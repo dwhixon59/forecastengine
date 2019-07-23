@@ -22,7 +22,7 @@ public class WellsFargoBank extends Bank {
     * Fields in the Wells Fargo download file transaction classifier:
     */
    private static String states = "|AL|AK|AS|AZ|AR|CA|CO|CT|DE|DC|FM|FL|GA|GU|HI|ID|IL|IN|IA|KS|KY|LA|ME|MH|MD|MA|MI|" +
-           "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|UT|VT|VI|VA|WA|WV|WI|WY|";
+           "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|";
    private final SimpleDateFormat sdf = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
    private String[] payeeTokens;
 
@@ -104,10 +104,14 @@ public class WellsFargoBank extends Bank {
       // Construct the merchant payee string from portions of the bank payee string:
       String merchantPayee = "";
       String firstFewWords = null;
-      if (payeeTokens.length >= 3) {
-         firstFewWords = payeeTokens[0] + " " + payeeTokens[1] + " " + payeeTokens[2];
+      if (payeeTokens[0].equalsIgnoreCase("CHECK")) {
+         firstFewWords = payeeTokens[0];
       } else {
-         firstFewWords = payeeTokens[0] + " " + payeeTokens[1];
+         if (payeeTokens.length >= 3) {
+            firstFewWords = payeeTokens[0] + " " + payeeTokens[1] + " " + payeeTokens[2];
+         } else {
+            firstFewWords = payeeTokens[0] + " " + payeeTokens[1];
+         }
       }
 
       switch (firstFewWords) {
@@ -136,12 +140,12 @@ public class WellsFargoBank extends Bank {
             for (; payeeTokens[i].matches("^[0-9].*") && i < payeeTokens.length; i++) {
             }
 
-            // then concatenate the 5th token and all following tokens until one that does not begin with a character
+            // then concatenate the current token and all following tokens until one that does not begin with a character
             // or is a reference number is encountered:
             cleanPayeeTokenList(start);
             for (;
                  i < payeeTokens.length &&
-                         payeeTokens[i].matches("^[A-Za-z'/]*$|^[0-9]{1,3}$");
+                         payeeTokens[i].matches("^[A-Za-z'/\\*\\&]*$|^[0-9]{1,3}$");
                  i++) {
                if (i > start) merchantPayee = merchantPayee + " ";
                merchantPayee = merchantPayee + addCleanToken(payeeTokens[i]);
@@ -198,6 +202,13 @@ public class WellsFargoBank extends Bank {
             merchantPayee = "Overdraft Fee";
             break;
 
+         case "ATM CASH DEPOSIT":
+            merchantPayee = "Deposit";
+            break;
+
+         case "CHECK":
+            merchantPayee = "Check";
+            break;
 
          default:
             // One-time online payments.  Concatenate the tokens until we find one that is all digits:
@@ -240,10 +251,15 @@ public class WellsFargoBank extends Bank {
    private void cleanPayeeTokenList(int start) {
       String payeeToken = null;
       for (int i = start; i < payeeTokens.length; i++) {
+         // Remove city followed by state from the merchant payee:
          if (payeeTokens[i].length() == 2 && states.indexOf(payeeTokens[i]) > 0) {
             payeeTokens[i] = "###";
             payeeTokens[i - 1] = "###";
-            break;
+         }
+
+         // Remove the word "RECURRING" from the merchant payee:
+         if (payeeTokens[i].equalsIgnoreCase("RECURRING")) {
+            payeeTokens[i] = "###";
          }
       }
    }
