@@ -1,4 +1,4 @@
 package com.hixon.financial.model;
 
-public interface FinancialAppEntity {
+public class FinancialAppEntity {
 }
