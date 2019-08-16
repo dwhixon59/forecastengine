@@ -1,7 +1,5 @@
 package com.hixon.financial.model.register;
 
-import com.hixon.financial.model.budget.BudgetException;
-import com.hixon.financial.model.budget.BudgetItem;
 import com.hixon.financial.view.ViewException;
 import com.hixon.financial.view.register.TransactionResolver;
 import org.apache.commons.csv.CSVRecord;
@@ -37,12 +35,6 @@ public class Bank implements FinancialInstitution {
    /*
     * Main methods for the Wells Fargo download file transaction classifier:
     */
-
-   @Override
-   public BudgetItem classify(Transaction transaction) throws SQLException, BudgetException, ParseException, RegisterException {
-      return null;
-   }
-
    @Override
    public Transaction loadFromCSV(CSVRecord record) throws ParseException, RegisterException, ViewException, SQLException {
       return null;

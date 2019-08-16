@@ -1,6 +1,4 @@
-package com.hixon.financial.model.budget;
-
-import com.hixon.financial.model.FinancialAppEntityInt;
+package com.hixon.financial.model;
 
 public interface DependentEntityInt extends FinancialAppEntityInt {
 

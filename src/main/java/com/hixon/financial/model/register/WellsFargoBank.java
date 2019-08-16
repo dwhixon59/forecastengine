@@ -1,8 +1,6 @@
 package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
-import com.hixon.financial.model.budget.BudgetException;
-import com.hixon.financial.model.budget.BudgetItem;
 import com.hixon.financial.view.register.TransactionResolver;
 import org.apache.commons.csv.CSVRecord;
 
@@ -43,16 +41,6 @@ public class WellsFargoBank extends Bank {
    /*
     * Main methods for the Wells Fargo download file transaction classifier:
     */
-   @Override
-   public BudgetItem classify(Transaction transaction) throws SQLException, BudgetException, ParseException, RegisterException {
-
-
-      //
-
-      // Return the matching budget item, or null if not found:
-      return null;
-   }
-
    // Load up a Transaction from a Wells Fargo CSV transaction download file:
    @Override
    public Transaction loadFromCSV(CSVRecord record) throws ParseException, RegisterException, SQLException {
@@ -89,12 +77,6 @@ public class WellsFargoBank extends Bank {
       // Parse out the merchant name:
       transaction.setMerchantPayee(parseMerchantPayee());
 
-      System.out.println("Imported bank transaction:  Date: " +
-              Utility.calendarDateToStringDate(transaction.getPostDate()) + " Authorization Date: " +
-              Utility.calendarDateToStringDate(transaction.getAuthorizationDate()) + " Amount: " +
-              transaction.getAmount() + " Cleared: " + transaction.isCleared() + " Check Number: " +
-              transaction.getCheckNumber() + " Payee: " + transaction.getPayee());
-
       return transaction;
    }
 
@@ -114,6 +96,7 @@ public class WellsFargoBank extends Bank {
          }
       }
 
+      int i = 0;
       switch (firstFewWords) {
 
          // If the transaction is a purchase:
@@ -136,20 +119,8 @@ public class WellsFargoBank extends Bank {
                   break;
             }
 
-            int i = start;
-            for (; payeeTokens[i].matches("^[0-9].*") && i < payeeTokens.length; i++) {
-            }
-
-            // then concatenate the current token and all following tokens until one that does not begin with a character
-            // or is a reference number is encountered:
-            cleanPayeeTokenList(start);
-            for (;
-                 i < payeeTokens.length &&
-                         payeeTokens[i].matches("^[A-Za-z'/\\*\\&]*$|^[0-9]{1,3}$");
-                 i++) {
-               if (i > start) merchantPayee = merchantPayee + " ";
-               merchantPayee = merchantPayee + addCleanToken(payeeTokens[i]);
-            }
+            // Derive a payee from the remaining tokens:
+            merchantPayee = makePayeeFromTokens(start);
             break;
 
          // If this is a transfer:
@@ -210,34 +181,47 @@ public class WellsFargoBank extends Bank {
             merchantPayee = "Check";
             break;
 
-         default:
-            // One-time online payments.  Concatenate the tokens until we find one that is all digits:
+         default: // One-time online payments:
+
+            // Skip over the words "BILL PAY" at the beginning if they are present:
             if (payeeTokens[0].equalsIgnoreCase("BILL") && payeeTokens[1].equalsIgnoreCase("PAY")) {
                start = 2;
             } else {
                start = 0;
             }
-            cleanPayeeTokenList(start);
-            for (i = start;
-                 i < payeeTokens.length &&
-                         payeeTokens[i].matches("^[A-Za-z'/]*$|^[0-9]{1,3}$");
-                 i++) {
-               if (i > start) merchantPayee = merchantPayee + " ";
-               merchantPayee = merchantPayee + addCleanToken(payeeTokens[i]);
-            }
 
-//               for (i = start;
-//                 i < payeeTokens.length &&
-//                         !payeeTokens[i].matches("^[0-9]{3}[0-9]*$");
-//                 i++) {
-//               if (i > 0) merchantPayee = merchantPayee + " ";
-//               merchantPayee = merchantPayee + addCleanToken(payeeTokens[i]);
-//            }
+            // Derive a payee from the remaining tokens:
+            merchantPayee = makePayeeFromTokens(start);
+
             break;
-
-         //throw new RegisterException("Format of the payee " + payeeTokens[0] + " from the CSV transaction file not " + "recognized.");
       }
+      System.out.println("Transaction payee = " + transaction.getPayee() + " for " +
+              Utility.formatDollarAmount(Math.abs(transaction.getAmount())));
       System.out.println("Parsed merchant payee = " + merchantPayee);
+      return merchantPayee;
+   }
+
+   public String makePayeeFromTokens(int start) {
+      int i;
+      String merchantPayee;// Overwrite certain extraneous tokens like city and state so they won't be included in the merchant payee:
+      cleanPayeeTokenList(start);
+
+      // Skip over any numeric tokens:
+      for (i = start; i < payeeTokens.length && payeeTokens[i].matches("^[0-9]*$"); i++);
+      if (i < payeeTokens.length) {
+         start = i;
+      }
+
+      // Always start with the first remaining token because it is always part of the merchant identification:
+      merchantPayee = addCleanToken(payeeTokens[start++]);
+
+      // Concatenate the following tokens until we find one that is not all characters or a short number (as in PIER 1):
+      for (i = start;
+           i < payeeTokens.length &&
+                   payeeTokens[i].matches("^[A-Za-z'/\\*\\&]*$|^[0-9]{1,3}$");
+           i++) {
+         merchantPayee = merchantPayee + " " + addCleanToken(payeeTokens[i]);
+      }
       return merchantPayee;
    }
 
@@ -247,7 +231,7 @@ public class WellsFargoBank extends Bank {
       return tokens[0];
    }
 
-   // Remove city and state from a token list:
+   // Remove city, state and the word "RECURRING" from a token list:
    private void cleanPayeeTokenList(int start) {
       String payeeToken = null;
       for (int i = start; i < payeeTokens.length; i++) {

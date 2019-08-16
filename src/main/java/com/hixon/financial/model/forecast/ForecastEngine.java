@@ -40,12 +40,18 @@ public class ForecastEngine {
             ResultSet rs = null;
             try {
                 rs = stmt.executeQuery("select bin_to_uuid(idBudgetItem), category, payee, period, AMOUNT, " +
-                        "startDate, numberOfPayments, endDate, ItemType, howPaid, searchString, " +
-                        "bin_to_uuid(Budget_idBudget) from ForecastDatabase.BudgetItem order by AMOUNT desc");
+                        "startDate, numberOfPayments, endDate, ItemType, howPaid, bin_to_uuid(Budget_idBudget) from " +
+                        "ForecastDatabase.BudgetItem order by amount desc");
             } catch (SQLException e) {
-                System.out.println("[SEVERE]  SQL Error attempting to retrieve a list of items in the budget.");
-                stmt.close();
-                if (rs != null) rs.close();
+                try {
+                    if (stmt != null) stmt.close();
+                    if (rs != null) rs.close();
+                } finally {
+                    ForecastException fe = new ForecastException("Database error attempting to retrieve a list of items " +
+                            "in the budget.");
+                    fe.initCause(e);
+                    throw fe;
+                }
             }
 
             // Setup the start, current and end dates for the forecast:

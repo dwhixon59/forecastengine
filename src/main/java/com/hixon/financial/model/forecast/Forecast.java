@@ -216,7 +216,6 @@ public class Forecast {
                 preparedStmt.setDate(8, Utility.calendarDateToSqlDate(forecastItem.getEndDate()));
                 preparedStmt.setString(9, forecastItem.getItemType());
                 preparedStmt.setString(10, forecastItem.getHowPaid());
-                preparedStmt.setString(11, forecastItem.getSearchString());
                 preparedStmt.setString(12, idForecast.toString());
                 preparedStmt.setString(13, forecastItem.getIdBudgetItem().toString());
                 preparedStmt.execute();

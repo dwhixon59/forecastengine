@@ -30,7 +30,7 @@ public class VirtualRegister extends Register {
     public VirtualRegister(String registerName, String budgetName, Connection dbConnection) throws SQLException, RegisterException {
 
         // Setup the register:
-        super(registerName);
+        super();
 
         // Setup the virtual register:
         this.budgetname = budgetName;

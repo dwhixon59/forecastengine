@@ -2,7 +2,11 @@ package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
 import com.hixon.financial.model.EntityException;
-import com.hixon.financial.model.FinancialAppEntityBase;
+import com.hixon.financial.model.FinancialAppEntityInt;
+import com.hixon.financial.model.IndependentEntity;
+import com.hixon.financial.model.budget.BudgetException;
+import com.hixon.financial.model.budget.BudgetItem;
+import com.hixon.financial.model.budget.BudgetItemMerchant;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -11,33 +15,30 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
-public class Merchant extends FinancialAppEntityBase {
+public class Merchant extends IndependentEntity {
 
    /*
     * Fields in the Merchant class:
     */
-   public static final String selectQuery = "select bin_to_uuid(idMerchant) as 'idMerchant', name from " +
+   public static final String selectQuery = "select bin_to_uuid(idMerchant) as 'idMerchant', name, askAlways from " +
            "forecastdatabase.merchant ";
-   public static final String selectJoinPayeeQuery = "select bin_to_uuid(A.idMerchant) as 'idMerchant', A.name, B.payee " +
-           "from forecastdatabase.merchant A inner join forecastdatabase.merchant_payee B on A.idMerchant = " +
-           "B.Merchant_idMerchant ";
-   public static final String insertQuery = "insert into forecastdatabase.merchant (idMerchant, name) values (";
+   public static final String selectJoinPayeeQuery = "select bin_to_uuid(A.idMerchant) as 'idMerchant', A.name, " +
+           "B.payee, A.askAlways from forecastdatabase.merchant A inner join forecastdatabase.merchant_payee B on " +
+           "A.idMerchant = B.Merchant_idMerchant ";
+   public static final String insertQuery = "insert into forecastdatabase.merchant (idMerchant, name, askAlways) values (";
 
    private String name = null;
+   boolean askAlways = false;
    private List<MerchantPayee> merchantPayees = new LinkedList<>();
+
+   public static Merchant getById(UUID idMerchant) {
+      return null;
+   }
 
 
    /*
     * Getters and setters:
     */
-   public static String getSelectQuery() {
-      return selectQuery;
-   }
-
-   public static String getSelectJoinPayeeQuery() {
-      return selectJoinPayeeQuery;
-   }
-
    public String getName() {
       return name;
    }
@@ -45,6 +46,14 @@ public class Merchant extends FinancialAppEntityBase {
    public void setName(String name) {
       dirty = true;
       this.name = name;
+   }
+
+   public boolean isAskAlways() {
+      return askAlways;
+   }
+
+   public void setAskAlways(boolean askAlways) {
+      this.askAlways = askAlways;
    }
 
    public List<MerchantPayee> getPayees() {
@@ -77,6 +86,7 @@ public class Merchant extends FinancialAppEntityBase {
          if (rs == null) throw new RegisterException("Result set passed into loadFromResultSet from must not be null.");
          this.id = UUID.fromString(rs.getString("idMerchant"));
          this.name = rs.getString("name");
+         this.askAlways = rs.getBoolean("askAlways");
          dirty = false;
 
       } catch (SQLException e) {
@@ -93,6 +103,9 @@ public class Merchant extends FinancialAppEntityBase {
       String[] values = merchantName.split(",");
       if (values.length < 1) throw new RegisterException("Empty string passed into Merchant.loadFromCSV().");
       Merchant merchant = new Merchant(merchantName);
+      if (values.length > 1) {
+        merchant.setAskAlways(values[1].equalsIgnoreCase("y"));
+      }
       System.out.println("Created new merchant " + merchantName);
       return merchant;
 
@@ -160,6 +173,13 @@ public class Merchant extends FinancialAppEntityBase {
       }
    }
 
+   // Get the name of a Merchant:
+   public static String getNameById(UUID idMerchant) throws EntityException, SQLException {
+      ResultSet rs = FinancialAppEntityInt.getRSById(selectQuery, idMerchant, "Database error occurred" +
+              " trying to get the merchant with id = " + idMerchant);
+      return rs.getString("name");
+   }
+
    // Create a new payee associated with this merchant:
    public MerchantPayee addPayee(String payee) {
 
@@ -172,12 +192,20 @@ public class Merchant extends FinancialAppEntityBase {
    public void save() throws RegisterException, EntityException {
 
       // Save the merchant:
-      super.save(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\")",
+      super.save(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways + ")",
               "Problem with Insert of merchant.  Returned row count not equal to 1.");
 
       // Save the merchant payees:
       for (MerchantPayee merchantPayee : merchantPayees) {
          merchantPayee.save();
       }
+   }
+
+   // Add a budget item to the merchant:
+   public BudgetItemMerchant addBudgetItem(BudgetItem budgetItem, double amount, int percentage) throws EntityException,
+           RegisterException, BudgetException, SQLException {
+      BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
+      budgetItemMerchant.save();
+      return budgetItemMerchant;
    }
 }

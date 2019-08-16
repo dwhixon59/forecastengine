@@ -95,9 +95,9 @@ public class Controller {
             // Import new transactions into the register:
             if (importCsvTransactionFile) {
                 Importer importer = new Importer(dbConnection);
-                int numImportedTrxs = importer.importCsvTransactionFile("C:\\Users\\dwhix\\Dropbox\\Hixon " +
-                        "Family Personal Business\\Finances\\Expenses\\Transactions.csv",
-                        "Wells Fargo Bank", "Bill Pay Account");
+                int numImportedTrxs = importer.importCsvTransactionFile(
+                        "C:\\Users\\dwhix\\Downloads\\Checking2.csv", "Wells Fargo Bank",
+                        "Bill Pay Account");
             }
 
             // Export the transactions to Excel beginning on a particular date:
@@ -222,9 +222,10 @@ public class Controller {
         System.out.println("\n\nRender the long term forecast.");
         ForecastView forecastView = new excelView();
         forecastView.setForecast(forecast);
-        forecastView.render("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-                "LongTermForecast.tsv", "UTF-8");
-        System.out.println("The long term forecast was successfully rendered.");
+        String filename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+                "LongTermForecast.tsv";
+        forecastView.render(filename, "UTF-8");
+        System.out.println("The long term forecast was successfully rendered to the file " + filename);
     }
 
 }  // End class App.

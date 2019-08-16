@@ -1,11 +1,11 @@
 package com.hixon.financial.model.register;
 
+import com.hixon.financial.model.DependentEntity;
 import com.hixon.financial.model.EntityException;
-import com.hixon.financial.model.FinancialAppEntityBase;
 
 import java.util.UUID;
 
-public class MerchantPayee extends FinancialAppEntityBase {
+public class MerchantPayee extends DependentEntity {
 
    /*
     * Fields in the Wells Fargo download file transaction classifier:
@@ -31,9 +31,10 @@ public class MerchantPayee extends FinancialAppEntityBase {
     * Constructors for MerchantPayee:
     */
    public MerchantPayee(String payee, UUID idMerchant) {
-      super(true);
+      super();
       this.idMerchant = idMerchant;
       this.payee = payee;
+      super.setDirty(true);
    }
 
 

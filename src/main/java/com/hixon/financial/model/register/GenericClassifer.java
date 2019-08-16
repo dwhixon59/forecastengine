@@ -1,6 +1,7 @@
 package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.EntityException;
 import com.hixon.financial.model.budget.BudgetException;
 import com.hixon.financial.model.budget.BudgetItem;
 import com.hixon.financial.view.ViewException;
@@ -11,15 +12,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class GenericClassifer implements FinancialInstitution {
 
     protected BudgetItem[] budgetItems;
 
     // Constructors:
-    public GenericClassifer(TransactionResolver resolver) throws SQLException, BudgetException {
+    public GenericClassifer(TransactionResolver resolver) throws SQLException, BudgetException, EntityException {
 
         // Create a prepared statement for using with the database:
         Statement stmt = null;
@@ -52,9 +51,9 @@ public class GenericClassifer implements FinancialInstitution {
 
             // Add the next item from the budget to the array of budget items:
             budgetItems[i] = new BudgetItem().loadFromResultSet(rs);
-            if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
-                budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
-            }
+            //if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
+            //    budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
+            //}
             i++;
 
         } // End for each item in the budget.
@@ -64,35 +63,36 @@ public class GenericClassifer implements FinancialInstitution {
     public BudgetItem classify(Transaction transaction) throws SQLException, BudgetException, ParseException {
 
         // Apply the search strings one at a time to the transaction payee until there is a match or none remain:
-        Matcher matcher = null;
-        int i = 0;
-        boolean found = false;
-        for (BudgetItem budgetItem : budgetItems) {
-
-            // Apply the regular expression for this budget item to the transaction payee:
-            if (budgetItem.getPattern() != null) {
-
-                matcher = budgetItem.getPattern().matcher(transaction.getPayee());
-
-                // If we find a matching transaction:
-                if (
-                        matcher.find() && (
-                                budgetItem.getEndDate() == null ||
-                                        budgetItem.getEndDate().compareTo(transaction.getPostDate()) >= 0
-                        )
-                ) {
-                    // then we found the first match, so stop looking:
-                    found = true;
-                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
-                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
-                    break;
-                }
-            }
-            i++;
-        }
-
-        // Return the first matching transaction:
-        return (found) ? budgetItems[i] : null;
+//        Matcher matcher = null;
+//        int i = 0;
+//        boolean found = false;
+//        for (BudgetItem budgetItem : budgetItems) {
+//
+//            // Apply the regular expression for this budget item to the transaction payee:
+//            if (budgetItem.getPattern() != null) {
+//
+//                matcher = budgetItem.getPattern().matcher(transaction.getPayee());
+//
+//                // If we find a matching transaction:
+//                if (
+//                        matcher.find() && (
+//                                budgetItem.getEndDate() == null ||
+//                                        budgetItem.getEndDate().compareTo(transaction.getPostDate()) >= 0
+//                        )
+//                ) {
+//                    // then we found the first match, so stop looking:
+//                    found = true;
+////                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
+////                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
+//                    break;
+//                }
+//            }
+//            i++;
+//        }
+//
+//        // Return the first matching transaction:
+//        return (found) ? budgetItems[i] : null;
+        return null;
     }
 
     @Override

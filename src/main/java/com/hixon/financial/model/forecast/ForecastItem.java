@@ -46,7 +46,6 @@ public class ForecastItem {
 
     protected String itemType;
     protected String howPaid;
-    protected String searchString;
 
     // Pointer to a Forecast Transaction in the current forecast that is the first instance of this item:
     protected ForecastTransaction firstInstance = null;
@@ -121,12 +120,6 @@ public class ForecastItem {
     public void setHowPaid(String howPaid) {
         this.howPaid = howPaid;
     }
-    public String getSearchString() {
-        return searchString;
-    }
-    public void setSearchString(String searchString) {
-        this.searchString = searchString;
-    }
     public void setNextDate(Calendar nextDate) {
         this.nextDate = nextDate;
     }
@@ -190,7 +183,6 @@ public class ForecastItem {
             numberOfPayments = rs.getInt("numberOfPayments");
             itemType = rs.getString("ItemType");
             howPaid = rs.getString("howPaid");
-            searchString = rs.getString("searchString");
 
         } catch (SQLException e) {
             System.out.println("Error reading in the Budget Item row.");

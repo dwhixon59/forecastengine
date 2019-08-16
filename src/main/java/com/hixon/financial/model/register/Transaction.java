@@ -1,6 +1,7 @@
 package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.IndependentEntity;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -9,12 +10,11 @@ import java.util.Calendar;
 import java.util.UUID;
 
 
-public class Transaction {
+public class Transaction extends IndependentEntity {
 
    /*
     * Fields of the Transaction class:
     */
-   private UUID idTransaction = null;
    private Calendar postDate = null;
    private Calendar authorizationDate;
    private boolean cleared = false;
@@ -44,12 +44,8 @@ public class Transaction {
    /*
     * Getters and setters:
     */
-   public UUID getIdTransaction() {
-      return idTransaction;
-   }
-
    public void setidTransaction(UUID idTransaction) {
-      this.idTransaction = idTransaction;
+      this.id = idTransaction;
    }
 
    public Calendar getPostDate() {
@@ -154,14 +150,16 @@ public class Transaction {
     */
 
    public Transaction() {
-
+      super(false);
    }
 
    public Transaction(Register register) {
+      super(true);
       this.register = register;
    }
 
    public Transaction(ResultSet rs) throws SQLException {
+      super(false);
       loadFromResultSet(rs);
    }
 
@@ -172,7 +170,7 @@ public class Transaction {
 
    public void loadFromResultSet(ResultSet rs) throws SQLException {
 
-      idTransaction = UUID.fromString(rs.getString("idTransaction"));
+      id = UUID.fromString(rs.getString("idTransaction"));
       postDate = Utility.SqlDateToCalendarDate(rs.getDate("postDate"));
       cleared = rs.getBoolean("cleared");
       checkNumber = rs.getInt("checkNumber");
@@ -190,7 +188,7 @@ public class Transaction {
       Statement statement = null;
       ResultSet rs = null;
       try {
-         query = insertQuery + "uuid_to_bin('" + idTransaction + "'), " +
+         query = insertQuery + "uuid_to_bin('" + id + "'), " +
                  Utility.calendarDateToSqlStringDate(postDate) + ", " +
                  Utility.calendarDateToSqlStringDate(authorizationDate) + ", " + amount + ", " + cleared + ", " +
                  checkNumber + ", \"" + payee + "\", " + balance + ", uuid_to_bin('" + register.getId() + "'), " +
