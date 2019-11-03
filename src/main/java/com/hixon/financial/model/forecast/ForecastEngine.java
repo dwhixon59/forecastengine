@@ -1,6 +1,10 @@
 package com.hixon.financial.model.forecast;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.EntityException;
+import com.hixon.financial.model.EntityInt;
+import com.hixon.financial.model.budget.BudgetException;
+import com.hixon.financial.model.budget.BudgetItem;
 
 import java.sql.*;
 import java.util.Calendar;
@@ -16,7 +20,7 @@ public class ForecastEngine {
     } // End ForecastEngine().
 
     // Connect to the MySQL database:
-    public boolean generateLongTermForcast(LongTermForecast forecast) throws Exception {
+    public boolean generateLongTermForecast(LongTermForecast forecast) throws Exception, BudgetException, EntityException {
 
         try {
             /*
@@ -27,32 +31,9 @@ public class ForecastEngine {
              planned to occur.  After they have all been added, the array is traversed once and the transactions are
              inserted into the forecasting transactions table.  Finally, the forecasting object is returned.
             */
-            Statement stmt = null;
-            try {
-                stmt = Utility.getDbConnection().createStatement();
-            } catch (SQLException e) {
-                System.out.println("[SEVERE]  dbConnection.createStatement() threw exception");
-                e.printStackTrace();
-                if (stmt != null) stmt.close();
-            }
-
             // Retrieve a handle to the list of items in the budget:
-            ResultSet rs = null;
-            try {
-                rs = stmt.executeQuery("select bin_to_uuid(idBudgetItem), category, payee, period, AMOUNT, " +
-                        "startDate, numberOfPayments, endDate, ItemType, howPaid, bin_to_uuid(Budget_idBudget) from " +
-                        "ForecastDatabase.BudgetItem order by amount desc");
-            } catch (SQLException e) {
-                try {
-                    if (stmt != null) stmt.close();
-                    if (rs != null) rs.close();
-                } finally {
-                    ForecastException fe = new ForecastException("Database error attempting to retrieve a list of items " +
-                            "in the budget.");
-                    fe.initCause(e);
-                    throw fe;
-                }
-            }
+            ResultSet rs = EntityInt.getRS(BudgetItem.getSelectQuery(), "Database error attempting to" +
+                    " retrieve a list of items in the budget.");
 
             // Setup the start, current and end dates for the forecast:
             Calendar startDate = forecast.getStartDate();
@@ -64,55 +45,53 @@ public class ForecastEngine {
                     Utility.calendarDateToStringDate(forecast.getEndDate()));
 
             // For each item in the budget:
-            ForecastItem forecastItem = null;
-            ForecastTransaction transaction = null;
+            ForecastItem forecastItem;
             while (rs.next()) {
 
-                boolean skip = false;
-
                 // If this is an on-demand (unscheduled) item, then skip it:
-                if (rs.getString("Period").equalsIgnoreCase("On-Demand")) skip = true;
+                if (rs.getString("Period").equalsIgnoreCase("On-Demand"))
+                    continue;
 
-                // If this budget item expires before the beginning of the forecast window:
+                // If this budget item expires before the beginning of the forecast window then skip it:
                 Date budgetItemEndDateDb = rs.getDate("endDate");
                 if (budgetItemEndDateDb != null) {
                     Calendar budgetItemEndDate = new GregorianCalendar();
                     budgetItemEndDate.setTime(budgetItemEndDateDb);
-                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0) skip = true;
+                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0)
+                        continue;
                 }
-                if (!skip) {
 
-                    forecastItem = new ForecastItem(forecast, rs);
-                    forecast.addForecastItem(forecastItem);
-                    System.out.println(forecastItem);
+                forecastItem = new ForecastItem(forecast, rs);
+                forecast.addForecastItem(forecastItem);
+                System.out.println(forecastItem);
 
-                    // Set the current date to the first date after the start date of the forecast window:
-                    nextDate = forecastItem.getFirstDateOnOrAfter(startDate);
+                // Set the current date to the first date after the start date of the forecast window:
+                nextDate = forecastItem.getFirstDateOnOrAfter(startDate);
 
-                    // For each instance of the period between the start date and the end of the forecast period:
-                    while (forecast.fallsWithinForecastWindow(nextDate)) {
+                // For each instance of the period between the start date and the end of the forecast period:
+                boolean firstOccurrence = true;
+                while (forecast.fallsWithinForecastWindow(nextDate)) {
 
-                        // Add the forecast transaction to the forecast:
-                        forecast.addTransactionOnDate(forecastItem, nextDate);
+                    // Add the forecast transaction to the forecast:
+                    forecast.addTransactionOnDate(forecastItem, nextDate, firstOccurrence);
+                    firstOccurrence = false;
 
-                        // Go to the next instance of this budget item:
-                        nextDate = forecastItem.getNextDate();
+                    // Go to the next instance of this budget item:
+                    nextDate = forecastItem.getNextDateOfOccurrence();
 
-                    } // End for each instance of this item in the forecast window.
-                } // End if this item didn't expire before the forecast window begins.
+                } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
 
-        } catch (SQLException e) {
-            System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
-            e.printStackTrace();
-            throw e;
+        } catch (SQLException se) {
+            System.out.println("[SEVERE]  Database error traversing the list of budget items.");
+            throw se;
         }
         return true;
 
-    } // End generateLongTermForcast().
+    } // End generateLongTermForecast().
 
 
-    public boolean generateShortTermForcast(ShortTermForecast forecast) throws Exception {
+    public boolean generateShortTermForecast(ShortTermForecast forecast) throws Exception, BudgetException {
 
         try {
             /*
@@ -123,25 +102,28 @@ public class ForecastEngine {
              planned to occur.  After they have all been added, the array is traversed once and the transactions are
              inserted into the forecasting transactions table.  Finally, the forecasting object is returned.
             */
-            Statement stmt = null;
+            Statement stmt;
             try {
                 stmt = Utility.getDbConnection().createStatement();
             } catch (SQLException e) {
                 System.out.println("[SEVERE]  dbConnection.createStatement() threw exception");
                 e.printStackTrace();
-                if (stmt != null) stmt.close();
+                ForecastException fe = new ForecastException("Database error occurred trying to create a statement.");
+                fe.initCause(e);
+                throw fe;
             }
 
             // Retrieve a handle to the list of items in the budget:
-            ResultSet rs = null;
+            ResultSet rs;
             try {
                 rs = stmt.executeQuery("select bin_to_uuid(idBudgetItem), category, payee, period, AMOUNT, " +
                         "startDate, numberOfPayments, endDate, ItemType, howPaid, searchString, " +
                         "bin_to_uuid(Budget_idBudget) from ForecastDatabase.BudgetItem order by AMOUNT desc");
             } catch (SQLException e) {
-                System.out.println("[SEVERE]  SQL Error attempting to retrieve a list of items in the budget.");
                 stmt.close();
-                if (rs != null) rs.close();
+                ForecastException fe = new ForecastException(" SQL Error attempting to retrieve a list of items in the budget.");
+                fe.initCause(e);
+                throw fe;
             }
 
             // Setup the start, current and first-day-of-the-month dates for the forecast:
@@ -149,13 +131,11 @@ public class ForecastEngine {
             Calendar nextDate = new GregorianCalendar();
             nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
                     startDate.get(Calendar.DATE));
-            Calendar endDate = new GregorianCalendar();
             System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) + "  Current Date: " +
                     Utility.calendarDateToStringDate(nextDate));
 
             // For each item in the budget:
-            ForecastItem forecastItem = null;
-            ForecastTransaction transaction = null;
+            ForecastItem forecastItem;
             while (rs.next()) {
 
                 // If this is an on-demand (unscheduled) item, then skip it:
@@ -228,18 +208,20 @@ public class ForecastEngine {
                 nextDate = forecastItem.getFirstDateOnOrAfter(startDate);
 
                 // For each instance of the period between the start date and the end of the forecast period:
+                boolean firstOccurrence = true;
                 while (forecast.fallsWithinForecastWindow(nextDate)) {
 
                     // Add the forecast transaction to the forecast:
-                    forecast.addTransactionOnDate(forecastItem, nextDate);
+                    forecast.addTransactionOnDate(forecastItem, nextDate, firstOccurrence);
+                    firstOccurrence = false;
 
                     // Go to the next instance of this budget item:
-                    nextDate = forecastItem.getNextDate();
+                    nextDate = forecastItem.getNextDateOfOccurrence();
 
                 } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
 
-        } catch (SQLException e) {
+        } catch (SQLException | BudgetException e) {
             System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
             e.printStackTrace();
             throw e;

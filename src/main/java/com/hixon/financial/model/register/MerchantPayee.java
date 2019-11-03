@@ -12,7 +12,7 @@ public class MerchantPayee extends DependentEntity {
     */
    private static final String insertQuery = "insert into forecastdatabase.merchant_payee (Merchant_idMerchant, payee) " +
            "values (";
-   private UUID idMerchant = null;
+   private UUID idMerchant;
    private String payee = null;
 
    /*
@@ -26,11 +26,36 @@ public class MerchantPayee extends DependentEntity {
       this.idMerchant = idMerchant;
    }
 
+   @Override
+   public String getInsertQuery() {
+      return null;
+   }
+
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() {
+      return null;
+   }
+
+   @Override
+   public String getUpdateQuery() {
+      return null;
+   }
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return "merchant payee";
+   }
+
 
    /*
     * Constructors for MerchantPayee:
     */
-   public MerchantPayee(String payee, UUID idMerchant) {
+   MerchantPayee(String payee, UUID idMerchant) {
       super();
       this.idMerchant = idMerchant;
       this.payee = payee;
@@ -42,7 +67,7 @@ public class MerchantPayee extends DependentEntity {
     * Load and save methods for MerchantPayee:
     */
    public void save() throws RegisterException, EntityException {
-      super.save(insertQuery + "uuid_to_bin('" + idMerchant + "'), \"" + payee + "\")",
+      super.executeQueryForThis(insertQuery + "uuid_to_bin('" + idMerchant + "'), \"" + payee + "\")",
               "Databsae error occurred inserting MerchantPayee into the database.");
    }
 

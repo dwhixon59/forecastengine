@@ -1,6 +1,11 @@
 package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.EntityException;
+import com.hixon.financial.model.EntityInt;
+import com.hixon.financial.model.IndependentEntity;
+import com.hixon.financial.model.budget.BudgetException;
+import com.hixon.financial.model.forecast.ForecastException;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class Register {
+public class Register extends IndependentEntity {
 
    /*
     * Fields in the Register class:
@@ -18,18 +23,18 @@ public class Register {
    private static final String selectQuery = "select bin_to_uuid(idRegister) as idRegister, name, account_type, " +
            "account_number, bin_to_uuid(Budget_idBudget) as idBudget from ForecastDatabase.Register ";
 
-   private UUID idRegister = null;
    private String registerName = null;
    private String accountType = null;
    private String accountNumber = null;
    private UUID idBudget = null;
+   private List<Transaction> significantEvents = new ArrayList<Transaction>();
 
 
    /*
     * Getters and setters:
     */
    public UUID getId() {
-      return idRegister;
+      return id;
    }
 
    public String getRegisterName() {
@@ -64,19 +69,49 @@ public class Register {
       this.idBudget = idBudget;
    }
 
+   public List<Transaction> getSignificantEvents() {
+      return significantEvents;
+   }
+
+   @Override
+   public String getInsertQuery() throws BudgetException, ForecastException {
+      return null;
+   }
+
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return "register";
+   }
+
 
    /*
     * Constructors:
     */
    public Register() {
-
+      super(true);
    }
 
-  public Register(ResultSet rs) throws RegisterException, SQLException {
+   public Register(ResultSet rs) throws RegisterException, SQLException {
+      super(false);
       try {
          if (rs != null) {
 
-            this.idRegister = UUID.fromString(rs.getString("idRegister"));
+            this.id = UUID.fromString(rs.getString("idRegister"));
             this.registerName = rs.getString("name");
             this.accountType = rs.getString("account_type");
             this.accountNumber = rs.getString("account_number");
@@ -94,8 +129,22 @@ public class Register {
 
 
    /*
+    * Helper methods:
+    */
+   public void addSignificantEvent(Transaction transaction) {
+      significantEvents.add(transaction);
+   }
+
+
+   /*
     * Load and save methods:
     */
+   public static Register getById(UUID idRegister) throws EntityException, SQLException, RegisterException {
+      ResultSet rs = EntityInt.getRSById(selectQuery + "where idRegister = ", idRegister, "Database error encountered trying to " +
+              "retrieve register with id = " + idRegister);
+      return new Register(rs);
+   }
+
    public static Register getByAccountNumber(String accountNumber) throws SQLException, RegisterException {
 
       try {
@@ -184,7 +233,7 @@ public class Register {
       }
    }
 
-   // Public Methods:
    public void save() {
    }
+
 }

@@ -4,7 +4,6 @@ import com.hixon.financial.Utility;
 import com.hixon.financial.model.EntityException;
 import com.hixon.financial.model.budget.BudgetException;
 import com.hixon.financial.model.budget.BudgetItem;
-import com.hixon.financial.view.ViewException;
 import com.hixon.financial.view.register.TransactionResolver;
 import org.apache.commons.csv.CSVRecord;
 
@@ -60,7 +59,7 @@ public class GenericClassifer implements FinancialInstitution {
     } // Classifer(Connection dbConnection).
 
 
-    public BudgetItem classify(Transaction transaction) throws SQLException, BudgetException, ParseException {
+    public BudgetItem classify(Transaction transaction) {
 
         // Apply the search strings one at a time to the transaction payee until there is a match or none remain:
 //        Matcher matcher = null;
@@ -96,14 +95,18 @@ public class GenericClassifer implements FinancialInstitution {
     }
 
     @Override
-    public Transaction loadFromCSV(CSVRecord record) throws ParseException, RegisterException, ViewException {
+    public String getImportRecordBaseName(CSVRecord record) {
         return null;
     }
 
     @Override
-    public String parseMerchantPayee() throws ParseException, RegisterException {
+    public Transaction loadFromCSV(CSVRecord record, String importRecordId) throws SQLException {
         return null;
     }
 
+    @Override
+    public String parseMerchantPayee(String payee) throws ParseException, RegisterException, SQLException {
+        return null;
+    }
 }
 

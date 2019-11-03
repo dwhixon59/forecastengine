@@ -1,4 +1,4 @@
 package com.hixon.financial.model;
 
-public class DependentEntity extends FinancialAppEntity implements DependentEntityInt {
+public abstract class DependentEntity extends Entity implements DependentEntityInt {
 }

@@ -1,6 +1,11 @@
 package com.hixon.financial.model.forecast;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.EntityException;
+import com.hixon.financial.model.EntityInt;
+import com.hixon.financial.model.IndependentEntity;
+import com.hixon.financial.model.budget.BudgetException;
+import com.hixon.financial.model.budget.Item;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,12 +15,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 import java.util.UUID;
 
-public class Forecast {
+public class Forecast extends IndependentEntity {
 
     /*
      * Forecast class fields:
      */
+    protected String description;
     protected Calendar startDate;
+    protected Calendar dateGenerated;
     protected double startingBalance;
     protected Calendar endDate;
     protected double minimumBalance;
@@ -24,12 +31,75 @@ public class Forecast {
     protected String budgetname;
     protected UUID idBudget;
     protected ForecastTransaction[] transactions = null;
-    private UUID idForecast = UUID.randomUUID();
     private ForecastItem firstForecastItem = null;
     private ForecastItem lastForecastItem = null;
     private ForecastTransaction firstSignificantEvent = null;
     private ForecastTransaction lastSignificantEvent = null;
+    private boolean inSync = true;
+    private static final String selectQuery = "select bin_to_uuid(idForecast) as idForecast, description, " +
+            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
+            "bin_to_uuid(Budget_idBudget) as idBudget from forecastdatabase.forecast ";
+    public static String getSelectQuery() {
+        return selectQuery;
+    }
 
+    private static final String insertQuery = "insert into forecastdatabase.forecast (idForecast, description, " +
+            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
+            "values (";
+    private static final String updateQuery = "update ForecastDatabase.Forecast set ";
+    private static final String deleteQuery = "delete from ForecastDatabase.Forecast where ";
+
+    // The types of significant events that can be generated:
+    public enum SignificantEvents { daysBelowMinimumBalance }
+
+
+    /*
+     * Forecast class getters and setters:
+     */
+    public Calendar getStartDate() { return startDate; }
+    public Calendar getEndDate() { return endDate; }
+    public double getStartingBalance() { return startingBalance; }
+    public double getMinimumBalance() { return minimumBalance; }
+    public double getEndingBalance() { return endingBalance; }
+    ForecastTransaction[] getTransactions() { return transactions; }
+    public ForecastTransaction getFirstSignificantEvent() { return firstSignificantEvent; }
+    public ForecastTransaction getLastSignificantEvent() { return lastSignificantEvent; }
+    public boolean getInSync() {return inSync;}
+    public void setInSync(boolean inSync) {this.inSync = inSync; setDirty(true);}
+
+    @Override
+    public String getInsertQuery() {
+        return insertQuery + "uuid_to_bin('" + id + ", " + description + ", " +
+                Utility.calendarDateToSqlDateString(dateGenerated) + ", " +
+                Utility.calendarDateToSqlDateString(startDate) + ", " + startingBalance +
+                Utility.calendarDateToSqlDateString(endDate) + ", " + endingBalance + ", " +  numberOfMonths + ", " +
+                " uuid_to_bin('" + idBudget + "')";
+    }
+
+    @Override
+    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+        return null;
+    }
+
+    @Override
+    public String getUpdateQuery() {
+        return updateQuery + "description = '" + description + "', " +
+                "dateGenerated = " + Utility.calendarDateToSqlDateString(dateGenerated) + ", startDate = " +
+                Utility.calendarDateToSqlDateString(startDate) + ", startingBalance = " + startingBalance + ", " +
+                "endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", endingBalance = " + endingBalance +
+                ", numberOfMonths = " +  numberOfMonths + ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+                "where idForecast = uuid_to_bin('" + id + "')";
+    }
+
+    @Override
+    public String getDeleteQuery() {
+        return deleteQuery + "id = uuid_to_bin('" + id + "')";
+    }
+
+    @Override
+    public String getEntityTypeName() {
+        return "forecast";
+    }
 
     /*
      * Forecast class constructors:
@@ -37,6 +107,7 @@ public class Forecast {
     public Forecast(String budgetName, Calendar startDate, double startingBalance, double minimumBalance,
                     int numberOfMonths) throws ForecastException, SQLException {
 
+        super(true);
         if (startDate == null) {
             this.startDate = Calendar.getInstance();
             this.startDate.set(Calendar.DAY_OF_MONTH, 1);
@@ -73,27 +144,123 @@ public class Forecast {
             if (rs != null) rs.close();
             throw e;
         }
+    }
 
+    // Create a forecast from the database:
+    Forecast(ResultSet rs) throws SQLException {
+        super(false);
+        this.id = UUID.fromString(rs.getString("idForecast"));
+        this.description = rs.getString("description");
+        this.dateGenerated = Utility.SqlDateToCalendarDate(rs.getDate("dateGenerated"));
+        this.startDate = Utility.SqlDateToCalendarDate(rs.getDate("startDate"));
+        this.startingBalance = rs.getDouble("startingBalance");
+        this.endDate = Utility.SqlDateToCalendarDate(rs.getDate("endDate"));
+        this.endingBalance = rs.getDouble("endingBalance");
+        this.numberOfMonths = rs.getInt("numberOfMonths");
+        this.idBudget = UUID.fromString(rs.getString("idBudget"));
     }
 
 
     /*
-     * Forecast class getters and setters:
+     * Load and save methods:
      */
-    public Calendar getStartDate() { return startDate; }
-    public Calendar getEndDate() { return endDate; }
-    public double getStartingBalance() { return startingBalance; }
-    public double getMinimumBalance() { return minimumBalance; }
-    public double getEndingBalance() { return endingBalance; }
-    ForecastTransaction[] getTransactions() { return transactions; }
-    public ForecastTransaction getFirstSignificantEvent() { return firstSignificantEvent; }
-    public ForecastTransaction getLastSignificantEvent() { return lastSignificantEvent; }
+    public static Forecast getMostRecent() throws EntityException, SQLException {
+        String selectMostRecentQuery = selectQuery + "order by dateGenerated desc";
+        ResultSet rs = EntityInt.getSingletonRS(selectMostRecentQuery, "Database error occurred " +
+                "trying to retrieve the most recent forecast.");
+        Forecast forecast = null;
+        if (rs != null) {
+            forecast = new Forecast(rs);
+        }
+        return forecast;
+    }
+
+    //  Save the forecast object:
+
+
+    // Save the all of the forecast to the database:
+    public void saveAll(Connection dbConnection) throws SQLException, BudgetException, EntityException, ForecastException {
+        PreparedStatement preparedStmt = null;
+        String errorMessage = null;
+        try {
+            // Insert the forecast tuple:
+            errorMessage = "SQL error attempting to insert the Forecast object into the database.";
+            String query = "insert into ForecastDatabase.Forecast (idForecast, description, dateGenerated, " +
+                    "startDate, startingBalance, endDate, endingBalance, numberOfMonths, inSync, Budget_idBudget) " +
+                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?))";
+            preparedStmt = dbConnection.prepareStatement(query);
+            preparedStmt.setString(1, id.toString());
+            preparedStmt.setString(2, "Test Forecast for Bill Pay Account");
+            preparedStmt.setObject(3, new java.sql.Timestamp(System.currentTimeMillis()));
+            preparedStmt.setDate(4, new java.sql.Date(startDate.getTimeInMillis()));
+            preparedStmt.setDouble(5, startingBalance);
+            preparedStmt.setDate(6, new java.sql.Date(endDate.getTimeInMillis()));
+            preparedStmt.setDouble(7, endingBalance);
+            preparedStmt.setInt(8, numberOfMonths);
+            preparedStmt.setBoolean(9, true);
+            preparedStmt.setString(10, idBudget.toString());
+            preparedStmt.execute();
+
+            // Insert the forecast item tuples:
+            errorMessage = "SQL error attempting to insert a forecast item into the database.";
+            query = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category, payee, period, amount, " +
+                    "startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, howPaid," +
+                    "Forecast_idForecast, BudgetItem_idBudgetItem) values (UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, ?," +
+                    " ?, ?, UUID_TO_BIN(?), UUID_TO_BIN(?))";
+            preparedStmt = dbConnection.prepareStatement(query);
+            ForecastItem forecastItem = firstForecastItem;
+            while (forecastItem != null) {
+                preparedStmt.setString(1, forecastItem.getId().toString());
+                preparedStmt.setString(2, forecastItem.getCategory());
+                preparedStmt.setString(3, forecastItem.getPayee());
+                preparedStmt.setString(4, Item.generatePeriodType(forecastItem.getPeriod()));
+                preparedStmt.setDouble(5, forecastItem.getAmount());
+                preparedStmt.setDate(6,  Utility.calendarDateToSqlDate(forecastItem.getStartDate()));
+                preparedStmt.setInt(7,forecastItem.getNumberOfPayments());
+                preparedStmt.setDate(8, Utility.calendarDateToSqlDate(forecastItem.getEndDate()));
+                preparedStmt.setString(9, Item.generateItemType(forecastItem.getItemType()));
+                preparedStmt.setString(10, Item.generateHowImportant(forecastItem.getHowImportant()));
+                preparedStmt.setString(11, Item.generateHowOccurs(forecastItem.getHowOccurs()));
+                preparedStmt.setString(12, Item.generateHowPaid(forecastItem.getHowPaid()));
+                preparedStmt.setString(13, id.toString());
+                preparedStmt.setString(14, forecastItem.getIdBudgetItem().toString());
+                preparedStmt.execute();
+                forecastItem = forecastItem.getNextForecastItem();
+            }
+
+            // Insert the forecast transaction tuples:
+            errorMessage = "SQL error attempting to insert a forecast transaction into the database.";
+            query = "insert into ForecastDatabase.Forecast_Transaction (idForecastTransaction, remainingAmount, " +
+                    "plannedDate, firstOccurrence, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), ?, ?, ?, " +
+                    "UUID_TO_BIN(?))";
+            preparedStmt = dbConnection.prepareStatement(query);
+            for (int i = 0; i < this.transactions.length; i++) {
+                if (this.transactions[i] != null) {
+                    ForecastTransaction forecastTransaction = this.transactions[i];
+                    while (forecastTransaction != null)
+                    {
+                        preparedStmt.setString(1, forecastTransaction.getId().toString());
+                        preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
+                        preparedStmt.setDate(3, new java.sql.Date(forecastTransaction.getPlannedDate().getTimeInMillis()));
+                        preparedStmt.setBoolean(4, forecastTransaction.isFirstOccurrence());
+                        preparedStmt.setString(5, forecastTransaction.getForecastItem().getId().toString());
+                        preparedStmt.execute();
+                        forecastTransaction = forecastTransaction.getNextTransaction();
+                    }
+                }
+            }
+
+        } catch (SQLException | BudgetException | EntityException | ForecastException e) {
+            System.out.println(errorMessage);
+            if (preparedStmt != null) preparedStmt.close();
+            throw e;
+        }
+    } // End Forecast.save().
 
 
     /*
      * Forecast class main methods:
      */
-
     // Determine if a date falls within the forecast window of this forecast object:
     public boolean fallsWithinForecastWindow(Calendar date) {
         boolean decision = false;
@@ -116,7 +283,7 @@ public class Forecast {
     }
 
     // Add a forecast transaction to the transaction array on the date that it is expected to occur:
-    public void addTransactionOnDate(ForecastItem forecastItem, Calendar nextDate) throws Exception {
+    public void addTransactionOnDate(ForecastItem forecastItem, Calendar nextDate, boolean firstOccurrence) throws Exception {
 
         // Calculate the index to assign this transaction by calculating the number of days between
         // the start date of the forecast and the day this transaction occurs:
@@ -124,8 +291,10 @@ public class Forecast {
 
         if (index < this.transactions.length) {
 
+            // Create a new forecast transaction (occurrence of a forecast item);
+            ForecastTransaction forecastTransaction = new ForecastTransaction(forecastItem, nextDate, firstOccurrence);
+
             // If this is the first transaction on that date:
-            ForecastTransaction forecastTransaction = new ForecastTransaction(forecastItem, nextDate);
             if (this.transactions[index] == null) {
                 this.transactions[index] = forecastTransaction;
             } else {
@@ -142,7 +311,7 @@ public class Forecast {
     }
 
     // Generate the summary and significant events list:
-    public void summarize(SignificantEvents[] events) {
+    public void summarize(SignificantEvents[] events) throws EntityException, SQLException, ForecastException, BudgetException {
 
         // Traverse the forecast sequentially from the first day to the last day:
         for (int i = 0; i < this.transactions.length; i++) {
@@ -159,13 +328,7 @@ public class Forecast {
                     // If this is the last transaction on the current day, and the balance dips below the specified
                     // minimum balance, then add this transaction to the significant events list:
                     if (forecastTransaction.getNextTransaction() == null && endingBalance < minimumBalance) {
-                        if (firstSignificantEvent == null) {
-                            firstSignificantEvent = forecastTransaction;
-                            lastSignificantEvent = forecastTransaction;
-                        } else {
-                            lastSignificantEvent.setNextSignificantEvent(forecastTransaction);
-                            lastSignificantEvent = forecastTransaction;
-                        }
+                        addSignificantEvent(forecastTransaction);
                     }
                     forecastTransaction = forecastTransaction.getNextTransaction();
                 }
@@ -175,95 +338,24 @@ public class Forecast {
 
     }
 
-    // Save the forecast to the database:
-    public void save(Connection dbConnection) throws SQLException {
-        PreparedStatement preparedStmt = null;
-        String errorMessage = null;
-        try {
-            // Insert the forecast tuple:
-            errorMessage = "SQL error attempting to insert the Forecast object into the database.";
-            String query = "insert into ForecastDatabase.Forecast (idForecast, description, dateGenerated, " +
-                    "startDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
-                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?))";
-            preparedStmt = dbConnection.prepareStatement(query);
-            preparedStmt.setString(1, idForecast.toString());
-            preparedStmt.setString(2, "Test Forecast for Bill Pay Account");
-            preparedStmt.setObject(3, new java.sql.Timestamp(System.currentTimeMillis()));
-            preparedStmt.setDate(4, new java.sql.Date(startDate.getTimeInMillis()));
-            preparedStmt.setDouble(5, startingBalance);
-            preparedStmt.setDate(6, new java.sql.Date(endDate.getTimeInMillis()));
-            preparedStmt.setDouble(7, endingBalance);
-            preparedStmt.setInt(8, numberOfMonths);
-            preparedStmt.setString(9, idBudget.toString());
-            preparedStmt.execute();
-
-            // Insert the forecast item tuples:
-            errorMessage = "SQL error attempting to insert a forecast item into the database.";
-            query = "insert into forecastdatabase.forecastitem (idForecastItem, category, payee, period, amount, " +
-                    "startDate, numberOfPayments, endDate, ItemType, howPaid, searchString, Forecast_idForecast, " +
-                    "BudgetItem_idBudgetItem) values (UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?), " +
-                    "UUID_TO_BIN(?))";
-            preparedStmt = dbConnection.prepareStatement(query);
-            ForecastItem forecastItem = firstForecastItem;
-            while (forecastItem != null) {
-                preparedStmt.setString(1, forecastItem.getId().toString());
-                preparedStmt.setString(2, forecastItem.getCategory());
-                preparedStmt.setString(3, forecastItem.getPayee());
-                preparedStmt.setString(4, forecastItem.getPeriod().toString());
-                preparedStmt.setDouble(5, forecastItem.getAmount());
-                preparedStmt.setDate(6,  Utility.calendarDateToSqlDate(forecastItem.getStartDate()));
-                preparedStmt.setInt(7,forecastItem.getNumberOfPayments());
-                preparedStmt.setDate(8, Utility.calendarDateToSqlDate(forecastItem.getEndDate()));
-                preparedStmt.setString(9, forecastItem.getItemType());
-                preparedStmt.setString(10, forecastItem.getHowPaid());
-                preparedStmt.setString(12, idForecast.toString());
-                preparedStmt.setString(13, forecastItem.getIdBudgetItem().toString());
-                preparedStmt.execute();
-                forecastItem = forecastItem.getNextItem();
-            }
-
-            // Insert the forecast transaction tuples:
-            errorMessage = "SQL error attempting to insert a forecast transaction into the database.";
-            query = "insert into forecastdatabase.forecasttransaction (idForecastTransaction, plannedDate, " +
-                    "ForecastItem_idForecastItem, Transaction_idTransaction) values (UUID_TO_BIN(?), " +
-                    "?, UUID_TO_BIN(?), UUID_TO_BIN(?))";
-            preparedStmt = dbConnection.prepareStatement(query);
-            for (int i = 0; i < this.transactions.length; i++) {
-                if (this.transactions[i] != null) {
-                    ForecastTransaction forecastTransaction = this.transactions[i];
-                    while (forecastTransaction != null)
-                    {
-                        preparedStmt.setString(1, forecastTransaction.getId().toString());
-                        preparedStmt.setDate(2, new java.sql.Date(forecastTransaction.getPlannedDate().getTimeInMillis()));
-                        preparedStmt.setString(3, forecastTransaction.getForecastItem().getId().toString());
-                        if (forecastTransaction.getTransaction() != null) {
-                            preparedStmt.setString(4, forecastTransaction.getTransaction().getId().toString());
-                        } else {
-                            preparedStmt.setString(4, null);
-                        }
-                        preparedStmt.execute();
-                        forecastTransaction = forecastTransaction.getNextTransaction();
-                    }
-                }
-            }
-
-        } catch (SQLException e) {
-            System.out.println(errorMessage);
-            if (preparedStmt != null) preparedStmt.close();
-            throw e;
+    // Add a transaction to the significant events list:
+    public void addSignificantEvent(ForecastTransaction forecastTransaction) {
+        if (firstSignificantEvent == null) {
+            firstSignificantEvent = forecastTransaction;
+            lastSignificantEvent = forecastTransaction;
+        } else {
+            lastSignificantEvent.setNextSignificantEvent(forecastTransaction);
+            lastSignificantEvent = forecastTransaction;
         }
-    } // End Forecast.save().
+    }
 
     // Add an item to the linked list of items in the forecast:
     public void addForecastItem(ForecastItem forecastItem) {
         if (firstForecastItem == null) {
             firstForecastItem = forecastItem;
         } else {
-            lastForecastItem.setNextItem(forecastItem);
+            lastForecastItem.setNextForecastItem(forecastItem);
         }
         lastForecastItem = forecastItem;
     }
-
-    // The types of significant events that can be generated:
-    public enum SignificantEvents { daysBelowMinimumBalance }
 }

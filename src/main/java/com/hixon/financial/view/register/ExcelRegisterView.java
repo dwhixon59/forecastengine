@@ -25,10 +25,10 @@ public class ExcelRegisterView implements RegisterView {
         // Get a list of forecast transactions starting on the start date:
         String query = "select Transaction.actualDate, BudgetItem.payee, Transaction.actualAmount, " +
                 "Transaction.cleared, Budget.name, Transaction.payee, Register.name, bin_to_UUID(idTransaction) from " +
-                "ForecastDatabase.Transaction, ForecastDatabase.BudgetItem, ForecastDatabase.Budget, " +
+                "ForecastDatabase.Transaction, ForecastDatabase.Budget_Item, ForecastDatabase.Budget, " +
                 "ForecastDatabase.Register where Transaction.Register_idRegister = Register.idRegister and " +
-                "Transaction.BudgetItem_idBudgetItem = BudgetItem.idBudgetItem and BudgetItem.Budget_idBudget = " +
-                "Budget.idBudget and Transaction.actualDate >= " + Utility.calendarDateToSqlStringDate(startDate) + "order by" +
+                "Transaction.BudgetItem_idBudgetItem = Budget_Item.idBudgetItem and Budget_Item.Budget_idBudget = " +
+                "Budget.idBudget and Transaction.actualDate >= " + Utility.calendarDateToSqlDateString(startDate) + "order by" +
                 " 1 asc";
         try {
             Statement statement = Utility.getDbConnection().createStatement();
@@ -85,14 +85,14 @@ public class ExcelRegisterView implements RegisterView {
                    " -B.amount as 'plannedVsActual' " +
                       "from forecastdatabase.ForecastTransaction A, forecastdatabase.forecastitem B " +
                       "where A.ForecastItem_idForecastItem = B.idForecastItem and A.plannedDate < " +
-                          Utility.calendarDateToSqlStringDate(startDate) + " " +
+                          Utility.calendarDateToSqlDateString(startDate) + " " +
                       "union " +
                       "select B.category, B.payee, 0 as 'plannedAmount', A.actualAmount as 'actualAmount', " +
                           "A.actualAmount as 'plannedVsActual' " +
                       "from forecastdatabase.transaction A, forecastdatabase.budgetitem B " +
                       "where A.BudgetItem_idBudgetItem = B.idBudgetItem and A.actualDate >= " +
-                          Utility.calendarDateToSqlStringDate(startDate) + " and " +
-                          "A.actualDate <= " + Utility.calendarDateToSqlStringDate(startDate) +
+                          Utility.calendarDateToSqlDateString(startDate) + " and " +
+                          "A.actualDate <= " + Utility.calendarDateToSqlDateString(startDate) +
                ") as T " +
                "group by 1,2 order by 1,2";
 

@@ -3,7 +3,8 @@ package com.hixon.financial.model.budget;
 import com.hixon.financial.Utility;
 import com.hixon.financial.model.DependentEntity;
 import com.hixon.financial.model.EntityException;
-import com.hixon.financial.model.FinancialAppEntityInt;
+import com.hixon.financial.model.EntityInt;
+import com.hixon.financial.model.forecast.ForecastException;
 import com.hixon.financial.model.register.Merchant;
 import com.hixon.financial.model.register.RegisterException;
 
@@ -21,23 +22,24 @@ public class BudgetItemMerchant extends DependentEntity {
    /*
     * Fields in the Wells Fargo download file transaction classifier:
     */
+   protected double amount = 0;
+   protected int percentage = 0;
+   UUID idBudgetItem = null;
+   BudgetItem budgetItem = null;
+   UUID idMerchant = null;
+
    private static final String selectQuery = "select amount, percentage, BudgetItem_idBudgetItem as idBudgetItem, " +
            "Merchant_idMerchant as idMerchant from forecastdatabase.budgetitem_merchant ";
 
    private static final String insertQuery = "insert into forecastdatabase.budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
 
-   private static final String selectItemsForMerchantQuery = "select bin_to_uuid(BudgetItem.id) as 'idBudgetItem', " +
-           "category, payee, period, BudgetItem.amount, startDate, numberOfPayments, " + "endDate, ItemType, howPaid, " +
-           "bin_to_uuid(Budget_idBudget) as 'idBudget', BudgetItem_Merchant.amount as merchant_amount, " +
-           "BudgetItem_Merchant.percentage as merchant_percentage from ForecastDatabase.BudgetItem inner join " +
-           "ForecastDatabase.BudgetItem_Merchant on BudgetItem.id = BudgetItem_idBudgetItem ";
-
-   protected double amount = 0;
-   protected int percentage = 0;
-   UUID idBudgetItem = null;
-   BudgetItem budgetItem = null;
-   UUID idMerchant = null;
+   private static final String selectItemsForMerchantQuery = "select bin_to_uuid(Budget_Item.idBudgetItem) as " +
+           "'idBudgetItem', category, payee, period, Budget_Item.amount, runningBalance, startDate, numberOfPayments, "
+           + "endDate, ItemType, howImportant, howOccurs, howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget', " +
+           "BudgetItem_Merchant.amount as merchant_amount, BudgetItem_Merchant.percentage as merchant_percentage from " +
+           "ForecastDatabase.Budget_Item inner join ForecastDatabase.BudgetItem_Merchant on Budget_Item.idBudgetItem = " +
+           "BudgetItem_idBudgetItem ";
 
 
    /*
@@ -88,6 +90,31 @@ public class BudgetItemMerchant extends DependentEntity {
       setDirty(true);
    }
 
+   @Override
+   public String getInsertQuery() throws BudgetException, ForecastException {
+      return null;
+   }
+
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return "budget item merchant";
+   }
+
 
    /*
     * Constructors for BudgetItemMerchant:
@@ -123,7 +150,7 @@ public class BudgetItemMerchant extends DependentEntity {
     * Load and save methods for BudgetItemMerchant:
     */
    public static BudgetItemMerchant getById(UUID idBudgetItemMerchant) throws SQLException, BudgetException, EntityException {
-      ResultSet rs = FinancialAppEntityInt.getRSById(selectQuery, idBudgetItemMerchant, "Database " +
+      ResultSet rs = EntityInt.getRSById(selectQuery, idBudgetItemMerchant, "Database " +
               "error occurred retrieving BudgetItemMerchant with id = " + idBudgetItemMerchant);
       return new BudgetItemMerchant(rs);
    }
@@ -131,7 +158,7 @@ public class BudgetItemMerchant extends DependentEntity {
    public void save() throws RegisterException, EntityException, BudgetException, SQLException {
       try {
 
-      super.save(insertQuery + amount + ", " + percentage + ", uuid_to_bin('" + idBudgetItem + "'), " +
+      super.executeQueryForThis(insertQuery + amount + ", " + percentage + ", uuid_to_bin('" + idBudgetItem + "'), " +
               "uuid_to_bin('" + idMerchant + "'))", "");
       }
       catch (EntityException ee) {

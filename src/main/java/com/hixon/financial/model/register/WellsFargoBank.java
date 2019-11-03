@@ -9,7 +9,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
-import java.util.UUID;
 
 /*
  * This class analyzes transactions from a Wells Fargo CSV download file:
@@ -19,8 +18,9 @@ public class WellsFargoBank extends Bank {
    /*
     * Fields in the Wells Fargo download file transaction classifier:
     */
+   //TODO:  Had to remove UT because it clashed with the abbreviation for "utilities".
    private static String states = "|AL|AK|AS|AZ|AR|CA|CO|CT|DE|DC|FM|FL|GA|GU|HI|ID|IL|IN|IA|KS|KY|LA|ME|MH|MD|MA|MI|" +
-           "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|";
+           "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|VT|VA|WA|WV|WI|WY|";
    private final SimpleDateFormat sdf = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
    private String[] payeeTokens;
 
@@ -38,15 +38,29 @@ public class WellsFargoBank extends Bank {
       super(register, resolver);
    }
 
+
+   /*
+    * Helper methods:
+    */
+   @Override
+   public String getImportRecordBaseName (CSVRecord record) throws ParseException {
+      return record.get(Transaction.Headers.TRANSACTION_DATE) + "\t" + record.get(Transaction.Headers.AMOUNT) + "\t" +
+              record.get(Transaction.Headers.CLEARED) + "\t" + record.get(Transaction.Headers.CHECK_NUMBER) + "\t" +
+              record.get(Transaction.Headers.PAYEE);
+   }
+
+
    /*
     * Main methods for the Wells Fargo download file transaction classifier:
     */
    // Load up a Transaction from a Wells Fargo CSV transaction download file:
    @Override
-   public Transaction loadFromCSV(CSVRecord record) throws ParseException, RegisterException, SQLException {
+   public Transaction loadFromCSV(CSVRecord record, String importRecordId) throws ParseException, RegisterException, SQLException {
+
+      // Create a transaction:
+      Transaction transaction = new Transaction(register);
 
       // Set the fields of the transaction from the tokens in the record:
-      transaction.setidTransaction(UUID.randomUUID());
       Calendar postDate = Calendar.getInstance();
       postDate.setTime(sdf.parse(record.get(Transaction.Headers.TRANSACTION_DATE)));
       transaction.setPostDate(postDate);
@@ -59,29 +73,30 @@ public class WellsFargoBank extends Bank {
       } else {
          transaction.setCheckNumber(0);
       }
+      transaction.setImportRecordId(importRecordId);
 
       // Tokenize the bank payee (single blank is the separator):
       payeeTokens = transaction.getPayee().split(" ");
 
       // Locate the authorization date if there is one:
       int i = 2;
-      for (; i < payeeTokens.length &&
-              !payeeTokens[i].matches("^(0?[1-9]|1[0-2]){1}\\/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]){1}.*"); i++)
-         ;
+      for (; i < payeeTokens.length; i++) {
 
-      // If we found a date, use it as the authorization date:
-      if (i < payeeTokens.length) {
-         transaction.setAuthorizationDate(Utility.stringDateSlashToCalendarDate(payeeTokens[i]));
-      }
+         // If we found a date, use it as the authorization date:
+         if (payeeTokens[i].matches("^(0?[1-9]|1[0-2]){1}\\/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]){1}.*")) {
+            transaction.setAuthorizationDate(Utility.stringDateSlashToCalendarDate(payeeTokens[i]));
+            break;
+         }
+       }
 
       // Parse out the merchant name:
-      transaction.setMerchantPayee(parseMerchantPayee());
+      transaction.setMerchantPayee(parseMerchantPayee(transaction.getPayee()));
 
       return transaction;
    }
 
    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-   public String parseMerchantPayee() throws RegisterException, SQLException, ParseException {
+   public String parseMerchantPayee(String payee) throws RegisterException, SQLException, ParseException {
 
       // Construct the merchant payee string from portions of the bank payee string:
       String merchantPayee = "";
@@ -129,6 +144,7 @@ public class WellsFargoBank extends Bank {
          case "RECURRING TRANSFER TO":
          case "RECURRING TRANSFER FROM":
          case "ATM TRANSFER AUTHORIZED":
+         case "Transfer in Branch/Store":
 
             // Find the account number:
             for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
@@ -137,7 +153,7 @@ public class WellsFargoBank extends Bank {
                if (payeeTokens[payeeTokens.length - 2].equalsIgnoreCase("CARD")) {
                   accountNumber = payeeTokens[payeeTokens.length - 2];
                }
-               accountNumber = resolver.resolveUnmatchedAccount(transaction.getPayee());
+               accountNumber = resolver.resolveUnmatchedAccount(payee);
             } else {
                accountNumber = payeeTokens[i];
             }
@@ -159,10 +175,10 @@ public class WellsFargoBank extends Bank {
             }
             break;
 
-         // If this is an online transfer:
+         // If this is an interest payment:
          case "INTEREST PAYMENT":
 
-            // then Wells Fargo is the merchant:
+            // then the merchant is Interest Payment:
             merchantPayee = "Interest Payment";
             break;
 
@@ -195,8 +211,6 @@ public class WellsFargoBank extends Bank {
 
             break;
       }
-      System.out.println("Transaction payee = " + transaction.getPayee() + " for " +
-              Utility.formatDollarAmount(Math.abs(transaction.getAmount())));
       System.out.println("Parsed merchant payee = " + merchantPayee);
       return merchantPayee;
    }
@@ -218,7 +232,7 @@ public class WellsFargoBank extends Bank {
       // Concatenate the following tokens until we find one that is not all characters or a short number (as in PIER 1):
       for (i = start;
            i < payeeTokens.length &&
-                   payeeTokens[i].matches("^[A-Za-z'/\\*\\&]*$|^[0-9]{1,3}$");
+                   payeeTokens[i].matches("^[A-Za-z'/\\*\\&\\,]*$|^[0-9]{1,3}$");
            i++) {
          merchantPayee = merchantPayee + " " + addCleanToken(payeeTokens[i]);
       }
@@ -228,7 +242,7 @@ public class WellsFargoBank extends Bank {
    // Remove any serial number, etc. from a token:
    private String addCleanToken(String payeeToken) {
       String[] tokens = payeeToken.split("\\*");
-      return tokens[0];
+      return (tokens[0].length() > 0) ? tokens[0] : tokens[1];
    }
 
    // Remove city, state and the word "RECURRING" from a token list:

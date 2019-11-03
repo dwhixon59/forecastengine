@@ -1,8 +1,9 @@
 package com.hixon.financial.model.budget;
 
 import com.hixon.financial.model.EntityException;
-import com.hixon.financial.model.FinancialAppEntityInt;
+import com.hixon.financial.model.EntityInt;
 import com.hixon.financial.model.IndependentEntity;
+import com.hixon.financial.model.forecast.ForecastException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,7 +15,45 @@ public class Budget extends IndependentEntity {
     * Fields:
     */
    private String budgetName = null;
-   private static final String selectQuery = "select bin_to_uuid(id), name from ForecastDatabase.Budget ";
+   private static final String selectQuery = "select bin_to_uuid(idBudget) as idbudget, name from " +
+           "ForecastDatabase.Budget ";
+
+
+   /*
+   * Getters and setters:
+   */
+
+   public String getBudgetName() {
+      return budgetName;
+   }
+   public void setBudgetName(String budgetName) {
+      this.budgetName = budgetName;
+      setDirty(true);
+   }
+   @Override
+   public String getInsertQuery() throws BudgetException, ForecastException {
+      return null;
+   }
+
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return "budget";
+   }
 
 
    /*
@@ -40,29 +79,18 @@ public class Budget extends IndependentEntity {
       }
    }
 
-   /*
-   * Getters and setters:
-   */
-   public String getBudgetName() {
-      return budgetName;
-   }
-   public void setBudgetName(String budgetName) {
-      this.budgetName = budgetName;
-      setDirty(true);
-   }
-
 
    /*
     * Load and save methods:
     */
    public static Budget getById(UUID idBudget) throws BudgetException, EntityException, SQLException {
-      ResultSet rs = FinancialAppEntityInt.getRSById(selectQuery, idBudget, "No budget found with id "
-              + idBudget);
+      ResultSet rs = EntityInt.getRSById(selectQuery + "where idBudget = ", idBudget,
+              "No budget found with id " + idBudget);
       return new Budget(rs);
    }
 
    public static Budget getByName(String name) throws BudgetException, EntityException, SQLException {
-      ResultSet rs = FinancialAppEntityInt.getRS(selectQuery + "where name = '" + name + "'",
+      ResultSet rs = EntityInt.getSingletonRS(selectQuery + "where name = '" + name + "'",
               "No budget found with name " + name);
       return new Budget(rs);
    }

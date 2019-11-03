@@ -1,25 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="bd9c63fc-86f8-4b18-85e3-035367ca632b" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntity.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntityInt.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntityInt.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntityInt.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/BudgetItemMerchant.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionSplit.java" afterDir="false" />
+    <list default="true" id="bd9c63fc-86f8-4b18-85e3-035367ca632b" name="Default Changelist" comment="Reconciliation logic complete.">
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/Entity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/EntityInt.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/Item.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransactionDatabaseIterator.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransactionSplit.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/UserResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/~$erations and Stories.docx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/dwhix.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/dwhix.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Iterations and Stories.docx" beforeDir="false" afterPath="$PROJECT_DIR$/Iterations and Stories.docx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/Utility.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/Utility.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/controller/Controller.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/controller/Controller.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/controller/Importer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/controller/Importer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntity.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntity.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntityBase.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntity.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntity.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntity.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntityInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/DependentEntityInt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntity.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/FinancialAppEntityInt.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntity.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntity.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntityInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/IndependentEntityInt.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/Budget.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/Budget.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/BudgetItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/BudgetItem.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/BudgetItemMerchant.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/BudgetItemMerchant.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/Forecast.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/Forecast.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastEngine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastEngine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastItem.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransactionIterator.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransactionIterator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/LongTermForecast.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/LongTermForecast.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Bank.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Bank.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/FinancialInstitution.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/FinancialInstitution.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/GenericClassifer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/GenericClassifer.java" afterDir="false" />
@@ -27,38 +38,54 @@
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/MerchantPayee.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/MerchantPayee.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Register.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Register.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Transaction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/Transaction.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/VirtualRegister.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/VirtualRegister.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/WellsFargoBank.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/WellsFargoBank.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/ForecastView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/ForecastView.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/excel/excelView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/excel/excelView.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/ExcelRegisterView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/ExcelRegisterView.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolver.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolver.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolverCmdLine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolverCmdLine.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionSplit.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financial/model/register/TransactionSplit.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/Utility.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/Utility.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Controller.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Controller.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer$1.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer$TerminationCondition.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer$TerminationCondition.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/controller/Importer.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/FinancialAppEntity.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/FinancialAppEntity.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/FinancialAppEntityBase.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/DependentEntity.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/DependentEntity.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/DependentEntityInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/DependentEntityInt.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/FinancialAppEntity.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/FinancialAppEntityInt.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/IndependentEntity.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/IndependentEntity.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/IndependentEntityInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/IndependentEntityInt.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/Budget.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/Budget.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$HowPaid.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$HowPaid.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$ItemType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$ItemType.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$PeriodType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$PeriodType.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$HowPaid.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$ItemType.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem$PeriodType.class" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItem.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItemMerchant.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/budget/BudgetItemMerchant.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/Forecast$SignificantEvents.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/Forecast$SignificantEvents.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/Forecast.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/Forecast.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastEngine.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastEngine.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastItem$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastItem$1.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastItem.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastItem.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastTransaction.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastTransaction.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastTransactionIterator.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/ForecastTransactionIterator.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/LongTermForecast.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/forecast/LongTermForecast.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Bank.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Bank.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/FinancialInstitution.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/FinancialInstitution.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/GenericClassifer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/GenericClassifer.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Merchant.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Merchant.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/MerchantPayee.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/MerchantPayee.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Register.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Register.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Transaction$Headers.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Transaction$Headers.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Transaction.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/Transaction.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/VirtualRegister.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/VirtualRegister.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/WellsFargoBank.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/model/register/WellsFargoBank.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/ForecastView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/ForecastView.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/excel/excelView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/excel/excelView.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/ExcelRegisterView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/ExcelRegisterView.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/TransactionResolver.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/TransactionResolver.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/TransactionResolverCmdLine.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/TransactionResolverCmdLine.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financial/view/register/TransactionSplit.class" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -79,6 +106,7 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Interface" />
+        <option value="Enum" />
         <option value="Class" />
       </list>
     </option>
@@ -94,34 +122,44 @@
     </option>
   </component>
   <component name="ProjectId" id="1OWJMMIRnVLZYT4ALX0pYweu6x0" />
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="extract.method.default.visibility" value="public" />
     <property name="last_directory_selection" value="$PROJECT_DIR$/src/main/java/com/hixon/financial/model" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
-    <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors.Java" />
+    <property name="restartRequiresConfirmation" value="false" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RecentsManager">
     <key name="ExtractSuperBase.RECENT_KEYS">
+      <recent name="com.hixon.financial.model.forecast" />
+      <recent name="com.hixon.financial.model.budget" />
       <recent name="com.hixon.financial.model" />
       <recent name="com.hixon.financial.model.register" />
-      <recent name="com.hixon.financial.model.forecast" />
       <recent name="com.hixon.financial.view.register" />
     </key>
     <key name="MoveClassesOrPackagesDialog.RECENTS_KEY">
+      <recent name="com.hixon.financial.model.register" />
       <recent name="com.hixon.financial.model" />
       <recent name="com.hixon.financial" />
       <recent name="com.hixon.financial.view.register" />
       <recent name="com.hixon.financial.view" />
-      <recent name="com.hixon.financial.view.excel" />
+    </key>
+    <key name="MoveMembersDialog.RECENTS_KEY">
+      <recent name="com.hixon.financial.model.forecast.ForecastTransactionSplit" />
+      <recent name="com.hixon.financial.view.register.TransactionResolver" />
+      <recent name="com.hixon.financial.model.FinancialAppEntity" />
     </key>
     <key name="CreateClassDialog.RecentsKey">
+      <recent name="com.hixon.financial.model.forecast" />
       <recent name="com.hixon.financial.view.register" />
       <recent name="com.hixon.financial.model.budget" />
       <recent name="com.hixon.financial.model" />
       <recent name="com.hixon.financial.model.register" />
-      <recent name="com.hixon.financial.model.forecast" />
     </key>
   </component>
   <component name="RunDashboard">
@@ -153,10 +191,10 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Create, Render and Save Long Term Forecast" type="Application" factoryName="Application">
+    <configuration name="Create and Save Long Term Forecast" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="com.hixon.financial.controller.Controller" />
       <module name="ForecastEngine" />
-      <option name="PROGRAM_PARAMETERS" value="createLongTermForecast renderLongTermForecast saveLongTermForecast" />
+      <option name="PROGRAM_PARAMETERS" value="createLongTermForecast saveLongTermForecast" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -165,6 +203,20 @@
       <option name="MAIN_CLASS_NAME" value="com.hixon.financial.controller.Controller" />
       <module name="ForecastEngine" />
       <option name="PROGRAM_PARAMETERS" value="renderRegister createForecast renderForecast saveForecast" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Import Budget Items" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="com.hixon.financial.controller.Controller" />
+      <module name="ForecastEngine" />
+      <option name="PROGRAM_PARAMETERS" value="importBudgetItemsFile" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="HixonFinancialApp.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -183,7 +235,7 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Import and Render Register " type="Application" factoryName="Application" temporary="true">
+    <configuration name="Import and Render Register " type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="com.hixon.financial.controller.Controller" />
       <module name="ForecastEngine" />
       <option name="PROGRAM_PARAMETERS" value="importCsvTransactionFile renderRegister" />
@@ -239,12 +291,28 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="renderSpendingReportMTD" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="com.hixon.financial.controller.Controller" />
+      <module name="ForecastEngine" />
+      <option name="PROGRAM_PARAMETERS" value="renderSpendingReportMTD" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="HixonFinancialApp.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <list>
       <item itemvalue="Application.Create and Render Long Term Forecast" />
       <item itemvalue="Application.Create and Render Short Term Forecast" />
-      <item itemvalue="Application.Create, Render and Save Long Term Forecast" />
+      <item itemvalue="Application.Create and Save Long Term Forecast" />
       <item itemvalue="Application.Custom" />
       <item itemvalue="Application.Import Transactions" />
+      <item itemvalue="Application.renderSpendingReportMTD" />
+      <item itemvalue="Application.Import Budget Items" />
       <item itemvalue="Application.Render Long Term Forecast" />
       <item itemvalue="Application.Render Register" />
       <item itemvalue="Application.Import and Render Register " />
@@ -253,7 +321,6 @@
     <recent_temporary>
       <list>
         <item itemvalue="Application.Run All" />
-        <item itemvalue="Application.Import and Render Register " />
       </list>
     </recent_temporary>
   </component>
@@ -291,34 +358,163 @@
         </entry>
       </map>
     </option>
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list />
+          </value>
+        </entry>
+        <entry key="User">
+          <value>
+            <list />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+    <MESSAGE value="Reconciliation logic complete." />
+    <option name="LAST_COMMIT_MESSAGE" value="Reconciliation logic complete." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastItem.java</url>
-          <line>474</line>
-          <option name="timeStamp" value="54" />
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolverCmdLine.java</url>
+          <line>710</line>
+          <option name="timeStamp" value="158" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/budget/Item.java</url>
+          <line>668</line>
+          <option name="timeStamp" value="163" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>536</line>
+          <option name="timeStamp" value="164" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>460</line>
+          <option name="timeStamp" value="168" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>467</line>
+          <option name="timeStamp" value="170" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>513</line>
+          <option name="timeStamp" value="177" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>572</line>
+          <option name="timeStamp" value="180" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>598</line>
+          <option name="timeStamp" value="182" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>601</line>
+          <option name="timeStamp" value="183" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>604</line>
+          <option name="timeStamp" value="184" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>652</line>
+          <option name="timeStamp" value="187" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>659</line>
+          <option name="timeStamp" value="188" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>554</line>
+          <option name="timeStamp" value="201" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>335</line>
+          <option name="timeStamp" value="209" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>496</line>
+          <option name="timeStamp" value="210" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>635</line>
+          <option name="timeStamp" value="214" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>690</line>
+          <option name="timeStamp" value="217" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>735</line>
+          <option name="timeStamp" value="221" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>698</line>
+          <option name="timeStamp" value="223" />
+        </line-breakpoint>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>671</line>
+          <option name="timeStamp" value="226" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastItem.java</url>
-          <line>381</line>
-          <option name="timeStamp" value="69" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/ExcelRegisterView.java</url>
-          <line>99</line>
-          <option name="timeStamp" value="74" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastEngine.java</url>
-          <line>68</line>
-          <option name="timeStamp" value="77" />
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>703</line>
+          <option name="timeStamp" value="230" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/view/register/TransactionResolverCmdLine.java</url>
-          <line>98</line>
-          <option name="timeStamp" value="100" />
+          <line>379</line>
+          <option name="timeStamp" value="231" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastItem.java</url>
+          <line>520</line>
+          <option name="timeStamp" value="232" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>449</line>
+          <option name="timeStamp" value="233" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>682</line>
+          <option name="timeStamp" value="235" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/ForecastTransaction.java</url>
+          <line>630</line>
+          <option name="timeStamp" value="238" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financial/model/forecast/Forecast.java</url>
+          <line>316</line>
+          <option name="timeStamp" value="245" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
@@ -326,7 +522,9 @@
       <configuration name="Application">
         <watch expression="startDate" language="JAVA" />
         <watch expression="query" />
-        <watch expression="query" />
+        <watch expression="query" language="JAVA" />
+        <watch expression="financialInstitutionName" />
+        <watch expression="selectQuery" />
       </configuration>
     </watches-manager>
   </component>

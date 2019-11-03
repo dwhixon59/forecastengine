@@ -2,10 +2,10 @@ package com.hixon.financial.model;
 
 import java.util.UUID;
 
-public interface IndependentEntityInt extends FinancialAppEntityInt {
+public interface IndependentEntityInt extends EntityInt {
    // The ID operations:
-   public UUID getId();
+   UUID getId();
 
-   public void setId(UUID id);
+   void setId(UUID id);
 
 }

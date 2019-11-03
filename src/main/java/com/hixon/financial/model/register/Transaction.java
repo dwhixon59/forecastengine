@@ -1,11 +1,13 @@
 package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
+import com.hixon.financial.model.EntityException;
+import com.hixon.financial.model.EntityInt;
 import com.hixon.financial.model.IndependentEntity;
+import com.hixon.financial.model.budget.BudgetException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Calendar;
 import java.util.UUID;
 
@@ -26,19 +28,56 @@ public class Transaction extends IndependentEntity {
    private Register register = null;
    private UUID idMerchant = null;
    private String merchantPayee = null;
-
+   private boolean isImproper = false;
+   private String importRecordId = null;
+   private Merchant merchant;
 
    public enum Headers {
       TRANSACTION_DATE, AMOUNT, CLEARED, CHECK_NUMBER, PAYEE
    }
 
-   private static final String selectQuery = "select idTransaction, postDate, authorizationDate, amount, cleared, " +
-           "checkNumber, payee, balance, Register_idRegister, Merchant_idMerchant from " +
-           "forecastdatabase.transaction where ";
+   private static final String selectQuery = "select bin_to_uuid(idTransaction) as idTransaction, postDate, " +
+           "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
+           "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant from " +
+           "forecastdatabase.transaction ";
 
    private static final String insertQuery = "insert into forecastdatabase.transaction (idTransaction, " +
-           "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, Register_idRegister, " +
-           "Merchant_idMerchant) values(";
+           "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
+           "Register_idRegister, Merchant_idMerchant) values(";
+   @Override
+   public String getInsertQuery() {
+      return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
+              Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
+              checkNumber + ", \"" + payee + "\", " + balance + "," + isImproper + ", \"" + importRecordId +
+              "\", uuid_to_bin('" + register.getId() + "'), uuid_to_bin('" + idMerchant + "'))";
+   }
+
+   private static final String insertOnDuplicateUpdateQuery = "";
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   private static final String updateQuery = "update forecastdatabase.transaction set idTransaction = ?, " +
+           "set postdate = ?, set authorizationDate = ?, set amount = ?, set cleared = ?, set checkNumber = ?, " +
+           "set payee = ?, set balance = ?, set isImproper = ?, set importRecordId = ?, set Register_idRegister = ?, " +
+           "set Merchant_idMerchant = ? where ";
+   @Override
+   public String getUpdateQuery() {
+      return updateQuery;
+   }
+
+   private static final String deleteQuery = "delete from forecastdatabase.transaction where ";
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return "transaction";
+   }
 
 
    /*
@@ -104,7 +143,10 @@ public class Transaction extends IndependentEntity {
       this.idRegister = idRegister;
    }
 
-   public Register getRegister() {
+   public Register getRegister() throws EntityException, SQLException, RegisterException {
+      if (register == null) {
+         register = Register.getById(idRegister);
+      }
       return register;
    }
 
@@ -116,12 +158,23 @@ public class Transaction extends IndependentEntity {
       return authorizationDate;
    }
 
+   public Calendar getDate() {
+      return (authorizationDate != null) ? authorizationDate : postDate;
+   }
+
    public void setAuthorizationDate(Calendar authorizationDate) {
       this.authorizationDate = authorizationDate;
    }
 
    public UUID getIdMerchant() {
       return idMerchant;
+   }
+
+   public Merchant getMerchant() throws EntityException, RegisterException {
+      if (merchant == null) {
+         merchant = Merchant.getById(idMerchant);
+      }
+      return merchant;
    }
 
    public void setIdMerchant(UUID idMerchant) {
@@ -132,10 +185,6 @@ public class Transaction extends IndependentEntity {
       return selectQuery;
    }
 
-   public static String getInsertQuery() {
-      return insertQuery;
-   }
-
    public void setMerchantPayee(String merchantPayee) {
       this.merchantPayee = merchantPayee;
    }
@@ -144,15 +193,26 @@ public class Transaction extends IndependentEntity {
       return merchantPayee;
    }
 
+   public boolean getIsImproper() {
+      return isImproper;
+   }
+
+   public void setIsImproper(boolean isImproper) {
+      this.isImproper = isImproper;
+   }
+
+   public String getImportRecordId() {
+      return importRecordId;
+   }
+
+   public void setImportRecordId(String importRecordId) {
+      this.importRecordId = importRecordId;
+   }
+
 
    /*
     * Constructors:
     */
-
-   public Transaction() {
-      super(false);
-   }
-
    public Transaction(Register register) {
       super(true);
       this.register = register;
@@ -168,49 +228,59 @@ public class Transaction extends IndependentEntity {
     * Load and save methods:
     */
 
+   public static Transaction getById(UUID idTransaction) throws EntityException, SQLException {
+      return new Transaction(EntityInt.getRSById(selectQuery + "where idTransaction =", idTransaction,
+              "Database error encountered trying to retrieve a transaction."));
+   }
+
+   public static Transaction getByImportRecordId(String importRecordId) throws EntityException, SQLException {
+      ResultSet rs = EntityInt.getRS(selectQuery + "where importRecordId = \"" + importRecordId + "\"",
+              "Database error encountered trying to retrieve a transaction by importRecordId.");
+      Transaction transaction = null;
+      if (rs.next()) {
+         //TODO: create a log message for this:  System.out.println("Transaction \"" + importRecordId + "\" already imported.  Skipping.");
+         transaction = new Transaction(rs);
+      }
+      return transaction;
+   }
+
    public void loadFromResultSet(ResultSet rs) throws SQLException {
 
       id = UUID.fromString(rs.getString("idTransaction"));
       postDate = Utility.SqlDateToCalendarDate(rs.getDate("postDate"));
+      authorizationDate = Utility.SqlDateToCalendarDate(rs.getDate("authorizationDate"));
       cleared = rs.getBoolean("cleared");
       checkNumber = rs.getInt("checkNumber");
       payee = rs.getString("payee");
       amount = rs.getDouble("amount");
       balance = rs.getDouble("balance");
-      idRegister = UUID.fromString(rs.getString("Register_idRegister"));
-      idMerchant = UUID.fromString(rs.getString("Merchant_idMerchant"));
+      isImproper = rs.getBoolean("isImproper");
+      importRecordId = rs.getString("importRecordId");
+      idRegister = UUID.fromString(rs.getString("idRegister"));
+      idMerchant = UUID.fromString(rs.getString("idMerchant"));
    }
 
-   // Save the transaction to the database:
-   public void save() throws RegisterException {
 
-      String query = null;
-      Statement statement = null;
-      ResultSet rs = null;
+   /*
+    * Helper methods:
+    */
+   @Override
+   public String toString() {
+      String s = null;
       try {
-         query = insertQuery + "uuid_to_bin('" + id + "'), " +
-                 Utility.calendarDateToSqlStringDate(postDate) + ", " +
-                 Utility.calendarDateToSqlStringDate(authorizationDate) + ", " + amount + ", " + cleared + ", " +
-                 checkNumber + ", \"" + payee + "\", " + balance + ", uuid_to_bin('" + register.getId() + "'), " +
-                 "uuid_to_bin('" + idMerchant + "'))";
-         System.out.println(query);
-         statement = Utility.getDbConnection().createStatement();
-         int rowCount = statement.executeUpdate(query);
-         if (rowCount != 1) {
-            throw new RegisterException("Problem with Insert of transaction.  Returned row count not equal to 1.");
-         }
-      } catch (SQLException e) {
-
-         // If the transaction doesn't already exist in the register:
-         try {
-            if (statement != null) statement.close();
-            if (rs != null) rs.close();
-         } finally {
-            RegisterException re = new RegisterException("Database error attempting to insert a transaction.");
-            re.initCause(e);
-            throw re;
-         }
+         s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
+                 Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
+                 checkNumber + ", Payee = " + payee + ", amount = " + amount + ", Balance = " + balance + ", Register = "  +
+                 getRegister().getRegisterName() + ", Merchant = " + merchantPayee + ", Disputed = " + isImproper;
+      } catch (EntityException | SQLException | RegisterException e) {
+         e.printStackTrace();
       }
+      return s;
    }
+
+
+   /*
+    * Main methods:
+    */
 }
 

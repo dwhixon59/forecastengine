@@ -26,7 +26,7 @@ public class Utility {
    public static String calendarDateToStringDate(Calendar calendar) {
       String dateFormatted;
       if (calendar != null) {
-         SimpleDateFormat fmt = new SimpleDateFormat("MMM-dd-yyyy");
+         SimpleDateFormat fmt = new SimpleDateFormat("MM-dd-yyyy");
          fmt.setCalendar(calendar);
          dateFormatted = fmt.format(calendar.getTime());
       } else {
@@ -35,20 +35,20 @@ public class Utility {
       return dateFormatted;
    }
 
-   // Convert a Java Calendar date to YYYY-MM-DD HH:MM:SS format for inserting into the database:
-   public static Date calendarDateToSqlDate(Calendar calendar) {
-      Date sqlDate = null;
+   // Convert a Java Calendar date to YYYY-MM-DD format for inserting into the database:
+   public static java.sql.Date calendarDateToSqlDate(Calendar calendar) {
+      java.sql.Date sqlDate = null;
       if (calendar != null) {
          sqlDate = new Date(calendar.getTimeInMillis());
       }
       return sqlDate;
    }
 
-   // Convert a Java Calendar date to YYYY-MM-DD HH:MM:SS format for inserting into the database:
-   public static String calendarDateToSqlStringDate(Calendar calendar) {
+   // Convert a Java Calendar date to YYYY-MM-DD format for inserting into the database:
+   public static String calendarDateToSqlDateString(Calendar calendar) {
       String dateFormatted;
       if (calendar != null) {
-         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
          fmt.setCalendar(calendar);
          dateFormatted = "'" + fmt.format(calendar.getTime()) + "'";
       } else {
@@ -107,7 +107,9 @@ public class Utility {
             sdf = new SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH);
             sdf.parse(stringDate);
             calendarDate = sdf.getCalendar();
-
+            if (now.compareTo(calendarDate) <0) {
+               calendarDate.set(Calendar.YEAR, year -1);
+            }
          }
      }
       return calendarDate;
@@ -156,5 +158,17 @@ public class Utility {
          calendarDate = sdf.getCalendar();
       }
       return calendarDate;
+   }
+
+   public static int daysBeteween(Calendar firstDate, Calendar secondDate) {
+      int oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
+      Calendar firstDate2 = Calendar.getInstance();
+      firstDate2.setTimeInMillis(firstDate.getTimeInMillis());
+      firstDate2.clear(Calendar.HOUR); firstDate2.clear(Calendar.MINUTE); firstDate2.clear(Calendar.SECOND);
+      Calendar secondDate2 = Calendar.getInstance();
+      secondDate2.setTimeInMillis(secondDate.getTimeInMillis());
+      secondDate2.clear(Calendar.HOUR); secondDate2.clear(Calendar.MINUTE); secondDate2.clear(Calendar.SECOND);
+      int diffDays = Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
+      return diffDays;
    }
 }

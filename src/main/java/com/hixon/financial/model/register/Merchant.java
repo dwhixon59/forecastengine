@@ -2,11 +2,12 @@ package com.hixon.financial.model.register;
 
 import com.hixon.financial.Utility;
 import com.hixon.financial.model.EntityException;
-import com.hixon.financial.model.FinancialAppEntityInt;
+import com.hixon.financial.model.EntityInt;
 import com.hixon.financial.model.IndependentEntity;
 import com.hixon.financial.model.budget.BudgetException;
 import com.hixon.financial.model.budget.BudgetItem;
 import com.hixon.financial.model.budget.BudgetItemMerchant;
+import com.hixon.financial.model.forecast.ForecastException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -31,8 +32,10 @@ public class Merchant extends IndependentEntity {
    boolean askAlways = false;
    private List<MerchantPayee> merchantPayees = new LinkedList<>();
 
-   public static Merchant getById(UUID idMerchant) {
-      return null;
+   public static Merchant getById(UUID idMerchant) throws EntityException, RegisterException {
+      ResultSet rs = EntityInt.getRSById(selectQuery + "where idMerchant = ", idMerchant,
+              "trying to retrieve a Merchant by it's ID.");
+      return new Merchant(rs);
    }
 
 
@@ -44,7 +47,7 @@ public class Merchant extends IndependentEntity {
    }
 
    public void setName(String name) {
-      dirty = true;
+     setDirty(true);
       this.name = name;
    }
 
@@ -53,6 +56,7 @@ public class Merchant extends IndependentEntity {
    }
 
    public void setAskAlways(boolean askAlways) {
+      setDirty(true);
       this.askAlways = askAlways;
    }
 
@@ -60,11 +64,36 @@ public class Merchant extends IndependentEntity {
       return merchantPayees;
    }
 
+   @Override
+   public String getInsertQuery() throws BudgetException, ForecastException {
+      return null;
+   }
+
+   @Override
+   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getUpdateQuery() throws BudgetException {
+      return null;
+   }
+
+   @Override
+   public String getDeleteQuery() {
+      return null;
+   }
+
+   @Override
+   public String getEntityTypeName() {
+      return null;
+   }
+
 
    /*
     * Constructors:
     */
-     // Create a new merchant with the provided name:
+   // Create a new merchant with the provided name:
    public Merchant(String merchantName) {
       super(true);
       name = merchantName;
@@ -80,6 +109,7 @@ public class Merchant extends IndependentEntity {
    /*
     * Load and save methods:
     */
+
    private void loadFromResultSet(ResultSet rs) throws RegisterException {
       try {
 
@@ -87,7 +117,7 @@ public class Merchant extends IndependentEntity {
          this.id = UUID.fromString(rs.getString("idMerchant"));
          this.name = rs.getString("name");
          this.askAlways = rs.getBoolean("askAlways");
-         dirty = false;
+         setDirty(false);
 
       } catch (SQLException e) {
 
@@ -172,15 +202,15 @@ public class Merchant extends IndependentEntity {
          throw re;
       }
    }
-
    // Get the name of a Merchant:
+
    public static String getNameById(UUID idMerchant) throws EntityException, SQLException {
-      ResultSet rs = FinancialAppEntityInt.getRSById(selectQuery, idMerchant, "Database error occurred" +
+      ResultSet rs = EntityInt.getRSById(selectQuery, idMerchant, "Database error occurred" +
               " trying to get the merchant with id = " + idMerchant);
       return rs.getString("name");
    }
-
    // Create a new payee associated with this merchant:
+
    public MerchantPayee addPayee(String payee) {
 
       MerchantPayee merchantPayee = new MerchantPayee(payee, id);
@@ -192,7 +222,7 @@ public class Merchant extends IndependentEntity {
    public void save() throws RegisterException, EntityException {
 
       // Save the merchant:
-      super.save(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways + ")",
+      super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways + ")",
               "Problem with Insert of merchant.  Returned row count not equal to 1.");
 
       // Save the merchant payees:
