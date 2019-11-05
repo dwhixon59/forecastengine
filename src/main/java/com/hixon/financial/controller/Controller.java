@@ -13,15 +13,11 @@ import com.hixon.financial.view.ViewException;
 import com.hixon.financial.view.excel.excelView;
 import com.hixon.financial.view.register.ExcelRegisterView;
 import com.hixon.financial.view.register.RegisterView;
-import com.hixon.financial.view.register.TransactionResolver;
 import com.hixon.financial.view.register.TransactionResolverCmdLine;
 
-import java.sql.Connection;
 import java.sql.DriverManager;
-import java.text.ParseException;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
-import java.util.Scanner;
 
 import static java.util.Calendar.NOVEMBER;
 
@@ -38,14 +34,14 @@ public class Controller {
         boolean renderShortTermForecast = false;
         boolean saveShortTermForecast = false;
         boolean createLongTermForecast = false;
+        boolean updateLongTermForecast = false;
         boolean renderLongTermForecast = false;
         boolean saveLongTermForecast = false;
         boolean renderSpendingReportMTD = false;
 
-        Connection dbConnection = null;
         ShortTermForecast shortTermForecast = null;
         LongTermForecast longTermForecast = null;
-        RegisterView registerView = null;
+        RegisterView registerView;
 
         // Convert the input parameters into goals:
         for (int i = 0; i < args.length; i++) {
@@ -72,6 +68,9 @@ public class Controller {
                 case "createLongTermForecast":
                     createLongTermForecast = true;
                     break;
+                case "updateLongTermForecast":
+                    updateLongTermForecast = true;
+                    break;
                 case "renderLongTermForecast":
                     renderLongTermForecast = true;
                     break;
@@ -84,11 +83,11 @@ public class Controller {
                 case "all":
                     importCsvTransactionFile = true;
                     renderRegister = true;
-                    registerView = new ExcelRegisterView();
                     createShortTermForecast = true;
                     renderShortTermForecast = true;
                     saveShortTermForecast = true;
                     createLongTermForecast = true;
+                    updateLongTermForecast = true;
                     renderLongTermForecast = true;
                     saveLongTermForecast = true;
                     break;
@@ -100,10 +99,18 @@ public class Controller {
 
         // Process the goals:
         try {
+            // Use a MySQL database for persistence:
             System.out.println("Connect to the database.");
-            dbConnection = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***");
-            Utility.setDbConnection(dbConnection);
+            Utility.setDbConnection(DriverManager.getConnection(
+                    "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
+
+            // Interact with the user via the command line for server operations:
+            System.out.println("Create a command line transaction Utility.getResolver().");
+            Utility.setResolver(new TransactionResolverCmdLine());
+
+            // Use Microsoft Excel as the view of the model:
+            System.out.println("Create an Excel view.");
+            Utility.setView(new ExcelRegisterView());
 
             // Import new budget items into the budget:
             if (importBudgetItemsFile) {
@@ -121,8 +128,7 @@ public class Controller {
                 boolean inSync = importer.importCsvTransactionFile(filename,"Wells Fargo Bank",
                         "Bill Pay Account", forecast);
                 if (!inSync && !createLongTermForecast)  {
-                    TransactionResolver resolver = new TransactionResolverCmdLine();
-                    resolver.askRegenerateForecast();
+                    Utility.getResolver().askRegenerateForecast();
                 }
             }
 
@@ -130,7 +136,7 @@ public class Controller {
             if (renderRegister) {
                 //Calendar startDate = getStartDate();
                 Calendar startDate = Utility.stringDateDashToCalendarDate("09-28-19");
-                registerView.renderFrom(startDate);
+                Utility.getRegisterView().renderFrom(startDate);
             }
 
             // Create the short term forecast:
@@ -145,13 +151,18 @@ public class Controller {
 
             // Save the short term forecast:
             if (shortTermForecast != null && saveShortTermForecast) {
-                shortTermForecast.saveAll(dbConnection);
+                shortTermForecast.saveAll();
                 System.out.println("The forecast was successfully saved to the database.");
             }
 
             // Create the long term forecast:
             if (createLongTermForecast) {
-                longTermForecast = createLongTermForecast(dbConnection);
+                longTermForecast = createLongTermForecast();
+            }
+
+            // Update the long term forecast:
+            if (updateLongTermForecast) {
+                longTermForecast = updateLongTermForecast();
             }
 
             // Render the long term forecast:
@@ -162,51 +173,28 @@ public class Controller {
 
             // Save the long term forecast:
             if (longTermForecast != null && saveLongTermForecast) {
-                longTermForecast.saveAll(dbConnection);
+                longTermForecast.saveAll();
                 System.out.println("The forecast was successfully saved to the database.");
             }
 
             // Render the month-to-date spending report:
             if (renderSpendingReportMTD) {
                 ForecastView forecastView = new excelView();
-                TransactionResolver resolver = new TransactionResolverCmdLine();
-                forecastView.renderSpendingReportMTD(resolver);
+                forecastView.renderSpendingReportMTD(Utility.getResolver());
             }
 
             // Close the connection to the database:
             System.out.println("\n\nClose the connection to the database.");
-            dbConnection.close();
+            Utility.getDbConnection().close();
 
-        } catch (Exception e) {
-            if (dbConnection != null) {
-                dbConnection.close();
+        } catch (Exception | QuitException e) {
+            if (Utility.getDbConnection() != null) {
+                Utility.getDbConnection().close();
             }
             e.printStackTrace();
         }
 
     }  // End main().
-
-    private static Calendar getStartDate() throws QuitException {
-        Calendar startDate = null;
-        boolean stop = false;
-        while (!stop) {
-            System.out.print("Enter the starting date (MM-DD-YY) of the register export: ");
-            Scanner in = new Scanner(System.in);
-            String line = in.nextLine();
-            try {
-                startDate = Utility.stringDateDashToCalendarDate(line);
-                stop = true;
-
-            } catch (ParseException e) {
-                if (line.equalsIgnoreCase("quit")) {
-                    throw new QuitException("User requested to quit.");
-                } else {
-                    System.out.println("Invalid date.  Please re-enter or type 'quit' to quit.");
-                }
-            }
-        }
-        return startDate;
-    }
 
     private static ShortTermForecast createShortTermForecast() throws Exception, BudgetException {
         System.out.println("Create the short term forecast.");
@@ -231,7 +219,7 @@ public class Controller {
      }
 
     // Create the long term forecast:
-    public static LongTermForecast createLongTermForecast(Connection dbConnection) throws Exception, BudgetException, EntityException {
+    public static LongTermForecast createLongTermForecast() throws Exception, BudgetException, EntityException {
         System.out.println("Create the long term forecast.");
         ForecastEngine forecastEngine = new ForecastEngine();
         Calendar startDate = new GregorianCalendar();
@@ -242,10 +230,20 @@ public class Controller {
         String budgetName = "Bill Pay Account";
         LongTermForecast forecast = new LongTermForecast(budgetName, startDate, startingBalance, numberOfMonths,
                 minimumBalance);
-        forecastEngine.generateLongTermForecast(forecast);
+        forecastEngine.generateLongTermForecast(forecast, startDate);
         System.out.println("The long term forecast was successfully generated");
         return forecast;
-    } // End createLongTermForecast(Connection dbConnections).
+    } // End createLongTermForecast(Connection Utility.getDbConnection()s).
+
+    // Update the long term forcast:
+    private static LongTermForecast updateLongTermForecast()
+            throws EntityException, Exception, BudgetException, RegisterException, QuitException {
+        System.out.println("Update the long term forecast.");
+        LongTermForecast longTermForecast = LongTermForecast.getMostRecent();
+        longTermForecast.updateForecast();
+        System.out.println("The long term forecast was successfully updated.");
+        return longTermForecast;
+    }
 
     // Render the long term longTermForecast:
     public static void renderLongTermForecast(LongTermForecast longTermForecast) throws Exception, EntityException, BudgetException {

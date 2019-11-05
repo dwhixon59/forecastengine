@@ -41,17 +41,17 @@ public class Budget extends IndependentEntity {
    }
 
    @Override
-   public String getUpdateQuery() throws BudgetException {
+   public String getUpdateByIdQuery() throws BudgetException {
       return null;
    }
 
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return null;
    }
 
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "budget";
    }
 

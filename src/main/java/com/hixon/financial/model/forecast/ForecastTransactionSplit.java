@@ -46,7 +46,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    // The update query:
    private static final String updateQuery = "update ForecastDatabase.Forecast_Transaction set ";
    @Override
-   public String getUpdateQuery() {
+   public String getUpdateByIdQuery() {
       return updateQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +
               "ForecastItem_idForecastItem = uuid_to_bin('" + idBudgetItem + "')Transaction_Split_idBudgetItem = " +
               "uuid_to_bin('" + idTransaction + "'), disposition = '" + disposition.name() + ")";
@@ -55,7 +55,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    // The delete query:
    private static final String deleteQuery = "delete from ForecastDatabase.Forecast_Transaction where ";
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return deleteQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +
               "and ForecastItem_idForecastItem = uuid_to_bin('" + idBudgetItem + "')" +
               "and Transaction_Split_idBudgetItem = uuid_to_bin('" + idTransaction + "'))";
@@ -63,7 +63,7 @@ public class ForecastTransactionSplit extends DependentEntity {
 
    // The entity type attributes:
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "forecast transaction split";
    }
 

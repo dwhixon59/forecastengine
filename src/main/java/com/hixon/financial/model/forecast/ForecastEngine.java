@@ -20,7 +20,8 @@ public class ForecastEngine {
     } // End ForecastEngine().
 
     // Connect to the MySQL database:
-    public boolean generateLongTermForecast(LongTermForecast forecast) throws Exception, BudgetException, EntityException {
+    public boolean generateLongTermForecast(LongTermForecast forecast, Calendar startDate) throws Exception,
+            BudgetException, EntityException {
 
         try {
             /*
@@ -36,7 +37,6 @@ public class ForecastEngine {
                     " retrieve a list of items in the budget.");
 
             // Setup the start, current and end dates for the forecast:
-            Calendar startDate = forecast.getStartDate();
             Calendar nextDate = new GregorianCalendar();
             nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
                     startDate.get(Calendar.DATE));
@@ -46,6 +46,7 @@ public class ForecastEngine {
 
             // For each item in the budget:
             ForecastItem forecastItem;
+            forecast.createTransactionsArray();
             while (rs.next()) {
 
                 // If this is an on-demand (unscheduled) item, then skip it:
@@ -73,7 +74,7 @@ public class ForecastEngine {
                 while (forecast.fallsWithinForecastWindow(nextDate)) {
 
                     // Add the forecast transaction to the forecast:
-                    forecast.addTransactionOnDate(forecastItem, nextDate, firstOccurrence);
+                    forecast.addTransactionOnDate(forecastItem, startDate, nextDate, firstOccurrence);
                     firstOccurrence = false;
 
                     // Go to the next instance of this budget item:
@@ -212,7 +213,7 @@ public class ForecastEngine {
                 while (forecast.fallsWithinForecastWindow(nextDate)) {
 
                     // Add the forecast transaction to the forecast:
-                    forecast.addTransactionOnDate(forecastItem, nextDate, firstOccurrence);
+                    forecast.addTransactionOnDate(forecastItem, startDate, nextDate, firstOccurrence);
                     firstOccurrence = false;
 
                     // Go to the next instance of this budget item:

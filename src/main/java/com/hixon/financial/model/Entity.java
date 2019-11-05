@@ -53,18 +53,18 @@ public abstract class Entity implements EntityInt {
       if (isDirty()) {
          switch (method) {
             case INSERT:
-               executeQueryForThis(getInsertQuery(), " inserting a " + getEntityTypeName());
+               executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableEntityTypeName());
                break;
             case UPDATE:
-               executeQueryForThis(getUpdateQuery(), "Trying to update a " + getEntityTypeName() + ".");
+               executeQueryForThis(getUpdateByIdQuery(), "Trying to update a " + getPrintableEntityTypeName() + ".");
                break;
             case INSERT_ON_DUPLICATE_UPDATE:
-               executeQueryForThis(getInsertOnDuplicateUpdateQuery(), getEntityTypeName());
+               executeQueryForThis(getInsertOnDuplicateUpdateQuery(), getPrintableEntityTypeName());
                break;
 
             case INSERT_ON_DUPLICATE_SKIP:
                try {
-                  executeQueryForThis(getInsertQuery(), " inserting a " + getEntityTypeName());
+                  executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableEntityTypeName());
                } catch (EntityException e) {
                   SQLException se = (SQLException) e.getCause();
                   if (!se.getSQLState().equalsIgnoreCase("SQL92"))
@@ -87,7 +87,7 @@ public abstract class Entity implements EntityInt {
    // The generic delete operation:
    @Override
    public void delete() throws EntityException, RegisterException {
-         EntityInt.executeQuery(getDeleteQuery(), getEntityTypeName());
+         EntityInt.executeQuery(getDeleteByIdQuery(), getPrintableEntityTypeName());
    }
 
 

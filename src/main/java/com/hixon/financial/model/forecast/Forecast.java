@@ -82,7 +82,7 @@ public class Forecast extends IndependentEntity {
     }
 
     @Override
-    public String getUpdateQuery() {
+    public String getUpdateByIdQuery() {
         return updateQuery + "description = '" + description + "', " +
                 "dateGenerated = " + Utility.calendarDateToSqlDateString(dateGenerated) + ", startDate = " +
                 Utility.calendarDateToSqlDateString(startDate) + ", startingBalance = " + startingBalance + ", " +
@@ -92,12 +92,12 @@ public class Forecast extends IndependentEntity {
     }
 
     @Override
-    public String getDeleteQuery() {
+    public String getDeleteByIdQuery() {
         return deleteQuery + "id = uuid_to_bin('" + id + "')";
     }
 
     @Override
-    public String getEntityTypeName() {
+    public String getPrintableEntityTypeName() {
         return "forecast";
     }
 
@@ -123,7 +123,6 @@ public class Forecast extends IndependentEntity {
         this.endingBalance = 0;
         this.numberOfMonths = numberOfMonths;
         this.budgetname = budgetName;
-        this.transactions = new ForecastTransaction[numberOfMonths * 31];
 
         // Find the ID of the named budget:
         PreparedStatement preparedStmt = null;
@@ -179,7 +178,8 @@ public class Forecast extends IndependentEntity {
 
 
     // Save the all of the forecast to the database:
-    public void saveAll(Connection dbConnection) throws SQLException, BudgetException, EntityException, ForecastException {
+    public void saveAll() throws SQLException, BudgetException, EntityException, ForecastException {
+        Connection dbConnection = Utility.getDbConnection();
         PreparedStatement preparedStmt = null;
         String errorMessage = null;
         try {
@@ -187,7 +187,9 @@ public class Forecast extends IndependentEntity {
             errorMessage = "SQL error attempting to insert the Forecast object into the database.";
             String query = "insert into ForecastDatabase.Forecast (idForecast, description, dateGenerated, " +
                     "startDate, startingBalance, endDate, endingBalance, numberOfMonths, inSync, Budget_idBudget) " +
-                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?))";
+                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?)) on duplicate key update " +
+                    "description = ?, dateGenerated = ?, startDate =?, startingBalance = ?, endDate = ?, " +
+                    "endingBalance = ?, numberOfMonths = ?, inSync = ?";
             preparedStmt = dbConnection.prepareStatement(query);
             preparedStmt.setString(1, id.toString());
             preparedStmt.setString(2, "Test Forecast for Bill Pay Account");
@@ -199,6 +201,14 @@ public class Forecast extends IndependentEntity {
             preparedStmt.setInt(8, numberOfMonths);
             preparedStmt.setBoolean(9, true);
             preparedStmt.setString(10, idBudget.toString());
+            preparedStmt.setString(11, "Test Forecast for Bill Pay Account");
+            preparedStmt.setObject(12, new java.sql.Timestamp(System.currentTimeMillis()));
+            preparedStmt.setDate(13, new java.sql.Date(startDate.getTimeInMillis()));
+            preparedStmt.setDouble(14, startingBalance);
+            preparedStmt.setDate(15, new java.sql.Date(endDate.getTimeInMillis()));
+            preparedStmt.setDouble(16, endingBalance);
+            preparedStmt.setInt(17, numberOfMonths);
+            preparedStmt.setBoolean(18, true);
             preparedStmt.execute();
 
             // Insert the forecast item tuples:
@@ -283,7 +293,8 @@ public class Forecast extends IndependentEntity {
     }
 
     // Add a forecast transaction to the transaction array on the date that it is expected to occur:
-    public void addTransactionOnDate(ForecastItem forecastItem, Calendar nextDate, boolean firstOccurrence) throws Exception {
+    public void addTransactionOnDate(ForecastItem forecastItem, Calendar startDate, Calendar nextDate,
+                                     boolean firstOccurrence) throws Exception {
 
         // Calculate the index to assign this transaction by calculating the number of days between
         // the start date of the forecast and the day this transaction occurs:

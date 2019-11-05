@@ -157,18 +157,18 @@ public class TransactionSplit extends DependentEntity {
    }
 
    @Override
-   public String getUpdateQuery() throws BudgetException {
+   public String getUpdateByIdQuery() throws BudgetException {
       return null;
    }
 
    private static final String deleteQuery = "delete from ForecastDatabase.Transaction_Split ";
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return null;
    }
 
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "transaction split";
    }
 

@@ -37,17 +37,17 @@ public class MerchantPayee extends DependentEntity {
    }
 
    @Override
-   public String getUpdateQuery() {
+   public String getUpdateByIdQuery() {
       return null;
    }
 
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return null;
    }
 
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "merchant payee";
    }
 

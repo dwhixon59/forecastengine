@@ -63,19 +63,19 @@ public class Transaction extends IndependentEntity {
            "set payee = ?, set balance = ?, set isImproper = ?, set importRecordId = ?, set Register_idRegister = ?, " +
            "set Merchant_idMerchant = ? where ";
    @Override
-   public String getUpdateQuery() {
+   public String getUpdateByIdQuery() {
       return updateQuery;
    }
 
    private static final String deleteQuery = "delete from forecastdatabase.transaction where ";
 
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return null;
    }
 
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "transaction";
    }
 

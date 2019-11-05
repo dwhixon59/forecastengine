@@ -91,22 +91,23 @@ public class ForecastTransaction extends IndependentEntity {
    }
 
    @Override
-   public String getUpdateQuery() {
+   public String getUpdateByIdQuery() {
       return updateQuery + getupdateClause();
    }
 
    // The delete query:
-   public static final String deleteQuery = "delete from ForecastDatabase.Forecast_Transaction where " +
-           "idForecastTransaction = ";
+   public static final String deleteQuery = "delete from ForecastDatabase.Forecast_Transaction ";
+
+   public static String getDeleteQuery() {return deleteQuery;}
 
    @Override
-   public String getDeleteQuery() {
-      return deleteQuery + "uuid_to_bin('" + id + "')";
+   public String getDeleteByIdQuery() {
+      return deleteQuery + "where idForecastTransaction = uuid_to_bin('" + id + "')";
    }
 
    // The entity name:
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "forecast transaction";
    }
 

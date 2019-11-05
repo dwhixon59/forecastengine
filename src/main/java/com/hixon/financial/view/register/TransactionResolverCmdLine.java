@@ -2,6 +2,7 @@ package com.hixon.financial.view.register;
 
 import com.hixon.financial.Utility;
 import com.hixon.financial.controller.Importer;
+import com.hixon.financial.controller.QuitException;
 import com.hixon.financial.model.EntityException;
 import com.hixon.financial.model.EntityInt;
 import com.hixon.financial.model.budget.BudgetException;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Scanner;
 
 import static com.hixon.financial.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static com.hixon.financial.model.forecast.LongTermForecast.updateStart.*;
 
 public class TransactionResolverCmdLine implements TransactionResolver {
 
@@ -113,7 +115,7 @@ public class TransactionResolverCmdLine implements TransactionResolver {
    }
 
    // Parse a date in mm/dd/yy format:
-   private String parseDate(String prompt, Calendar defaultDate) {
+   private String parseStringDate(String prompt, Calendar defaultDate) {
       ask(prompt);
       if (defaultDate == null) {
          say(" (mm/dd/yy)");
@@ -135,6 +137,54 @@ public class TransactionResolverCmdLine implements TransactionResolver {
          }
       }
       return line;
+   }
+
+   // Parse a date in mm/dd/yy format:
+   private Calendar parseCalendarDate(String prompt, Calendar defaultDate) {
+      ask(prompt);
+      if (defaultDate == null) {
+         say(" (mm/dd/yy)");
+      } else {
+         say(" (mm/dd/yy) or just hit enter to accept the date " + Utility.calendarDateToStringDate(defaultDate));
+      }
+      String line = in.nextLine();
+      boolean done = false;
+      Calendar date = null;
+      while (!done) {
+         try {
+            if (defaultDate != null && line.length() == 0) {
+               line = Utility.calendarDateToStringDate(defaultDate);
+            }
+            date = Utility.stringDateDashToCalendarDate(line);
+            done = true;
+         } catch (ParseException e) {
+            say("Invalid date format.  Please re-enter:");
+            line = in.nextLine();
+         }
+      }
+      return date;
+   }
+
+   private static Calendar getStartDate() throws QuitException {
+      Calendar startDate = null;
+      boolean stop = false;
+      while (!stop) {
+         System.out.print("Enter the starting date (MM-DD-YY) of the register export: ");
+         Scanner in = new Scanner(System.in);
+         String line = in.nextLine();
+         try {
+            startDate = Utility.stringDateDashToCalendarDate(line);
+            stop = true;
+
+         } catch (ParseException e) {
+            if (line.equalsIgnoreCase("quit")) {
+               throw new QuitException("User requested to quit.");
+            } else {
+               System.out.println("Invalid date.  Please re-enter or type 'quit' to quit.");
+            }
+         }
+      }
+      return startDate;
    }
 
 
@@ -664,7 +714,7 @@ public class TransactionResolverCmdLine implements TransactionResolver {
          switch (line) {
             case "a":
                response.setDisposition(ADJUST);
-               response.setResponse(parseDate("Enter the new date", split.getTransaction().getDate()));
+               response.setResponse(parseStringDate("Enter the new date", split.getTransaction().getDate()));
                break;
 
             case "s":
@@ -727,4 +777,45 @@ public class TransactionResolverCmdLine implements TransactionResolver {
       return response;
    }
 
+   @Override
+   public UserResponse getForecastUpdateStartDate() throws QuitException {
+      UserResponse response = new UserResponse();
+
+      say("Update the forecast from which date on?  (t-Today, f-First of next month (default), o-One month from " +
+              "today, c-Custom date");
+
+      boolean done = false;
+      while (!done) {
+         done = true;
+         String line = in.nextLine();
+         switch (line) {
+            case "t":
+               response.setUpdateStart(TODAY);
+               break;
+
+            case "f":
+               response.setUpdateStart(FIRST_OF_NEXT_MONTH);
+               break;
+
+            case "o":
+               response.setUpdateStart(ONE_MONTH_FROM_TODAY);
+               break;
+
+            case "c":
+               response.setUpdateStart(ARBITRARY_DATE);
+               Calendar startDate = Calendar.getInstance();
+               response.setDate(parseCalendarDate("Enter the start date", startDate));
+               break;
+
+            default:
+               if (line.length() == 0) {
+                  response.setUpdateStart(FIRST_OF_NEXT_MONTH);
+               } else {
+                  say("Please enter t, f, o, or c.");
+                  done = false;
+               }
+         }
+      }
+      return response;
+   }
 } // End class TransactionResolverCmdLine.

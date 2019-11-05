@@ -1,6 +1,7 @@
 package com.hixon.financial.view.register;
 
 import com.hixon.financial.controller.Importer;
+import com.hixon.financial.controller.QuitException;
 import com.hixon.financial.model.EntityException;
 import com.hixon.financial.model.budget.BudgetException;
 import com.hixon.financial.model.budget.BudgetItemMerchant;
@@ -49,5 +50,8 @@ public interface TransactionResolver {
 
    // What to do if we're not sure which forecast transaction to assign a split to because the date differs:
    UserResponse assignSplitDateToForecastTransaction(TransactionSplit split, ForecastTransaction forecastTransaction) throws EntityException, SQLException;
+
+   // Get the start date of the portion of the forecast to update:
+   UserResponse getForecastUpdateStartDate() throws QuitException;
 }
 

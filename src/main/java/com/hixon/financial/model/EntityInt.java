@@ -20,9 +20,9 @@ public interface EntityInt {
    // The base CRUD queries:
    String getInsertQuery() throws BudgetException, ForecastException;
    String getInsertOnDuplicateUpdateQuery() throws BudgetException;
-   String getUpdateQuery() throws BudgetException;
-   String getDeleteQuery();
-   String getEntityTypeName();
+   String getUpdateByIdQuery() throws BudgetException;
+   String getDeleteByIdQuery();
+   String getPrintableEntityTypeName();
 
    // The save operation:
    enum SaveMethod {INSERT, UPDATE, INSERT_ON_DUPLICATE_UPDATE, INSERT_ON_DUPLICATE_SKIP}

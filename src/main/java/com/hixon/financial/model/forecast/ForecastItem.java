@@ -149,7 +149,7 @@ public class ForecastItem extends Item {
 
    private static final String updateQuery = "update ForecastDatabase.Forecast_Item set ";
    @Override
-   public String getUpdateQuery() throws BudgetException {
+   public String getUpdateByIdQuery() throws BudgetException {
       return updateQuery + " category = '" + category + "', payee = '" +
               payee + "', period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", startDate = "
               + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments + ", " +
@@ -162,12 +162,12 @@ public class ForecastItem extends Item {
 
    private static final String deleteQuery = "delete from ForecastDatabase.Forecast_Item where ";
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return deleteQuery + "idForecastItem = uuid_to_bin('" + id + "')";
    }
 
    @Override
-   public String getEntityTypeName() {
+   public String getPrintableEntityTypeName() {
       return "forecast item";
    }
 

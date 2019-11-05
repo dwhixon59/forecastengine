@@ -25,6 +25,9 @@ public class BudgetItem extends Item {
    private static final String selectQuery = "select bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
            "Budget_Item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
            "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from ForecastDatabase.Budget_Item ";
+   public static String getSelectQuery() {
+      return selectQuery;
+   }
 
    private static final String insertQuery = "insert into ForecastDatabase.Budget_Item (idBudgetItem, category, payee, " +
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
@@ -70,10 +73,6 @@ public class BudgetItem extends Item {
       setDirty(true);
    }
 
-   public static String getSelectQuery() {
-      return selectQuery;
-   }
-
    @Override
    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
 
@@ -94,7 +93,7 @@ public class BudgetItem extends Item {
    }
 
    @Override
-   public String getUpdateQuery() throws BudgetException {
+   public String getUpdateByIdQuery() throws BudgetException {
       return updateQuery +  "category = '" + category + "', payee = \"" + payee + "\", period = '" +
               generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
               ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
@@ -105,12 +104,12 @@ public class BudgetItem extends Item {
    }
 
    @Override
-   public String getDeleteQuery() {
+   public String getDeleteByIdQuery() {
       return deleteQuery;
    }
 
    @Override
-   public String getEntityTypeName() {return "budget item";}
+   public String getPrintableEntityTypeName() {return "budget item";}
 
 
    // Constructors:

@@ -1,5 +1,8 @@
 package com.hixon.financial;
 
+import com.hixon.financial.view.register.RegisterView;
+import com.hixon.financial.view.register.TransactionResolver;
+
 import java.sql.Connection;
 import java.sql.Date;
 import java.text.DecimalFormat;
@@ -13,14 +16,25 @@ public class Utility {
 
    // Common database connection for the App:
    private static Connection dbConnection;
-
-   public static void setDbConnection(Connection dbConnection) {
-      Utility.dbConnection = dbConnection;
-   }
+   private static TransactionResolver resolver;
+   private static RegisterView registerView;
 
    public static Connection getDbConnection() {
       return dbConnection;
    }
+   public static void setDbConnection(Connection dbConnection) {
+      Utility.dbConnection = dbConnection;
+   }
+   public static TransactionResolver getResolver() {
+      return resolver;
+   }
+   public static void setResolver(TransactionResolver resolver) {
+      Utility.resolver = resolver;
+   }
+   public static RegisterView getRegisterView() {
+      return registerView;
+   }
+   public static void setView(RegisterView registerView) {Utility.registerView = registerView;}
 
    // Print out a date in human readable format:
    public static String calendarDateToStringDate(Calendar calendar) {
