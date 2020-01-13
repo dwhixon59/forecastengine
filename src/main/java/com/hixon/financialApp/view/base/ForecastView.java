@@ -1,0 +1,169 @@
+package com.hixon.financialApp.view.base;
+
+import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.forecast.ForecastTransactionIterator;
+import com.hixon.financialApp.utility.Utility;
+
+import java.io.FileNotFoundException;
+import java.io.UnsupportedEncodingException;
+import java.sql.SQLException;
+import java.util.Calendar;
+
+import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
+
+public abstract class ForecastView implements ForecastViewInt {
+
+   /*
+    * Fields:
+    */
+   protected Forecast forecast = null;
+
+
+   /*
+    * Getters and setters:
+    */
+   public Forecast getForecast() { return forecast; }
+   public void setForecast(Forecast forecast) { this.forecast = forecast; }
+
+
+   /*
+    * Constructors:
+    */
+
+
+   /*
+    * Helper methods:
+    */
+   protected abstract void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException;
+   protected abstract void renderLongTermForecastFrontMatter();
+   protected abstract void renderMonthHeader(Calendar plannedDate);
+   protected abstract void renderForecastTransaction(ForecastTransaction forecastTransaction, int credit, int debit)
+           throws EntityException, SQLException, ForecastException, BudgetException;
+   protected abstract void renderLongTermForecastBackMatter();
+   protected abstract void closeLongTermForecastOutput();
+
+
+   /*
+    * Main methods:
+    */
+   @Override
+   public boolean renderShortTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException {
+
+      this.forecast = forecast;
+
+      Utility.getResolver().say("\n\nRender the short term forecast.");
+
+      // To clue the user into what things to look for in the spreadsheet, run the forecast summary routine
+      // requesting below minimum balance events:
+      Forecast.SignificantEvents[] events = {daysBelowMinimumBalance};
+      forecast.summarize(events);
+
+      // Print out the starting and ending balances:
+      Utility.getResolver().say("The starting balance is: " + Utility.formatDollarAmount(forecast.getStartingBalance()));
+      Utility.getResolver().say("The ending balance is:   " + Utility.formatDollarAmount(forecast.getEndingBalance()));
+      Utility.getResolver().say("The savings rate is:   " + Utility.formatDollarAmount(forecast.getEndingBalance() /
+              forecast.getNumberOfMonths()) + " per month.");
+
+      // TODO:  Render the short term forecast (whatever that means . . . .).
+      System.out.println("The short term forecast was successfully rendered.");
+
+      // and print out the significant events list:
+      ForecastTransaction forecastTransaction = forecast.getFirstSignificantEvent();
+      while (forecastTransaction != null) {
+         Utility.getResolver().say("The balance on " + Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate()) +
+                 " is $" + forecastTransaction.getRunningBalance());
+         if (forecastTransaction.getRunningBalance() < forecast.getMinimumBalance()) {
+            Utility.getResolver().say("Balance below minimum balance!");
+         }
+         forecastTransaction = forecastTransaction.getNextSignificantEvent();
+      }
+     return true;
+   }
+
+
+   @Override
+   public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException {
+
+      this.forecast = forecast;
+
+      // Get the first day of the forecast rendering:
+      Calendar startDate = Utility.askStartDate();
+
+      // Get the starting balance:
+      double startingBalance = 0;
+      double runningBalance = startingBalance;
+
+      // Open and initialize the forecast rendering output file:
+      openLongTermForecastOutput();
+      renderLongTermForecastFrontMatter();
+
+      // Iterate over all the forecast transactions in chronological order beginning on the start date:
+      ForecastTransactionIterator forecastTransactions =
+              ForecastTransaction.getForecastTransactionsStartingOn(this.forecast, startDate);
+      ForecastTransaction forecastTransaction = forecastTransactions.getNext();
+      int currentMonth = -1;
+      while (forecastTransaction != null) {
+
+         runningBalance += forecastTransaction.getRemainingAmount();
+         forecastTransaction.setRunningBalance(runningBalance);
+
+         int credit;
+         int debit;
+         if (Utility.doubleToInt(forecastTransaction.getRemainingAmount()) > 0) {
+            credit = Utility.doubleToInt(forecastTransaction.getRemainingAmount());
+            debit = 0;
+         } else {
+            credit = 0;
+            debit = -Utility.doubleToInt(forecastTransaction.getRemainingAmount());
+         }
+
+         // The month changed, so write out a header line with the name of the month:
+         if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
+            renderMonthHeader(forecastTransaction.getPlannedDate());
+            currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+         }
+
+         // Write out the forecast line:
+         renderForecastTransaction(forecastTransaction, credit, debit);
+
+         // Move to the next transaction:
+         forecastTransaction = forecastTransactions.getNext();
+      }
+
+      // Finish up and closeout the forecast rendering:
+      renderLongTermForecastBackMatter();
+      closeLongTermForecastOutput();
+
+      // TODO: To clue the user into what things to look for in the spreadsheet, run the forecast summary routine
+      // requesting below minimum balance events:
+/*
+      LongTermForecast.SignificantEvents[] events = {daysBelowMinimumBalance};
+      longTermForecast.summarize(events);
+
+      // and print out the significant events list:
+      forecastTransaction = longTermForecast.getFirstSignificantEvent();
+      while (forecastTransaction != null) {
+         System.out.println("The balance on " + Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate()) +
+                 " is $" + forecastTransaction.getRunningBalance());
+         if (forecastTransaction.getRunningBalance() < longTermForecast.getMinimumBalance()) {
+            System.out.println("Balance below minimum balance!");
+         }
+         forecastTransaction = forecastTransaction.getNextSignificantEvent();
+      }
+*/
+
+      // Print out the starting and ending balances:
+      System.out.println("The starting balance is: " + Utility.formatDollarAmount(this.forecast.getStartingBalance()));
+      System.out.println("The ending balance is:   " + Utility.formatDollarAmount(this.forecast.getEndingBalance()));
+      System.out.println("The savings rate is:   " + Utility.formatDollarAmount(this.forecast.getEndingBalance() /
+              this.forecast.getNumberOfMonths()) + " per month.");
+      
+      return true;
+   }
+
+}
