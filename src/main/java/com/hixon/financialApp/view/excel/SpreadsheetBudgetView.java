@@ -1,12 +1,14 @@
 package com.hixon.financialApp.view.excel;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.view.base.BudgetView;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.util.Calendar;
 
 public class SpreadsheetBudgetView extends BudgetView {
 
@@ -87,7 +89,8 @@ public class SpreadsheetBudgetView extends BudgetView {
    }
 
    @Override
-   public void renderBudgetItem(BudgetItem budgetItem, double total) {
+   public void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double total) throws
+           ForecastException {
       writer.println("<Row>");
       writer.println("</Row>");
       writer.println("<Row>");
@@ -99,9 +102,11 @@ public class SpreadsheetBudgetView extends BudgetView {
       }
       writer.println("<Cell><Data ss:Type=\"String\">" + category + "</Data></Cell>");
       writer.println("<Cell><Data ss:Type=\"String\">" + budgetItem.getPayee() + "</Data></Cell>");
-      writer.println("<Cell><Data ss:Type=\"Number\">" + budgetItem.getAmount() + "</Data></Cell>");
+      writer.println("<Cell><Data ss:Type=\"Number\">" + budgetItem.getAmountForDateRange(startDate, endDate) +
+              "</Data></Cell>");
       writer.println("<Cell><Data ss:Type=\"Number\">" + total + "</Data></Cell>");
       writer.println("</Row>");
+
    }
 
    @Override

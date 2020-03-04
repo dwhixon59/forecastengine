@@ -1,30 +1,36 @@
 package com.hixon.financialApp.view.excel;
 
+import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ForecastView;
+import com.hixon.financialApp.view.csv.CsvForecastView;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Locale;
 
 public class SpreadsheetForecastView extends ForecastView {
 
-   public String longTermForecastFilename;
-   public String shortTermForecastFilename;
-   public String encoding;
+   protected String longTermForecastFilename;
+   protected String shortTermForecastFilename;
+   protected String importForecastFilename;
+   protected String encoding;
    private PrintWriter writer;
    private String lastDate = "";
    private boolean firstItem;
    private boolean firstItemInMonth;
    private String category;
    private String lastCategory;
+   private final CsvForecastView csvForecastView = new CsvForecastView();
 
 
    /*
@@ -42,6 +48,13 @@ public class SpreadsheetForecastView extends ForecastView {
    }
    public void setLongTermForecastFilename(String longTermForecastFilename) {
       this.longTermForecastFilename = longTermForecastFilename;
+   }
+
+   public String getImportForecastFilename() {
+      return importForecastFilename;
+   }
+   public void setImportForecastFilename(String importForecastFilename) {
+      this.importForecastFilename = importForecastFilename;
    }
 
    public String getEncoding() {
@@ -65,10 +78,12 @@ public class SpreadsheetForecastView extends ForecastView {
       encoding = "UTF-8";
    }
 
-   public SpreadsheetForecastView(String shortTermForecastFilename, String longTermForecastFilename, String encoding) {
+   public SpreadsheetForecastView(String shortTermForecastFilename, String longTermForecastFilename,
+                                  String importForecastFilename, String encoding) {
       super();
       this.shortTermForecastFilename = shortTermForecastFilename;
       this.longTermForecastFilename = longTermForecastFilename;
+      this.importForecastFilename = importForecastFilename;
       this.encoding = encoding;
       firstItem = true;
       firstItemInMonth = true;
@@ -302,4 +317,10 @@ public class SpreadsheetForecastView extends ForecastView {
       writer.close();
    }
 
+   @Override
+   // For now, defer to the CSV view for importing forecast transactions:
+   public List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException,
+           BudgetException {
+      return csvForecastView.openForecastTransactionSource();
+   }
 }

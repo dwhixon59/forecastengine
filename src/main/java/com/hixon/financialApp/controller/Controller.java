@@ -7,9 +7,6 @@ import com.hixon.financialApp.model.forecast.ForecastEngine;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.BudgetViewInt;
-import com.hixon.financialApp.view.base.ForecastViewInt;
-import com.hixon.financialApp.view.base.RegisterViewInt;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
 import com.hixon.financialApp.view.excel.SpreadsheetBudgetView;
 import com.hixon.financialApp.view.excel.SpreadsheetForecastView;
@@ -33,10 +30,10 @@ public class Controller {
       System.out.println("Create a command line transaction Utility.getResolver().");
       Utility.setResolver(new TransactionResolverCmdLine());
 
-      // Use Microsoft Excel as the view of the model:
-      RegisterViewInt registerView = new SpreadsheetRegisterView();
-      BudgetViewInt budgetView = new SpreadsheetBudgetView();
-      ForecastViewInt forecastView = new SpreadsheetForecastView();
+      // Use Spreadsheet XML as the view for the application:
+      Utility.setRegisterView(new SpreadsheetRegisterView());
+      Utility.setBudgetView(new SpreadsheetBudgetView());
+      Utility.setForecastView(new SpreadsheetForecastView());
 
       // Create the Importer:
       Importer importer = new Importer();
@@ -63,24 +60,28 @@ public class Controller {
                      Utility.getResolver().say("The long term forecast was successfully updated.");
                   }
                   break;
+
                case "importBudgetItems":
                   Utility.getResolver().say("Importing the budget items.");
                   importer.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
                           "Finances\\Expenses\\BudgetItems.csv");
                   Utility.getResolver().say("The budget items were successfully imported.");
                   break;
+
                case "renderRegister":
                   Utility.getResolver().say("Rendering the register.");
                   startDate = Utility.askStartDate();
-                  registerView.renderTransactionReport(startDate);
+                  Utility.getRegisterView().renderTransactionReport(startDate);
                   Utility.getResolver().say("The register was successfully rendered");
                   break;
+
                case "renderSpendingReport":
                   Utility.getResolver().say("Rendering the spending report.");
-                  startDate = Utility.askStartDate();
-                  budgetView.renderSpendingReport(startDate);
+                  startDate = Utility.getResolver().getSpendingReportMonth();
+                  Utility.getBudgetView().renderPlannedVsActualReport(startDate);
                   Utility.getResolver().say("The spending report was successfully rendered");
                   break;
+
                case "createForecast":
                   Utility.getResolver().say("Create the forecast.");
                   ForecastEngine forecastEngine = new ForecastEngine();
@@ -93,6 +94,18 @@ public class Controller {
                   forecastEngine.generateForecast(forecast, startDate);
                   Utility.getResolver().say("The forecast was successfully generated");
                   break;
+
+               case "ImportForecastTransactions":
+                  Utility.getResolver().say("Importing the forecast transactions.");
+                  if (forecast == null) forecast = Forecast.getMostRecent();
+                  if (forecast != null) {
+                     Utility.getForecastView().updateFromExternalSoure();
+                     Utility.getResolver().say("The transactions were successfully imported.");
+                  } else {
+                     Utility.getResolver().say("There is no forecast to import the transactions into.");
+                  }
+                  break;
+
                case "saveForecast":
                   if (forecast == null) {
                      Utility.getResolver().say("You requested to save the forecast, but there isn't a forecast to save.");
@@ -102,24 +115,28 @@ public class Controller {
                      Utility.getResolver().say("The forecast was successfully saved to the database.");
                   }
                   break;
+
                case "updateForecast":
                   Utility.getResolver().say("Updating the forecast.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
                   forecast.updateForecast();
                   Utility.getResolver().say("The forecast was successfully updated.");
                   break;
+
                case "renderShortTermForecast":
                   Utility.getResolver().say("Rendering the short term forecast.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
-                  forecastView.renderShortTermForecast(forecast);
+                  Utility.getForecastView().renderShortTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the short term forecast.");
                   break;
+
                case "renderLongTermForecast":
                   Utility.getResolver().say("Rendering the long term forecast.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
-                  forecastView.renderLongTermForecast(forecast);
+                  Utility.getForecastView().renderLongTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the long term forecast.");
                   break;
+
                default:
                   throw new ControllerException("Unrecognized goal '" + args[i] + "' (parameter " + i + ") in Controller.");
             }

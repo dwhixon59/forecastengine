@@ -1,13 +1,13 @@
 package com.hixon.financialApp.model.forecast;
 
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
-import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import com.hixon.financialApp.view.base.UserResponse;
 
@@ -28,40 +28,45 @@ public class ForecastTransaction extends IndependentEntity {
    /*
     * Fields:
     */
+   // Version:
+   Calendar version;
+
    // Amount of the transaction in case of an override:
-   private double remainingAmount = 0;
+   protected double remainingAmount = 0;
 
    // The date that this transaction is expected to occur, or is due:
-   private Calendar plannedDate;
+   protected Calendar plannedDate;
 
    // The id of the forecast item that this transaction is an instance of:
-   private UUID idForecastItem = null;
+   protected UUID idForecastItem = null;
 
    // Indicates if this is the first occurrence of this forecast item in the forecast:
-   private boolean firstOccurrence = false;
+   protected boolean firstOccurrence = false;
 
    // Running runningBalance of the forecast:
-   private double runningBalance = 0;
+   protected double runningBalance = 0;
 
    // A reference to the forecast item that this transaction is an occurrence of;
-   private ForecastItem forecastItem = null;
+   protected ForecastItem forecastItem = null;
 
    // A pointer to the next transaction on the same date:
-   private ForecastTransaction nextTransaction = null;
+   protected ForecastTransaction nextTransaction = null;
 
    // A pointer to the next transaction in the list of significant transactions:
-   private ForecastTransaction nextSignificantEvent = null;
+   protected ForecastTransaction nextSignificantEvent = null;
 
    // The select query for forecast transactions for a forecast item:
-   public static final String transactionsForItemQuery = "select a.idForecastTransaction as 'id', a.remainingAmount, " +
-           "a.plannedDate, a.firstOccurrence, a.ForecastItem_idForecastItem as 'idForecastItem' from " +
-           "forecastdatabase.Forecast_Transaction a inner join ForecastDatabase.Forecast_Item b on " +
-           "a.ForecastItem_idForecastItem = b.idForecastItem where a.remainingAmount > 0";
+   public static final String transactionsForItemQuery = "select ft.idForecastTransaction as 'id', ft.updatedTimeStamp " +
+           "as 'version', ft.remainingAmount, ft.plannedDate, ft.firstOccurrence, ft.ForecastItem_idForecastItem as " +
+           "'idForecastItem' from forecastdatabase.Forecast_Transaction ft inner join ForecastDatabase.Forecast_Item fi on " +
+           "ft.ForecastItem_idForecastItem = fi.idForecastItem where ft.remainingAmount > 0";
 
    // The select query:
    public static final String selectColumns = " bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', " +
-           "ft.remainingAmount as 'ft.remainingAmount', ft.plannedDate as ' ft.plannedDate', ft.firstOccurrence as " +
-           "'ft.firstOccurrence', bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem' ";
+           "ft.updatedTimeStamp as 'ft.version', ft.remainingAmount as 'ft.remainingAmount', ft.plannedDate as " +
+           "'ft.plannedDate', ft.firstOccurrence as 'ft.firstOccurrence', bin_to_uuid(ft.ForecastItem_idForecastItem) " +
+           "as 'ft.idForecastItem' ";
+
    public static String getSelectColumns() {
       return selectColumns;
    }
@@ -119,10 +124,16 @@ public class ForecastTransaction extends IndependentEntity {
    /*
     * Getters and setters:
     */
+   public Calendar getVersion() {
+      return version;
+   }
+   public void setVersion(Calendar version) {
+      this.version = version;
+   }
+
    public Calendar getPlannedDate() {
       return plannedDate;
    }
-
    public void setPlannedDate(Calendar plannedDate) {
       this.plannedDate = plannedDate;
       setDirty(true);
@@ -131,7 +142,6 @@ public class ForecastTransaction extends IndependentEntity {
    public double getRemainingAmount() {
       return remainingAmount;
    }
-
    public void setRemainingAmount(double remainingAmount) {
       this.remainingAmount = remainingAmount;
       setDirty(true);
@@ -140,7 +150,6 @@ public class ForecastTransaction extends IndependentEntity {
    public double getRunningBalance() {
       return runningBalance;
    }
-
    public void setRunningBalance(double runningBalance) {
       this.runningBalance = runningBalance;
       setDirty(true);
@@ -149,7 +158,6 @@ public class ForecastTransaction extends IndependentEntity {
    public UUID getIdForecastItem() {
       return idForecastItem;
    }
-
    public void setIdForecastItem(UUID idForecastItem) {
       this.idForecastItem = idForecastItem;
    }
@@ -194,6 +202,11 @@ public class ForecastTransaction extends IndependentEntity {
    /*
     * Constructors:
     */
+
+   public ForecastTransaction() {
+      super(false);
+   }
+
    public ForecastTransaction(ForecastItem item, Calendar nextDate, boolean firstOccurrence) throws Exception {
       super(true);
       if (item == null || nextDate == null) throw new Exception("ForecastItem seeds cannot be null.");
@@ -227,6 +240,11 @@ public class ForecastTransaction extends IndependentEntity {
    /*
     *  Load and save methods:
     */
+   public static ForecastTransaction getById(UUID idForecastTransaction) throws ForecastException, EntityException, SQLException {
+      ResultSet rs = EntityInt.getRSById(selectQuery + "where idForecastTransaction = ", idForecastTransaction,
+              "No Forecast Transaction found with id " + idForecastTransaction);
+      return new ForecastTransaction(rs);
+   }
 
 
    /*
@@ -280,6 +298,9 @@ public class ForecastTransaction extends IndependentEntity {
    private static boolean updateAllDates(ForecastTransaction forecastTransaction, Calendar newDate) throws EntityException,
            Exception, BudgetException {
 
+      // Don't change the passed date parameter:
+      Calendar nextDate = (Calendar) newDate.clone();
+
       // Was the update successful?:
       boolean result;
 
@@ -293,13 +314,12 @@ public class ForecastTransaction extends IndependentEntity {
          // beginning with the earliest non-zero amount occurrence of a forecast transaction in the forecast for the
          // budget item associated with the split.  This should start with the existing forecast transaction:
          ForecastItem forecastItem = forecastTransaction.getForecastItem();
-         forecastItem.setNextDate((Calendar) newDate.clone());
          ForecastTransactionIterator it =
                  ForecastTransaction.getForecastTransactionsForForecastItem(forecastTransaction.getIdForecastItem());
          ForecastTransaction forecastTransactionOccurrence = it.getNext();
          while (forecastTransactionOccurrence != null) {
-            forecastTransactionOccurrence.setPlannedDate((Calendar) newDate.clone());
-            newDate = forecastItem.getNextDateOfOccurrence();
+            forecastTransactionOccurrence.setPlannedDate((Calendar) nextDate.clone());
+            nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
             forecastTransactionOccurrence = it.getNext();
          }
          result = true;
@@ -328,8 +348,7 @@ public class ForecastTransaction extends IndependentEntity {
                timing = Timing.PRIOR_TO;
             } else {
                // Compute the next date of occurrence of the related forecast item:
-               getForecastItem().setNextDate((Calendar) plannedDate.clone());
-               Calendar nextDate = forecastItem.getNextDateOfOccurrence();
+               Calendar nextDate = forecastItem.getNextDateOfOccurrence(plannedDate);
 
                // If the transaction date is prior to the next forecast transaction planned date:
                if (nextDate != null && date.compareTo(nextDate) < 0) {
@@ -429,7 +448,7 @@ public class ForecastTransaction extends IndependentEntity {
                // Then deduct the amount of the split:
                forecastTransaction = deductSplitAmount(forecast, transaction, resolver, split, forecastTransaction);
 
-            } // End if we were able to match the split to a forecast transaction.
+            } // End if this split is part of the forecast.
 
             // And finally link the split to the forecast transaction for historical purposes:
             forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);

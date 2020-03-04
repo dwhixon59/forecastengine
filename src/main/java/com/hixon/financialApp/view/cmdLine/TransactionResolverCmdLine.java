@@ -24,6 +24,7 @@ import java.util.Scanner;
 
 import static com.hixon.financialApp.utility.Utility.StartDateType.*;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static java.util.Calendar.YEAR;
 
 public class TransactionResolverCmdLine implements TransactionResolverInt {
 
@@ -752,14 +753,18 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    public UserResponse getForecastStartDate() throws QuitException {
       UserResponse response = new UserResponse();
 
-      say("What date do you want to start on?  (<enter> first of next month, t-Today, f-First of this month, " +
-              "o-One month from today, c-Custom date");
+      say("What date do you want to start on?  (l-first of last month, <enter> first of next month, t-Today, " +
+              "f-First of this month, o-One month from today, c-Custom date)");
 
       boolean done = false;
       while (!done) {
          done = true;
          String line = in.nextLine();
          switch (line) {
+            case "l":
+               response.setStartDate(FIRST_OF_LAST_MONTH);
+               break;
+
             case "t":
                response.setStartDate(TODAY);
                break;
@@ -782,11 +787,70 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                if (line.length() == 0) {
                   response.setStartDate(FIRST_OF_NEXT_MONTH);
                } else {
-                  say("Please enter <enter>, t, f, o, or c.");
+                  say("Please enter l, <enter>, t, f, o, or c.");
                   done = false;
                }
          }
       }
       return response;
+   }
+
+   @Override
+   public Calendar getSpendingReportMonth() throws QuitException {
+      UserResponse response = new UserResponse();
+
+      say("What month do you want to report on?  \n" +
+              "l - last month\n" +
+              "t or just <enter> - this month\n" +
+              "1 - 12 January - December\n" +
+              "Custom date (mm-yy):\n");
+
+      boolean done = false;
+      Calendar month = Calendar.getInstance();
+      month.set(Calendar.DATE, 1);
+      while (!done) {
+         done = true;
+         String line = in.nextLine();
+         switch (line) {
+            case "l":
+               month.add(Calendar.MONTH, -1);
+               break;
+
+            case "t":
+               break;
+
+            case "1":
+            case "2":
+            case "3":
+            case "4":
+            case "5":
+            case "6":
+            case "7":
+            case "8":
+            case "9":
+            case "10":
+            case "11":
+            case "12":
+               month.set(Calendar.MONTH, Integer.parseInt(line) - 1);
+               break;
+
+            case "quit":
+               throw new QuitException("Quitting render spending report action.");
+
+            default:
+               try {
+                  Utility.stringDateDashToCalendarDate(line);
+               } catch (ParseException e) {
+                  say("Please enter l, <enter>, t, 1-12 c, or quit.");
+                  done = false;
+               }
+         }
+         //  If the selected month is in the future, then change the date to that month a last year:
+         Calendar now = Calendar.getInstance();
+         if (now.compareTo(month) < 0) {
+            month.add(YEAR, -1);
+         }
+      }
+      return month;
    }
 } // End class TransactionResolverCmdLine.

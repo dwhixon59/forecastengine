@@ -1,15 +1,15 @@
 package com.hixon.financialApp.controller;
 
-import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.*;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
@@ -267,5 +267,4 @@ public class Importer {
       System.out.println("Successfully imported " + i + " budget items into the database.");
    }
 
-
-}
+} // End class Importer.

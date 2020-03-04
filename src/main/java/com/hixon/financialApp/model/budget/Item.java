@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.budget;
 
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
@@ -8,6 +9,7 @@ import com.hixon.financialApp.model.entity.IndependentEntity;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.Locale;
@@ -17,6 +19,7 @@ import static com.hixon.financialApp.model.budget.Item.HowPaid.*;
 import static com.hixon.financialApp.model.budget.Item.ItemType.CREDIT_CARD;
 import static com.hixon.financialApp.model.budget.Item.ItemType.*;
 import static com.hixon.financialApp.model.budget.Item.PeriodType.*;
+import static java.lang.Math.abs;
 
 // This class represents an expense item.  It is used in budgets and forecasts.
 public abstract class Item extends IndependentEntity {
@@ -230,6 +233,72 @@ public abstract class Item extends IndependentEntity {
    /*
     *  Helper methods:
     */
+   // Get the amount spent on this item in a typical month like January, February, etc.:
+   public double getAverageAmountForMonth(int month) {
+      double monthlyAmount = 0;
+      switch (period) {
+         case ON_DEMAND:
+            monthlyAmount = 0;
+            break;
+         case DAILY:
+            monthlyAmount = amount * 365 / 12;
+            break;
+         case WEEKLY:
+            monthlyAmount = amount / 7 * 365 / 12;
+            break;
+         case BIWEEKLY:
+            monthlyAmount = amount / 14 * 365 / 12;
+            break;
+         case SEMIMONTHLY:
+            monthlyAmount = amount * 2;
+            break;
+         case SCHOOLYEARSEMIMONTHLY:
+            if (month >= 6 && month <= 8) {
+               monthlyAmount = 0;
+            } else {
+               monthlyAmount = amount;
+            }
+            break;
+         case MONTHLY:
+            monthlyAmount = amount;
+            break;
+         case SIXWEEKS:
+            monthlyAmount = amount / 42 * 365 / 12;
+            break;
+         case BIMONTHLY:
+            monthlyAmount = amount / 2;
+            break;
+         case QUARTERLY:
+            monthlyAmount = amount / 3;
+            break;
+         case ANNUALLY:
+            monthlyAmount = amount / 12;
+            break;
+         case SEMIANNUALLY:
+            monthlyAmount = amount / 6;
+            break;
+      }
+      return 0;
+   }
+
+   // Get the amount spent on this item in a specific month like January, 2020.:
+   public double getAmountForDateRange(Calendar startDateParm, Calendar endDateParm) throws ForecastException {
+
+      // Clone nextDate to protect it from side effects:
+      Calendar nextDate = (Calendar) startDateParm.clone();
+
+      // Compute the amount for the month in question:
+      nextDate = getFirstDateOnOrAfter(nextDate);
+      double monthAmount = 0;
+      while (nextDate != null) {
+         monthAmount += amount;
+         nextDate = getNextDateOnOrBefore(nextDate, endDateParm);
+      }
+
+      return monthAmount;
+   }
+
+
    public static PeriodType parsePeriodType(String dbPeriod) throws BudgetException {
       PeriodType period;
       switch (dbPeriod) {
@@ -699,7 +768,434 @@ public abstract class Item extends IndependentEntity {
       return isOk;
    }
 
-   // Print out an item:
+
+   // Compute the first occurrence of this item after an arbitrary date:
+   public Calendar getFirstDateOnOrAfter(Calendar onOrAfterDateParm) throws ForecastException {
+
+      // Check pre-conditions:
+      if (onOrAfterDateParm == null) throw new ForecastException("Start date cannot be null.");
+
+      Calendar tempDate = Calendar.getInstance();
+      Calendar onOrAfterDate = Calendar.getInstance();
+      Utility.copyDate(onOrAfterDateParm, onOrAfterDate);
+      Calendar nextDate = Calendar.getInstance();
+      Utility.copyDate(onOrAfterDateParm, nextDate);
+
+      // If the start date of this item (which is the first date this item could occur) is after the start date of
+      // the query, then move up the query start date to the item start date:
+      if (startDate.compareTo(onOrAfterDate) > 0) {
+         onOrAfterDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
+                 startDate.get(Calendar.DATE));
+      }
+
+      // Get the day of the week of the first occurrence of this budget item:
+      int budgetItemStartDateDayOfWeek = startDate.get(Calendar.DAY_OF_WEEK);
+
+      // Get the day of the week of the forecast start date:
+      int forecastStartDayOfWeek = onOrAfterDate.get(Calendar.DAY_OF_WEEK);
+
+      // Set nextDate to the first occurrence of the budget item on or after the forecast date:
+      switch (period) {
+
+         case DAILY:
+            // Next date is already set to the first date in the forecast
+            break;
+
+         case WEEKLY:
+            // Set the date of the first occurrence to the same day of the week as the budget item start date:
+            if (budgetItemStartDateDayOfWeek >= forecastStartDayOfWeek) {
+               nextDate.add(Calendar.DATE, budgetItemStartDateDayOfWeek - forecastStartDayOfWeek);
+            } else {
+               nextDate.add(Calendar.DATE, 7 - (forecastStartDayOfWeek - budgetItemStartDateDayOfWeek));
+            }
+            break;
+
+         case BIWEEKLY:
+            // If the day of the month of the start date is on or after the day of the month of the forecast start date:
+            if (startDate.get(Calendar.DATE) >= onOrAfterDate.get(Calendar.DATE)) {
+
+               // Then start this transaction on that date in the year and month of the forecast start date:
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
+                       startDate.get(Calendar.DATE));
+
+            } else {
+
+               // if the forecast start date day of the month is less than or equal to two weeks after the item
+               // start date:
+               if (onOrAfterDate.get(Calendar.DATE) <= (startDate.get(Calendar.DATE) + 14)) {
+                  // then make the next date two weeks after the start date day of the month:
+                  nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
+                          startDate.get(Calendar.DATE) + 14);
+
+               } else {
+                  // the forecast start date is more than two weeks after the item start date so add 4 weeks:
+                  nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
+                          startDate.get(Calendar.DATE) + 28);
+               }
+            }
+            break;
+
+         case SEMIMONTHLY:
+            // At the moment semi-monthly means the 1st or the 15th, so pick the first one to occur on or after the
+            // forecast start date:
+            if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 15);
+            } else {
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1, 1);
+            }
+            break;
+
+         case SCHOOLYEARSEMIMONTHLY:
+            // At the moment semi-monthly means the 1st or the 15th, so pick the first one to occur on or after the
+            // forecast start date:
+            if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 15);
+            } else {
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) +1, 1);
+            }
+            int month = nextDate.get(Calendar.MONTH);
+            if (month >= 6 && month <= 8) {
+               nextDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
+            }
+            break;
+
+         case MONTHLY:
+            // If the item start date is after the first month of the forecast:
+            tempDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 1);
+            tempDate.add(Calendar.MONTH, 1);
+            if (startDate.compareTo(tempDate) >= 0) {
+
+               // then it's next date is it's start date:
+               nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
+                       startDate.get(Calendar.DATE));
+            } else {
+
+               // Make the item start on it's day of the month, this month:
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
+                       startDate.get(Calendar.DATE));
+
+               // If the item start date day-of-the-month occurs before the forecast start date day-of-the-month:
+               if (startDate.get(Calendar.DATE) < onOrAfterDate.get(Calendar.DATE)) {
+
+                  // then make it the start in the second month in the forecast window:
+                  nextDate.add(Calendar.MONTH, 1);
+               }
+            }
+            break;
+
+         case SIXWEEKS:
+            // Compute the number of six-week increments occur between the item start date and the forecast start
+            // date.
+            long sixWeekUnits = abs(ChronoUnit.DAYS.between(startDate.toInstant(), onOrAfterDate.toInstant()) / (7 * 6));
+
+            // Set next date to the item start data + that many six-week increments:
+            nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
+            nextDate.add(Calendar.DATE, (int) sixWeekUnits * 42);
+
+            // We used an integer value for the division, so we should be on the forecast start date, or less than
+            // six weeks before or after it.  If we are before it, then increment by six weeks to get into the
+            // forecast:
+            if (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.DATE, 42);
+            break;
+
+         case BIMONTHLY:
+            // If one of the start months is odd and the other is even:
+            if ((onOrAfterDate.get(Calendar.MONTH) & 1) != (startDate.get(Calendar.MONTH) & 1)) {
+
+               // then the first occurrence is in the month after the forecast start month:
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1,
+                       startDate.get(Calendar.DATE));
+            } else {
+               // if the start date day of the month is on or after the forecast start date day of the month:
+               if (startDate.get(Calendar.DATE) >= onOrAfterDate.get(Calendar.DATE)) {
+
+                  // then the first occurrence in the forecast window is in the forecast start month:
+                  nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
+                          startDate.get(Calendar.DATE));
+               } else {
+                  // else it occurs for the first time two months after the forecast start month:
+                  nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 2,
+                          startDate.get(Calendar.DATE));
+               }
+            }
+            break;
+
+         case QUARTERLY:
+            // Quarterly dates occur on the same date each year, so set the next date year to be the same as the
+            // start date of the forecast:
+            nextDate.set(onOrAfterDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
+
+            // Increment by quarters till the nextDate is on or after the forecast start date:
+            while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 3);
+
+            // Decrement by quarters till the nextDate is less than 3 months ahead of the forecast start date:
+            while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 3)
+               nextDate.add(Calendar.MONTH, -3);
+            break;
+
+         case SEMIANNUALLY:
+            // Semi-annual dates occur on the same date each year, so set the next date year to be the same as the
+            // start date of the forecast:
+            nextDate.set(onOrAfterDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
+
+            // Increment by half-years till the nextDate is on or after the forecast start date:
+            while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 6);
+
+            // Decrement by half-years till the nextDate is less than 6 months ahead of the forecast start date:
+            while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 3)
+               nextDate.add(Calendar.MONTH, -6);
+            break;
+
+         case ANNUALLY:
+            // Annual dates occur on the same date each year, so set the next-date-year to be the same as the
+            // forecast-start-date year:
+            nextDate.set(onOrAfterDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
+
+            // If the next date this year is before the forecast start date, the move it to next year:
+            if (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.YEAR, 1);
+            break;
+
+         case ON_DEMAND:
+            nextDate = null;
+            break;
+
+         default:
+            throw new ForecastException("Unrecognized period type " + period + " in the " + payee + "forecast item.");
+      }
+
+      // Check post-conditions:
+      if (nextDate != null && nextDate.compareTo(onOrAfterDateParm) < 0) {
+         throw new ForecastException("Next date (" + Utility.calendarDateToStringDate(nextDate) + ") must be on or " +
+                 "after the specified date" + Utility.calendarDateToStringDate(onOrAfterDateParm)+ ").");
+      }
+
+      return nextDate;
+   }
+
+
+   // Compute the first occurrence of this item in an arbitrary window:
+   Calendar getFirstDateInWindow(Calendar startDate, Calendar endDate) throws ForecastException {
+      Calendar firstDate = null;
+
+      // If the window doesn't end before this item's start date, or start after this budget item's end date:
+      if (
+              (endDate == null || !(endDate.compareTo(this.startDate) < 0)) &&
+              (this.endDate == null || startDate.compareTo(this.endDate) > 0)
+         ) {
+         firstDate = getFirstDateOnOrAfter(startDate);
+      }
+      return firstDate;
+   }
+
+
+   // Get the date of the next occurrence of this forecast item:
+   public Calendar getNextDateOfOccurrence(Calendar previousDate) throws ForecastException {
+
+      Calendar nextDate = (Calendar) previousDate.clone();
+      if (nextDate != null) {
+         switch (period) {
+
+            case DAILY:
+               // Increment the date by the length of a week, e.g. 7 days:
+               nextDate.add(Calendar.DATE, 1);
+               break;
+
+            case WEEKLY:
+               // Increment the date by the length of a week, e.g. 7 days:
+               nextDate.add(Calendar.DATE, 7);
+               break;
+
+            case BIWEEKLY:
+               // Increment the date by the length of two weeks, e.g. 14 days:
+               nextDate.add(Calendar.DATE, 14);
+               break;
+
+            case SEMIMONTHLY:
+               // For now, semi-monthly items always occur on the 1st and the 15th:
+               if (nextDate.get(Calendar.DATE) == 1) {
+                  nextDate.set(Calendar.DATE, 15);
+               } else {
+                  nextDate.add(Calendar.MONTH, 1);
+                  nextDate.set(Calendar.DATE, 1);
+               }
+               break;
+
+            case SCHOOLYEARSEMIMONTHLY:
+               // For now, semi-monthly items always occur on the 1st and the 15th:
+               if (nextDate.get(Calendar.DATE) == 1) {
+                  nextDate.set(Calendar.DATE, 15);
+               } else {
+                  nextDate.add(Calendar.MONTH, 1);
+                  nextDate.set(Calendar.DATE, 1);
+               }
+               int month = nextDate.get(Calendar.MONTH);
+               if (month >= 6 && month <= 8) {
+                  nextDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
+               }
+               break;
+
+            case MONTHLY:
+               // Increment the date by one month:
+               nextDate.add(Calendar.MONTH, 1);
+               break;
+
+            case SIXWEEKS:
+               // Increment the date by the length of six weeks, e.g. 42 days:
+               nextDate.add(Calendar.DATE, 42);
+               break;
+
+            case BIMONTHLY:
+               // Increment the date by three months:
+               nextDate.add(Calendar.MONTH, 2);
+               break;
+
+            case QUARTERLY:
+               // Increment the date by three months:
+               nextDate.add(Calendar.MONTH, 3);
+               break;
+
+            case SEMIANNUALLY:
+               // Increment the date by six months:
+               nextDate.add(Calendar.MONTH, 6);
+               break;
+
+            case ANNUALLY:
+               // Increment the date by one year:
+               nextDate.add(Calendar.YEAR, 1);
+               break;
+
+            default:
+               throw new ForecastException("Can't get the next date because period " + period + " is unrecognized.");
+         }
+      } else {
+         throw new ForecastException("Can't get the next date before calling get the first date.");
+      }
+
+      // Post-conditions:
+      if (nextDate != null) {
+         if (nextDate.compareTo(previousDate) <= 0) {
+            throw new ForecastException("Next date is the same as, or prior to, the previous date.");
+         }
+
+         // If the next date is after the end date of this budget item, then return no next date:
+         if (endDate != null && nextDate.compareTo(endDate) > 0) nextDate = null;
+      }
+
+      // TODO:  Make into a logging statement:
+      //  System.out.println("The next date of this budget item is " + Utility.calendarDateToStringDate(nextDate));
+
+      return nextDate;
+   }
+
+
+   // Get the date of the next occurrence of this forecast item or or before the given date:
+   Calendar getNextDateOnOrBefore(Calendar previousDate, Calendar endDate) throws ForecastException {
+      Calendar nextDate = getNextDateOfOccurrence(previousDate);
+      return (nextDate != null && nextDate.compareTo(endDate) <= 0) ? nextDate : null;
+   }
+
+
+   // Calculate the previous date of occurrence of this forecast item given the date of occurrence of this item:
+   public Calendar getPreviousDateOfOccurrence(Calendar dateOfItemOccurrence) throws ForecastException {
+      Calendar previousDateOfItemOccurrence = (Calendar) dateOfItemOccurrence.clone();
+      if (dateOfItemOccurrence != null) {
+         switch (period) {
+
+            case DAILY:
+               // Decrement the date by one day:
+               previousDateOfItemOccurrence.add(Calendar.DATE, -1);
+               break;
+
+            case WEEKLY:
+               // Decrement the date by the length of a week, e.g. 7 days:
+               previousDateOfItemOccurrence.add(Calendar.DATE, -7);
+               break;
+
+            case BIWEEKLY:
+               // Decrement the date by the length of two weeks, e.g. 14 days:
+               previousDateOfItemOccurrence.add(Calendar.DATE, -14);
+               break;
+
+            case SEMIMONTHLY:
+               // For now, semi-monthly items always occur on the 1st and the 15th:
+               if (previousDateOfItemOccurrence.get(Calendar.DATE) == 1) {
+                  previousDateOfItemOccurrence.add(Calendar.MONTH, -1);
+                  previousDateOfItemOccurrence.set(Calendar.DATE, 15);
+               } else {
+                  previousDateOfItemOccurrence.set(Calendar.DATE, 1);
+               }
+               break;
+
+            case SCHOOLYEARSEMIMONTHLY:
+               // For now, semi-monthly items always occur on the 1st and the 15th:
+               if (previousDateOfItemOccurrence.get(Calendar.DATE) == 1) {
+                  previousDateOfItemOccurrence.add(Calendar.MONTH, -1);
+                  previousDateOfItemOccurrence.set(Calendar.DATE, 15);
+               } else {
+                  previousDateOfItemOccurrence.set(Calendar.DATE, 1);
+               }
+               int month = previousDateOfItemOccurrence.get(Calendar.MONTH);
+               if (month >= 6 && month <= 8) {
+                  previousDateOfItemOccurrence.set(Calendar.MONTH, Calendar.MAY);
+               }
+               break;
+
+            case MONTHLY:
+               // Decrement the date by one month:
+               previousDateOfItemOccurrence.add(Calendar.MONTH, -1);
+               break;
+
+            case SIXWEEKS:
+               // Decrement the date by the length of six weeks, e.g. 42 days:
+               previousDateOfItemOccurrence.add(Calendar.DATE, -42);
+               break;
+
+            case BIMONTHLY:
+               // Decrement the date by two months:
+               previousDateOfItemOccurrence.add(Calendar.MONTH, -2);
+               break;
+
+            case QUARTERLY:
+               // Decrement the date by three months:
+               previousDateOfItemOccurrence.add(Calendar.MONTH, -3);
+               break;
+
+            case SEMIANNUALLY:
+               // Decrement the date by six months:
+               previousDateOfItemOccurrence.add(Calendar.MONTH, -6);
+               break;
+
+            case ANNUALLY:
+               // Decrement the date by one year:
+               previousDateOfItemOccurrence.add(Calendar.YEAR, -1);
+               break;
+
+            default:
+               throw new ForecastException("Can't get the next date because period unrecognized.");
+         }
+      } else {
+         throw new ForecastException("Can't get the next date before calling get the first date.");
+      }
+
+      // Post-conditions:
+      if (previousDateOfItemOccurrence != null) {
+         if (previousDateOfItemOccurrence.compareTo(dateOfItemOccurrence) >= 0) {
+            throw new ForecastException("Previous date is the same as, or after, the passed in date.");
+         }
+
+         // If the next date is before the first date of this budget item, then return no previous date:
+         if (startDate != null && previousDateOfItemOccurrence.compareTo(startDate) < 0)
+            previousDateOfItemOccurrence = null;
+      }
+
+      // TODO:  Make into a logging statement:
+      //  System.out.println("The next date of this budget item is " + Utility.calendarDateToStringDate(previousDateOfItemOccurrence));
+
+      return previousDateOfItemOccurrence;
+   }
+
+
+      // Format an item as a string:
    public String toString() {
 
       String endDate = null;

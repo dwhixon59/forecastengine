@@ -106,5 +106,8 @@ public interface TransactionResolverInt {
 
    // Get the start date of the portion of the forecast to update:
    UserResponse getForecastStartDate() throws QuitException;
+
+   // Get the start date for a spending report:
+   public Calendar getSpendingReportMonth() throws QuitException;
 }
 

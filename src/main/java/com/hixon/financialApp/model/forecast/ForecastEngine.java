@@ -78,7 +78,7 @@ public class ForecastEngine {
                     firstOccurrence = false;
 
                     // Go to the next instance of this budget item:
-                    nextDate = forecastItem.getNextDateOfOccurrence();
+                    nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
 
                 } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
@@ -217,7 +217,7 @@ public class ForecastEngine {
                     firstOccurrence = false;
 
                     // Go to the next instance of this budget item:
-                    nextDate = forecastItem.getNextDateOfOccurrence();
+                    nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
 
                 } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
