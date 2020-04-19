@@ -1,11 +1,10 @@
 package com.hixon.financialApp.model.budget;
 
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
-import com.sun.istack.internal.NotNull;
+import com.hixon.financialApp.utility.Utility;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.Date;
@@ -32,19 +31,16 @@ public class BudgetItem extends Item {
    private static final String insertQuery = "insert into ForecastDatabase.Budget_Item (idBudgetItem, category, payee, " +
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Budget_idBudget) values (";
-       String msg = "Database error attempting to insert a budget item.";
 
    @Override
    public String getInsertQuery() throws BudgetException {
 
-      String query = insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
+      return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
               generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", " +
               Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
               Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
               generateHowImportant(howImportant) + "', '" + generateHowOccurs(howOccurs) + "', '" +
               generateHowPaid(howPaid) + "', uuid_to_bin('" + idBudget + "'))";
-
-      return query;
    }
 
    private static final String updateQuery = "update ForecastDatabase.Budget_Item set ";
@@ -76,7 +72,7 @@ public class BudgetItem extends Item {
    @Override
    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
 
-      String query = insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
+      return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
               generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", " +
               Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
               Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
@@ -87,9 +83,8 @@ public class BudgetItem extends Item {
               ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
               numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" +
               generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '"
-              + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idbudget = " +
+              + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idBudget = " +
               "uuid_to_bin('" + idBudget + "')";
-      return query;
    }
 
    @Override
@@ -99,7 +94,7 @@ public class BudgetItem extends Item {
               ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
               numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" +
               generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '"
-              + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idbudget = " +
+              + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idBudget = " +
               "uuid_to_bin('" + idBudget + "') where idBudgetItem = uuid_to_bin('" + id + "')";
    }
 
@@ -118,7 +113,7 @@ public class BudgetItem extends Item {
       setDirty(false);
    }
 
-   public BudgetItem(ResultSet rs) throws SQLException, BudgetException {
+   public BudgetItem(ResultSet rs) throws BudgetException {
       super(false);
       loadFromResultSet(rs);
       setDirty(false);
@@ -129,13 +124,13 @@ public class BudgetItem extends Item {
     *  Load and save methods:
     */
 
-   public static BudgetItem getById(UUID idBudgetItem) throws EntityException, SQLException, BudgetException {
+   public static BudgetItem getById(UUID idBudgetItem) throws EntityException, BudgetException {
       return new BudgetItem(EntityInt.getRSById(selectQuery + "where idBudgetItem = ", idBudgetItem,
               "Database error encountered trying to retrieve a budget item."));
    }
 
    // Load up a budget item from a budget item database table row:
-   public BudgetItem loadFromResultSet(@NotNull ResultSet rs) throws SQLException, BudgetException {
+   public BudgetItem loadFromResultSet(ResultSet rs) throws BudgetException {
       try {
          if (rs == null) throw new BudgetException("Result set to loadFromResultSet from must not be null.");
 
@@ -188,6 +183,7 @@ public class BudgetItem extends Item {
       }
    }
 
+   // Get the payee for a budget item using it's arbitrary ID:
    public static String getPayeeById(UUID idBudgetItem) throws BudgetException {
 
       if (idBudgetItem == null) {
@@ -199,7 +195,6 @@ public class BudgetItem extends Item {
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
-         BudgetItem budgetItem = null;
          if (rs.next()) {
             return rs.getString("payee");
          }
@@ -215,7 +210,7 @@ public class BudgetItem extends Item {
 
 
    // Load a budget item from a comma separated values string:
-   public void loadFromCsvRecord(CSVRecord record) throws BudgetException, ParseException, SQLException, EntityException {
+   public void loadFromCsvRecord(CSVRecord record) throws BudgetException, ParseException {
 
       if (record.size() < 14) throw new BudgetException("Less than 14 values submitted for new budget item");
       setId(UUID.fromString(record.get(Headers.ID_BUDGET_ITEM)));
@@ -244,7 +239,6 @@ public class BudgetItem extends Item {
 
       System.out.println("Created new budget item " + toString());
       setDirty(true);
-      return;
    }
 
 
@@ -291,15 +285,14 @@ public class BudgetItem extends Item {
       super.save(method);
 
       // Mark all the forecasts that use the budget this item belongs to as out of sync with the budget:
-      String updateInsyncQuery = "update forecastdatabase.forecast set inSync = 0 where Budget_idBudget = " +
+      String updateInSyncQuery = "update forecastdatabase.forecast set inSync = 0 where Budget_idBudget = " +
               "uuid_to_bin('" + idBudget + "')";
-      EntityInt.executeQuery(updateInsyncQuery, "Database error attempting to set the " +
+      EntityInt.executeUpdate(updateInSyncQuery, "Database error attempting to set the " +
               "inSync flag on the forecast.");
     }
 
    public void update() throws BudgetException, SQLException {
 
-      String endDateString = (endDate == null) ? "null" : "'" + Utility.calendarDateToSqlDateString(endDate) + "'";
       String query = updateQuery + "category = '" + category + "', payee = \"" + payee + "\", period = '" +
               generatePeriodType(period) + "', amount = " + amount + "', runningBalance = " + runningBalance +
               ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
@@ -311,7 +304,6 @@ public class BudgetItem extends Item {
       System.out.println(query);
 
       Statement statement = null;
-      ResultSet rs = null;
       try {
          statement = Utility.getDbConnection().createStatement();
          int rowCount = statement.executeUpdate(query);
@@ -322,7 +314,6 @@ public class BudgetItem extends Item {
       } catch (SQLException e) {
          System.out.println();
          if (statement != null) statement.close();
-         if (rs != null) rs.close();
          BudgetException be = new BudgetException("Database error attempting to update a budget item.");
          be.initCause(e);
          throw be;
@@ -333,8 +324,6 @@ public class BudgetItem extends Item {
    public static ResultSet getAllBudgetItems() throws EntityException {
 
       String query = getSelectQuery() + " order by category, payee";
-      ResultSet rs = EntityInt.getRS(query, "getting the budget items for a MTD spending report");
-
-      return rs;
+      return EntityInt.getRS(query, "getting the budget items for a MTD spending report");
    }
 }

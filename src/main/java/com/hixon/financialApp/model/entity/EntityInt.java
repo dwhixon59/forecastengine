@@ -18,8 +18,8 @@ public interface EntityInt {
    void setDirty(boolean dirty);
 
    // The base CRUD queries:
-   String getInsertQuery() throws BudgetException, ForecastException;
-   String getInsertOnDuplicateUpdateQuery() throws BudgetException;
+   String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException;
+   String getInsertOnDuplicateUpdateQuery() throws BudgetException, EntityException, SQLException, ForecastException;
    String getUpdateByIdQuery() throws BudgetException;
    String getDeleteByIdQuery();
    String getPrintableEntityTypeName();
@@ -29,8 +29,11 @@ public interface EntityInt {
    void save(SaveMethod method) throws EntityException, RegisterException, BudgetException, SQLException,
            ForecastException;
 
+   // The inser operation:
+   void insert() throws ForecastException, BudgetException, EntityException, RegisterException, SQLException;
+
    // The update operation:
-   void update() throws EntityException, BudgetException, SQLException;
+   void update() throws EntityException, BudgetException, SQLException, RegisterException;
 
    // The delete operation:
    void delete() throws EntityException, RegisterException;
@@ -39,14 +42,15 @@ public interface EntityInt {
    void executeQueryForThis(String query, String exceptionMessage) throws RegisterException, EntityException;
 
    // Execute a query using the SQL call executeUpdate():
-   static void executeQuery(String query, String exceptionMessage) throws RegisterException, EntityException {
+   static int executeUpdate(String query, String exceptionMessage) throws RegisterException, EntityException {
 
       Statement statement = null;
       ResultSet rs = null;
 
+      int rowCount;
       try {
          statement = Utility.getDbConnection().createStatement();
-         int rowCount = statement.executeUpdate(query);
+         rowCount = statement.executeUpdate(query);
       } catch (SQLException e) {
          try {
             if (statement != null) statement.close();
@@ -58,6 +62,7 @@ public interface EntityInt {
             throw ee;
          }
       }
+      return rowCount;
    }
 
    // The generic get operation:

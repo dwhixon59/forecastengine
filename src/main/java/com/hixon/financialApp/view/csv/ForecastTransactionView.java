@@ -8,11 +8,14 @@ import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import java.util.Calendar;
 import java.util.UUID;
 
-public class ViewForecastTransaction extends ForecastTransaction {
+public class ForecastTransactionView extends ForecastTransaction {
 
    /*
     * Fields:
     */
+   double credit = 0.0;
+   double debit = 0.0;
+   double amount = 0.0;
 
 
    /*
@@ -40,31 +43,31 @@ public class ViewForecastTransaction extends ForecastTransaction {
    }
 
    public Double getCredit() {
-      return getCredit();
+      return credit;
    }
    public void setCredit(Double credit) {
       if (credit < 0.01) {
-         setCredit(0.0);
+         this.credit = 0.0;
       } else {
-         setCredit(credit);
+         this.credit = credit;
       }
-      setRemainingAmount(getCredit() - getDebit());
+      this.setRemainingAmount(getCredit() - getDebit());
    }
 
    public Double getDebit() {
-      return getDebit();
+      return debit;
    }
    public void setDebit(Double debit) {
       if (debit < 0.01) {
-         setDebit(0.0);
+         this.debit = 0.0;
       } else {
-         setDebit(debit);
+         this.debit = debit;
       }
-      setRemainingAmount(getCredit() - getDebit());
+      this.setRemainingAmount(getCredit() - getDebit());
    }
 
    public Double getBalance() {
-      return getRunningBalance();
+      return this.getRunningBalance();
    }
    public void setBalance(Double balance) {
       setRunningBalance(balance);
@@ -92,10 +95,10 @@ public class ViewForecastTransaction extends ForecastTransaction {
    }
 
    public Double getAmount() {
-      return getRemainingAmount();
+      return amount;
    }
    public void setAmount(Double amount) {
-      setRemainingAmount(amount);
+      this.amount = amount;
    }
 
    // The entity name:
@@ -107,8 +110,23 @@ public class ViewForecastTransaction extends ForecastTransaction {
    /*
     * Constructors:
     */
-   public ViewForecastTransaction() {
+   public ForecastTransactionView() {
       ForecastItem forecastItem = new ForecastItem();
       setForecastItem(forecastItem);
+   }
+
+
+   /*
+    * Helper methods:
+    */
+   @Override
+   public String toString() {
+      return "ForecastTransactionView{" +
+              "credit=" + credit +
+              ", debit=" + debit +
+              ", amount=" + amount +
+              "}\n" +
+              super.toString() + "\n" +
+              forecastItem.toString();
    }
 }

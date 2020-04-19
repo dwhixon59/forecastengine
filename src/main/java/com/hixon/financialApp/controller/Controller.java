@@ -95,7 +95,7 @@ public class Controller {
                   Utility.getResolver().say("The forecast was successfully generated");
                   break;
 
-               case "ImportForecastTransactions":
+               case "importForecastTransactions":
                   Utility.getResolver().say("Importing the forecast transactions.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
                   if (forecast != null) {

@@ -4,23 +4,25 @@ import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ForecastView;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.io.input.BOMInputStream;
 
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
+
+import static com.hixon.financialApp.utility.Utility.*;
 
 public class CsvForecastView extends ForecastView {
 
@@ -56,6 +58,17 @@ public class CsvForecastView extends ForecastView {
    /*
     * Helper methods:
     */
+   private void setStartingPlannedDate(int forecastMonth, Calendar plannedDate) {
+      Calendar currentDate = Calendar.getInstance();
+      int currentMonth = currentDate.get(Calendar.MONTH);
+      if (forecastMonth > currentMonth) plannedDate.set(Calendar.YEAR, currentDate.get(Calendar.YEAR) - 1);
+      if (currentMonth >= forecastMonth) {
+         plannedDate.add(Calendar.MONTH, currentMonth - forecastMonth + 1);
+      } else {
+
+      }
+
+   }
 
 
    /*
@@ -94,148 +107,102 @@ public class CsvForecastView extends ForecastView {
 
    // Forecast transaction headers in a CSV file:
    public enum ForecastTransactionHeaders {
-      DATE, PAYEE, CREDIT, DEBIT, BALANCE, CATEGORY, IMPORTANCE, HOW_OCCURS, TRANSACTION_ID, VERSION, AMOUNT
+      DATE, CATEGORY, PAYEE, CREDIT, DEBIT, BALANCE, BLANK, IMPORTANCE, HOW_OCCURS, TRANSACTION_ID, VERSION, AMOUNT
    }
 
    @Override
    public List<ForecastTransaction> openForecastTransactionSource() throws ControllerException, BudgetException {
-      int i = 1;
+      int i = 0;
       List<ForecastTransaction> forecastTransactions = new ArrayList<>();
       try {
-         Utility.getResolver().say("Update the forecast from the forecast transactions in the file " + importForecastFilename);
-         in = new FileReader(importForecastFilename);
+         getResolver().say("Update the forecast from the forecast transactions in the CSV file " + importForecastFilename);
 
-         // Setup the CSV parser:
-         CSVFormat rfc4180 = CSVFormat.RFC4180;
-         rfc4180.withHeader(ForecastTransactionHeaders.class);
-         records = rfc4180.parse(in);
+         // Work on the most recent forecast:
+         Forecast forecast = Forecast.getMostRecent();
 
-         // Iterator over the CSV records and create a list of forecast transactions from them:
+         // Iterate over the CSV records and create a list of forecast transactions from them:
+         BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)));
+         BufferedReader in = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
          Iterable<CSVRecord> records = CSVFormat.RFC4180.withHeader(ForecastTransactionHeaders.class).parse(in);
          Calendar plannedDate = Calendar.getInstance();
-         int previousMonth = plannedDate.get(Calendar.MONTH);
+         int previousMonth;
+         boolean firstTime = true;
          for (CSVRecord record : records) {
 
-            // If there is something in the Date column:
-            if (!record.get(ForecastTransactionHeaders.DATE).isEmpty()) {
+            // Keep track of the line number for debugging purposes:
+            i++;
 
-               // If the current record is a month header then update the month portion of the planned date:
-               if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("January")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.JANUARY);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
+            // If there is something in the Date column:
+            String dateColumn = record.get(ForecastTransactionHeaders.DATE);
+            if (!dateColumn.isEmpty()) {
+
+               // If the current record is a month header then update the month and year portion of the planned date:
+               try {
+                  plannedDate = MonthYearLongDateToCalendarDate(dateColumn);
                   continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("February")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.FEBRUARY);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("March")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.MARCH);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("April")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.APRIL);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("May")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.MAY);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("June")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.JUNE);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("July")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.JULY);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("August")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.AUGUST);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("September")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("October")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.OCTOBER);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("November")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.NOVEMBER);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).equalsIgnoreCase("December")) {
-                  previousMonth = plannedDate.get(Calendar.MONTH);
-                  plannedDate.set(Calendar.MONTH, Calendar.DECEMBER);
-                  if (previousMonth >= plannedDate.get(Calendar.MONTH)) plannedDate.add(Calendar.YEAR, 1);
-                  continue;
-               } else if (record.get(ForecastTransactionHeaders.DATE).matches("[0-9]{1,2}(st|nd|rd|th)")) {
-                  // It's got a date in the first column, so set the current date and create a forecast transaction:
-                  int length = (record.get(ForecastTransactionHeaders.DATE).length() - 2);
-                  plannedDate.set(Calendar.DATE, Integer.parseInt(record.get(Calendar.DATE).substring(1, length)));
-               } else {
-                  // This is neither a header row, or a forecast transaction row, so skip it:
-                  continue;
+               } catch (ParseException pe) {
+                  // Parse exception is OK.  Just not a month header row.
+                  if (dateColumn.matches("[0-9]{1,2}(st|nd|rd|th)")) {
+                     // It's got a date in the first column, so set the current date and create a forecast transaction:
+                     int length = (dateColumn.length() - 2);
+                     plannedDate.set(Calendar.DATE, Integer.parseInt(dateColumn.substring(0, length)));
+                  } else {
+                     // This is neither a header row, or a forecast transaction row, so skip it:
+                     continue;
+                  }
                }
             } else if (record.get(ForecastTransactionHeaders.PAYEE).isEmpty()) {
                // The first and second columns are blank, so this is not a forecast transaction row; skip it:
                continue;
             }
 
-            // Create a CSV forecast transaction from the spreadsheet row:
-            CsvForecastTransaction csvForecastTransaction = new CsvForecastTransaction();
-            csvForecastTransaction.setCategory(record.get(ForecastTransactionHeaders.CATEGORY));
-            csvForecastTransaction.setPayee(record.get(ForecastTransactionHeaders.PAYEE));
-            csvForecastTransaction.setCredit(Double.parseDouble(record.get(ForecastTransactionHeaders.CREDIT)));
-            csvForecastTransaction.setDebit(Double.parseDouble(record.get(ForecastTransactionHeaders.DEBIT)));
-            csvForecastTransaction.setHowImportant(Item.parseHowImportant(record.get(ForecastTransactionHeaders.IMPORTANCE)));
-            csvForecastTransaction.setHowOccurs(Item.parseHowOccurs(record.get(ForecastTransactionHeaders.HOW_OCCURS)));
-            csvForecastTransaction.setAmount(Double.parseDouble(record.get(ForecastTransactionHeaders.AMOUNT)));
-
+            // If we get this far, we are working on a forecast transaction view, so copy the values from the CSV row
+            // into a viewForecastTransaction:
+            ForecastTransactionView forecastTransactionView = new ForecastTransactionView();
+            forecastTransactionView.getForecastItem().setForecast(forecast);
+            forecastTransactionView.setDate((Calendar) plannedDate.clone());
+            forecastTransactionView.setCategory(record.get(ForecastTransactionHeaders.CATEGORY));
+            forecastTransactionView.setPayee(record.get(ForecastTransactionHeaders.PAYEE));
+            forecastTransactionView.setCredit(parseDollarAmount(record.get(ForecastTransactionHeaders.CREDIT)));
+            forecastTransactionView.setDebit(parseDollarAmount(record.get(ForecastTransactionHeaders.DEBIT)));
+            forecastTransactionView.setRunningBalance(parseDollarAmount(record.get(ForecastTransactionHeaders.BALANCE)));
+            forecastTransactionView.getForecastItem().setPeriod(Item.PeriodType.ON_DEMAND);
+            forecastTransactionView.getForecastItem().setItemType(Item.ItemType.EXPENSE);
+            if (parseDollarAmount(record.get(ForecastTransactionHeaders.DEBIT)) > 0) {
+               forecastTransactionView.getForecastItem().setHowPaid(Item.HowPaid.DEBIT_CARD);
+            } else {
+               forecastTransactionView.getForecastItem().setHowPaid(Item.HowPaid.DIRECT_DEPOSIT);
+            }
+            if (!record.get(ForecastTransactionHeaders.IMPORTANCE).isEmpty()) {
+               forecastTransactionView.setHowImportant(Item.parseHowImportant(record.get(ForecastTransactionHeaders.IMPORTANCE)));
+            } else {
+               forecastTransactionView.setHowImportant(Item.HowImportant.FIXED_ESSENTIAL);
+            }
+            if (!record.get(ForecastTransactionHeaders.HOW_OCCURS).isEmpty()) {
+               forecastTransactionView.setHowOccurs(Item.parseHowOccurs(record.get(ForecastTransactionHeaders.HOW_OCCURS)));
+            } else {
+               forecastTransactionView.setHowOccurs(Item.HowOccurs.UNPLANNED);
+            }
             if (!record.get(ForecastTransactionHeaders.TRANSACTION_ID).isEmpty()) {
-               csvForecastTransaction.setId(UUID.fromString(record.get(ForecastTransactionHeaders.TRANSACTION_ID)));
+               forecastTransactionView.setTransactionID(UUID.fromString(record.get(ForecastTransactionHeaders.TRANSACTION_ID)));
             } else {
-               csvForecastTransaction.setId(null);
+               forecastTransactionView.setTransactionID(null);
             }
-            csvForecastTransaction.setVersion(Utility.stringTimeStampToCalendarDate(
-                    record.get(ForecastTransactionHeaders.VERSION)));
-            double remainingAmout = csvForecastTransaction.getDebit();
-            if (remainingAmout > 0.01) {
-               remainingAmout = -remainingAmout;
+            if (!record.get(ForecastTransactionHeaders.VERSION).isEmpty()) {
+               forecastTransactionView.setVersion(stringTimeStampToCalendarDate(
+                       record.get(ForecastTransactionHeaders.VERSION)));
             } else {
-               remainingAmout = csvForecastTransaction.getCredit();
-               if (remainingAmout < 0.01) {
-                  remainingAmout = 0;
-               }
+               forecastTransactionView.setVersion(null);
             }
-            csvForecastTransaction.setRemainingAmount(remainingAmout);
-            csvForecastTransaction.setPlannedDate(plannedDate);
-            csvForecastTransaction.setRunningBalance(Double.parseDouble(record.get(ForecastTransactionHeaders.BALANCE)));
-
-            // Create or link to an existing forecast item in the forecast:
-/*
-            ForecastItem forecastItem = new ForecastItem(forecast, split.getBudgetItem());
-            forecastItem.setAmount(1);
-            forecastItem.save(INSERT);
-            forecastTransaction = new ForecastTransaction(forecastItem, split.getTransaction().getDate(), true);
-            forecastTransaction.setRemainingAmount(1);
-            forecastTransaction.save(INSERT);
-*/
+            if (!record.get(ForecastTransactionHeaders.AMOUNT).isEmpty()) {
+               forecastTransactionView.setAmount(parseDollarAmount(record.get(ForecastTransactionHeaders.AMOUNT)));
+            } else {
+               forecastTransactionView.setAmount(parseDollarAmount(record.get(ForecastTransactionHeaders.CREDIT)) -
+                       parseDollarAmount(record.get(ForecastTransactionHeaders.DEBIT)));
+            }
 
             // Add the forecast transaction to the list
-            // TODO:  Add a forecast transaction and a forecast item to the list, not a csvForecastTransaction:
-            forecastTransactions.add(csvForecastTransaction);
+            forecastTransactions.add(forecastTransactionView);
          }
 
       } catch (FileNotFoundException e) {
@@ -250,6 +217,10 @@ public class CsvForecastView extends ForecastView {
       } catch (Exception e) {
          ControllerException ce = new ControllerException("Exception while processing the transactions file " +
                  importForecastFilename + " on line " + i + ".");
+         ce.initCause(e);
+         throw ce;
+      } catch (EntityException e) {
+         ControllerException ce = new ControllerException("Exception while loading the most recent forecast.");
          ce.initCause(e);
          throw ce;
       }

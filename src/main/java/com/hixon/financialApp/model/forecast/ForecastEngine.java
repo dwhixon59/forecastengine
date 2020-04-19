@@ -19,18 +19,26 @@ public class ForecastEngine {
         }
     } // End ForecastEngine().
 
-    // Connect to the MySQL database:
+    // Create a new forecast:
     public boolean generateForecast(Forecast forecast, Calendar startDate) throws Exception,
             BudgetException, EntityException {
 
+        // Create a new set of items in the forecast:
+        boolean result = generateForecastItems(forecast, startDate);
+        if (result == true) {
+
+            // Generate the forecast transactions for the new forecast items:
+            generateForecastTransactions(forecast, startDate);
+        }
+        return result;
+    }
+
+    // Create a new set of forecast items in a new forecast from the budget items:
+    private boolean generateForecastItems(Forecast forecast, Calendar startDate) throws ForecastException {
         try {
             /*
-             Read each of the items in the budget database and add transactions for them to the forecast in the correct
-             order. There is a "forecasting" array with elements for each day of the forecasting.  The day elements point to
-             a linked list of planned transactions for that day.  The list of budget items is scanned one at a time.
-             For each item in the budget, a transaction is added to each day of the forecasting that that transaction is
-             planned to occur.  After they have all been added, the array is traversed once and the transactions are
-             inserted into the forecasting transactions table.  Finally, the forecasting object is returned.
+             Read each of the budget items in the budget database and for each budget item that is expected to occur
+             in the forecast window, add a forecast item for it to the forecast.
             */
             // Retrieve a handle to the list of items in the budget:
             ResultSet rs = EntityInt.getRS(BudgetItem.getSelectQuery(), "Database error attempting to" +
@@ -62,9 +70,62 @@ public class ForecastEngine {
                         continue;
                 }
 
+                // Add a forecast item to the forecast for the current budget item:
                 forecastItem = new ForecastItem(forecast, rs);
                 forecast.addForecastItem(forecastItem);
-                System.out.println(forecastItem);
+
+            } // End for each item in the budget.
+
+        } catch (SQLException | EntityException | BudgetException se) {
+            ForecastException fe = new ForecastException("[SEVERE]  Database error traversing the list of budget items.");
+            fe.initCause(se);
+            throw fe;
+        }
+        return true;
+    }
+
+    // Generate the forecast transactions for the forecast items in a forecast starting at the specified start date:
+    public boolean generateForecastTransactions(Forecast forecast, Calendar startDate) throws Exception,
+                BudgetException, EntityException {
+        try {
+            /*
+             Read each of the forecast items in the database and add transactions for them to the forecast in the correct
+             order. There is a "forecasting" array with elements for each day of the forecasting.  The day elements point to
+             a linked list of planned transactions for that day.  The list of budget items is scanned one at a time.
+             For each item in the budget, a transaction is added to each day of the forecasting that that transaction is
+             planned to occur.  After they have all been added, the array is traversed once and the transactions are
+             inserted into the forecasting transactions table.  Finally, the forecasting object is returned.
+            */
+            // Retrieve a handle to the list of items in the forecast:
+            ResultSet rs = EntityInt.getRS(ForecastItem.getSelectQuery(), "Database error attempting to" +
+                    " retrieve a list of items in the forecast.");
+
+            Calendar nextDate = (Calendar) startDate.clone();
+            System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) +
+                    Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
+                    Utility.calendarDateToStringDate(forecast.getEndDate()));
+
+            // For each item in the forecast:
+            ForecastItem forecastItem;
+            forecast.createTransactionsArray();
+            while (rs.next()) {
+
+                forecastItem = new ForecastItem(rs);
+
+                // If this is an on-demand (unscheduled) item, then skip it:
+                if (rs.getString("fi.period").equalsIgnoreCase("On-Demand"))
+                    continue;
+
+                // If this forecast item expires before the beginning of the forecast window then skip it:
+                Date budgetItemEndDateDb = rs.getDate("fi.endDate");
+                if (budgetItemEndDateDb != null) {
+                    Calendar budgetItemEndDate = new GregorianCalendar();
+                    budgetItemEndDate.setTime(budgetItemEndDateDb);
+                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0)
+                        continue;
+                }
+
+                //forecastItem = new ForecastItem(rs);
 
                 // Set the current date to the first date after the start date of the forecast window:
                 nextDate = forecastItem.getFirstDateOnOrAfter(startDate);
@@ -89,7 +150,7 @@ public class ForecastEngine {
         }
         return true;
 
-    } // End generateLongTermForecast().
+    } // End generateForecastTransactions().
 
 
     public boolean generateShortTermForecast(Forecast forecast) throws Exception, BudgetException {

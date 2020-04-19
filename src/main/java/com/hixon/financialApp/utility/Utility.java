@@ -5,12 +5,11 @@ import com.hixon.financialApp.view.base.*;
 
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
-import java.util.Locale;
+import java.util.*;
 
 import static java.util.Calendar.*;
 
@@ -94,6 +93,19 @@ public class Utility {
       return dateFormatted;
    }
 
+   // Print out a date in human readable format:
+   public static String calendarDateToLongStringDate(Calendar calendar) {
+      String dateFormatted;
+      if (calendar != null) {
+         SimpleDateFormat fmt = new SimpleDateFormat("MM-dd-yyyy HH:mm:ss");
+         fmt.setCalendar(calendar);
+         dateFormatted = fmt.format(calendar.getTime());
+      } else {
+         dateFormatted = "null";
+      }
+      return dateFormatted;
+   }
+
    // Convert a Java Calendar date to YYYY-MM-DD format for inserting into the database:
    public static java.sql.Date calendarDateToSqlDate(Calendar calendar) {
       java.sql.Date sqlDate = null;
@@ -130,8 +142,8 @@ public class Utility {
    // Convert a Timestamp string to a Calendar object:
    public static Calendar stringTimeStampToCalendarDate(String timeStamp) throws ParseException {
       Calendar calendarDate = null;
-      if (timeStamp != null) {
-         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S", Locale.ENGLISH);
+      if (timeStamp != null && timeStamp.length() > 0) {
+         SimpleDateFormat sdf = new SimpleDateFormat("MM-dd-yyyy HH:mm:ss", Locale.ENGLISH);
          sdf.parse(timeStamp);
          calendarDate = sdf.getCalendar();
       }
@@ -144,6 +156,16 @@ public class Utility {
       if (sqlDate != null) {
          calendarDate = new GregorianCalendar();
          calendarDate.setTime(sqlDate);
+      }
+      return calendarDate;
+   }
+
+   // Convert a Java SQL timestamp to a Java Calendar date:
+   public static Calendar SqlTimestampToCalendarDate(Timestamp timestamp) {
+      Calendar calendarDate = null;
+      if (timestamp != null) {
+         calendarDate = new GregorianCalendar();
+         calendarDate.setTime(timestamp);
       }
       return calendarDate;
    }
@@ -217,6 +239,84 @@ public class Utility {
          sqlDate = (Date) sdf.parse(stringDate);
       }
       return sqlDate;
+   }
+
+   // Convert a Calendar date to a long month - year format:
+   public static String calendarDateToMonthYearLongDate(Calendar calendar) {
+      String dateFormatted;
+      if (calendar != null) {
+         SimpleDateFormat fmt = new SimpleDateFormat("MMMM - yyyy");
+         fmt.setCalendar(calendar);
+         dateFormatted = fmt.format(calendar.getTime());
+      } else {
+         dateFormatted = "null";
+      }
+      return dateFormatted;
+   }
+
+   // Convert a long "month - year" date string to a Calendar object:
+   public static Calendar MonthYearLongDateToCalendarDate(String stringDate) throws ParseException {
+      Calendar calendarDate = Calendar.getInstance();
+      clearTime(calendarDate);
+      if (stringDate != null) {
+         String[] tokens = stringDate.split(" ");
+         if (tokens.length != 3) {
+            throw new ParseException("Wrong number of tokens in the string.", 0);
+         }
+         if (tokens[0].equalsIgnoreCase("January")) {
+            calendarDate.set(MONTH, Calendar.JANUARY);
+         } else if (tokens[0].equalsIgnoreCase("February")) {
+            calendarDate.set(MONTH, FEBRUARY);
+         } else if (tokens[0].equalsIgnoreCase("March")) {
+            calendarDate.set(MONTH, MARCH);
+         } else if (tokens[0].equalsIgnoreCase("April")) {
+            calendarDate.set(MONTH, APRIL);
+         } else if (tokens[0].equalsIgnoreCase("May")) {
+            calendarDate.set(MONTH, MAY);
+         } else if (tokens[0].equalsIgnoreCase("June")) {
+            calendarDate.set(MONTH, JUNE);
+         } else if (tokens[0].equalsIgnoreCase("July")) {
+            calendarDate.set(MONTH, JULY);
+         } else if (tokens[0].equalsIgnoreCase("August")) {
+            calendarDate.set(MONTH, AUGUST);
+         } else if (tokens[0].equalsIgnoreCase("September")) {
+            calendarDate.set(MONTH, SEPTEMBER);
+         } else if (tokens[0].equalsIgnoreCase("October")) {
+            calendarDate.set(MONTH, OCTOBER);
+         } else if (tokens[0].equalsIgnoreCase("November")) {
+            calendarDate.set(MONTH, NOVEMBER);
+         } else if (tokens[0].equalsIgnoreCase("December")) {
+            calendarDate.set(MONTH, DECEMBER);
+         } else {
+            throw new ParseException("Month token is not a month name", 0);
+         }
+         calendarDate.set(DATE, 1);
+         try {
+            calendarDate.set(YEAR, Integer.parseInt(tokens[2]));
+         } catch (NumberFormatException ne) {
+            ParseException pe = new ParseException("Year token is not an integer.", 0);
+            pe.initCause(ne);
+            throw pe;
+         }
+      } else {
+         throw new ParseException("The date string cannot be null.", 0);
+      }
+      return calendarDate;
+   }
+
+   // Clear the time fields of a calendar date:
+   private static void clearTime(Calendar calendarDate) {
+      calendarDate.set(HOUR_OF_DAY, 0);
+      calendarDate.set(MINUTE, 0);
+      calendarDate.set(SECOND, 0);
+      calendarDate.set(MILLISECOND, 0);
+   }
+
+   // Parse a dollar AMOUNT from a string:
+   public static Double parseDollarAmount(String stringAmount) throws ParseException {
+      stringAmount = stringAmount.replace("$", "");
+      stringAmount = stringAmount.replace(",", "");
+      return Double.parseDouble(stringAmount);
    }
 
    // Print out a dollar AMOUNT in human readable format:

@@ -2,6 +2,7 @@ package com.hixon.financialApp.view.excel;
 
 import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
@@ -16,7 +17,6 @@ import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Locale;
 
 public class SpreadsheetForecastView extends ForecastView {
 
@@ -173,59 +173,59 @@ public class SpreadsheetForecastView extends ForecastView {
       // The planned date of the forecast transaction:
       writer.println("\t\t<Column ss:Index=\"1\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
 
+      // The category column:
+      writer.println("\t\t<Column ss:Index=\"2\" ss:AutoFitWidth=\"0\" ss:Width=\"100\"/>");
+
       // The payee column:
-      writer.println("\t\t<Column ss:Index=\"2\" ss:AutoFitWidth=\"0\" ss:Width=\"135\"/>");
+      writer.println("\t\t<Column ss:Index=\"3\" ss:AutoFitWidth=\"0\" ss:Width=\"135\"/>");
 
       // The credit (income) column:
-      writer.println("\t\t<Column ss:Index=\"3\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
-
-      // The debit (expense) column:
       writer.println("\t\t<Column ss:Index=\"4\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
-      // The running balance column:
+      // The debit (expense) column:
       writer.println("\t\t<Column ss:Index=\"5\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
-      // A blank column for spacing between a right justified column followed by a left justified column:
-      writer.println("\t\t<Column ss:Index=\"6\" ss:AutoFitWidth=\"0\" ss:Width=\"20\"/>");
+      // The running balance column:
+      writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
-      // The category column:
-      writer.println("\t\t<Column ss:Index=\"7\" ss:AutoFitWidth=\"0\" ss:Width=\"150\"/>");
+      // A blank column for spacing between a right justified column followed by a left justified column:
+      writer.println("\t\t<Column ss:Index=\"7\" ss:AutoFitWidth=\"0\" ss:Width=\"20\"/>");
 
       // The "how important" (discretionary/essential) column:
-      writer.println("\t\t<Column ss:Index=\"8\" ss:AutoFitWidth=\"0\" ss:Width=\"135\"/>");
+      writer.println("\t\t<Column ss:Index=\"8\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
 
       // The "how occurs" (discretionary/essential) column:
-      writer.println("\t\t<Column ss:Index=\"9\" ss:AutoFitWidth=\"0\" ss:Width=\"70\"/>");
+      writer.println("\t\t<Column ss:Index=\"9\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
 
       // The transaction ID column:
       writer.println("\t\t<Column ss:Index=\"10\" ss:AutoFitWidth=\"0\" ss:Width=\"200\"/>");
 
-      // The amount column for short form reporting:
-      writer.println("\t\t<Column ss:Index=\"11\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"40\"/>");
+      // The version column:
+      writer.println("\t\t<Column ss:Index=\"11\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"100\"/>");
 
-      // The running balance for short form reporting:
+      // The amount column for short form reporting:
       writer.println("\t\t<Column ss:Index=\"12\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"40\"/>");
    }
 
    @Override
    public void renderMonthHeader(Calendar plannedDate) {
       writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"MonthRow\">");
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + plannedDate.getDisplayName(Calendar.MONTH, Calendar.LONG,
-              Locale.US) + "</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Utility.calendarDateToMonthYearLongDate(plannedDate) +
+              "</Data></Cell>");
       writer.println("\t\t</Row>");
       writer.println("\t\t<Row ss:Height=\"18.75\" ss:StyleID=\"HeaderRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Date</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Category</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Payee</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Credit</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Debit</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Balance</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\"></Data></Cell>");
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Category</Data></Cell>");
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Importance</Data></Cell>");
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">How Occurs</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Imp</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Occ</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Transaction ID</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Version</Data></Cell>");
       writer.println("\t\t\t<Cell ss:StyleID=\"CenteredHeader\"><Data ss:Type=\"String\">Amt</Data></Cell>");
-      writer.println("\t\t\t<Cell ss:StyleID=\"CenteredHeader\"><Data ss:Type=\"String\">Bal</Data></Cell>");
       writer.println("\t\t</Row>");
       firstItemInMonth = true;
    }
@@ -255,6 +255,10 @@ public class SpreadsheetForecastView extends ForecastView {
       }
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + dateString + "</Data></Cell>");
 
+      // The category name:
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getCategory() +
+              "</Data></Cell>");
+
       // The payee for this forecast transaction:
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getPayee() +
               "</Data></Cell>");
@@ -281,26 +285,23 @@ public class SpreadsheetForecastView extends ForecastView {
       // A blank column to separate a right justified column from a left justified column:
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\"></Data></Cell>");
 
-      // The category name:
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getCategory() +
-              "</Data></Cell>");
-
       // The importance (discretionary, essential, etc.):
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getHowImportant() +
-              "</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Item.generateHowImportant(
+              forecastTransaction.getForecastItem().getHowImportant()) + "</Data></Cell>");
 
       // How the transactions occur (periodic, collection, etc.):
-      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getHowOccurs() +
-              "</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Item.generateHowOccurs(
+              forecastTransaction.getForecastItem().getHowOccurs()) + "</Data></Cell>");
 
       // Unique ID for round trip forecast transaction matching:
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getId().toString() + "</Data></Cell>");
 
+      // The version for round trip forecast transaction matching:
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" +
+              Utility.calendarDateToLongStringDate(forecastTransaction.getVersion()) + "</Data></Cell>");
+
       // The amount of the transaction for short form reporting:
       writer.println("\t\t\t<Cell ss:Formula=\"=RC[-8]-RC[-7]\"><Data ss:Type=\"Number\"></Data></Cell>");
-
-      // The running balance for short form reporting:
-      writer.println("\t\t\t<Cell ss:Formula=\"=RC[-7]\"><Data ss:Type=\"Number\"></Data></Cell>");
 
       writer.println("\t\t</Row>");
    }

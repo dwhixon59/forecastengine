@@ -23,6 +23,10 @@ import static java.lang.Math.abs;
 
 // This class represents an expense item.  It is used in budgets and forecasts.
 public abstract class Item extends IndependentEntity {
+
+   /*
+    * Fields:
+    */
    protected static final SimpleDateFormat sdfMDY = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
    protected String category = null;
    protected String payee = null;
@@ -42,10 +46,18 @@ public abstract class Item extends IndependentEntity {
    protected HowOccurs howOccurs;
    protected HowPaid howPaid;
 
+
+   /*
+    * Constructors:
+    */
    public Item(boolean createId) {
       super(createId);
    }
 
+
+   /*
+    * Helper methods:
+    */
    // How frequently this forecast item is expected to occur:
    public enum PeriodType {
       ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, SEMIMONTHLY, SCHOOLYEARSEMIMONTHLY, MONTHLY, SIXWEEKS, BIMONTHLY, QUARTERLY, SEMIANNUALLY,
@@ -838,7 +850,9 @@ public abstract class Item extends IndependentEntity {
          case SEMIMONTHLY:
             // At the moment semi-monthly means the 1st or the 15th, so pick the first one to occur on or after the
             // forecast start date:
-            if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
+            if (onOrAfterDate.get(Calendar.DATE) == 1) {
+               nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 1);
+            } else if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
                nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 15);
             } else {
                nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1, 1);
@@ -1204,7 +1218,7 @@ public abstract class Item extends IndependentEntity {
       } else {
          endDate = "null";
       }
-      String line = "Item: " + id + ", category = " + category + ", payee = " + payee +
+      String line = "Item:  id = " + id + ", category = " + category + ", payee = " + payee +
               ", period = " + period + ", amount = " + amount + ", running balance = " + runningBalance +
               ", start date = " + Utility.calendarDateToStringDate(startDate) + " number of payments = " +
               numberOfPayments + ", end date = " + endDate + ", item type = " + itemType + ", how important = " +

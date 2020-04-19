@@ -6,7 +6,6 @@ import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.utility.Utility;
-import com.sun.istack.internal.NotNull;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -39,11 +38,15 @@ public class ForecastItem extends Item {
    public Forecast getForecast() {
       return forecast;
    }
+   public void setForecast(Forecast forecast) {
+      this.forecast = forecast;
+      this.idForecast = forecast.getId();
+      setDirty(true);
+   }
 
    public UUID getIdBudgetItem() {
       return idBudgetItem;
    }
-
    public void setIdBudgetItem(UUID idBudgetItem) {
       this.idBudgetItem = idBudgetItem;
       setDirty(true);
@@ -52,7 +55,6 @@ public class ForecastItem extends Item {
    public Calendar getNextDate() {
       return nextDate;
    }
-
    public void setNextDate(Calendar date) {
       this.nextDate = date;
       setDirty(true);
@@ -61,7 +63,6 @@ public class ForecastItem extends Item {
    public ForecastItem getNextForecastItem() {
       return nextForecastItem;
    }
-
    public void setNextForecastItem(ForecastItem nextForecastItem) {
       this.nextForecastItem = nextForecastItem;
       setDirty(true);
@@ -71,10 +72,37 @@ public class ForecastItem extends Item {
    /*
     * Constructors:
     */
+   // A blank forecast item:
+   public ForecastItem() {
+      super(true);
+   }
+
    // Constructor that builds a forecast item from a row in the forecast item table:
-   ForecastItem(ResultSet rs) throws SQLException, BudgetException, ForecastException {
+   ForecastItem(ResultSet rs) throws BudgetException, ForecastException {
       super(false);
       loadFromResultSet(rs);
+   }
+
+   // Constructor that builds a forecast item from a passed in values:
+   public ForecastItem(Forecast forecast, UUID idBudgetItem, String category, String payee, PeriodType period,
+                       double amount, double runningBalance, Calendar startDate, int numberOfPayments, Calendar endDate,
+                       ItemType itemType, HowImportant howImportant, HowOccurs howOccurs, HowPaid howPaid) {
+      super(true);
+      this.forecast = forecast;
+      this.idForecast = forecast.getId();
+      this.idBudgetItem = idBudgetItem;
+      this.category = category;
+      this.payee = payee;
+      this.period = period;
+      this.amount = amount;
+      this.startDate =startDate;
+      this.numberOfPayments =numberOfPayments;
+      this.endDate = endDate;
+      this.itemType = itemType;
+      this.howImportant =howImportant;
+      this.howOccurs = howOccurs;
+      this.howPaid =howPaid;
+      setDirty(true);
    }
 
    // Constructor that builds a forecast item from a row in the budget item table:
@@ -134,15 +162,26 @@ public class ForecastItem extends Item {
 
    private static final String insertQuery = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category," +
            " payee, period, amount, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
-           "howPaid, Forecast_idForecast, BudgetItem_idBudgetItem) values (";
+           "howPaid, Forecast_idForecast";
    @Override
    public String getInsertQuery() throws BudgetException {
-      return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
+      String query =  insertQuery;
+      if (idBudgetItem != null) {
+         query += ", BudgetItem_idBudgetItem";
+      }
+      query += ") values (";
+      query += "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
               Item.generatePeriodType(period) + "', " + amount + ", " + Utility.calendarDateToSqlDateString(startDate) +
               ", " + numberOfPayments + ", " + Utility.calendarDateToSqlDateString(endDate) + ", '" +
               Item.generateItemType(itemType) + "', '" + Item.generateHowImportant(howImportant) + "', '" +
               Item.generateHowOccurs(howOccurs) + "', '" + Item.generateHowPaid(howPaid) + "', uuid_to_bin('" +
-              idForecast + "'), uuid_to_bin('" + idBudgetItem + "'))";
+              idForecast;
+      if (idBudgetItem != null) {
+         query += "'), uuid_to_bin('" + idBudgetItem + "'))";
+      } else {
+         query +=  "'))";
+      }
+      return query;
    }
 
    @Override
@@ -193,7 +232,7 @@ public class ForecastItem extends Item {
          idBudgetItem = UUID.fromString(rs.getString("fi.idBudgetItem"));
          setDirty(false);
       } catch (SQLException e) {
-         ForecastException fe = new ForecastException("Error reading in the Budget Item row.\n" + this.toString());
+         ForecastException fe = new ForecastException("Error reading in the forecast item row.\n" + this.toString());
          fe.initCause(e);
          throw (fe);
       }
@@ -201,7 +240,7 @@ public class ForecastItem extends Item {
    }
 
    // Create a forecast item from a row in the budget item table:
-   private void loadFromBudgetItem(@NotNull ResultSet rs) throws SQLException, ForecastException, BudgetException {
+   private void loadFromBudgetItem(ResultSet rs) throws SQLException, ForecastException, BudgetException {
       try {
          if (rs == null) throw new ForecastException("Result set to load from must not be null.");
 
@@ -224,6 +263,18 @@ public class ForecastItem extends Item {
          throw e;
       }
    }  // End loadFromBudgetItem().
+
+   public static ForecastItem getByName(UUID idForecast, String category, String payee) throws EntityException,
+           BudgetException, SQLException, ForecastException {
+      ResultSet rs = EntityInt.getSingletonRS(getSelectQuery() + " where fi.Forecast_idForecast = uuid_to_bin('" +
+              idForecast + "') and fi.category = \"" + category + "\" and fi.payee = \"" + payee + "\"",
+              "retrieve a forecast item where category = " + category + " and payee = " + payee + ".");
+      if (rs != null) {
+         return new ForecastItem(rs);
+      } else {
+         return null;
+      }
+   }
 
 
    /*

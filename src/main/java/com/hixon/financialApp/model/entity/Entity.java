@@ -72,22 +72,25 @@ public abstract class Entity implements EntityInt {
                }
          }
       }
-      else {
-         //System.out.println("Attempt to save an entity of type " + getEntityTypeName() + " that wasn't dirty.  Skipping");
-      }
       isDirty = false;
+   }
+
+   // The generic insert operation:
+   @Override
+   public void insert() throws ForecastException, BudgetException, EntityException, RegisterException, SQLException {
+      EntityInt.executeUpdate(getInsertQuery(), "trying to insert a " + getPrintableEntityTypeName() + ".");
    }
 
    // The generic update operation:
    @Override
-   public void update() throws EntityException, BudgetException, SQLException {
-      throw new EntityException("Update method not implemented yet.");
+   public void update() throws EntityException, BudgetException, SQLException, RegisterException {
+      EntityInt.executeUpdate(getUpdateByIdQuery(), "trying to update a " + getPrintableEntityTypeName() + ".");
    }
 
    // The generic delete operation:
    @Override
    public void delete() throws EntityException, RegisterException {
-         EntityInt.executeQuery(getDeleteByIdQuery(), getPrintableEntityTypeName());
+         EntityInt.executeUpdate(getDeleteByIdQuery(), getPrintableEntityTypeName());
    }
 
 

@@ -15,11 +15,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT;
 import static com.hixon.financialApp.model.entity.EntityInt.*;
-import static java.util.Calendar.DATE;
 import static java.util.Calendar.MONTH;
 
 public class Forecast extends IndependentEntity {
@@ -35,7 +35,7 @@ public class Forecast extends IndependentEntity {
    protected double minimumBalance;
    protected double endingBalance;
    protected int numberOfMonths;
-   protected String budgetname;
+   protected String budgetName;
    protected UUID idBudget;
    protected ForecastTransaction[] transactions = null;
    private ForecastItem firstForecastItem = null;
@@ -88,20 +88,12 @@ public class Forecast extends IndependentEntity {
       return numberOfMonths;
    }
 
-   public void setNumberOfMonths(int numberOfMonths) {
-      this.numberOfMonths = numberOfMonths;
-   }
-
    ForecastTransaction[] getTransactions() {
       return transactions;
    }
 
    public ForecastTransaction getFirstSignificantEvent() {
       return firstSignificantEvent;
-   }
-
-   public ForecastTransaction getLastSignificantEvent() {
-      return lastSignificantEvent;
    }
 
    public boolean getInSync() {
@@ -123,7 +115,7 @@ public class Forecast extends IndependentEntity {
    }
 
    @Override
-   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+   public String getInsertOnDuplicateUpdateQuery() {
       return null;
    }
 
@@ -162,14 +154,14 @@ public class Forecast extends IndependentEntity {
          this.startDate = startDate;
       }
       this.startingBalance = startingBalance;
-      this.endDate = (Calendar) startDate.clone();
+      this.endDate = (Calendar) Objects.requireNonNull(startDate).clone();
       this.endDate.add(Calendar.MONTH, numberOfMonths);
       // Subtract off one day because n months after June 1st is June 1st, but we only want to go to May 31st, etc.:
       this.endDate.add(Calendar.DATE, -1);
       this.minimumBalance = minimumBalance;
       this.endingBalance = 0;
       this.numberOfMonths = numberOfMonths;
-      this.budgetname = budgetName;
+      this.budgetName = budgetName;
 
       // Find the ID of the named budget:
       PreparedStatement preparedStmt = null;
@@ -221,10 +213,7 @@ public class Forecast extends IndependentEntity {
    }
 
    //  Save the forecast object:
-   // TODO: Create the save forecast object method.
-
-   // Save the entire forecast to the database, including all the forecast items and forecast transactions:
-   public void saveAll() throws SQLException, BudgetException, EntityException, ForecastException {
+   public void save() throws SQLException {
       Connection dbConnection = Utility.getDbConnection();
       PreparedStatement preparedStmt = null;
       String errorMessage = null;
@@ -257,9 +246,22 @@ public class Forecast extends IndependentEntity {
          preparedStmt.setBoolean(18, true);
          preparedStmt.execute();
 
-         // Insert the forecast item tuples:
+      } catch (SQLException e) {
+         System.out.println(errorMessage);
+         if (preparedStmt != null) preparedStmt.close();
+         throw e;
+      }
+   } // End save().
+
+   // Save the forecast items to the database:
+   public void saveForecastItems() throws SQLException, BudgetException {
+      Connection dbConnection = Utility.getDbConnection();
+      PreparedStatement preparedStmt = null;
+      String errorMessage = null;
+      try {
+          // Insert the forecast item tuples:
          errorMessage = "SQL error attempting to insert a forecast item into the database.";
-         query = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category, payee, period, amount, " +
+         String query = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category, payee, period, amount, " +
                  "startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, howPaid," +
                  "Forecast_idForecast, BudgetItem_idBudgetItem) values (UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, ?," +
                  " ?, ?, UUID_TO_BIN(?), UUID_TO_BIN(?))";
@@ -284,15 +286,28 @@ public class Forecast extends IndependentEntity {
             forecastItem = forecastItem.getNextForecastItem();
          }
 
+      } catch (SQLException | BudgetException e) {
+         System.out.println(errorMessage);
+         if (preparedStmt != null) preparedStmt.close();
+         throw e;
+      }
+   } // End saveForecastItems().
+
+   // Save the forecast transactions to the database:, including all the forecast items and forecast transactions:
+   public void saveForecastTransactions() throws SQLException, BudgetException, EntityException, ForecastException {
+      Connection dbConnection = Utility.getDbConnection();
+      PreparedStatement preparedStmt = null;
+      String errorMessage = null;
+      try {
          // Insert the forecast transaction tuples:
          errorMessage = "SQL error attempting to insert a forecast transaction into the database.";
-         query = "insert into ForecastDatabase.Forecast_Transaction (idForecastTransaction, remainingAmount, " +
+         String query = "insert into ForecastDatabase.Forecast_Transaction (idForecastTransaction, remainingAmount, " +
                  "plannedDate, firstOccurrence, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), ?, ?, ?, " +
                  "UUID_TO_BIN(?))";
          preparedStmt = dbConnection.prepareStatement(query);
-         for (int i = 0; i < this.transactions.length; i++) {
-            if (this.transactions[i] != null) {
-               ForecastTransaction forecastTransaction = this.transactions[i];
+         for (ForecastTransaction transaction : this.transactions) {
+            if (transaction != null) {
+               ForecastTransaction forecastTransaction = transaction;
                while (forecastTransaction != null) {
                   preparedStmt.setString(1, forecastTransaction.getId().toString());
                   preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
@@ -310,19 +325,33 @@ public class Forecast extends IndependentEntity {
          if (preparedStmt != null) preparedStmt.close();
          throw e;
       }
+   } // End saveForecastTransactions().
+
+   // Save the entire forecast to the database, including all the forecast items and forecast transactions:
+   public void saveAll() throws SQLException, BudgetException, EntityException, ForecastException {
+
+      // Save the forecast:
+      save();
+      saveForecastItems();
+      saveForecastTransactions();
+
    } // End saveAll().
 
-   // Update the long term forcast, which means regenerate the portion of the forecast from the update start date
-   // (usually the first day of the next month) to the end of the forecast window (defaults to 12 months), which
-   // likely results in extending the forecast:
+   /*
+    * Update the long term forecast, which means regenerate the portion of the forecast from the update start date
+    * (usually the first day of the next month) to the end of the forecast window (defaults to 12 months), which
+    * likely results in extending the forecast:
+   */
    public void updateForecast() throws Exception, EntityException, BudgetException, QuitException, RegisterException {
 
       // Get the starting date of the forecast to update:
       Calendar startDate = Utility.askStartDate();
 
-      // Fix up the end date:
-      endDate = Calendar.getInstance();
-      endDate.set(startDate.get(Calendar.YEAR), startDate.get(MONTH), startDate.get(DATE));
+      /*
+       Update up the end date so that the forecast window will be the same number of months as it was originally
+       set to be:
+      */
+      endDate = (Calendar) startDate.clone();
       endDate.add(MONTH, numberOfMonths);
 
       // Update all the forecast items in the forecast from the current budget items:
@@ -332,9 +361,10 @@ public class Forecast extends IndependentEntity {
               "bi.numberOfPayments, fi.endDate = bi.endDate, fi.itemType = bi.itemType, fi.howImportant =" +
               " bi.howImportant, fi.howOccurs = bi.howOccurs, fi.howPaid = bi.howPaid where fi.Forecast_idForecast =" +
               " uuid_to_bin('" + id + "')";
-      executeQuery(query, "updating the forecast items from the budget items");
+      executeUpdate(query, "updating the forecast items from the budget items");
 
-      // Get a list of current budget items that weren't included in the forecast:
+      // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
+      // was created:
       query = BudgetItem.getSelectQuery() + "where idBudgetItem not in (select distinct BudgetItem_idBudgetItem from " +
               "ForecastDatabase.Forecast_Item)";
       ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
@@ -346,24 +376,29 @@ public class Forecast extends IndependentEntity {
          forecastItem.save(INSERT);
       }
 
-      // Note:  we don't have to worry about forecast items based upon budget items that no longer exist because
-      // CASCADE DELETE referential integrity constraints would have deleted them at the time the budget item was
-      // deleted.
+      // We don't have to delete any forecast items that reference budget items that no longer exist, because the ones
+      // after the update start date will be deleted with all the other forecast items and not regenerated because
+      // they don't have budget items to regenerate them from.  If they occur before the update start date, then we
+      // shouldn't mess with them:
 
       // Delete all of the forecast transactions that occur after the update start date:
       query = ForecastTransaction.getDeleteQuery() + "where plannedDate >= " +
               Utility.calendarDateToSqlDateString(startDate);
-      executeQuery(query, "deleting all the forecast transactions after " +
+      executeUpdate(query, "deleting all the forecast transactions after " +
               Utility.calendarDateToStringDate(startDate));
 
       // Generate the updated portion of the forecast starting on start date:
       this.transactions = new ForecastTransaction[numberOfMonths * 31];
       ForecastEngine forecastEngine = new ForecastEngine();
-      forecastEngine.generateForecast(this, startDate);
+      forecastEngine.generateForecastTransactions(this, startDate);
 
       // Save the updated portion of the forecast:
-      this.saveAll();
+      save();
+      saveForecastTransactions();
+
    } // End Forecast.update().
+
+
    /*
     *  Helper methods:
     */
@@ -380,20 +415,10 @@ public class Forecast extends IndependentEntity {
       boolean decision = false;
 
       if (date != null) {
-         if (date.compareTo(startDate) >= 0 && date.compareTo(endDate) <= 0) {
-            decision = true;
-         } else {
-            decision = false;
-         }
+         decision = date.compareTo(startDate) >= 0 && date.compareTo(endDate) <= 0;
       }
 
       return decision;
-   }
-
-   public ForecastTransaction getTransactionsOnDate(Calendar date) {
-
-      int index = (int) ChronoUnit.DAYS.between(startDate.toInstant(), date.toInstant());
-      return transactions[index];
    }
 
    // Add a forecast transaction to the transaction array on the date that it is expected to occur:
@@ -430,12 +455,12 @@ public class Forecast extends IndependentEntity {
    }
 
    // Generate the summary and significant events list:
-   public void summarize(SignificantEvents[] events) throws EntityException, SQLException, ForecastException, BudgetException {
+   public void summarize() throws EntityException, SQLException, ForecastException, BudgetException {
 
       // Traverse the forecast sequentially from the first day to the last day:
-      for (int i = 0; i < this.transactions.length; i++) {
-         if (this.transactions[i] != null) {
-            ForecastTransaction forecastTransaction = this.transactions[i];
+      for (ForecastTransaction transaction : this.transactions) {
+         if (transaction != null) {
+            ForecastTransaction forecastTransaction = transaction;
             while (forecastTransaction != null) {
                // Update the ending balance in the forecast and the running balance in the transaction:
                endingBalance += forecastTransaction.getForecastItem().getAmount();
@@ -458,11 +483,10 @@ public class Forecast extends IndependentEntity {
    public void addSignificantEvent(ForecastTransaction forecastTransaction) {
       if (firstSignificantEvent == null) {
          firstSignificantEvent = forecastTransaction;
-         lastSignificantEvent = forecastTransaction;
       } else {
          lastSignificantEvent.setNextSignificantEvent(forecastTransaction);
-         lastSignificantEvent = forecastTransaction;
       }
+      lastSignificantEvent = forecastTransaction;
    }
 
    // Add an item to the linked list of items in the forecast:

@@ -279,6 +279,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                     register.getAccountNumber().length() - 4))) {
                accountNumber = register.getAccountNumber();
                stop = true;
+               break;
             }
          }
          if (!stop) {
