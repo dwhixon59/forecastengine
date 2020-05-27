@@ -14,7 +14,7 @@ import java.sql.SQLException;
 import java.util.List;
 
 // These are the forecast views in the MVC architecture for the forecast:
-public interface ForecastViewInt extends ViewInt {
+public interface ForecastViewInt {
 
    // Render the short term forecast:
    boolean renderShortTermForecast(Forecast forecast) throws Exception, EntityException,

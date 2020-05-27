@@ -1,55 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="bd9c63fc-86f8-4b18-85e3-035367ca632b" name="Default Changelist" comment="">
+    <list default="true" id="bd9c63fc-86f8-4b18-85e3-035367ca632b" name="Default Changelist" comment="Added notificion service.">
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/User.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/async/file/fileBasedNotificationService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/~$erations and Stories.docx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/ForecastEngine.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/ForecastEngine.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/dwhix.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/dwhix.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/controller/Controller.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/controller/Controller.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/BudgetItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/BudgetItem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/Item.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/Item.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/controller/Importer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/controller/Importer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/BudgetItemMerchant.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/budget/BudgetItemMerchant.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/entity/Entity.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/entity/Entity.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/entity/EntityInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/entity/EntityInt.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/Forecast.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/Forecast.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastEngine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastEngine.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastItem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastTransaction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/forecast/ForecastTransaction.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/FinancialInstitution.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/FinancialInstitution.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/GenericClassifer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/GenericClassifer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/Merchant.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/Merchant.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/Transaction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/Transaction.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/WellsFargoBank.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/model/register/WellsFargoBank.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/utility/Utility.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/utility/Utility.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/ForecastView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/ForecastView.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/BudgetView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/BudgetView.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/BudgetViewInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/BudgetViewInt.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/ForecastViewInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/ForecastViewInt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/RegisterViewInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/RegisterViewInt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/TransactionResolverInt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/TransactionResolverInt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/View.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/async/base/NotificationServiceInt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/base/ViewInt.java" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/cmdLine/TransactionResolverCmdLine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/cmdLine/TransactionResolverCmdLine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/csv/CsvForecastView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/csv/CsvForecastView.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/csv/ForecastTransactionView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/csv/ForecastTransactionView.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/excel/SpreadsheetForecastView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/excel/SpreadsheetForecastView.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/META-INF/forecastengine.kotlin_module" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Controller.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Controller.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItem$Headers.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItem$Headers.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItem.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItem.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowImportant.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowImportant.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowOccurs.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowOccurs.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowPaid.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$HowPaid.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$ItemType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$ItemType.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$PeriodType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item$PeriodType.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/Item.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer$1.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer$TerminationCondition.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer$TerminationCondition.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/controller/Importer.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItemMerchant.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/budget/BudgetItemMerchant.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/entity/Entity.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/entity/Entity.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/entity/EntityInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/entity/EntityInt.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/Forecast.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/Forecast.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastEngine.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastEngine.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastItem.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastItem.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction$Timing.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction$Timing.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/forecast/ForecastTransaction.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/FinancialInstitution.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/FinancialInstitution.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/GenericClassifer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/GenericClassifer.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Merchant.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Merchant.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Transaction$Headers.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Transaction$Headers.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Transaction.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/Transaction.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/WellsFargoBank.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/model/register/WellsFargoBank.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility$1.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility$StartDateType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility$StartDateType.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/utility/Utility.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/ForecastView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/ForecastView.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/BudgetView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/BudgetView.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/BudgetViewInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/BudgetViewInt.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/ForecastViewInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/ForecastViewInt.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/RegisterViewInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/RegisterViewInt.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/TransactionResolverInt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/TransactionResolverInt.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/View.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/base/ViewInt.class" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/cmdLine/TransactionResolverCmdLine.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/cmdLine/TransactionResolverCmdLine.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/csv/CsvForecastView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/csv/CsvForecastView.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/excel/SpreadsheetForecastView.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/hixon/financialApp/view/excel/SpreadsheetForecastView.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,9 +62,6 @@
   </component>
   <component name="DefaultGradleProjectSettings">
     <option name="isMigrated" value="true" />
-  </component>
-  <component name="FavoritesManager">
-    <favorites_list name="ForecastEngine" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -87,13 +85,6 @@
       </map>
     </option>
   </component>
-  <component name="MavenImportPreferences">
-    <option name="importingSettings">
-      <MavenImportingSettings>
-        <option name="importAutomatically" value="true" />
-      </MavenImportingSettings>
-    </option>
-  </component>
   <component name="ProjectFrameBounds" extendedState="6">
     <option name="x" value="140" />
     <option name="y" value="20" />
@@ -106,16 +97,15 @@
   </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
-    <option name="showExcludedFiles" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
     <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="extract.method.default.visibility" value="public" />
-    <property name="last.edited.regexp" value="" />
+    <property name="last.edited.regexp" value="Disney+" />
     <property name="last_directory_selection" value="$PROJECT_DIR$/src/test/java/com/hixon/financialApp" />
-    <property name="last_opened_file_path" value="$USER_HOME$/Downloads/LongTermForecast.xml" />
+    <property name="last_opened_file_path" value="$USER_HOME$" />
     <property name="restartRequiresConfirmation" value="false" />
     <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
@@ -128,11 +118,11 @@
       <recent name="com.hixon.financial.model.register" />
     </key>
     <key name="MoveClassesOrPackagesDialog.RECENTS_KEY">
+      <recent name="com.hixon.financialApp.model" />
       <recent name="com.hixon.financialApp.model.forecast" />
       <recent name="com.hixon.financialApp.view.base" />
       <recent name="com.hixon.financial" />
       <recent name="com.hixon.financial.model.register" />
-      <recent name="com.hixon.financial.model" />
     </key>
     <key name="MoveMembersDialog.RECENTS_KEY">
       <recent name="com.hixon.financialApp.utility.Utility" />
@@ -146,14 +136,14 @@
       <recent name="com.hixon.financialApp.view.base" />
     </key>
     <key name="CreateClassDialog.RecentsKey">
-      <recent name="com.hixon.financialApp.view.csv" />
-      <recent name="com.hixon.financialApp.utility" />
+      <recent name="com.hixon.financialApp.view.async.file" />
       <recent name="com.hixon.financialApp.view.base" />
-      <recent name="com.hixon.financial.model.forecast" />
-      <recent name="com.hixon.financial.view.register" />
+      <recent name="com.hixon.financial.model" />
+      <recent name="com.hixon.financialApp.controller" />
+      <recent name="com.hixon.financialApp.view.csv" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.Import Forecast Transactions">
+  <component name="RunManager" selected="Application.Render Spending Report">
     <configuration name="Create and Render Short Term Forecast" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
       <module name="forecastengine" />
@@ -181,7 +171,7 @@
     <configuration name="Import Bank Transactions" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
       <module name="forecastengine" />
-      <option name="PROGRAM_PARAMETERS" value="importTransactions" />
+      <option name="PROGRAM_PARAMETERS" value="importRegisterTransactions importProvisionalRegisterTransactions" />
       <extension name="coverage">
         <pattern>
           <option name="PATTERN" value="HixonFinancialApp.*" />
@@ -210,6 +200,34 @@
       <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
       <module name="forecastengine" />
       <option name="PROGRAM_PARAMETERS" value="importForecastTransactions" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="HixonFinancialApp.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Import Provisional Register Transactions" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
+      <module name="forecastengine" />
+      <option name="PROGRAM_PARAMETERS" value="importProvisionalRegisterTransactions" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="HixonFinancialApp.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Import Register Transactions" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
+      <module name="forecastengine" />
+      <option name="PROGRAM_PARAMETERS" value="importRegisterTransactions" />
       <extension name="coverage">
         <pattern>
           <option name="PATTERN" value="HixonFinancialApp.*" />
@@ -293,6 +311,8 @@
       <item itemvalue="Application.Import Bank Transactions" />
       <item itemvalue="Application.Import Budget Items" />
       <item itemvalue="Application.Import Forecast Transactions" />
+      <item itemvalue="Application.Import Provisional Register Transactions" />
+      <item itemvalue="Application.Import Register Transactions" />
       <item itemvalue="Application.Import and Render Register " />
       <item itemvalue="Application.Render Long Term Forecast" />
       <item itemvalue="Application.Render Register" />
@@ -300,21 +320,6 @@
       <item itemvalue="Application.Update and Render the Forecast" />
       <item itemvalue="Application.Update the Forecast" />
     </list>
-  </component>
-  <component name="ServiceViewManager">
-    <option name="viewStates">
-      <list>
-        <serviceView>
-          <treeState>
-            <expand />
-            <select />
-          </treeState>
-        </serviceView>
-      </list>
-    </option>
-  </component>
-  <component name="StructureViewFactory">
-    <option name="ACTIVE_ACTIONS" value=",ALPHA_COMPARATOR" />
   </component>
   <component name="SvnConfiguration">
     <configuration />
@@ -348,7 +353,14 @@
       <option name="project" value="LOCAL" />
       <updated>1583319562860</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Feature Import-Forecast-Transactions">
+      <created>1587291253700</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1587291253700</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -356,9 +368,7 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State>
-              <option name="COLUMN_ORDER" />
-            </State>
+            <State />
           </value>
         </entry>
       </map>
@@ -377,6 +387,7 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
@@ -384,29 +395,27 @@
     <MESSAGE value="Forecast update logic complete." />
     <MESSAGE value="Refactor Controller logic." />
     <MESSAGE value="Make monthly reporting go from last business day of the last month to the last business day of this month." />
-    <option name="LAST_COMMIT_MESSAGE" value="Make monthly reporting go from last business day of the last month to the last business day of this month." />
+    <MESSAGE value="Feature Import-Forecast-Transactions" />
+    <MESSAGE value="Added notificion service." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added notificion service." />
   </component>
   <component name="WindowStateProjectService">
-    <state x="414" y="177" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1586857092742">
+    <state x="828" y="251" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1587457492844">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="414" y="177" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1586857092742" />
-    <state x="765" y="212" key="#com.intellij.ide.util.MemberChooser" timestamp="1585216142986">
+    <state x="828" y="251" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1587457492844" />
+    <state x="765" y="212" key="#com.intellij.ide.util.MemberChooser" timestamp="1590415580072">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="765" y="212" key="#com.intellij.ide.util.MemberChooser/0.0.1920.1040@0.0.1920.1040" timestamp="1585216142986" />
-    <state x="690" y="302" key="#com.intellij.ide.util.PackageChooserDialog" timestamp="1580721862193">
+    <state x="765" y="212" key="#com.intellij.ide.util.MemberChooser/0.0.1920.1040@0.0.1920.1040" timestamp="1590415580072" />
+    <state x="640" y="250" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1588324042304">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="690" y="302" key="#com.intellij.ide.util.PackageChooserDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1580721862193" />
-    <state x="640" y="250" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1584180663628">
+    <state x="640" y="250" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1588324042304" />
+    <state x="743" y="388" width="433" height="269" key="#com.intellij.refactoring.move.moveClassesOrPackages.MoveClassesOrPackagesDialog.classes" timestamp="1589882093916">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="640" y="250" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1584180663628" />
-    <state x="662" y="266" key="#com.intellij.refactoring.memberPullUp.PullUpDialog" timestamp="1579522706372">
-      <screen x="0" y="0" width="1920" height="1040" />
-    </state>
-    <state x="662" y="266" key="#com.intellij.refactoring.memberPullUp.PullUpDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1579522706372" />
+    <state x="743" y="388" width="433" height="269" key="#com.intellij.refactoring.move.moveClassesOrPackages.MoveClassesOrPackagesDialog.classes/0.0.1920.1040@0.0.1920.1040" timestamp="1589882093916" />
     <state x="790" y="388" key="#com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodDialog" timestamp="1582966735826">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
@@ -415,71 +424,67 @@
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
     <state x="340" y="0" key="#com.intellij.refactoring.rename.AutomaticRenamingDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1584268381722" />
-    <state x="690" y="269" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog" timestamp="1581157764695">
-      <screen x="0" y="0" width="1920" height="1040" />
-    </state>
-    <state x="690" y="269" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1581157764695" />
     <state x="69" y="361" width="490" height="534" key="#xdebugger.evaluate" timestamp="1586853773438">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
     <state x="69" y="361" key="#xdebugger.evaluate/0.0.1920.1040@0.0.1920.1040" timestamp="1586853773438" />
     <state x="-7" y="62" width="490" height="534" key="#xdebugger.evaluate/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583956899407" />
-    <state x="239" y="119" key="CommitChangelistDialog2" timestamp="1587291180319">
+    <state x="239" y="119" key="CommitChangelistDialog2" timestamp="1590569021079">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="239" y="119" key="CommitChangelistDialog2/0.0.1920.1040@0.0.1920.1040" timestamp="1587291180319" />
+    <state x="239" y="119" key="CommitChangelistDialog2/0.0.1920.1040@0.0.1920.1040" timestamp="1590569021079" />
     <state x="370" y="164" key="DBNavigator.ProjectSettingsDialog" timestamp="1583419449637">
       <screen x="0" y="0" width="1680" height="1010" />
     </state>
     <state x="370" y="164" key="DBNavigator.ProjectSettingsDialog/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583419449637" />
-    <state width="1067" height="466" key="DebuggerActiveHint" timestamp="1584788740904">
+    <state width="1067" height="466" key="DebuggerActiveHint" timestamp="1590407129853">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1067" height="466" key="DebuggerActiveHint/0.0.1920.1040@0.0.1920.1040" timestamp="1584788740904" />
+    <state width="1067" height="466" key="DebuggerActiveHint/0.0.1920.1040@0.0.1920.1040" timestamp="1590407129853" />
     <state width="497" height="453" key="DebuggerActiveHint/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190395915" />
-    <state x="184" y="92" key="DiffContextDialog" timestamp="1578911160410">
+    <state x="740" y="274" key="FileChooserDialogImpl" timestamp="1590568760873">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="184" y="92" key="DiffContextDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1578911160410" />
-    <state width="1877" height="783" key="GridCell.Tab.0.bottom" timestamp="1587290719747">
+    <state x="740" y="274" key="FileChooserDialogImpl/0.0.1920.1040@0.0.1920.1040" timestamp="1590568760873" />
+    <state width="1877" height="268" key="GridCell.Tab.0.bottom" timestamp="1590569021119">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.0.bottom/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="268" key="GridCell.Tab.0.bottom/0.0.1920.1040@0.0.1920.1040" timestamp="1590569021119" />
     <state width="1637" height="312" key="GridCell.Tab.0.bottom/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190304586" />
-    <state width="1877" height="783" key="GridCell.Tab.0.center" timestamp="1587290719747">
+    <state width="1877" height="268" key="GridCell.Tab.0.center" timestamp="1590569021119">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.0.center/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="268" key="GridCell.Tab.0.center/0.0.1920.1040@0.0.1920.1040" timestamp="1590569021119" />
     <state width="1637" height="312" key="GridCell.Tab.0.center/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190304586" />
-    <state width="1877" height="783" key="GridCell.Tab.0.left" timestamp="1587290719746">
+    <state width="1877" height="268" key="GridCell.Tab.0.left" timestamp="1590569021118">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.0.left/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719746" />
+    <state width="1877" height="268" key="GridCell.Tab.0.left/0.0.1920.1040@0.0.1920.1040" timestamp="1590569021118" />
     <state width="1637" height="312" key="GridCell.Tab.0.left/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190304586" />
-    <state width="1877" height="783" key="GridCell.Tab.0.right" timestamp="1587290719747">
+    <state width="1877" height="268" key="GridCell.Tab.0.right" timestamp="1590569021119">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.0.right/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="268" key="GridCell.Tab.0.right/0.0.1920.1040@0.0.1920.1040" timestamp="1590569021119" />
     <state width="1637" height="312" key="GridCell.Tab.0.right/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190304586" />
-    <state width="1877" height="783" key="GridCell.Tab.1.bottom" timestamp="1587290719748">
+    <state width="1877" height="649" key="GridCell.Tab.1.bottom" timestamp="1590419022453">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.1.bottom/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719748" />
+    <state width="1877" height="649" key="GridCell.Tab.1.bottom/0.0.1920.1040@0.0.1920.1040" timestamp="1590419022453" />
     <state width="1637" height="312" key="GridCell.Tab.1.bottom/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190311141" />
-    <state width="1877" height="783" key="GridCell.Tab.1.center" timestamp="1587290719747">
+    <state width="1877" height="649" key="GridCell.Tab.1.center" timestamp="1590419022453">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.1.center/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="649" key="GridCell.Tab.1.center/0.0.1920.1040@0.0.1920.1040" timestamp="1590419022453" />
     <state width="1637" height="312" key="GridCell.Tab.1.center/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190311141" />
-    <state width="1877" height="783" key="GridCell.Tab.1.left" timestamp="1587290719747">
+    <state width="1877" height="649" key="GridCell.Tab.1.left" timestamp="1590419022453">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.1.left/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="649" key="GridCell.Tab.1.left/0.0.1920.1040@0.0.1920.1040" timestamp="1590419022453" />
     <state width="1637" height="312" key="GridCell.Tab.1.left/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190311141" />
-    <state width="1877" height="783" key="GridCell.Tab.1.right" timestamp="1587290719747">
+    <state width="1877" height="649" key="GridCell.Tab.1.right" timestamp="1590419022453">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state width="1877" height="783" key="GridCell.Tab.1.right/0.0.1920.1040@0.0.1920.1040" timestamp="1587290719747" />
+    <state width="1877" height="649" key="GridCell.Tab.1.right/0.0.1920.1040@0.0.1920.1040" timestamp="1590419022453" />
     <state width="1637" height="312" key="GridCell.Tab.1.right/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583190311141" />
     <state x="530" y="177" key="Maven.ArtifactSearchDialog" timestamp="1584005529705">
       <screen x="0" y="0" width="1920" height="1040" />
@@ -488,40 +493,55 @@
     <state x="431" y="226" key="SettingsEditor" timestamp="1583419261606">
       <screen x="0" y="0" width="1680" height="1010" />
     </state>
-    <state x="492" y="233" key="SettingsEditor/0.0.1920.1040@0.0.1920.1040" timestamp="1581501950520" />
     <state x="431" y="226" key="SettingsEditor/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583419261606" />
     <state x="681" y="261" width="555" height="524" key="StructurePopup" timestamp="1582455598296">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
     <state x="681" y="261" width="555" height="524" key="StructurePopup/0.0.1920.1040@0.0.1920.1040" timestamp="1582455598296" />
-    <state x="668" y="347" width="734" height="390" key="com.intellij.ide.util.TipDialog" timestamp="1587289061783">
+    <state width="968" height="528" key="XDebugger.FullValuePopup" timestamp="1589621915360">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="668" y="347" width="734" height="390" key="com.intellij.ide.util.TipDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1587289061783" />
+    <state width="968" height="528" key="XDebugger.FullValuePopup/0.0.1920.1040@0.0.1920.1040" timestamp="1589621915360" />
+    <state x="668" y="347" width="734" height="390" key="com.intellij.ide.util.TipDialog" timestamp="1587894801311">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="668" y="347" width="734" height="390" key="com.intellij.ide.util.TipDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1587894801311" />
     <state x="585" y="337" key="com.intellij.ide.util.TipDialog/1680.-20.1920.1040/0.0.1680.1010@0.0.1680.1010" timestamp="1583782328275" />
-    <state x="468" y="114" width="1071" height="641" key="find.popup" timestamp="1585816328528">
+    <state x="771" y="439" key="com.intellij.openapi.vcs.update.UpdateOrStatusOptionsDialogupdate-v2" timestamp="1587751956333">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="468" y="114" width="1071" height="641" key="find.popup/0.0.1920.1040@0.0.1920.1040" timestamp="1585816328528" />
-    <state x="702" y="154" key="refactoring.ChangeSignatureDialog" timestamp="1582541834872">
+    <state x="771" y="439" key="com.intellij.openapi.vcs.update.UpdateOrStatusOptionsDialogupdate-v2/0.0.1920.1040@0.0.1920.1040" timestamp="1587751956333" />
+    <state x="724" y="203" key="com.intellij.testIntegration.createTest.CreateTestDialog" timestamp="1590225520372">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="702" y="154" key="refactoring.ChangeSignatureDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1582541834872" />
+    <state x="724" y="203" key="com.intellij.testIntegration.createTest.CreateTestDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1590225520372" />
+    <state x="690" y="267" key="extract.method.dialog" timestamp="1589275072752">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="690" y="267" key="extract.method.dialog/0.0.1920.1040@0.0.1920.1040" timestamp="1589275072752" />
+    <state x="468" y="114" width="1071" height="641" key="find.popup" timestamp="1590413416384">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="468" y="114" width="1071" height="641" key="find.popup/0.0.1920.1040@0.0.1920.1040" timestamp="1590413416384" />
+    <state x="702" y="154" key="refactoring.ChangeSignatureDialog" timestamp="1589276695290">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="702" y="154" key="refactoring.ChangeSignatureDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1589276695290" />
     <state x="616" y="240" key="run.anything.popup" timestamp="1584873286625">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
     <state x="616" y="240" key="run.anything.popup/0.0.1920.1040@0.0.1920.1040" timestamp="1584873286625" />
-    <state x="616" y="173" width="672" height="676" key="search.everywhere.popup" timestamp="1585644637919">
+    <state x="616" y="173" width="672" height="676" key="search.everywhere.popup" timestamp="1590414209568">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
-    <state x="616" y="173" width="672" height="676" key="search.everywhere.popup/0.0.1920.1040@0.0.1920.1040" timestamp="1585644637919" />
+    <state x="616" y="173" width="672" height="676" key="search.everywhere.popup/0.0.1920.1040@0.0.1920.1040" timestamp="1590414209568" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/com/hixon/financialApp/view/cmdLine/TransactionResolverCmdLine.java</url>
-          <line>414</line>
+          <line>465</line>
           <option name="timeStamp" value="231" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
@@ -543,8 +563,8 @@
     </breakpoint-manager>
     <watches-manager>
       <configuration name="Application">
-        <watch expression="Utility.calendarDateToStringDate(nextDate)" language="JAVA" custom="javax.rmi.CORBA.Util,com.hixon.financialApp.utility.Utility" />
-        <watch expression="Utility.calendarDateToStringDate(startDate)" language="JAVA" custom="javax.rmi.CORBA.Util,com.hixon.financialApp.utility.Utility" />
+        <watch expression="Utility.calendarDateToStringDate(firstDate)" language="JAVA" />
+        <watch expression="Utility.calendarDateToStringDate(secondDate)" language="JAVA" />
       </configuration>
     </watches-manager>
   </component>

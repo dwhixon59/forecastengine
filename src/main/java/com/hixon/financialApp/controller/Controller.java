@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.forecast.ForecastEngine;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import com.hixon.financialApp.view.async.file.fileBasedNotificationService;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
 import com.hixon.financialApp.view.excel.SpreadsheetBudgetView;
 import com.hixon.financialApp.view.excel.SpreadsheetForecastView;
@@ -35,6 +36,9 @@ public class Controller {
       Utility.setBudgetView(new SpreadsheetBudgetView());
       Utility.setForecastView(new SpreadsheetForecastView());
 
+      // Use the file based notification service:
+      Utility.setNotificationService(new fileBasedNotificationService());
+
       // Create the Importer:
       Importer importer = new Importer();
 
@@ -45,16 +49,29 @@ public class Controller {
                  "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
 
          // Process the goals:
+         String filename = null;
+         boolean inSync = true;
          for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-               case "importTransactions":
-                  Utility.getResolver().say("Importing the transactions.");
+               case "importRegisterTransactions":
+                  Utility.getResolver().say("Importing the register transactions.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
-                  String filename = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
-                  //String filename = "C:\\Users\\dwhix\\Downloads\\2019-10-24.csv";
-                  boolean inSync = importer.importCsvTransactionFile(filename, "Wells Fargo Bank",
+                  filename = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
+                  inSync = importer.importCsvTransactionFile(filename, "Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The transactions were successfully imported.");
+                  if (!inSync) {
+                     forecast.updateForecast();
+                     Utility.getResolver().say("The long term forecast was successfully updated.");
+                  }
+                  break;
+
+               case "importProvisionalRegisterTransactions":
+                  if (forecast == null) forecast = Forecast.getMostRecent();
+                  filename = "C:\\Users\\dwhix\\Downloads\\ProvisionalTransactions.tsv";
+                  inSync = importer.importCsvProvisionalTransactionFile(filename, "Wells Fargo Bank",
+                          "Bill Pay Account", forecast);
+                  Utility.getResolver().say("The provisional transactions were successfully imported.");
                   if (!inSync) {
                      forecast.updateForecast();
                      Utility.getResolver().say("The long term forecast was successfully updated.");

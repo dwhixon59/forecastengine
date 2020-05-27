@@ -1,7 +1,8 @@
 package com.hixon.financialApp.view.cmdLine;
 
-import com.hixon.financialApp.controller.Importer;
+import com.hixon.financialApp.controller.Importer.TerminationCondition;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -22,8 +23,9 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Scanner;
 
-import static com.hixon.financialApp.utility.Utility.StartDateType.*;
+import static com.hixon.financialApp.controller.Importer.TerminationCondition.*;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static com.hixon.financialApp.utility.Utility.StartDateType.*;
 import static java.util.Calendar.YEAR;
 
 public class TransactionResolverCmdLine implements TransactionResolverInt {
@@ -31,15 +33,15 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    /*
     * Fields for TransactionResolverCmdLine:
     */
-   private Importer.TerminationCondition terminationCondition;
-   private Scanner in;
+   private TerminationCondition terminationCondition;
+   private final Scanner in;
 
 
    /*
     * Getters and setters for TransactionResolverCmdLine:
     */
    @Override
-   public Importer.TerminationCondition getTerminationCondition() {
+   public TerminationCondition getTerminationCondition() {
       return terminationCondition;
    }
 
@@ -48,7 +50,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     * Constructors for TransactionResolverCmdLine:
     */
    public TransactionResolverCmdLine() {
-      terminationCondition = Importer.TerminationCondition.QUIT;
+      terminationCondition = QUIT;
       in = new Scanner(System.in);
    }
 
@@ -79,6 +81,20 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
          if (line.equalsIgnoreCase("y")) return true;
          if (line.equalsIgnoreCase("n")) return false;
          ask("\nPlease enter 'y' or 'n': ");
+      }
+   }
+
+   @Override
+   public int getNumberBetween(String prompt, int min, int max) {
+      say(prompt + " (" + min + " to " + max + "): ");
+      while (true) {
+         try {
+            int response = Integer.parseInt(in.nextLine());
+            if (response >= min && response <= max) return response;
+            ask("\nPlease enter 'y' or 'n': ");
+         } catch (NumberFormatException numberFormatException) {
+            say("Please enter a number from " + min + " to " + max + ":");
+         }
       }
    }
 
@@ -134,9 +150,15 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
          try {
             if (defaultDate != null && line.length() == 0) {
                line = Utility.calendarDateToStringDate(defaultDate);
+               done = true;
+            } else {
+               if (Utility.stringDateDashToCalendarDate(line) != null) {
+                  done = true;
+               } else {
+                  say("Invalid date format.  Please re-enter:");
+                  line = in.nextLine();
+               }
             }
-            Calendar date = Utility.stringDateDashToCalendarDate(line);
-            done = true;
          } catch (ParseException e) {
             say("Invalid date format.  Please re-enter:");
             line = in.nextLine();
@@ -196,6 +218,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             String line = in.nextLine();
             switch (line) {
                case "":
+                  say("Please enter a merchant name, 'skip', or 'quit'.");
                   continue;
 
                case "reset":
@@ -206,9 +229,14 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                   say("The import process cannot be restarted.");
                   continue;
 
+               case "skip":
+                  stop = true;
+                  terminationCondition = SKIP;
+                  break;
+
                case "quit":
                   stop = true;
-                  terminationCondition = Importer.TerminationCondition.QUIT;
+                  terminationCondition = QUIT;
                   break;
 
                default:
@@ -219,7 +247,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         merchantPayee.save();
                      }
                      stop = true;
-                     terminationCondition = Importer.TerminationCondition.FOUND;
+                     terminationCondition = FOUND;
                      break;
                   } else {
 
@@ -230,10 +258,13 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                      // If the user wants to create a new merchant with that name:
                      if (yesOrNo.equalsIgnoreCase("y")) {
                         merchant = Merchant.loadFromCSV(line);
-
-                        say("Do you always want to approve budget allocations for this merchant?");
-                        yesOrNo = in.nextLine();
-                        merchant.setAskAlways((yesOrNo.equalsIgnoreCase("y")));
+                        merchant.setAskAlways(getYesOrNo("Do you always want to approve budget allocations for " +
+                                "this merchant?"));
+                        User user = getUser("Which user do you want to associate with this merchant?",
+                                User.getAllUsers(), true);
+                        if (user != null) {
+                           merchant.setIdUser(user.getId());
+                        }
 
                         // Checks don't have payees:
                         if (!merchantPayeeString.equalsIgnoreCase("Check")) {
@@ -241,7 +272,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         }
                         merchant.save();
                         stop = true;
-                        terminationCondition = Importer.TerminationCondition.FOUND;
+                        terminationCondition = FOUND;
                      } else {
                         stop = false;
                      }
@@ -256,6 +287,21 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
          ve.initCause(e);
          throw ve;
       }
+   }
+
+   @Override
+   public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException {
+
+      // Get a list of all the users and create a list of user first names from it:
+      List<String> userFirstNames = new ArrayList<>();
+      for (User user: users
+      ) {
+         userFirstNames.add(user.getFirstName());
+      }
+
+      // Ask the user to select one of the users from the list of user first names:
+      int index = selectFromList(prompt, userFirstNames, true);
+      return (index > -1) ? users.get(index) : null;
    }
 
    // The account number was not in the payee string, so ask the user for help:
@@ -313,6 +359,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             String line = in.nextLine();
             switch (line) {
                case "":
+                  say("Please enter a budget item payee, 'skip', or 'quit'.");
                   continue;
 
                case "reset":
@@ -323,8 +370,12 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                   say("The import process cannot be restarted.");
                   continue;
 
+               case "skip":
+                  terminationCondition = SKIP;
+                  break;
+
                case "quit":
-                  terminationCondition = Importer.TerminationCondition.QUIT;
+                  terminationCondition = QUIT;
                   break;
 
                default:
@@ -352,7 +403,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                   if (tokens.length > 2) percentage = parseInt(tokens[2], "Invalid percentage");
                   BudgetItemMerchant budgetItemMerchant = merchant.addBudgetItem(budgetItem, amount, percentage);
                   budgetItems.add(budgetItemMerchant);
-                  terminationCondition = Importer.TerminationCondition.FOUND;
+                  terminationCondition = FOUND;
                   break;
 
             } // End switch on entered budget item.
@@ -387,7 +438,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                       )
       ) {
          // Ask the user to enter the splits:
-         getSplits(transaction, splits, merchant, budgetItemMerchants);
+         getSplits(transaction, splits, merchant, budgetItemMerchants, true, true);
       } else {
          // Track the total of the splits so that we can ensure they splits balance in the end:
          double transactionAmount = transaction.getAmount();
@@ -425,7 +476,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
          if (transactionAmount != 0) {
             say("Automatic splits don't add up to the transaction amount, please enter them manually.");
             TransactionSplit.deleteSplitsForTransaction(transaction.getId());
-            getSplits(transaction, splits, merchant, budgetItemMerchants);
+            getSplits(transaction, splits, merchant, budgetItemMerchants, true, true);
          }
       }
       return splits;
@@ -440,7 +491,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     */
    @Override
    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
-                         List<BudgetItemMerchant> budgetItemsForMerchant)
+                         List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
            throws ViewException, EntityException, BudgetException, RegisterException {
 
       // There should be at least one budget item.  If there isn't then throw an error:
@@ -449,87 +500,98 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                  "splits for  it.");
       }
 
-      // Show the assigned budget items to the user:
-      showAssignedBudgetItems(budgetItemsForMerchant, transaction.getAmount());
-
       // Allow the user to add budget items to this list if they want to:
-      while (getYesOrNo("Would you like to add more budget items to this merchant?")) {
-         assignMoreBudgetItems(merchant, budgetItemsForMerchant);
-         showAssignedBudgetItems(budgetItemsForMerchant, transaction.getAmount());
-      }
+      Boolean done = false;
+      while (!done) {
 
-      // Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the budget items:
-      // If there is more than one budget item to allocate to:
-      String[] amounts;
-      if (budgetItemsForMerchant.size() > 1) {
-         // then if the amounts are pre-established in the budget item:
+         // Assume we will get this done in one iteration:
+         done = true;
+
+         // Show the assigned budget items to the user:
+         showAssignedBudgetItems(budgetItemsForMerchant, transaction.getAmount());
+
+         /*
+          * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the budget items:
+          */
+         // If the amounts are pre-established in the budget item:
+         String[] amounts;
          if (budgetItemsForMerchant.get(0).getAmount() > 0 || budgetItemsForMerchant.get(0).getPercentage() > 0) {
 
             // Then ask the user to confirm or override the amounts:
             amounts = getAndParseCsvLine("Enter the split amounts, or just return to accept displayed amounts:",
-                    budgetItemsForMerchant.size(), true, "+");
+                    budgetItemsForMerchant.size(), true, true);
 
          } else { // the amounts are not pre-established, so ask the user to enter them:
             amounts = getAndParseCsvLine("Enter the split amounts:",
-                    budgetItemsForMerchant.size(), false, "+");
+                    budgetItemsForMerchant.size(), false, true);
          }
-      } else { // since there is only one possible budget item to allocate the transaction amount to:
 
-         // then allocate the entire amount of the transaction to the budget item:
-         amounts = new String[1];
-         amounts[0] = Double.toString(-transaction.getAmount());
-      }
+         // Create the splits:
+         if (amounts[0].equalsIgnoreCase("a")) {
+            assignMoreBudgetItems(merchant, budgetItemsForMerchant);
+            done = false;
 
-      // Create the splits:
-      if (amounts[0].matches("\\+[0-9]+")) {
-         int itemNumber = Integer.parseInt(amounts[0].substring(1));
-         if (itemNumber <= budgetItemsForMerchant.size()) {
-            splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber-1), transaction));
-         }
-      } else {
-         switch (amounts[0]) {
+         } else if (amounts[0].equalsIgnoreCase("d")) {
+            say("The delete budget item from merchant function has not been implemented yet.");
+            done = false;
 
-            case ("+++"):  // Assign the entire transaction amount to the third budget item:
-               splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(2), transaction));
-               break;
+         } else if (amounts[0].equalsIgnoreCase("i")) {
+            if (inquireAllowed) {
+               say("Sending an inquiry.");
+               terminationCondition = INQUIRE;
+            } else {
+               say("Inquiry function not allowed at this time.");
+               done = false;
+            }
 
-            case ("++"):  // Assign the entire transaction amount to the second budget item:
-               splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(1), transaction));
-               break;
+         } else if (amounts[0].equalsIgnoreCase("s")) {
+            if (skipAllowed) {
+               say("Skipping this transaction.");
+               terminationCondition = SKIP;
+            } else {
+               say("Skip not allowed at this time.");
+               done = false;
+            }
 
-            case ("+"):  // Assign the entire transaction amount to the first budget item:
-               splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(0), transaction));
-               break;
+         } else if (amounts[0].matches("[a-zA-Z][a-zA-Z0-9 '()-\\+]+")) {
+            say("The allocate, but don't add, function has not been implemented yet.");
+            done = false;
 
-            default:
-               // if the user didn't enter any overrides:
-               boolean useEnteredAmounts = amounts.length != 1 || amounts[0].length() != 0;
-               for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
+         } else if (amounts[0].matches("[1-9][0-9]*") && amounts.length == 1) {
+            int itemNumber = Integer.parseInt(amounts[0]);
+            if (itemNumber <= budgetItemsForMerchant.size()) {
+               splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
+                       transaction));
+            }
+         } else {
+            // Allocate the splits as directed:
+            boolean useEnteredAmounts = amounts.length != 1 || amounts[0].length() != 0;
+            for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
 
-                  double enteredAmount = (useEnteredAmounts) ? parseDouble(amounts[i], "Must be a dollar amount.") : 0;
+               double enteredAmount = (useEnteredAmounts) ? parseDouble(amounts[i], "Must be a dollar amount.") : 0;
 
-                  // Don't create a split if the user entered zero for this budget item:
-                  if (!useEnteredAmounts || enteredAmount != 0) {
+               // Don't create a split if the user entered zero for this budget item:
+               if (!useEnteredAmounts || enteredAmount != 0) {
 
-                     // If the splits are not based on percentages, then use amounts:
-                     if (budgetItemsForMerchant.get(i).getPercentage() == 0) {
-                        splits.add(new TransactionSplit((useEnteredAmounts) ? -enteredAmount :
-                                budgetItemsForMerchant.get(i).getAmount(), budgetItemsForMerchant.get(i), transaction)
-                        );
-                     } else  // use the percentages:
-                     {
-                        splits.add(new TransactionSplit((useEnteredAmounts) ?
-                                (Integer.parseInt(amounts[i]) / 100) * transaction.getAmount() :
-                                (budgetItemsForMerchant.get(i).getPercentage() / 100) * transaction.getAmount(),
-                                budgetItemsForMerchant.get(i), transaction)
-                        );
-                     }
+                  // If the splits are not based on percentages, then use amounts:
+                  if (budgetItemsForMerchant.get(i).getPercentage() == 0) {
+                     splits.add(new TransactionSplit((useEnteredAmounts) ? -enteredAmount :
+                             budgetItemsForMerchant.get(i).getAmount(), budgetItemsForMerchant.get(i), transaction)
+                     );
+                  } else  // use the percentages:
+                  {
+                     splits.add(new TransactionSplit((useEnteredAmounts) ?
+                             (Integer.parseInt(amounts[i]) / 100) * transaction.getAmount() :
+                             (budgetItemsForMerchant.get(i).getPercentage() / 100) * transaction.getAmount(),
+                             budgetItemsForMerchant.get(i), transaction)
+                     );
                   }
                }
-
+            }
          }
       }
    }
+
 
    // Ask the user if the want to regenerate the forecast:
    @Override
@@ -538,10 +600,11 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
               "to regenerate the long term forecast?");
    }
 
+
    // Print a prompt, get a response, parse it based on commas and return it in a string array:
    @Override
-   public String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, String
-           specialChar) {
+   public String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean
+           allowSingleValue) {
       String[] tokens = null;
       boolean done = false;
       while (!done) {
@@ -554,11 +617,13 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             done = true;
             continue;
          }
-         if (specialChar != null && specialChar.length() > 0 && line.length() > 0 &&
-                 specialChar.getBytes()[0] == line.getBytes()[0]) {
+
+         // If we are dealing with special values, and the user entered a single value then were done:
+         if (allowSingleValue && (tokens.length == 1)) {
             done = true;
             continue;
          }
+
          if (tokens.length < numberOfRequiredValues || tokens.length > numberOfRequiredValues) {
             ask("Wrong number of values entered.  Please enter " + numberOfRequiredValues + " value(s).");
          } else {
@@ -572,7 +637,6 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    @Override
    public void showAssignedBudgetItems(List<BudgetItemMerchant> budgetItems, double amount) {
 
-      say("The transaction amount is " + Utility.formatDollarAmount(amount));
       say("The assigned budget items and amounts (if specified) for this merchant are:");
       int i = 1;
       for (BudgetItemMerchant budgetItem : budgetItems
@@ -854,4 +918,28 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
       }
       return month;
    }
+
+   @Override
+   public boolean askDeleteRegisterTransaction(Transaction transaction) {
+      say();
+      say(transaction.summaryToString());
+      return getYesOrNo("This provisional transaction has disappeared from the list of provisional " +
+              "transactions, but it does not appear as a cleared transaction.\nIt has likely been invalidated.  Do you "
+              + "want to remove it?");
+   }
+
+   @Override
+   public int selectFromList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException {
+
+      // Ask which user to send the message to:
+      say(prompt + ":  ");
+      if (allowNone) say("\t0 - none");
+      int i = 1;
+      for (String user : items
+      ) {
+         say("\t" + i++ + " - " + user);
+      }
+      return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1) - 1;
+   }
+
 } // End class TransactionResolverCmdLine.

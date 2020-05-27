@@ -1,15 +1,18 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
-import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.ParseException;
 import java.util.Calendar;
 import java.util.UUID;
+
+import static com.hixon.financialApp.utility.Utility.*;
 
 
 public class Transaction extends IndependentEntity {
@@ -38,30 +41,36 @@ public class Transaction extends IndependentEntity {
 
    private static final String selectQuery = "select bin_to_uuid(idTransaction) as idTransaction, postDate, " +
            "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
-           "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant from " +
-           "forecastdatabase.transaction ";
+           "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant" +
+           " from forecastdatabase.transaction ";
 
    private static final String insertQuery = "insert into forecastdatabase.transaction (idTransaction, " +
            "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
            "Register_idRegister, Merchant_idMerchant) values(";
+
    @Override
    public String getInsertQuery() {
       return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
               Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
-              checkNumber + ", \"" + payee + "\", " + balance + "," + isImproper + ", \"" + importRecordId +
-              "\", uuid_to_bin('" + register.getId() + "'), uuid_to_bin('" + idMerchant + "'))";
+              checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", \"" + importRecordId +
+              "\", uuid_to_bin('" + register.getId() + "'), uuid_to_bin('" + getIdMerchant() + "'))";
    }
 
-   private static final String insertOnDuplicateUpdateQuery = "";
    @Override
    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
-      return null;
+      return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
+              ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
+              + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
+              + balance + ", isImproper = " + isImproper + ", importRecordId = \"" + importRecordId + "\", " +
+              "Register_idRegister = uuid_to_bin('" + register.getId() + "'), Merchant_idMerchant = uuid_to_bin('" +
+              getIdMerchant() + "')";
    }
 
    private static final String updateQuery = "update forecastdatabase.transaction set idTransaction = ?, " +
            "set postdate = ?, set authorizationDate = ?, set amount = ?, set cleared = ?, set checkNumber = ?, " +
            "set payee = ?, set balance = ?, set isImproper = ?, set importRecordId = ?, set Register_idRegister = ?, " +
            "set Merchant_idMerchant = ? where ";
+
    @Override
    public String getUpdateByIdQuery() {
       return updateQuery;
@@ -71,7 +80,7 @@ public class Transaction extends IndependentEntity {
 
    @Override
    public String getDeleteByIdQuery() {
-      return null;
+      return deleteQuery + "idTransaction = uuid_to_bin('" + id + "')";
    }
 
    @Override
@@ -167,7 +176,14 @@ public class Transaction extends IndependentEntity {
    }
 
    public UUID getIdMerchant() {
+      if (idMerchant == null) {
+         idMerchant = merchant.getId();
+      }
       return idMerchant;
+   }
+
+   public void setIdMerchant(UUID idMerchant) {
+      this.idMerchant = idMerchant;
    }
 
    public Merchant getMerchant() throws EntityException, RegisterException {
@@ -177,8 +193,8 @@ public class Transaction extends IndependentEntity {
       return merchant;
    }
 
-   public void setIdMerchant(UUID idMerchant) {
-      this.idMerchant = idMerchant;
+   public void setMerchant(Merchant merchant) {
+      this.merchant = merchant;
    }
 
    public static String getSelectQuery() {
@@ -213,6 +229,7 @@ public class Transaction extends IndependentEntity {
    /*
     * Constructors:
     */
+
    public Transaction(Register register) {
       super(true);
       this.register = register;
@@ -221,6 +238,31 @@ public class Transaction extends IndependentEntity {
    public Transaction(ResultSet rs) throws SQLException {
       super(false);
       loadFromResultSet(rs);
+   }
+
+   // Constructor for importing a provisional transaction:
+   public Transaction(Register register, String postDate, String payee, String credit, String debit, String merchantPayee)
+           throws ParseException {
+
+      super(true);
+      this.postDate = (stringDateSlashToCalendarDate(postDate));
+      authorizationDate = null;
+      cleared = false;
+      checkNumber = 0;
+      this.payee = payee;
+      if (!credit.trim().isEmpty()) {
+         this.amount = parseDollarAmount(credit);
+      } else {
+         this.amount = -parseDollarAmount(debit);
+      }
+      balance = 0;
+      isImproper = false;
+      importRecordId = null;
+      this.register = register;
+      idRegister = register.getId();
+      merchant = null;
+      idMerchant = null;
+      this.merchantPayee = merchantPayee;
    }
 
 
@@ -260,18 +302,42 @@ public class Transaction extends IndependentEntity {
       idMerchant = UUID.fromString(rs.getString("idMerchant"));
    }
 
+   // Find provisional transactions based on the merchant and amount and return the first one found:
+   public static Transaction getFirstProvisionalTransaction(UUID idMerchant, double amount) throws EntityException,
+           SQLException {
+
+      ResultSet rs = EntityInt.getRS(selectQuery + " where Merchant_idMerchant = uuid_to_bin('" + idMerchant +
+              "') and amount = " + amount + " and cleared = false order by postDate asc", "Database error" +
+              " occured while trying to retrieve any provisional transactions that match a merchant and amount.");
+      Transaction transaction = null;
+      if (rs != null) {
+         if (rs.next()) {
+            transaction = new Transaction(rs);
+         }
+      }
+      return transaction;
+   }
+
 
    /*
     * Helper methods:
     */
-   @Override
+   public String summaryToString() {
+      String s = null;
+      s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
+              Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
+              checkNumber + ", Merchant = " + merchant.getName() + ", amount = " + formatDollarAmount(amount);
+      return s;
+   }
+
    public String toString() {
       String s = null;
       try {
          s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
                  Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
-                 checkNumber + ", Payee = " + payee + ", amount = " + amount + ", Balance = " + balance + ", Register = "  +
-                 getRegister().getRegisterName() + ", Merchant = " + merchantPayee + ", Disputed = " + isImproper;
+                 checkNumber + ", Merchant = " + merchant.getName() + ", amount = " + formatDollarAmount(amount) +
+                 ",\n\tPayee = " + payee + ", Balance = " + balance + ", Register = " + getRegister().getRegisterName()
+                 + ", Merchant payee = " + merchantPayee + ", Disputed = " + isImproper;
       } catch (EntityException | SQLException | RegisterException e) {
          e.printStackTrace();
       }

@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.register;
 
+import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import org.apache.commons.csv.CSVRecord;
@@ -43,7 +44,7 @@ public class WellsFargoBank extends Bank {
     * Helper methods:
     */
    @Override
-   public String getImportRecordBaseName (CSVRecord record) throws ParseException {
+   public String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException {
       return record.get(Transaction.Headers.TRANSACTION_DATE) + "\t" + record.get(Transaction.Headers.AMOUNT) + "\t" +
               record.get(Transaction.Headers.CLEARED) + "\t" + record.get(Transaction.Headers.CHECK_NUMBER) + "\t" +
               record.get(Transaction.Headers.PAYEE);
@@ -55,10 +56,26 @@ public class WellsFargoBank extends Bank {
     */
    // Load up a Transaction from a Wells Fargo CSV transaction download file:
    @Override
-   public Transaction loadFromCSV(CSVRecord record, String importRecordId) throws ParseException, RegisterException, SQLException {
+   public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
+           SQLException {
 
-      // Create a transaction:
       Transaction transaction = new Transaction(register);
+      loadFromCsvRecord(record, importRecordId, transaction);
+      return transaction;
+   }
+
+   // Update a provisional transactions from a posted transaction CSV record:
+   @Override
+   public void updateFromCSVRecord(Transaction transaction, CSVRecord record, String importRecordId) throws ParseException,
+           RegisterException, SQLException {
+
+      loadFromCsvRecord(record, importRecordId, transaction);
+
+   }
+
+   // Load a transaction from a posted transaction CSV record:
+   public void loadFromCsvRecord(CSVRecord record, String importRecordId, Transaction transaction) throws ParseException,
+           RegisterException, SQLException {
 
       // Set the fields of the transaction from the tokens in the record:
       Calendar postDate = Calendar.getInstance();
@@ -87,20 +104,58 @@ public class WellsFargoBank extends Bank {
             transaction.setAuthorizationDate(Utility.stringDateSlashToCalendarDate(payeeTokens[i]));
             break;
          }
-       }
+      }
 
       // Parse out the merchant name:
       transaction.setMerchantPayee(parseMerchantPayee(transaction.getPayee()));
+
+      transaction.setDirty(true);
+   }
+
+   @Override
+   public Transaction getMatchingProvisionalTransaction(CSVRecord record) throws RegisterException, SQLException,
+           EntityException {
+      Transaction transaction = null;
+      Merchant merchant = Merchant.getByPayee(parseMerchantPayee(record.get(Transaction.Headers.PAYEE)));
+      if (merchant != null) {
+         transaction = Transaction.getFirstProvisionalTransaction(merchant.getId(),
+                 Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
+      }
+      return transaction;
+   }
+
+   // Load a transaction from a CSV provisional transaction record:
+   @Override
+   public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException,
+           SQLException, RegisterException {
+      String[] tokens;
+
+      // If the user didn't pick up the tab character when they copied the list, add one:
+      if (line.getBytes()[0] != '\t') line = "/t" + line;
+
+      // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
+      tokens = line.split("\t");
+      if (tokens.length < 3) {
+         throw new ParseException("Too few tokens in the line.", 0);
+      }
+
+      // Figure out which merchant the transaction is associated with:
+      payeeTokens = tokens[2].split(" ");
+      String merchantPayee = parseMerchantPayee(tokens[2]);
+
+      // Create a transaction based on the provisional record:
+      Transaction transaction = new Transaction(register, tokens[1], tokens[2], tokens[3], tokens[4], merchantPayee);
 
       return transaction;
    }
 
    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-   public String parseMerchantPayee(String payee) throws RegisterException, SQLException, ParseException {
+   public String parseMerchantPayee(String payee) throws RegisterException, SQLException {
 
       // Construct the merchant payee string from portions of the bank payee string:
-      String merchantPayee = "";
-      String firstFewWords = null;
+      String merchantPayee;
+      String firstFewWords;
+      payeeTokens = payee.split(" ");
       if (payeeTokens[0].equalsIgnoreCase("CHECK")) {
          firstFewWords = payeeTokens[0];
       } else {
@@ -148,11 +203,8 @@ public class WellsFargoBank extends Bank {
 
             // Find the account number:
             for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
-            String accountNumber = null;
+            String accountNumber;
             if (i == payeeTokens.length) {
-               if (payeeTokens[payeeTokens.length - 2].equalsIgnoreCase("CARD")) {
-                  accountNumber = payeeTokens[payeeTokens.length - 2];
-               }
                accountNumber = resolver.resolveUnmatchedAccount(payee);
             } else {
                accountNumber = payeeTokens[i];
@@ -162,7 +214,7 @@ public class WellsFargoBank extends Bank {
             // to the budget:
             String lastFourDigits = accountNumber.substring(accountNumber.length() - 4);
             Register register = Register.getByLastFourDigits(lastFourDigits);
-            String toFrom = null;
+            String toFrom;
             if (payeeTokens[0].equalsIgnoreCase("ATM")) {
                toFrom = (payeeTokens[5].equalsIgnoreCase("TO")) ? "to" : "from";
             } else {
@@ -199,9 +251,12 @@ public class WellsFargoBank extends Bank {
 
          default: // One-time online payments:
 
-            // Skip over the words "BILL PAY" at the beginning if they are present:
+            // Skip over certain words at the beginning if they are present:
             if (payeeTokens[0].equalsIgnoreCase("BILL") && payeeTokens[1].equalsIgnoreCase("PAY")) {
                start = 2;
+            } else if (payeeTokens[0].equalsIgnoreCase("PURCHASE") ||
+                    payeeTokens[0].equalsIgnoreCase("REVERSAL")) {
+               start = 1;
             } else {
                start = 0;
             }
@@ -221,7 +276,8 @@ public class WellsFargoBank extends Bank {
       cleanPayeeTokenList(start);
 
       // Skip over any numeric tokens:
-      for (i = start; i < payeeTokens.length && payeeTokens[i].matches("^[0-9]*$"); i++);
+      //noinspection StatementWithEmptyBody
+      for (i = start; i < payeeTokens.length && payeeTokens[i].matches("^[0-9]*$"); i++) ;
       if (i < payeeTokens.length) {
          start = i;
       }

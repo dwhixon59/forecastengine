@@ -22,11 +22,11 @@ public class BudgetItemMerchant extends DependentEntity {
    /*
     * Fields in the Wells Fargo download file transaction classifier:
     */
-   protected double amount = 0;
-   protected int percentage = 0;
-   UUID idBudgetItem = null;
-   BudgetItem budgetItem = null;
-   UUID idMerchant = null;
+   protected double amount;
+   protected int percentage;
+   UUID idBudgetItem;
+   BudgetItem budgetItem;
+   UUID idMerchant;
 
    private static final String selectQuery = "select amount, percentage, BudgetItem_idBudgetItem as idBudgetItem, " +
            "Merchant_idMerchant as idMerchant from forecastdatabase.budgetitem_merchant ";
@@ -187,7 +187,8 @@ public class BudgetItemMerchant extends DependentEntity {
            ParseException, RegisterException, BudgetException {
 
       // Find out what budget items are associated with the merchant for this transaction:
-      String query = selectItemsForMerchantQuery + "where Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')";
+      String query = selectItemsForMerchantQuery + "where Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')"
+              + " order by payee asc";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);

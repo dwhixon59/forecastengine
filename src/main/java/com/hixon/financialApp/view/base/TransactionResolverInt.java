@@ -2,9 +2,10 @@ package com.hixon.financialApp.view.base;
 
 import com.hixon.financialApp.controller.Importer;
 import com.hixon.financialApp.controller.QuitException;
-import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.register.Merchant;
@@ -50,6 +51,8 @@ public interface TransactionResolverInt {
 
    boolean getYesOrNo(String question);
 
+   int getNumberBetween(String prompt, int min, int max);
+
    static Calendar getStartDate() throws QuitException {
       Calendar startDate = null;
       boolean stop = false;
@@ -81,7 +84,7 @@ public interface TransactionResolverInt {
     * user to and add new budget items and create splits for them as well.
     */
    void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
-                  List<BudgetItemMerchant> budgetItemsForMerchant)
+                  List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
            throws ViewException, EntityException, BudgetException, RegisterException;
 
    boolean askRegenerateForecast();
@@ -90,7 +93,7 @@ public interface TransactionResolverInt {
                                              ForecastTransaction forecastTransaction);
 
    // Print a prompt, get a response, parse it based on commas and return it in a string array:
-   String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, String specialChar);
+   String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue);
 
    // Show a list of the assigned budget items for a transaction, and the amount of the transaction:
    void showAssignedBudgetItems(List<BudgetItemMerchant> budgetItems, double amount);
@@ -109,5 +112,14 @@ public interface TransactionResolverInt {
 
    // Get the start date for a spending report:
    public Calendar getSpendingReportMonth() throws QuitException;
+
+   // Ask the user if they want to delete a provisional transction in the register because it appears to have fallen off:
+   boolean askDeleteRegisterTransaction(Transaction transaction);
+
+   // Send a notification consisting of the notification string to the user.
+   int selectFromList(String s, List<String> notificationMessage, Boolean allowNone) throws SQLException, EntityException;
+
+   // Have the user select a username from a list of usernames (taken from a list of users):
+   public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException;
 }
 

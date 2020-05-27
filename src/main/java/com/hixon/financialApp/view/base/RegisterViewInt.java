@@ -6,8 +6,8 @@ import java.io.FileNotFoundException;
 import java.io.UnsupportedEncodingException;
 import java.util.Calendar;
 
-public interface RegisterViewInt extends ViewInt {
+public interface RegisterViewInt {
 
-    public boolean renderTransactionReport(Calendar startDate) throws FileNotFoundException, UnsupportedEncodingException, ViewException;
+    boolean renderTransactionReport(Calendar startDate) throws FileNotFoundException, UnsupportedEncodingException, ViewException;
 
 }

@@ -15,7 +15,7 @@ import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
 
-public abstract class BudgetView extends View implements BudgetViewInt
+public abstract class BudgetView implements BudgetViewInt
 {
 
    /*

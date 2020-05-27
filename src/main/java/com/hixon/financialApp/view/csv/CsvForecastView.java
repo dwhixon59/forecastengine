@@ -123,7 +123,7 @@ public class CsvForecastView extends ForecastView {
          // Iterate over the CSV records and create a list of forecast transactions from them:
          BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)));
          BufferedReader in = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
-         Iterable<CSVRecord> records = CSVFormat.RFC4180.withHeader(ForecastTransactionHeaders.class).parse(in);
+         Iterable<CSVRecord> records = CSVFormat.EXCEL.withHeader(ForecastTransactionHeaders.class).parse(in);
          Calendar plannedDate = Calendar.getInstance();
          int previousMonth;
          boolean firstTime = true;

@@ -55,9 +55,11 @@ public abstract class Entity implements EntityInt {
             case INSERT:
                executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableEntityTypeName());
                break;
+
             case UPDATE:
                executeQueryForThis(getUpdateByIdQuery(), "Trying to update a " + getPrintableEntityTypeName() + ".");
                break;
+
             case INSERT_ON_DUPLICATE_UPDATE:
                executeQueryForThis(getInsertOnDuplicateUpdateQuery(), getPrintableEntityTypeName());
                break;

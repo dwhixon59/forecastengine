@@ -21,19 +21,20 @@ public class Merchant extends IndependentEntity {
    /*
     * Fields in the Merchant class:
     */
-   public static final String selectQuery = "select bin_to_uuid(idMerchant) as 'idMerchant', name, askAlways from " +
-           "forecastdatabase.merchant ";
-   public static final String selectJoinPayeeQuery = "select bin_to_uuid(A.idMerchant) as 'idMerchant', A.name, " +
-           "B.payee, A.askAlways from forecastdatabase.merchant A inner join forecastdatabase.merchant_payee B on " +
-           "A.idMerchant = B.Merchant_idMerchant ";
-   public static final String insertQuery = "insert into forecastdatabase.merchant (idMerchant, name, askAlways) values (";
+   public static final String selectQuery = "select bin_to_uuid(m.idMerchant) as 'm.idMerchant', m.name as 'm.name', " +
+           "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser' from forecastdatabase.merchant m";
+   public static final String selectJoinPayeeQuery = selectQuery + " inner join forecastdatabase.merchant_payee mp on " +
+           "m.idMerchant = mp.Merchant_idMerchant ";
+   public static final String insertQuery = "insert into forecastdatabase.merchant (idMerchant, name, askAlways, " +
+           "User_idUser) values (";
 
    private String name = null;
    boolean askAlways = false;
+   private UUID idUser;
    private List<MerchantPayee> merchantPayees = new LinkedList<>();
 
    public static Merchant getById(UUID idMerchant) throws EntityException, RegisterException {
-      ResultSet rs = EntityInt.getRSById(selectQuery + "where idMerchant = ", idMerchant,
+      ResultSet rs = EntityInt.getRSById(selectQuery + " where m.idMerchant = ", idMerchant,
               "trying to retrieve a Merchant by it's ID.");
       return new Merchant(rs);
    }
@@ -45,7 +46,6 @@ public class Merchant extends IndependentEntity {
    public String getName() {
       return name;
    }
-
    public void setName(String name) {
      setDirty(true);
       this.name = name;
@@ -54,10 +54,17 @@ public class Merchant extends IndependentEntity {
    public boolean isAskAlways() {
       return askAlways;
    }
-
    public void setAskAlways(boolean askAlways) {
       setDirty(true);
       this.askAlways = askAlways;
+   }
+
+   public UUID getIdUser() {
+      return idUser;
+   }
+   public void setIdUser(UUID idUser) {
+      setDirty(true);
+      this.idUser = idUser;
    }
 
    public List<MerchantPayee> getPayees() {
@@ -114,9 +121,10 @@ public class Merchant extends IndependentEntity {
       try {
 
          if (rs == null) throw new RegisterException("Result set passed into loadFromResultSet from must not be null.");
-         this.id = UUID.fromString(rs.getString("idMerchant"));
-         this.name = rs.getString("name");
-         this.askAlways = rs.getBoolean("askAlways");
+         this.id = UUID.fromString(rs.getString("m.idMerchant"));
+         this.name = rs.getString("m.name");
+         this.askAlways = rs.getBoolean("m.askAlways");
+         this.idUser = UUID.fromString(rs.getString("m.idUser"));
          setDirty(false);
 
       } catch (SQLException e) {
@@ -136,15 +144,17 @@ public class Merchant extends IndependentEntity {
       if (values.length > 1) {
         merchant.setAskAlways(values[1].equalsIgnoreCase("y"));
       }
+      if (values.length > 2) {
+         merchant.setIdUser(UUID.fromString(values[2]));
+      }
       System.out.println("Created new merchant " + merchantName);
       return merchant;
-
    }
 
    public static Merchant getByPayee(String payee) throws RegisterException {
 
       // Find the ID of the merchant that uses the passed in payee:
-      String query = selectJoinPayeeQuery + "where B.payee = \"" + payee + "\"";
+      String query = selectJoinPayeeQuery + "where mp.payee = \"" + payee + "\"";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
@@ -156,7 +166,7 @@ public class Merchant extends IndependentEntity {
          }
       } catch (SQLException e) {
          RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
-                 "payee " + payee);
+                 "payee " + payee + "\nSQL statement was:  " + query);
          re.initCause(e);
          throw re;
       }
@@ -165,7 +175,7 @@ public class Merchant extends IndependentEntity {
    public static Merchant getByName(String name) throws RegisterException {
 
       // Find the ID of the merchant that uses the passed in name:
-      String query = selectQuery + "where name = \"" + name + "\"";
+      String query = selectQuery + " where m.name = \"" + name + "\"";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
@@ -185,32 +195,30 @@ public class Merchant extends IndependentEntity {
 
    public static Merchant getByNameLike(String name) throws RegisterException {
       // Find the ID of the merchant that uses the passed in name:
-      String query = selectQuery + "where name like \"" + name + "%\"";
+      String query = selectQuery + " where m.name like \"" + name + "%\"";
       try {
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(query);
+         ResultSet rs = EntityInt.getRS(query, "trying to get the Merchant with the name like " + name);
          if (rs.next()) {
             Merchant merchant = new Merchant(rs);
             return merchant;
          } else {
             return null;
          }
-      } catch (SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
-                 "name " + name);
+      } catch (EntityException | SQLException e) {
+         RegisterException re = new RegisterException("Database error occurred.");
          re.initCause(e);
          throw re;
       }
    }
+
    // Get the name of a Merchant:
-
    public static String getNameById(UUID idMerchant) throws EntityException, SQLException {
-      ResultSet rs = EntityInt.getRSById(selectQuery, idMerchant, "Database error occurred" +
-              " trying to get the merchant with id = " + idMerchant);
-      return rs.getString("name");
+      ResultSet rs = EntityInt.getRS(selectQuery + "where m.idMerchant = uuid_to_bin('" + idMerchant + "')",
+              "Database error occurred trying to get the merchant with id = " + idMerchant);
+      return rs.getString("m.name");
    }
-   // Create a new payee associated with this merchant:
 
+   // Create a new payee associated with this merchant:
    public MerchantPayee addPayee(String payee) {
 
       MerchantPayee merchantPayee = new MerchantPayee(payee, id);
@@ -222,8 +230,14 @@ public class Merchant extends IndependentEntity {
    public void save() throws RegisterException, EntityException {
 
       // Save the merchant:
-      super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways + ")",
-              "Problem with Insert of merchant.  Returned row count not equal to 1.");
+      if (idUser != null) {
+         super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
+                         ", uuid_to_bin('" + idUser + "'))",
+                 "Problem with Insert of merchant.  Returned row count not equal to 1.");
+      } else {
+         super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
+                         ", null)", "Problem with Insert of merchant.  Returned row count not equal to 1.");
+      }
 
       // Save the merchant payees:
       for (MerchantPayee merchantPayee : merchantPayees) {

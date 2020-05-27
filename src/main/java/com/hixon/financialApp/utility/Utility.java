@@ -1,6 +1,8 @@
 package com.hixon.financialApp.utility;
 
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.User;
+import com.hixon.financialApp.view.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.*;
 
 import java.sql.Connection;
@@ -19,12 +21,13 @@ public class Utility {
    private static Connection dbConnection;
 
    // The configured transaction resolver:
-   private static TransactionResolverInt resolver;
+   public static TransactionResolverInt resolver;
 
    // Configured views for interfacing with external agents:
    private static RegisterViewInt registerView;
    private static BudgetViewInt budgetView;
    private static ForecastViewInt forecastView;
+   private static NotificationServiceInt notificationService;
 
 
    /*
@@ -33,7 +36,6 @@ public class Utility {
    public static Connection getDbConnection() {
       return dbConnection;
    }
-
    public static void setDbConnection(Connection dbConnection) {
       com.hixon.financialApp.utility.Utility.dbConnection = dbConnection;
    }
@@ -41,15 +43,20 @@ public class Utility {
    public static TransactionResolverInt getResolver() {
       return resolver;
    }
-
    public static void setResolver(TransactionResolverInt resolver) {
       com.hixon.financialApp.utility.Utility.resolver = resolver;
+   }
+
+   public static NotificationServiceInt getNotificationService() {
+      return notificationService;
+   }
+   public static void setNotificationService(NotificationServiceInt notificationService) {
+      Utility.notificationService = notificationService;
    }
 
    public static RegisterViewInt getRegisterView() {
       return registerView;
    }
-
    public static void setRegisterView(RegisterViewInt registerView) {
       Utility.registerView = registerView;
    }
@@ -57,7 +64,6 @@ public class Utility {
    public static BudgetViewInt getBudgetView() {
       return budgetView;
    }
-
    public static void setBudgetView(BudgetViewInt budgetView) {
       Utility.budgetView = budgetView;
    }
@@ -65,7 +71,6 @@ public class Utility {
    public static ForecastViewInt getForecastView() {
       return forecastView;
    }
-
    public static void setForecastView(ForecastViewInt forecastView) {
       Utility.forecastView = forecastView;
    }
@@ -80,11 +85,24 @@ public class Utility {
       toDate.set(fromDate.get(YEAR), fromDate.get(MONTH), fromDate.get(DATE));
    }
 
-   // Print out a date in human readable format:
+   // Print out a date in human readable format with dashes:
    public static String calendarDateToStringDate(Calendar calendar) {
       String dateFormatted;
       if (calendar != null) {
          SimpleDateFormat fmt = new SimpleDateFormat("MM-dd-yyyy");
+         fmt.setCalendar(calendar);
+         dateFormatted = fmt.format(calendar.getTime());
+      } else {
+         dateFormatted = "null";
+      }
+      return dateFormatted;
+   }
+
+   // Print out a date in human readable format with slashes:
+   public static String calendarDateToStringSlashDate(Calendar calendar) {
+      String dateFormatted;
+      if (calendar != null) {
+         SimpleDateFormat fmt = new SimpleDateFormat("MM/dd/yyyy");
          fmt.setCalendar(calendar);
          dateFormatted = fmt.format(calendar.getTime());
       } else {
@@ -354,22 +372,6 @@ public class Utility {
       return calendarDate;
    }
 
-   public static int daysBeteween(Calendar firstDate, Calendar secondDate) {
-      int oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
-      Calendar firstDate2 = Calendar.getInstance();
-      firstDate2.setTimeInMillis(firstDate.getTimeInMillis());
-      firstDate2.clear(Calendar.HOUR);
-      firstDate2.clear(Calendar.MINUTE);
-      firstDate2.clear(Calendar.SECOND);
-      Calendar secondDate2 = Calendar.getInstance();
-      secondDate2.setTimeInMillis(secondDate.getTimeInMillis());
-      secondDate2.clear(Calendar.HOUR);
-      secondDate2.clear(Calendar.MINUTE);
-      secondDate2.clear(Calendar.SECOND);
-      int diffDays = Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
-      return diffDays;
-   }
-
    public enum StartDateType {
       FIRST_OF_LAST_MONTH, FIRST_OF_THIS_MONTH, TODAY, FIRST_OF_NEXT_MONTH, ONE_MONTH_FROM_TODAY,
       ARBITRARY_DATE
@@ -410,6 +412,31 @@ public class Utility {
       return startDate;
    }
 
+   public static int daysBeteween(Calendar firstDate, Calendar secondDate) {
+      int oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
+      Calendar firstDate2 = Calendar.getInstance();
+      firstDate2.setTimeInMillis(firstDate.getTimeInMillis());
+      firstDate2.clear(Calendar.HOUR);
+      firstDate2.clear(Calendar.MINUTE);
+      firstDate2.clear(Calendar.SECOND);
+      Calendar secondDate2 = Calendar.getInstance();
+      secondDate2.setTimeInMillis(secondDate.getTimeInMillis());
+      secondDate2.clear(Calendar.HOUR);
+      secondDate2.clear(Calendar.MINUTE);
+      secondDate2.clear(Calendar.SECOND);
+      int diffDays = Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
+      return diffDays;
+   }
+
+   public static int businessDaysBeteween(Calendar firstDate, Calendar secondDate) {
+      Calendar firstDateCopy = (Calendar) firstDate.clone();
+      int diffDays = 0;
+      while(firstDateCopy.compareTo(secondDate) > 0) {
+         if (!isaBankHoliday(Utility.calendarDateToStringDate(firstDateCopy))) diffDays++;
+         firstDateCopy.add(DATE, -1);
+      }
+      return diffDays;
+   }
 
    // Modifies date to the last business day before it:
    public static int setToLastBusinessDayBefore(Calendar date) {
@@ -443,4 +470,10 @@ public class Utility {
       }
       return false;
    }
+
+   // Identify the user that is the target of some action:
+   User getUser() {
+      return null;
+   };
+
 }

@@ -10,10 +10,10 @@ import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.Calendar;
 
-public interface BudgetViewInt extends ViewInt {
+public interface BudgetViewInt {
 
         // Render the spending report:
-        public void renderPlannedVsActualReport(Calendar startDate) throws FileNotFoundException,
+        void renderPlannedVsActualReport(Calendar startDate) throws FileNotFoundException,
                 UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException, ForecastException;
 
 }

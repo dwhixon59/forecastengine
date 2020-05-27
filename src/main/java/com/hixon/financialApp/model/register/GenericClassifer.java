@@ -95,18 +95,33 @@ public class GenericClassifer implements FinancialInstitution {
     }
 
     @Override
-    public String getImportRecordBaseName(CSVRecord record) {
+    public String getRegisterImportRecordBaseName(CSVRecord record) {
         return null;
     }
 
     @Override
-    public Transaction loadFromCSV(CSVRecord record, String importRecordId) throws SQLException {
+    public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws SQLException {
         return null;
     }
 
     @Override
     public String parseMerchantPayee(String payee) throws ParseException, RegisterException, SQLException {
         return null;
+    }
+
+    @Override
+    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException {
+        return null;
+    }
+
+    @Override
+    public Transaction getMatchingProvisionalTransaction(CSVRecord record) throws RegisterException, SQLException, EntityException {
+        return null;
+    }
+
+    @Override
+    public void updateFromCSVRecord(Transaction transaction, CSVRecord record, String importRecordId) throws ParseException, RegisterException, SQLException {
+
     }
 }
 
