@@ -33,8 +33,5 @@ public interface FinancialInstitution {
    Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException, RegisterException;
 
    // Get a provisional transaction from an import record:
-   Transaction getMatchingProvisionalTransaction(CSVRecord record) throws RegisterException, SQLException, EntityException;
-
-   // Update a provisional transaction from a posted transaction CSV record:
-   void updateFromCSVRecord(Transaction transaction, CSVRecord record, String importRecordId) throws ParseException, RegisterException, SQLException;
+   Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException;
 }

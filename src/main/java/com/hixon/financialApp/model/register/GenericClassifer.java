@@ -1,9 +1,9 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import org.apache.commons.csv.CSVRecord;
 
@@ -115,13 +115,8 @@ public class GenericClassifer implements FinancialInstitution {
     }
 
     @Override
-    public Transaction getMatchingProvisionalTransaction(CSVRecord record) throws RegisterException, SQLException, EntityException {
+    public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException {
         return null;
-    }
-
-    @Override
-    public void updateFromCSVRecord(Transaction transaction, CSVRecord record, String importRecordId) throws ParseException, RegisterException, SQLException {
-
     }
 }
 

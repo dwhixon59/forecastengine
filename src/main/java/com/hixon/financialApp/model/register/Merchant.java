@@ -1,13 +1,13 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
-import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -251,5 +251,18 @@ public class Merchant extends IndependentEntity {
       BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
       budgetItemMerchant.save();
       return budgetItemMerchant;
+   }
+
+   // Nice "to String" function for debugging:
+
+   @Override
+   public String toString() {
+      return "Merchant{" +
+              "name='" + name + '\'' +
+              ", askAlways=" + askAlways +
+              ", idUser=" + idUser +
+              ", merchantPayees=" + merchantPayees +
+              ", id=" + id +
+              '}';
    }
 }

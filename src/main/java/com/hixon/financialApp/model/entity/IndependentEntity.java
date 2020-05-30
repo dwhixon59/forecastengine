@@ -14,6 +14,7 @@ public abstract class IndependentEntity extends Entity implements IndependentEnt
    @Override
    public void setId(UUID id) {
       this.id = id;
+      setDirty(true);
    }
 
    public IndependentEntity(boolean createId) {

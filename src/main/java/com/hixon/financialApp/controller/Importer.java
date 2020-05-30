@@ -80,6 +80,7 @@ public class Importer {
          // For each row in the import file:
          HashMap<String, String> map = new HashMap<>();
          String importRecordId;
+         Merchant merchant;
          for (i = recordList.size() - 1; i > -1; i--) {
             CSVRecord record = recordList.get(i);
 
@@ -93,46 +94,49 @@ public class Importer {
             // Get the transaction for this import record:
             transaction = Transaction.getByImportRecordId(importRecordId);
 
-            // If the transaction hasn't been imported before:
-            Merchant merchant;
+            // If the transaction hasn't been imported before, then create a new one:
             if (transaction == null) {
 
-               // Then see if there is a provisional transaction for it
-               transaction = financialInstitution.getMatchingProvisionalTransaction(record);
+               // Create a transaction from the import record:
+               transaction = financialInstitution.createFromCSVRecord(record, importRecordId);
 
-               // If we found a provisional transaction, then update it from the posted transaction:
-               if (transaction != null) {
-                  financialInstitution.updateFromCSVRecord(transaction, record, importRecordId);
-                  merchant = transaction.getMerchant();
+               // Get the merchant for this transaction:
+               merchant = Merchant.getByPayee(transaction.getMerchantPayee());
 
-               } else {
-                  // We still haven't found a transaction, so create one:
-                  transaction = financialInstitution.createFromCSVRecord(record, importRecordId);
-
-                  // Get the merchant for this transaction:
-                  merchant = Merchant.getByPayee(transaction.getMerchantPayee());
-
-                  // If we couldn't find a merchant for the transaction, get some help from the user to create one:
+               // If we couldn't find a merchant for the transaction, get some help from the user to create one:
+               if (merchant == null) {
+                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
                   if (merchant == null) {
-                     merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
-                     if (merchant == null) {
-                        switch (resolver.getTerminationCondition()) {
-                           case SKIP:
-                              continue;
+                     switch (resolver.getTerminationCondition()) {
+                        case SKIP:
+                           continue;
 
-                           case QUIT:
-                              break;
+                        case QUIT:
+                           break;
 
-                           default:
-                              throw new ControllerException("Invalid termination condition " +
-                                      resolver.getTerminationCondition() + " during transaction import");
+                        default:
+                           throw new ControllerException("Invalid termination condition " +
+                                   resolver.getTerminationCondition() + " during transaction import");
 
-                        }
                      }
                   }
-                  transaction.setIdMerchant(merchant.getId());
                }
+
+               // then update the transaction merchant info from the merchant that we just found or created:
+               transaction.setMerchant(merchant);
+               transaction.setIdMerchant(merchant.getId());
+
+               // Now see if there is a provisional transaction for this transaction:
+               Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(record,
+                       merchant);
+
+               // and if there is one, then update the posted transaction from it:
+               if (provisionalTransaction != null) {
+                  transaction.setId(provisionalTransaction.getId());
+               }
+
             } else {
+               // since it was already created, just get the merchant from it:
                merchant = transaction.getMerchant();
             }
 
@@ -158,9 +162,10 @@ public class Importer {
             }
 
             // Tell the user about the bank transaction we are processing:
-            System.out.println("Imported a bank transaction to " + merchant.getName() + " for $" +
-                    Math.abs(transaction.getAmount()) + " on " + ((transaction.getAuthorizationDate() != null) ?
-                    calendarDateToStringDate(transaction.getAuthorizationDate()) :
+            System.out.println("Imported a bank transaction to " + merchant.getName() + " for " +
+                    formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
+                    ((transaction.getAuthorizationDate() != null) ?
+                            calendarDateToStringDate(transaction.getAuthorizationDate()) :
                     calendarDateToStringDate(transaction.getPostDate())));
 
             // Get the splits for the transaction.  Create them if they don't already exist:
@@ -379,8 +384,8 @@ public class Importer {
                }
 
                // Tell the user about the bank transaction we are processing:
-               System.out.println("\n*** Imported a bank transaction to " + merchant.getName() + " for $" +
-                       Math.abs(provisionalTransactions.get(i).getAmount()) + " on " +
+               System.out.println("\n*** Imported a bank transaction to " + merchant.getName() + " for " +
+                       formatDollarAmount(Math.abs(provisionalTransactions.get(i).getAmount())) + " on " +
                        ((provisionalTransactions.get(i).getAuthorizationDate() != null) ?
                                calendarDateToStringDate(provisionalTransactions.get(i).getAuthorizationDate()) :
                                calendarDateToStringDate(provisionalTransactions.get(i).getPostDate())) + "***");

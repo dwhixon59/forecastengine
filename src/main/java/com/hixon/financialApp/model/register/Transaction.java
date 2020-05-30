@@ -176,7 +176,7 @@ public class Transaction extends IndependentEntity {
    }
 
    public UUID getIdMerchant() {
-      if (idMerchant == null) {
+      if (idMerchant == null && merchant != null) {
          idMerchant = merchant.getId();
       }
       return idMerchant;
@@ -333,9 +333,21 @@ public class Transaction extends IndependentEntity {
    public String toString() {
       String s = null;
       try {
+         String merchantName;
+         if (merchant != null) {
+            merchantName = merchant.getName();
+         } else {
+            merchantName = "null";
+         }
+         String registerName;
+         if (register != null) {
+            registerName = register.getRegisterName();
+         } else {
+            registerName = "null";
+         }
          s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
                  Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
-                 checkNumber + ", Merchant = " + merchant.getName() + ", amount = " + formatDollarAmount(amount) +
+                 checkNumber + ", Merchant = " + merchantName + ", amount = " + formatDollarAmount(amount) +
                  ",\n\tPayee = " + payee + ", Balance = " + balance + ", Register = " + getRegister().getRegisterName()
                  + ", Merchant payee = " + merchantPayee + ", Disputed = " + isImproper;
       } catch (EntityException | SQLException | RegisterException e) {

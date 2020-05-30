@@ -64,15 +64,6 @@ public class WellsFargoBank extends Bank {
       return transaction;
    }
 
-   // Update a provisional transactions from a posted transaction CSV record:
-   @Override
-   public void updateFromCSVRecord(Transaction transaction, CSVRecord record, String importRecordId) throws ParseException,
-           RegisterException, SQLException {
-
-      loadFromCsvRecord(record, importRecordId, transaction);
-
-   }
-
    // Load a transaction from a posted transaction CSV record:
    public void loadFromCsvRecord(CSVRecord record, String importRecordId, Transaction transaction) throws ParseException,
            RegisterException, SQLException {
@@ -113,15 +104,11 @@ public class WellsFargoBank extends Bank {
    }
 
    @Override
-   public Transaction getMatchingProvisionalTransaction(CSVRecord record) throws RegisterException, SQLException,
+   public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant merchant) throws RegisterException,
+           SQLException,
            EntityException {
-      Transaction transaction = null;
-      Merchant merchant = Merchant.getByPayee(parseMerchantPayee(record.get(Transaction.Headers.PAYEE)));
-      if (merchant != null) {
-         transaction = Transaction.getFirstProvisionalTransaction(merchant.getId(),
-                 Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
-      }
-      return transaction;
+      return Transaction.getFirstProvisionalTransaction(merchant.getId(),
+              Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
    }
 
    // Load a transaction from a CSV provisional transaction record:
@@ -143,10 +130,23 @@ public class WellsFargoBank extends Bank {
       payeeTokens = tokens[2].split(" ");
       String merchantPayee = parseMerchantPayee(tokens[2]);
 
-      // Create a transaction based on the provisional record:
-      Transaction transaction = new Transaction(register, tokens[1], tokens[2], tokens[3], tokens[4], merchantPayee);
+      // Make sure there are both a credit and debit for the Transaction constructor:
+      String credit;
+      if (tokens.length < 4) {
+         credit = "0.00";
+      } else {
+         credit = tokens[3];
+      }
+      String debit;
+      if (tokens.length < 5) {
+         debit = "0.00";
+      } else
+      {
+         debit = tokens[4];
+      }
 
-      return transaction;
+      // Create a transaction based on the provisional record:
+      return new Transaction(register, tokens[1], tokens[2], credit, debit, merchantPayee);
    }
 
    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
@@ -166,7 +166,7 @@ public class WellsFargoBank extends Bank {
          }
       }
 
-      int i = 0;
+      int i;
       switch (firstFewWords) {
 
          // If the transaction is a purchase:
@@ -202,6 +202,7 @@ public class WellsFargoBank extends Bank {
          case "Transfer in Branch/Store":
 
             // Find the account number:
+            //noinspection StatementWithEmptyBody
             for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
             String accountNumber;
             if (i == payeeTokens.length) {
@@ -272,7 +273,7 @@ public class WellsFargoBank extends Bank {
 
    public String makePayeeFromTokens(int start) {
       int i;
-      String merchantPayee;// Overwrite certain extraneous tokens like city and state so they won't be included in the merchant payee:
+      StringBuilder merchantPayee;// Overwrite certain extraneous tokens like city and state so they won't be included in the merchant payee:
       cleanPayeeTokenList(start);
 
       // Skip over any numeric tokens:
@@ -283,16 +284,16 @@ public class WellsFargoBank extends Bank {
       }
 
       // Always start with the first remaining token because it is always part of the merchant identification:
-      merchantPayee = addCleanToken(payeeTokens[start++]);
+      merchantPayee = new StringBuilder(addCleanToken(payeeTokens[start++]));
 
       // Concatenate the following tokens until we find one that is not all characters or a short number (as in PIER 1):
       for (i = start;
            i < payeeTokens.length &&
-                   payeeTokens[i].matches("^[A-Za-z'/\\*\\&\\,]*$|^[0-9]{1,3}$");
+                   payeeTokens[i].matches("^[A-Za-z'/*&,]*$|^[0-9]{1,3}$");
            i++) {
-         merchantPayee = merchantPayee + " " + addCleanToken(payeeTokens[i]);
+         merchantPayee.append(" ").append(addCleanToken(payeeTokens[i]));
       }
-      return merchantPayee;
+      return merchantPayee.toString();
    }
 
    // Remove any serial number, etc. from a token:
@@ -303,7 +304,6 @@ public class WellsFargoBank extends Bank {
 
    // Remove city, state and the word "RECURRING" from a token list:
    private void cleanPayeeTokenList(int start) {
-      String payeeToken = null;
       for (int i = start; i < payeeTokens.length; i++) {
          // Remove city followed by state from the merchant payee:
          if (payeeTokens[i].length() == 2 && states.indexOf(payeeTokens[i]) > 0) {
