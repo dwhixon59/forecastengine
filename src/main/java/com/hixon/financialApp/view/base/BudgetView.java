@@ -6,7 +6,7 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.TransactionSplit;
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
 import java.io.UnsupportedEncodingException;
@@ -15,13 +15,16 @@ import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
 
+import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.setToLastBusinessDayBefore;
+
 public abstract class BudgetView implements BudgetViewInt
 {
 
    /*
     *  Helper methods:
     */
-   public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException;
+   public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;
    public abstract void renderSpendingReportFrontMatter();
    public abstract void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double total)
            throws ForecastException;
@@ -36,7 +39,7 @@ public abstract class BudgetView implements BudgetViewInt
    // Create and render a month-to-date spending report as an XML spreadsheet file that can be imported into a spreadsheet:
    @Override
    public void renderPlannedVsActualReport(Calendar startDateParm) throws FileNotFoundException, UnsupportedEncodingException,
-           EntityException, SQLException, BudgetException, RegisterException, ForecastException {
+           EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException {
 
       // Insulate the parameter from side effects:
       Calendar startDate = (Calendar) startDateParm.clone();
@@ -45,22 +48,21 @@ public abstract class BudgetView implements BudgetViewInt
       openSpendingReportOutput();
       renderSpendingReportFrontMatter();
 
-      // Set the start and end dates to be the last business days of the previous month and the requested month since
-      // that is when I get paid:
+      // Set the start and end dates to be the last business days of the previous month and the day before the last day
+      // of the requested month since that is when I get paid:
       startDate.set(Calendar.DATE, 1);
       Calendar endDate = (Calendar) startDateParm.clone();
       endDate.add(Calendar.MONTH, 1);
-      Utility.setToLastBusinessDayBefore(startDate);
-      Utility.setToLastBusinessDayBefore(endDate);
+      setToLastBusinessDayBefore(startDate);
+      setToLastBusinessDayBefore(endDate);
       endDate.add(Calendar.DATE, -1);
 
       // For each budget item in the budget:
       ResultSet rsbi = BudgetItem.getAllBudgetItems();
       BudgetItem budgetItem;
-      String lastCategory = "";
       while (rsbi.next()) {
 
-         // Create the budget item:
+         // Create a budget item from the database row:
          budgetItem = new BudgetItem(rsbi);
 
          // Get all the transaction splits for the current budget item:
@@ -92,6 +94,6 @@ public abstract class BudgetView implements BudgetViewInt
 
       // Close the output file:
       closeSpendingReportOutput();
-      com.hixon.financialApp.utility.Utility.getResolver().say("MTD Spending Report successfully rendered.");
+      getResolver().say("MTD Spending Report successfully rendered.");
    }
 }

@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
 import java.io.UnsupportedEncodingException;
@@ -14,6 +15,6 @@ public interface BudgetViewInt {
 
         // Render the spending report:
         void renderPlannedVsActualReport(Calendar startDate) throws FileNotFoundException,
-                UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException, ForecastException;
+                UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException;
 
 }

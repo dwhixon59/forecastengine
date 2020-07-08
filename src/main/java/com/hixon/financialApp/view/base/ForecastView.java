@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.*;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
+import static com.hixon.financialApp.utility.Utility.getResolver;
 
 public abstract class ForecastView implements ForecastViewInt {
 
@@ -69,7 +71,7 @@ public abstract class ForecastView implements ForecastViewInt {
 
       this.forecast = forecast;
 
-      Utility.getResolver().say("\n\nRender the short term forecast.");
+      getResolver().say("\n\nRender the short term forecast.");
 
       // To clue the user into what things to look for in the spreadsheet, run the forecast summary routine
       // requesting below minimum balance events:
@@ -77,9 +79,9 @@ public abstract class ForecastView implements ForecastViewInt {
       forecast.summarize();
 
       // Print out the starting and ending balances:
-      Utility.getResolver().say("The starting balance is: " + Utility.formatDollarAmount(forecast.getStartingBalance()));
-      Utility.getResolver().say("The ending balance is:   " + Utility.formatDollarAmount(forecast.getEndingBalance()));
-      Utility.getResolver().say("The savings rate is:   " + Utility.formatDollarAmount(forecast.getEndingBalance() /
+      getResolver().say("The starting balance is: " + Utility.formatDollarAmount(forecast.getStartingBalance()));
+      getResolver().say("The ending balance is:   " + Utility.formatDollarAmount(forecast.getEndingBalance()));
+      getResolver().say("The savings rate is:   " + Utility.formatDollarAmount(forecast.getEndingBalance() /
               forecast.getNumberOfMonths()) + " per month.");
 
       // TODO:  Render the short term forecast (whatever that means . . . .).
@@ -88,10 +90,10 @@ public abstract class ForecastView implements ForecastViewInt {
       // and print out the significant events list:
       ForecastTransaction forecastTransaction = forecast.getFirstSignificantEvent();
       while (forecastTransaction != null) {
-         Utility.getResolver().say("The balance on " + Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate()) +
+         getResolver().say("The balance on " + Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate()) +
                  " is $" + forecastTransaction.getRunningBalance());
          if (forecastTransaction.getRunningBalance() < forecast.getMinimumBalance()) {
-            Utility.getResolver().say("Balance below minimum balance!");
+            getResolver().say("Balance below minimum balance!");
          }
          forecastTransaction = forecastTransaction.getNextSignificantEvent();
       }
@@ -135,7 +137,7 @@ public abstract class ForecastView implements ForecastViewInt {
             debit = -Utility.doubleToInt(forecastTransaction.getRemainingAmount());
          }
 
-         // The month changed, so write out a header line with the name of the month:
+         // If the month changed, write out a header line with the name of the month:
          if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
             renderMonthHeader(forecastTransaction.getPlannedDate());
             currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
@@ -183,85 +185,89 @@ public abstract class ForecastView implements ForecastViewInt {
    /*
     * Update the forecast from a list of forecast transactions from some external source:
     */
-   public void updateFromExternalSoure() throws ControllerException, ForecastException, EntityException, SQLException, RegisterException, BudgetException {
+   public void updateFromExternalSource() throws ControllerException, ForecastException, EntityException, SQLException, ViewException {
 
       // Keep a count of the forecast transactions from the external source for debugging purposes:
       int i = 0;
 
       try {
-         // Get the current timestamp so that we can determine which forecast tranasctions weren't updated from the
-         // external source by comparing the updatedTimeStamp to the current timestamp:
-         Calendar preUpdateTime = Calendar.getInstance();
-
          // Open the external source and get a list of forecast transactions in it:
          List<ForecastTransaction> forecastTransactions = openForecastTransactionSource();
 
-         // Mark all the forecast transactions in the forecast as not found:
-         ForecastTransaction.setAllFound(false);
+         // If we were able to open the external source:
+         if (forecastTransactions != null) {
 
-         // For each forecast transaction from the external source:
-         for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
+            // Mark all the forecast transactions in the forecast as not found:
+            ForecastTransaction.setAllFound(false);
 
-            // Keep track of the list item number for debugging purposes:
-            i++;
+            // For each forecast transaction from the external source:
+            for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
 
-            // If the current spreadsheet forecast transaction has an ID (the update case):
-            if (ssForecastTransaction.getId() != null) {
+               // Keep track of the list item number for debugging purposes:
+               i++;
 
-               // then get the matching forecast transaction from the database:
-               System.out.println("Current forecast transaction:  " + ssForecastTransaction);
-               ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(ssForecastTransaction.getId());
+               // If the current spreadsheet forecast transaction has an ID (the update case):
+               if (ssForecastTransaction.getId() != null) {
 
-               // and if a matching forecast transaction was found in the database:
-               if (dbForecastTransaction != null) {
+                  // then get the matching forecast transaction from the database:
+                  System.out.println("Current forecast transaction:  " + ssForecastTransaction);
+                  ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(ssForecastTransaction.getId());
 
-                  // then mark the transaction as found:
-                  dbForecastTransaction.setFound(true);
+                  // and if a matching forecast transaction was found in the database:
+                  if (dbForecastTransaction != null) {
 
-                  // then if the forecast planned date has been modified then update the database transaction:
-                  if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
-                     Utility.copyDate(ssForecastTransaction.getPlannedDate(), dbForecastTransaction.getPlannedDate());
+                     // then mark the transaction as found:
+                     dbForecastTransaction.setFound(true);
+
+                     // then if the forecast planned date has been modified then update the database transaction:
+                     if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
+                        Utility.copyDate(ssForecastTransaction.getPlannedDate(), dbForecastTransaction.getPlannedDate());
+                     }
+
+                     // and if the remaining amount has been modified, then update the database transaction:
+                     if (ssForecastTransaction.getRemainingAmount() != dbForecastTransaction.getRemainingAmount()) {
+                        dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
+                     }
+
+                     // and save the updated forecast transaction to the database:
+                     dbForecastTransaction.update();
+
+                  } else { // No matching transaction was found meaning that it has been deleted from the database:
+                     getResolver().say("The following forecast transaction was updated, but it falls outside of " +
+                             "your short term horizon and has been invalidated by the last forecast update.  You will have " +
+                             "to remake this change" + "\n" + ssForecastTransaction);
+                  }
+               } else { // the forecast transaction does not have an ID (the create case), so create one:
+
+                  // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
+                  ForecastItem forecastItem = ForecastItem.getByName(ssForecastTransaction.getForecastItem().getForecast().getId(),
+                          ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
+                  if (forecastItem == null) {
+
+                     // then create a forecast item so we have something to link the forecast transaction split to:
+                     BudgetItem budgetItem = BudgetItem.getByPayee(ssForecastTransaction.getForecastItem().getPayee());
+                     // TODO:  Handle if the budget item isn't found.
+                     ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
+                     ssForecastTransaction.getForecastItem().insert();
+                  } else {
+                     ssForecastTransaction.setForecastItem(forecastItem);
                   }
 
-                  // and if the remaining amount has been modified, then update the database transaction:
-                  if (ssForecastTransaction.getRemainingAmount() != dbForecastTransaction.getRemainingAmount()) {
-                     dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
-                  }
+                  // Create the forecast transaction:
+                  ssForecastTransaction.setId(UUID.randomUUID());
+                  ssForecastTransaction.setFound(true);
+                  ssForecastTransaction.insert();
 
-                  // and save the updated forecast transaction to the database:
-                  dbForecastTransaction.update();
+               } // End else the forecast transaction does not have an ID.
+            } // End for each forecast transaction in the external source.
 
-               } else { // No matching transaction was found meaning that it has been deleted from the database:
-                  Utility.getResolver().say("The following forecast transaction was updated, but it falls outside of " +
-                          "your short term horizon and has been invalidated by the last forecast update.  You will have " +
-                          "to remake this change" + "\n" + ssForecastTransaction);
-               }
-            } else { // the forecast transaction does not have an ID (the create case), so create one:
+            // Set to zero in the forecast all the forecast transactions that were deleted from the spreadsheet (not found):
+            ForecastTransaction.zeroNotFound();
 
-               // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
-               ForecastItem forecastItem = ForecastItem.getByName(ssForecastTransaction.getForecastItem().getForecast().getId(),
-                       ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
-               if (forecastItem == null) {
+            // Close the external source of forecast transactions:
+            closeForecastTransactionSource();
 
-                  // then create a forecast item so we have something to link the forecast transaction split to:
-                  BudgetItem budgetItem = BudgetItem.getByPayee(ssForecastTransaction.getForecastItem().getPayee());
-                  // TODO:  Handle if the budget item isn't found.
-                  ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
-                  ssForecastTransaction.getForecastItem().insert();
-               } else {
-                  ssForecastTransaction.setForecastItem(forecastItem);
-               }
-
-               // Create the forecast transaction:
-               ssForecastTransaction.setId(UUID.randomUUID());
-               ssForecastTransaction.setFound(true);
-               ssForecastTransaction.insert();
-
-            } // End else the forecast transaction does not have an ID.
-         } // End for each forecast transaction in the external source.
-
-         // Delete from the forecast the forecast transactions that were deleted from the spreadsheet (not found):
-         ForecastTransaction.deleteNotFound();
+         } // End if we were able to open the external source.
 
          // TODO: Save the import event:
 
@@ -272,8 +278,12 @@ public abstract class ForecastView implements ForecastViewInt {
          throw (fe);
       }
 
-      // Return the number of transactions imported:
-      Utility.getResolver().say("Successfully updated " + i + " forecast transactions in the forecast.");
+      // Return the number of transactions updated:
+      if (i > 0) {
+         getResolver().say("Successfully updated " + i + " forecast transactions in the forecast.");
+      } else {
+         getResolver().say("There were no forecast transactions in the external source to update from.");
+      }
 
    } // End updateFromExternalSource(Connection dbConnection).
 

@@ -64,6 +64,9 @@ public class Forecast extends IndependentEntity {
    /*
     * Forecast class getters and setters:
     */
+   public String getDescription() {
+      return description; }
+
    public Calendar getStartDate() {
       return startDate;
    }
@@ -375,6 +378,13 @@ public class Forecast extends IndependentEntity {
          forecastItem = new ForecastItem(this, rs);
          forecastItem.save(INSERT);
       }
+
+      // First clean up the old transactions (prior to the month before the current month:
+      // TODO: clean up old transactions.
+
+      // Now set the first occurrence of every forecast transaction to "first occurrence":
+      // TODO:  set all the forecast transactions to "not the first occurrence".
+      // TODO:  set the first occurrence of every forecast transaction to "first occurence".
 
       // We don't have to delete any forecast items that reference budget items that no longer exist, because the ones
       // after the update start date will be deleted with all the other forecast items and not regenerated because

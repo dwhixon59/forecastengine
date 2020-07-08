@@ -1,13 +1,13 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.model.entity.DependentEntity;
-import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.entity.DependentEntity;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,7 +23,7 @@ import static java.util.Calendar.DATE;
 public class TransactionSplit extends DependentEntity {
 
    /*
-    * Fields in the Wells Fargo download file transaction classifier:
+    * Fields:
     */
 
    protected double amount = 0;
@@ -31,6 +31,7 @@ public class TransactionSplit extends DependentEntity {
    BudgetItem budgetItem = null;
    UUID idTransaction = null;
    Transaction transaction = null;
+   String memo;
 
    // Disposition of this split in the current forecast while it is being reconciled.  Since it only applies to the
    // current forecast during reconciliation, it is not persisted in the database.
@@ -43,7 +44,6 @@ public class TransactionSplit extends DependentEntity {
    public double getAmount() {
       return amount;
    }
-
    public void setAmount(double amount) {
       this.amount = amount;
    }
@@ -51,7 +51,6 @@ public class TransactionSplit extends DependentEntity {
    public UUID getIdBudgetItem() {
       return idBudgetItem;
    }
-
    public void setIdBudgetItem(UUID idBudgetItem) {
       this.idBudgetItem = idBudgetItem;
    }
@@ -62,7 +61,6 @@ public class TransactionSplit extends DependentEntity {
       }
       return budgetItem;
    }
-
    public void setBudgetItem(BudgetItem budgetItem) {
       this.budgetItem = budgetItem;
    }
@@ -70,7 +68,6 @@ public class TransactionSplit extends DependentEntity {
    public UUID getIdTransaction() {
       return idTransaction;
    }
-
    public void setIdTransaction(UUID idTransaction) {
       this.idTransaction = idTransaction;
    }
@@ -81,38 +78,45 @@ public class TransactionSplit extends DependentEntity {
       }
       return transaction;
    }
-
    public void setTransaction(Transaction transaction) {
       this.transaction = transaction;
    }
 
+   public SplitDisposition getDisposition() {
+      return disposition;
+   }
    public void setDisposition(SplitDisposition disposition) {
       this.disposition = disposition;
    }
 
-   public SplitDisposition getDisposition() {
-      return disposition;
+   public String getMemo() {
+      return memo;
+   }
+   public void setMemo(String memo) {
+      this.memo = memo;
    }
 
 
    /*
     * Constructors for BudgetItemMerchant:
     */
-   public TransactionSplit(double splitAmount, BudgetItemMerchant budgetItemMerchant, Transaction transaction) {
+   public TransactionSplit(double splitAmount, BudgetItemMerchant budgetItemMerchant, Transaction transaction, String memo) {
       super();
       this.amount = splitAmount;
       this.idBudgetItem = budgetItemMerchant.getIdBudgetItem();
       this.budgetItem = budgetItemMerchant.getBudgetItem();
       this.idTransaction = transaction.getId();
       this.transaction = transaction;
+      this.memo = memo;
       setDirty(true);
    }
 
-   public TransactionSplit(double amount, UUID idBudgetItem, UUID idTransaction) {
+   public TransactionSplit(double amount, UUID idBudgetItem, UUID idTransaction, String memo) {
       super();
       this.amount = amount;
       this.idBudgetItem = idBudgetItem;
       this.idTransaction = idTransaction;
+      this.memo = memo;
       setDirty(true);
    }
 
@@ -124,6 +128,7 @@ public class TransactionSplit extends DependentEntity {
          this.amount = rs.getDouble("amount");
          this.idBudgetItem = UUID.fromString(rs.getString("idBudgetItem"));
          this.idTransaction = UUID.fromString(rs.getString("idTransaction"));
+         this.memo = rs.getString("memo");
          setDirty(false);
 
       } catch (SQLException e) {
@@ -136,16 +141,16 @@ public class TransactionSplit extends DependentEntity {
 
 
    /*
-    * Load and save methods for BudgetItemMerchant:
+    * Load and save methods:
     */
    private static final String selectQuery = "select amount, bin_to_uuid(BudgetItem_idBudgetItem) as idBudgetItem, " +
-           "bin_to_uuid(Transaction_idTransaction) as idTransaction from forecastdatabase.transaction_split ";
+           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo from forecastdatabase.transaction_split ";
    public static String getSelectQuery() {
       return selectQuery;
    }
 
    private static final String insertQuery = "insert into ForecastDatabase.Transaction_Split (amount, " +
-           "BudgetItem_idBudgetItem, Transaction_idTransaction) values (";
+           "BudgetItem_idBudgetItem, Transaction_idTransaction, memo) values (";
    @Override
    public String getInsertQuery() throws BudgetException, ForecastException {
       return null;
@@ -180,8 +185,9 @@ public class TransactionSplit extends DependentEntity {
    }
 
    public void save() throws RegisterException, EntityException {
+      String memoString = (memo != null) ? "\"" + memo + "\"" : "null";
       super.executeQueryForThis(insertQuery + amount + ", uuid_to_bin('" + idBudgetItem + "'), " +
-              "uuid_to_bin('" + idTransaction + "'))", "Databsae error occurred inserting " +
+              "uuid_to_bin('" + idTransaction + "'), " + memoString + ")", "Databsae error occurred inserting " +
               "a TransactionSplit into the database.");
    }
 
@@ -193,9 +199,11 @@ public class TransactionSplit extends DependentEntity {
    public String toString() {
       String s = null;
       try {
+         String memoString = (memo != null) ? ".  Memo:  " + memo : "";
          s = "Split: amount of " + Utility.formatDollarAmount(amount) + " on " +
                  Utility.calendarDateToStringDate(getTransaction().getDate()) + " to " +
-                 getTransaction().getMerchant().getName() + " applied to budget item " + getBudgetItem().getPayee();
+                 getTransaction().getMerchant().getName() + " applied to budget item " + getBudgetItem().getPayee() +
+                 memoString;
       } catch (Exception | EntityException | BudgetException | RegisterException e) {
          e.printStackTrace();
       }
@@ -238,7 +246,7 @@ public class TransactionSplit extends DependentEntity {
    public static ResultSet getSplitsForBudgetItemInPeriod(BudgetItem budgetItem, Calendar startDate, Calendar endDate)
            throws EntityException {
       String selectQuery = "select ts.amount, bin_to_uuid(ts.BudgetItem_idBudgetItem) as idBudgetItem, " +
-              "bin_to_uuid(ts.Transaction_idTransaction) as idTransaction, ";
+              "bin_to_uuid(ts.Transaction_idTransaction) as idTransaction, ts.memo, ";
       String query = selectQuery + "t.authorizationDate as 'date' from forecastdatabase.transaction_split ts " +
               "inner join ForecastDatabase.Transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +

@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.ForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
 
@@ -323,5 +324,13 @@ public class SpreadsheetForecastView extends ForecastView {
    public List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException,
            BudgetException {
       return csvForecastView.openForecastTransactionSource();
+
+
+   }
+
+   // For now, defer to the CSV view for importing forecast transactions:
+   @Override
+   public void closeForecastTransactionSource() throws ViewException {
+      csvForecastView.closeForecastTransactionSource();
    }
 }

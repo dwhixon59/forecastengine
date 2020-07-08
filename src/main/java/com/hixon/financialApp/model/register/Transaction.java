@@ -2,8 +2,8 @@ package com.hixon.financialApp.model.register;
 
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
+import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
@@ -12,6 +12,8 @@ import java.text.ParseException;
 import java.util.Calendar;
 import java.util.UUID;
 
+import static com.hixon.financialApp.model.entity.EntityInt.getRS;
+import static com.hixon.financialApp.model.entity.EntityInt.getRSById;
 import static com.hixon.financialApp.utility.Utility.*;
 
 
@@ -271,12 +273,12 @@ public class Transaction extends IndependentEntity {
     */
 
    public static Transaction getById(UUID idTransaction) throws EntityException, SQLException {
-      return new Transaction(EntityInt.getRSById(selectQuery + "where idTransaction =", idTransaction,
+      return new Transaction(getRSById(selectQuery + "where idTransaction =", idTransaction,
               "Database error encountered trying to retrieve a transaction."));
    }
 
    public static Transaction getByImportRecordId(String importRecordId) throws EntityException, SQLException {
-      ResultSet rs = EntityInt.getRS(selectQuery + "where importRecordId = \"" + importRecordId + "\"",
+      ResultSet rs = getRS(selectQuery + "where importRecordId = \"" + importRecordId + "\"",
               "Database error encountered trying to retrieve a transaction by importRecordId.");
       Transaction transaction = null;
       if (rs.next()) {
@@ -302,31 +304,22 @@ public class Transaction extends IndependentEntity {
       idMerchant = UUID.fromString(rs.getString("idMerchant"));
    }
 
-   // Find provisional transactions based on the merchant and amount and return the first one found:
-   public static Transaction getFirstProvisionalTransaction(UUID idMerchant, double amount) throws EntityException,
-           SQLException {
-
-      ResultSet rs = EntityInt.getRS(selectQuery + " where Merchant_idMerchant = uuid_to_bin('" + idMerchant +
-              "') and amount = " + amount + " and cleared = false order by postDate asc", "Database error" +
-              " occured while trying to retrieve any provisional transactions that match a merchant and amount.");
-      Transaction transaction = null;
-      if (rs != null) {
-         if (rs.next()) {
-            transaction = new Transaction(rs);
-         }
-      }
-      return transaction;
-   }
-
 
    /*
     * Helper methods:
     */
-   public String summaryToString() {
+   public String toStringSummary() {
+      String authDate = (authorizationDate != null) ? "\n\tAuthorization date = " +
+              Utility.calendarDateToStringDate(authorizationDate) : "";
+      String checkNumberString = (checkNumber != 0) ? "\n\tCheck number = " + checkNumber : "";
       String s = null;
-      s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
-              Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
-              checkNumber + ", Merchant = " + merchant.getName() + ", amount = " + formatDollarAmount(amount);
+      s = "\tPost date = " + Utility.calendarDateToStringDate(postDate) +
+               authDate +
+              "\n\tMerchant = " + merchant.getName() +
+              "\n\tamount = " + formatDollarAmount(amount) +
+              "\n\tCleared = " + cleared +
+              "\n\tOriginal Payee = " + payee +
+              checkNumberString;
       return s;
    }
 
@@ -356,9 +349,76 @@ public class Transaction extends IndependentEntity {
       return s;
    }
 
+   public String provisionalToString() {
+      String s = null;
+      try {
+         String postDateString = "\tPost date = " + Utility.calendarDateToStringDate(postDate) + "\n";
+         String checkNumberString = (checkNumber != 0) ? "\tCheck number = " + checkNumber + "\n" : "";
+         Merchant merchant = getMerchant();
+         String merchantString = (merchant != null) ? "\tMerchant = " + merchant.getName() + "\n" : "";
+         String amountString = "\tAmount = " + formatDollarAmount(amount) + "\n";
+         String balanceString = (balance > 0.0) ? "\t" + formatDollarAmount(balance) + "\n" : "";
+         Register register = getRegister();
+         String registerNameString = (register != null) ? "\tRegister name = " + register.getRegisterName() + "\n" : "";
+         String merchantPayeeString = (merchantPayee != null) ? "\tMerchant payee = " + merchantPayee + "\n" : "";
+         String disputedString = (isImproper) ? "\tDisputed transaction.\n" : "";
+         s = new StringBuilder().append("Transaction:  ").append(importRecordId).append("\n").append(postDateString).
+                 append(checkNumberString).append(merchantString).append(amountString).append(balanceString).
+                 append(registerNameString).append(merchantPayeeString).append(disputedString).toString();
+      } catch (EntityException | SQLException | RegisterException e) {
+         e.printStackTrace();
+      }
+      return s;
+   }
+
 
    /*
     * Main methods:
     */
+   // Find provisional transactions based on the merchant and amount and return the first one found:
+   public static Transaction getFirstProvisionalTransaction(UUID idMerchant, double amount) throws EntityException,
+           SQLException {
+
+      ResultSet rs = getRS(selectQuery + " where Merchant_idMerchant = uuid_to_bin('" + idMerchant +
+              "') and amount = " + amount + " and cleared = false order by postDate asc", "Database error" +
+              " occured while trying to retrieve any provisional transactions that match a merchant and amount.");
+      Transaction transaction = null;
+      if (rs != null) {
+         if (rs.next()) {
+            transaction = new Transaction(rs);
+         }
+      }
+      return transaction;
+   }
+
+
+   // Get a list of transactions that were previously skipped during the importRegisterTransactions() process.  We know
+   // they were skipped because either there is no merchant assigned, or there are no splits assigned, or the
+   // transactions has not been reconciled:
+   public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
+      Calendar startDate = forecast.getStartDate();
+      Utility.setToLastBusinessDayBefore(startDate);
+      String query = getSelectQuery() + " where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " " +
+              "and idTransaction not in " +
+              "(select idTransaction from Transaction " +
+              "inner join Transaction_Split on idTransaction = Transaction_idTransaction " +
+              "inner join Forecast_Transaction_Split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
+              "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem) " +
+              "order by postDate asc";
+      return getRS(query, "attempting to retieve a list of transactions that were previously " +
+              "skipped during the import process.");
+   }
+
+
+   // Combine a cleared transaction with an uncleared transaction:
+   public Boolean reconcileWithProvisional() throws EntityException, SQLException {
+      Boolean result = false;
+      Transaction provisionalTransaction = getFirstProvisionalTransaction(merchant.getId(), amount);
+      if (provisionalTransaction != null) {
+         setId(provisionalTransaction.getId());
+         result = true;
+      }
+      return result;
+   }
 }
 

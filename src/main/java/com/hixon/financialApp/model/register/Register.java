@@ -1,11 +1,17 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.controller.ControllerException;
+import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
-import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,6 +20,9 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
+import static com.hixon.financialApp.utility.Utility.*;
 
 public class Register extends IndependentEntity {
 
@@ -236,4 +245,127 @@ public class Register extends IndependentEntity {
    public void save() {
    }
 
+
+   /*
+    * Main methods:
+    */
+   // Reprocess any transactions that were previously skipped:
+   public boolean processSkippedTransactions(Forecast forecast)
+           throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
+
+      getResolver().say("Process any transactions that were previously skipped in register '" +
+              getRegisterName() + "' and/or forecast '" + forecast.getDescription() + "'");
+
+      int i = 0;
+      try {
+         // Retrieve any transactions that were skipped.
+         ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+
+         // For each transaction in the result set:
+         Transaction transaction;
+         Merchant merchant;
+         while(rs.next()) {
+
+            // Get the transaction for this import record:
+            transaction = new Transaction(rs);
+
+            // Let the resolver know we are beginning a new item:
+            resolver.say("Reprocess skipped " + transaction.toString());
+
+            // Get the merchant for this transaction:
+            merchant = transaction.getMerchant();
+            if (merchant == null) {
+               merchant = Merchant.getByPayee(transaction.getMerchantPayee());
+               if (merchant == null) {
+                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
+                  if (merchant == null) {
+                     switch (resolver.getTerminationCondition()) {
+                        case SKIP:
+                           continue;
+
+                        case QUIT:
+                           throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+
+                        default:
+                           throw new ControllerException("Invalid termination condition " +
+                                   resolver.getTerminationCondition() + " during transaction import");
+                     }
+                  }
+               }
+
+               // then update the transaction merchant info from the merchant that we just found or created:
+               transaction.setMerchant(merchant);
+               transaction.setIdMerchant(merchant.getId());
+            }
+
+            // If there is a provisional transaction for this transaction, then use the same ID:
+            transaction.reconcileWithProvisional();
+
+            // Get the assigned budget items for the merchant:
+            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+
+            // If we couldn't find any matching items, get some help from the user:
+            if (budgetItems.size() < 1) {
+               budgetItems = resolver.assignBudgetItems(merchant);
+               if (budgetItems == null) {
+                  switch (resolver.getTerminationCondition()) {
+                     case SKIP:
+                        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                        continue;
+
+                     case QUIT:
+                        throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+
+                     default:
+                        throw new ControllerException("Invalid termination condition " +
+                                resolver.getTerminationCondition() + " during transaction import");
+                  }
+               }
+            }
+
+            // Tell the user about the bank transaction we are processing:
+            getResolver().say("Imported a bank transaction to " + merchant.getName() + " for " +
+                    formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
+                    ((transaction.getAuthorizationDate() != null) ?
+                            calendarDateToStringDate(transaction.getAuthorizationDate()) :
+                            calendarDateToStringDate(transaction.getPostDate())));
+
+            // Get the splits for the transaction.  Create them if they don't already exist:
+            List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
+            if (splits == null) {
+               splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+            }
+
+            // Save the transaction and associated items:
+            transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+            if (splits != null) {
+               for (TransactionSplit split : splits) {
+                  getResolver().say(split.toString());
+                  split.save();
+               }
+
+               // Reconcile this transaction with the forecast:
+               ForecastTransaction.reconcile(forecast, transaction, splits, resolver);
+            }
+
+            i++;
+         } // End for each record in the transactions file.
+
+         // TODO: Process any significant events that occurred during reconciliation:
+
+         // TODO: Save the import event:
+
+      } catch (Exception e) {
+         throw new RegisterException("Exception occurred while processing skipped transactions", e);
+      }
+
+      // Return the number of transactions imported:
+      if (i > 0) {
+         Utility.getResolver().say("Successfully reprocessed " + i + " skipped transactions in the register.");
+      } else {
+         Utility.getResolver().say("There were no skipped transactions in the register '" + registerName + "'.");
+      }
+      return forecast.getInSync();
+
+   } // End processSkippedTransactions().
 }

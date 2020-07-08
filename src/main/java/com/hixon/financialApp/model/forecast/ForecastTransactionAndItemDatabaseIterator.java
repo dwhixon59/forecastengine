@@ -36,7 +36,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
       String selectCreditsQuery = "select" + ForecastTransaction.getSelectColumns() + ", " + ForecastItem.getSelectColumns() +
               " from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
-              "ft.remainingAmount > 0.005 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
+              "ft.remainingAmount > 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " order by ft.plannedDate asc, ft.remainingAmount desc";
       rsCredits = EntityInt.getRS(selectCreditsQuery, "Database error occurred attempting to " +
               "get a list of credit forecast transactions by date.");
@@ -49,7 +49,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
       String selectDebitsQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
               "from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
-              "ft.remainingAmount < -0.005 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
+              "ft.remainingAmount < 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " order by ft.plannedDate asc, ft.remainingAmount asc";
       rsDebits = EntityInt.getRS(selectDebitsQuery, "Database error occurred attempting to " +
               "get a list of debit forecast transactions by date.");
@@ -62,7 +62,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
       String selectPlaceholdersQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
               "from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
-              "ft.remainingAmount >= -0.005 and ft.remainingAmount <= 0.005 and ft.plannedDate >= " +
+              "ft.remainingAmount = 0.00 and fi.amount = 0.00 and ft.plannedDate >= " +
               Utility.calendarDateToSqlDateString(startDate) + " order by ft.plannedDate asc, fi.payee asc";
       rsPlaceholders = EntityInt.getRS(selectPlaceholdersQuery, "Database error occurred attempting to " +
               "get a list of placeholder forecast transactions by date.");

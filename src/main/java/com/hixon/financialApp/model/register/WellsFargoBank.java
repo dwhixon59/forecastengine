@@ -2,7 +2,6 @@ package com.hixon.financialApp.model.register;
 
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.TransactionResolverInt;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
@@ -34,9 +33,9 @@ public class WellsFargoBank extends Bank {
    /*
     * Constructors for the Wells Fargo download file transaction classifier:
     */
-   public WellsFargoBank(Register register, TransactionResolverInt resolver) {
+   public WellsFargoBank(Register register) {
 
-      super(register, resolver);
+      super(register, Utility.getResolver());
    }
 
 
@@ -118,7 +117,7 @@ public class WellsFargoBank extends Bank {
       String[] tokens;
 
       // If the user didn't pick up the tab character when they copied the list, add one:
-      if (line.getBytes()[0] != '\t') line = "/t" + line;
+      if (line.getBytes()[0] != '\t') line = "\t" + line;
 
       // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
       tokens = line.split("\t");

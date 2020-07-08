@@ -4,13 +4,13 @@ import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.async.base.NotificationServiceInt;
 
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.List;
@@ -19,39 +19,86 @@ import static com.hixon.financialApp.utility.Utility.getResolver;
 
 public class fileBasedNotificationService implements NotificationServiceInt {
 
-   String encoding = "UTF-8";
-   PrintWriter writer;
+   /*
+    * Fields:
+    */
+   private static final String NOTIFICATION_FILE_PREFIX = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business" +
+           "\\Finances\\Expenses\\";
+   public static final String NOTIFICATION_FILE_POSTFIX = "_Notifications.txt";
+   private static final String ENCODING = "UTF-8";
 
-   @Override
-   public void requestClassifyTransaction(User user, Transaction transaction) throws IOException, EntityException,
-           RegisterException, ParseException, BudgetException, SQLException {
 
-      String notificationFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              user.getFirstName() + "_Notifications.txt";
-
-      getResolver().say("Request to classify transaction to user " + user.getFirstName() + "written to the file: " +
-              notificationFilename);
-      writer = new PrintWriter(notificationFilename, encoding);
-      writer.println(user.getFirstName() + ":  ");
-
-      // Get the budget items for the merchant associated with this transaction:
-      List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(transaction.getMerchant());
-      writer.println("The assigned budget items and amounts (if specified) for this merchant are:");
-      int i = 1;
-      for (BudgetItemMerchant budgetItem : budgetItems
-      ) {
-         String lineEnd = "";
-         if (budgetItem.getAmount() > 0) {
-            lineEnd = ", " + Utility.formatDollarAmount(budgetItem.getBudgetItem().getAmount()) + ", 0";
-         } else {
-            if (budgetItem.getPercentage() > 0) {
-               lineEnd = ", 0, " + budgetItem.getPercentage() + "%";
-            }
-         }
-         writer.println("   " + i++ + ".  " + budgetItem.getBudgetItem().getPayee() + lineEnd);
-      }
-
-      writer.close();
+   /*
+    * Getters and setters:
+    */
+   private String getNotificationFilename(User user) {
+      return NOTIFICATION_FILE_PREFIX + user.getFirstName() + NOTIFICATION_FILE_POSTFIX;
    }
 
+   /*
+    * Helper methods:
+    */
+
+
+   /*
+    * Main methods:
+    */
+   @Override
+   public void requestIdentifyMerchant(User user, Transaction transaction) throws FileNotFoundException,
+           UnsupportedEncodingException {
+
+      try (PrintWriter writer = new PrintWriter(getNotificationFilename(user), ENCODING)){
+         writer.println("");
+         writer.println(user.getFirstName() + ":  Please identify the merchant for the following transaction:");
+         writer.println(transaction);
+         getResolver().say("Request to identify the merchant for a transaction sent to user " + user.getFirstName() +
+                 " was written to the file: " + getNotificationFilename(user));
+      }
+   }
+
+   @Override
+   public void requestAssignBudgetItems(User user, Merchant merchant) throws FileNotFoundException,
+           UnsupportedEncodingException {
+
+      try (PrintWriter writer = new PrintWriter(getNotificationFilename(user), ENCODING)){
+         writer.println("");
+         writer.println("Hi " + user.getFirstName() + ".  What budget items should be associated with the merchant "
+                 + merchant + "?");
+         getResolver().say("Request to assign budget items the merchant " + merchant + " sent to " +
+                 user.getFirstName() + " was written to the file: " + getNotificationFilename(user));
+      }
+   }
+
+   @Override
+   public void requestAssignSplits(User user, Transaction transaction) throws IOException, EntityException,
+           RegisterException, ParseException, BudgetException, SQLException {
+
+      try (FileWriter writer = new FileWriter(getNotificationFilename(user), true)) {
+
+         writer.append("");
+         writer.append("\nHi " + user.getFirstName() + ":  Please classify the following transaction:\n");
+         writer.append(transaction.toStringSummary());
+
+         // Get the budget items for the merchant associated with this transaction:
+         List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(transaction.getMerchant());
+         writer.append("\nThe assigned budget items and amounts (if specified) for this merchant are:\n");
+         int i = 1;
+         for (BudgetItemMerchant budgetItem : budgetItems
+         ) {
+            String lineEnd = "\n";
+            if (budgetItem.getAmount() > 0) {
+               lineEnd = ", " + Utility.formatDollarAmount(budgetItem.getBudgetItem().getAmount()) + ", 0";
+            } else {
+               if (budgetItem.getPercentage() > 0) {
+                  lineEnd = ", 0, " + budgetItem.getPercentage() + "%";
+               }
+            }
+            writer.append("   " + i++ + ".  " + budgetItem.getBudgetItem().getPayee() + lineEnd);
+         }
+         writer.append("Enter:  item_number <sp> amount <sp> memo (if multiple items add <comma> between):  \n");
+
+         getResolver().say("Request to " + user.getFirstName() + " classify transaction was written to the " +
+                 "file: " + getNotificationFilename(user));
+      }
+   }
 }

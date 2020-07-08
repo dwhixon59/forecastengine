@@ -4,7 +4,11 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastEngine;
+import com.hixon.financialApp.model.register.FinancialInstitution;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.WellsFargoBank;
+import com.hixon.financialApp.utility.FinancialException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.async.file.fileBasedNotificationService;
@@ -17,7 +21,7 @@ import java.sql.DriverManager;
 import java.util.Calendar;
 
 /**
- * Hello world!
+ * Main controller for the command line version of the product:
  */
 public class Controller {
 
@@ -51,13 +55,25 @@ public class Controller {
          // Process the goals:
          String filename = null;
          boolean inSync = true;
+         Register register = null;
+         FinancialInstitution financialInstitution = null;
          for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
+               case "processSkippedTransactions":
+                  if (forecast == null) forecast = Forecast.getMostRecent();
+                  if (register == null) register = Register.getByName("Bill Pay Account");
+                  if (financialInstitution == null) financialInstitution = new WellsFargoBank(register);
+                  inSync = register.processSkippedTransactions(forecast);
+                  if (!inSync) {
+                     forecast.updateForecast();
+                     Utility.getResolver().say("The long term forecast was successfully updated.");
+                  }
+                  break;
+
                case "importRegisterTransactions":
                   Utility.getResolver().say("Importing the register transactions.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
-                  filename = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
-                  inSync = importer.importCsvTransactionFile(filename, "Wells Fargo Bank",
+                  inSync = importer.importCsvRegisterTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The transactions were successfully imported.");
                   if (!inSync) {
@@ -68,8 +84,7 @@ public class Controller {
 
                case "importProvisionalRegisterTransactions":
                   if (forecast == null) forecast = Forecast.getMostRecent();
-                  filename = "C:\\Users\\dwhix\\Downloads\\ProvisionalTransactions.tsv";
-                  inSync = importer.importCsvProvisionalTransactionFile(filename, "Wells Fargo Bank",
+                  inSync = importer.importCsvProvisionalTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The provisional transactions were successfully imported.");
                   if (!inSync) {
@@ -112,14 +127,13 @@ public class Controller {
                   Utility.getResolver().say("The forecast was successfully generated");
                   break;
 
-               case "importForecastTransactions":
-                  Utility.getResolver().say("Importing the forecast transactions.");
+               case "updateFromExternalSource":
+                  Utility.getResolver().say("Updating the forecast from an external source.");
                   if (forecast == null) forecast = Forecast.getMostRecent();
                   if (forecast != null) {
-                     Utility.getForecastView().updateFromExternalSoure();
-                     Utility.getResolver().say("The transactions were successfully imported.");
+                     Utility.getForecastView().updateFromExternalSource();
                   } else {
-                     Utility.getResolver().say("There is no forecast to import the transactions into.");
+                     Utility.getResolver().say("There is no forecast to update.");
                   }
                   break;
 
@@ -163,7 +177,7 @@ public class Controller {
          System.out.println("\nClose the connection to the database.");
          Utility.getDbConnection().close();
 
-      } catch (Exception | QuitException e) {
+      } catch (Exception | FinancialException e) {
          if (Utility.getDbConnection() != null) {
             Utility.getDbConnection().close();
          }

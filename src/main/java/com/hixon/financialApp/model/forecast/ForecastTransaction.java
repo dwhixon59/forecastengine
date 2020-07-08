@@ -243,6 +243,7 @@ public class ForecastTransaction extends IndependentEntity {
 
    // The update query:
    public static final String updateQuery = "update ForecastDatabase.Forecast_Transaction set ";
+   public static String getUpdateQuery() { return updateQuery;}
 
    public String getupdateClause() {
       return  "remainingAmount = " + remainingAmount + ", plannedDate = " +
@@ -252,26 +253,20 @@ public class ForecastTransaction extends IndependentEntity {
 
    @Override
    public String getUpdateByIdQuery() {
-      return updateQuery + getupdateClause();
+      return getUpdateQuery() + getupdateClause();
    }
 
    // The delete query:
    public static final String deleteQuery = "delete from ForecastDatabase.Forecast_Transaction ";
-
    public static String getDeleteQuery() {return deleteQuery;}
 
    @Override
    public String getDeleteByIdQuery() {
-      return deleteQuery + "where idForecastTransaction = uuid_to_bin('" + id + "')";
-   }
-
-   // Delete all the Forecast Transactions that are marked not found:
-   public static void deleteNotFound() throws EntityException, RegisterException {
-      executeUpdate(getDeleteQuery() + "where found = false", "to delete the Forecast Transactions " +
-              "that are marked not found.");
+      return getDeleteQuery() + "where idForecastTransaction = uuid_to_bin('" + id + "')";
    }
 
    // The entity name:
+
    @Override
    public String getPrintableEntityTypeName() {
       return "forecast transaction";
@@ -282,12 +277,17 @@ public class ForecastTransaction extends IndependentEntity {
       return (rs != null) ? new ForecastTransaction(rs) : null;
    }
 
-
    /*
     *  Main methods:
     */
+   // Zero out the amounts for all the Forecast Transactions that are marked not found:
+   public static void zeroNotFound() throws EntityException, RegisterException {
+      executeUpdate(getUpdateQuery() + "remainingAmount = 0 where found = false", "to zero the " +
+              "Forecast Transactions that are marked not found.");
+   }
+
    public static ForecastTransactionIterator getForecastTransactionsStartingOn(Forecast forecast,
-                                                                               Calendar startDate) throws EntityException, ForecastException, SQLException, BudgetException {
+                         Calendar startDate) throws EntityException, ForecastException, SQLException, BudgetException {
       ForecastTransactionIterator forecastTransactions;
       if (forecast.isDirty()) {
          forecastTransactions = new ForecastTransactionMemoryIterator(forecast, startDate);
@@ -469,13 +469,16 @@ public class ForecastTransaction extends IndependentEntity {
 
             // if we weren't able to match the split to a forecast transaction.
             if (forecastTransaction == null) {
-               // Create a forecast transaction and forecast item for it so we have something to link the forecast
-               // transaction split to:
-               ForecastItem forecastItem = new ForecastItem(forecast, split.getBudgetItem());
-               forecastItem.setAmount(1);
-               forecastItem.save(INSERT);
+               // Create a forecast transaction and forecast item (if it doesn't already exist) for it so we have
+               // something to link the forecast transaction split to:
+               ForecastItem forecastItem = ForecastItem.getByBudgetItemId(split.getIdBudgetItem());
+               if (forecastItem == null) {
+                  forecastItem = new ForecastItem(forecast, split.getBudgetItem());
+                  forecastItem.setAmount(split.getAmount());
+                  forecastItem.save(INSERT);
+               }
                forecastTransaction = new ForecastTransaction(forecastItem, split.getTransaction().getDate(), true);
-               forecastTransaction.setRemainingAmount(1);
+               forecastTransaction.setRemainingAmount(0);
                forecastTransaction.save(INSERT);
                split.setDisposition(IGNORE);
             }
@@ -586,6 +589,7 @@ public class ForecastTransaction extends IndependentEntity {
                               break;
 
                            case IGNORE:
+                              forecastTransaction = null;
                               break;
 
                            case DISPUTE:
@@ -677,6 +681,7 @@ public class ForecastTransaction extends IndependentEntity {
                               break;
 
                            case IGNORE:
+                              forecastTransaction = null;
                               break;
 
                            case DISPUTE:

@@ -3,6 +3,8 @@ package com.hixon.financialApp.view.excel;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.TransactionSplit;
+import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.BudgetView;
 
 import java.io.FileNotFoundException;
@@ -57,12 +59,27 @@ public class SpreadsheetBudgetView extends BudgetView {
    /*
     * Main methods:
     */
-   public void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException {
+   public void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException {
       com.hixon.financialApp.utility.Utility.getResolver().say("MTD Spending Report will be rendered to the file: "
               + spendingReportFilename);
-      writer = new PrintWriter(spendingReportFilename, encoding);
-      category = " ";
-      lastCategory = " ";
+      Boolean done = false;
+      while(!done) {
+         done = true;
+         try {
+            writer = new PrintWriter(spendingReportFilename, encoding);
+            category = " ";
+            lastCategory = " ";
+         } catch (Exception e) {
+            Utility.getResolver().say(e.getMessage());
+            done = !Utility.getResolver().getYesOrNo("Do you want to try again?");
+            if (done) {
+               Utility.getResolver().say("Aborting spending report generation process.");
+               ViewException ve = new ViewException("Unable to open the spending report export file.");
+               ve.initCause(e);
+               throw ve;
+            }
+         }
+      }
    }
 
    @Override

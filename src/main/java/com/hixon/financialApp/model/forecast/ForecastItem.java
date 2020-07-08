@@ -136,8 +136,24 @@ public class ForecastItem extends Item {
 
    public static ForecastItem getById(UUID idForecastItem) throws EntityException, SQLException, BudgetException,
            ForecastException {
-      return new ForecastItem(EntityInt.getRSById(selectQuery + " where idForecastItem = ", idForecastItem,
-              "attempting to retrieve a forecast item"));
+      ResultSet rs = EntityInt.getRSById(selectQuery + " where idForecastItem = ", idForecastItem,
+              "attempting to retrieve a forecast item");
+      ForecastItem forecastItem = null;
+      if (rs != null) {
+         forecastItem = new ForecastItem(rs);
+      }
+      return forecastItem;
+   }
+
+   public static ForecastItem getByBudgetItemId(UUID idBudgetItem) throws EntityException, ForecastException,
+           BudgetException {
+      ResultSet rs = EntityInt.getRSById(selectQuery + " where BudgetItem_idbudgetItem = ", idBudgetItem,
+              "attempting to retrieve a forecast item based on the following budget item:  " + idBudgetItem);
+      ForecastItem forecastItem = null;
+      if (rs != null) {
+         forecastItem = new ForecastItem(rs);
+      }
+      return forecastItem;
    }
 
 

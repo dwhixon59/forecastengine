@@ -4,14 +4,18 @@ import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.view.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.*;
+import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.Locale;
 
 import static java.util.Calendar.*;
 
@@ -36,6 +40,7 @@ public class Utility {
    public static Connection getDbConnection() {
       return dbConnection;
    }
+
    public static void setDbConnection(Connection dbConnection) {
       com.hixon.financialApp.utility.Utility.dbConnection = dbConnection;
    }
@@ -43,6 +48,7 @@ public class Utility {
    public static TransactionResolverInt getResolver() {
       return resolver;
    }
+
    public static void setResolver(TransactionResolverInt resolver) {
       com.hixon.financialApp.utility.Utility.resolver = resolver;
    }
@@ -50,6 +56,7 @@ public class Utility {
    public static NotificationServiceInt getNotificationService() {
       return notificationService;
    }
+
    public static void setNotificationService(NotificationServiceInt notificationService) {
       Utility.notificationService = notificationService;
    }
@@ -57,6 +64,7 @@ public class Utility {
    public static RegisterViewInt getRegisterView() {
       return registerView;
    }
+
    public static void setRegisterView(RegisterViewInt registerView) {
       Utility.registerView = registerView;
    }
@@ -64,6 +72,7 @@ public class Utility {
    public static BudgetViewInt getBudgetView() {
       return budgetView;
    }
+
    public static void setBudgetView(BudgetViewInt budgetView) {
       Utility.budgetView = budgetView;
    }
@@ -71,6 +80,7 @@ public class Utility {
    public static ForecastViewInt getForecastView() {
       return forecastView;
    }
+
    public static void setForecastView(ForecastViewInt forecastView) {
       Utility.forecastView = forecastView;
    }
@@ -225,7 +235,7 @@ public class Utility {
    // Convert a Java String date in MM/DD/YY, or MM/DD format to a Calendar object:
    public static Calendar stringDateSlashToCalendarDate(String stringDate) throws ParseException {
       Calendar calendarDate = null;
-      SimpleDateFormat sdf = null;
+      SimpleDateFormat sdf;
       if (stringDate != null) {
          if (stringDate.length() > 5) {
 
@@ -237,7 +247,7 @@ public class Utility {
 
             Calendar now = Calendar.getInstance();
             int year = now.get(YEAR);
-            stringDate = stringDate + "/" + String.valueOf(year);
+            stringDate = stringDate + "/" + year;
             sdf = new SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH);
             sdf.parse(stringDate);
             calendarDate = sdf.getCalendar();
@@ -331,7 +341,7 @@ public class Utility {
    }
 
    // Parse a dollar AMOUNT from a string:
-   public static Double parseDollarAmount(String stringAmount) throws ParseException {
+   public static Double parseDollarAmount(String stringAmount) {
       stringAmount = stringAmount.replace("$", "");
       stringAmount = stringAmount.replace(",", "");
       return Double.parseDouble(stringAmount);
@@ -364,7 +374,7 @@ public class Utility {
       if (stringDate != null) {
          Calendar now = Calendar.getInstance();
          int year = now.get(YEAR);
-         stringDate = stringDate + "/" + String.valueOf(year);
+         stringDate = stringDate + "/" + year;
          SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH);
          sdf.parse(stringDate);
          calendarDate = sdf.getCalendar();
@@ -431,7 +441,7 @@ public class Utility {
    public static int businessDaysBeteween(Calendar firstDate, Calendar secondDate) {
       Calendar firstDateCopy = (Calendar) firstDate.clone();
       int diffDays = 0;
-      while(firstDateCopy.compareTo(secondDate) > 0) {
+      while (firstDateCopy.compareTo(secondDate) > 0) {
          if (!isaBankHoliday(Utility.calendarDateToStringDate(firstDateCopy))) diffDays++;
          firstDateCopy.add(DATE, -1);
       }
@@ -474,6 +484,79 @@ public class Utility {
    // Identify the user that is the target of some action:
    User getUser() {
       return null;
-   };
+   }
+
+   ;
+
+   // Create a previous version of a file:
+   public static Boolean makeSaveFile(String currentFilename) throws FinancialException {
+      return makeSaveFile(currentFilename, appendToFilename(currentFilename, "old"));
+   }
+
+   public static Boolean makeSaveFile(String currentFilename, String saveFilename) throws FinancialException {
+
+      Boolean result = false;
+      boolean done;
+
+      // Delete the previous save file:
+      File saveFile = new File(saveFilename);
+      if (saveFile.exists()) {
+         done = false;
+         while (!done) {
+            done = true;
+            if (saveFile.delete()) {
+               getResolver().say(saveFilename + " deleted successfully");
+               result = true;
+            } else {
+               getResolver().say("Error occured attempting to delete the file " + saveFilename);
+               done = !getResolver().getYesOrNo("Would you like to try again?");
+               if (done) {
+                  getResolver().say("Failed to rename the file " + currentFilename + " to " +
+                          saveFilename);
+                  result = false;
+               }
+            }
+         }
+      } else {
+         getResolver().say("Old file " + saveFilename + " was not deleted because it does not exist.");
+         result = true;
+      }
+
+      // Rename the current file to the save file name:
+      if (result) {
+         File currentFile = new File(currentFilename);
+         if (currentFile.exists()) {
+            done = false;
+            while (!done) {
+               if (currentFile.renameTo(saveFile)) {
+                  getResolver().say(currentFilename + " successfully renamed to " + saveFilename);
+                  done = true; result = true;
+               } else {
+                  getResolver().say("Unable to rename the file " + currentFilename + " to " + saveFilename);
+                  done = !getResolver().getYesOrNo("Would you like to try again?");
+                  if (done) {
+                     getResolver().say("Failed to rename the file " + currentFilename + " to " +
+                             saveFilename);
+                     result = false;
+                  }
+               }
+            }
+         } else {
+            getResolver().say("Current file " + currentFilename + " was not renamed because it does not exist.");
+            result = false;
+         }
+      }
+      else {
+         getResolver().say("New file " + currentFilename + " was not renamed because delete of " + saveFilename +
+                 " failed.");
+      }
+      return result;
+   }
+
+   // Insert some text at the end of a filename, but before the file extension, so a.b becomes a.c.b:
+   public static String appendToFilename(@NotNull String filename, @NotNull String appendText) {
+      return filename.substring(0, filename.indexOf(".") + 1) + appendText + filename.substring(filename.indexOf("."),
+              filename.length());
+   }
 
 }

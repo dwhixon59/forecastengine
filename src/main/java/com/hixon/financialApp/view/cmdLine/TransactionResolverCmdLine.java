@@ -451,21 +451,22 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             // If this split is for a fixed amount:
             if (budgetItemMerchant.getAmount() > 0) {
                transactionSplit = new TransactionSplit(budgetItemMerchant.getAmount(),
-                       budgetItemMerchant.getIdBudgetItem(), transaction.getId());
+                       budgetItemMerchant.getIdBudgetItem(), transaction.getId(), null);
                transactionAmount = transactionAmount - budgetItemMerchant.getAmount();
             }
             // else if this split if for a fixed percentage of the transaction amount:
             else {
                if (budgetItemMerchant.getPercentage() > 0) {
                   transactionSplit = new TransactionSplit((budgetItemMerchant.getPercentage() /
-                          100) * transaction.getAmount(), budgetItemMerchant.getIdBudgetItem(), transaction.getId());
+                          100) * transaction.getAmount(), budgetItemMerchant.getIdBudgetItem(), transaction.getId(),
+                          null);
                   transactionAmount = transactionAmount - (budgetItemMerchant.getPercentage() /
                           100) * transaction.getAmount();
                }
                // else there is only one budget item, so allocate the whole transaction amount to it:
                else {
                   transactionSplit = new TransactionSplit(transaction.getAmount(),
-                          budgetItemMerchant.getIdBudgetItem(), transaction.getId());
+                          budgetItemMerchant.getIdBudgetItem(), transaction.getId(), null);
                   transactionAmount = transactionAmount - transaction.getAmount();
                }
             }
@@ -479,7 +480,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             getSplits(transaction, splits, merchant, budgetItemMerchants, true, true);
          }
       }
-      return splits;
+      return (splits.isEmpty()) ? null : splits;
    }
 
 
@@ -487,7 +488,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     * getSplits()
     *
     * Interact with the user to confirm or override the budget item amounts and then create splits for them.  Allow the
-    * user to and add new budget items and create splits for them as well.
+    * user to add new budget items and create splits for them as well.
     */
    @Override
    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
@@ -553,15 +554,26 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                done = false;
             }
 
+            // else if the response is a single use category:
          } else if (amounts[0].matches("[a-zA-Z][a-zA-Z0-9 '()-\\+]+")) {
             say("The allocate, but don't add, function has not been implemented yet.");
             done = false;
 
+            // else if the response is a number selection and a memo:
+         } else if (amounts[0].matches("^[1-9][0-9]*[\\s]+[^,]*") && amounts.length == 1) {
+            String itemNumberString = amounts[0].substring(0,amounts[0].indexOf(' '));
+            int itemNumber = Integer.parseInt(itemNumberString);
+            String memo = amounts[0].substring(amounts[0].indexOf(' ') + 1);
+            if (itemNumber <= budgetItemsForMerchant.size()) {
+               splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
+                       transaction, memo));
+            }
+            // else if the response is just a number selection:
          } else if (amounts[0].matches("[1-9][0-9]*") && amounts.length == 1) {
             int itemNumber = Integer.parseInt(amounts[0]);
             if (itemNumber <= budgetItemsForMerchant.size()) {
                splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
-                       transaction));
+                       transaction, null));
             }
          } else {
             // Allocate the splits as directed:
@@ -576,14 +588,15 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                   // If the splits are not based on percentages, then use amounts:
                   if (budgetItemsForMerchant.get(i).getPercentage() == 0) {
                      splits.add(new TransactionSplit((useEnteredAmounts) ? -enteredAmount :
-                             budgetItemsForMerchant.get(i).getAmount(), budgetItemsForMerchant.get(i), transaction)
+                             budgetItemsForMerchant.get(i).getAmount(), budgetItemsForMerchant.get(i), transaction,
+                             null)
                      );
                   } else  // use the percentages:
                   {
                      splits.add(new TransactionSplit((useEnteredAmounts) ?
                              (Integer.parseInt(amounts[i]) / 100) * transaction.getAmount() :
                              (budgetItemsForMerchant.get(i).getPercentage() / 100) * transaction.getAmount(),
-                             budgetItemsForMerchant.get(i), transaction)
+                             budgetItemsForMerchant.get(i), transaction, null)
                      );
                   }
                }
@@ -691,7 +704,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
       return disposition;
    }
 
-   // What to do if we're not sure which forecast transaction to assign a split to:
+   // What to do if we're not sure which forecast transaction to assign a split to because the amounts don't match:
    @Override
    public UserResponse assignSplitAmountToForecastTransaction(TransactionSplit split, ForecastTransaction
            forecastTransaction) {
@@ -732,7 +745,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
       return response;
    }
 
-   // What to do if we're not sure which forecast transaction to assign a split to:
+   // What to do if we're not sure which forecast transaction to assign a split to because the dates don't match:
    @Override
    public UserResponse assignSplitDateToForecastTransaction(TransactionSplit split, ForecastTransaction
            forecastTransaction)
@@ -864,11 +877,12 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    public Calendar getSpendingReportMonth() throws QuitException {
       UserResponse response = new UserResponse();
 
-      say("What month do you want to report on?  \n" +
-              "l - last month\n" +
-              "t or just <enter> - this month\n" +
-              "1 - 12 January - December\n" +
-              "Custom date (mm-yy):\n");
+      say("\nWhat month do you want to report on?  \n" +
+              "\tl - last month\n" +
+              "\tt or just <enter> - this month\n" +
+              "\t1 - 12 January - December in the last 12 months\n" +
+              "\tSpecific month (mm-yy)\n" +
+              "Enter your selection:  ");
 
       boolean done = false;
       Calendar month = Calendar.getInstance();
@@ -882,6 +896,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                break;
 
             case "t":
+            case "":
                break;
 
             case "1":
@@ -897,6 +912,12 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             case "11":
             case "12":
                month.set(Calendar.MONTH, Integer.parseInt(line) - 1);
+
+               //  If the selected month is in the future, then change the date to that month a last year:
+               Calendar now = Calendar.getInstance();
+               if (now.compareTo(month) < 0) {
+                  month.add(YEAR, -1);
+               }
                break;
 
             case "quit":
@@ -904,16 +925,11 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
             default:
                try {
-                  Utility.stringDateDashToCalendarDate(line);
+                  month = Utility.stringDateDashToCalendarDate(line);
                } catch (ParseException e) {
                   say("Please enter l, <enter>, t, 1-12 c, or quit.");
                   done = false;
                }
-         }
-         //  If the selected month is in the future, then change the date to that month a last year:
-         Calendar now = Calendar.getInstance();
-         if (now.compareTo(month) < 0) {
-            month.add(YEAR, -1);
          }
       }
       return month;
@@ -922,7 +938,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    @Override
    public boolean askDeleteRegisterTransaction(Transaction transaction) {
       say();
-      say(transaction.summaryToString());
+      say(transaction.toStringSummary());
       return getYesOrNo("This provisional transaction has disappeared from the list of provisional " +
               "transactions, but it does not appear as a cleared transaction.\nIt has likely been invalidated.  Do you "
               + "want to remove it?");
@@ -933,7 +949,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
       // Ask which user to send the message to:
       say(prompt + ":  ");
-      if (allowNone) say("\t0 - none");
+      if (allowNone) say("\t0 - None");
       int i = 1;
       for (String user : items
       ) {

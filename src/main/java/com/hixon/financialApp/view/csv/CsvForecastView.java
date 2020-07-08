@@ -7,6 +7,9 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.utility.FinancialException;
+import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.ForecastView;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -31,6 +34,8 @@ public class CsvForecastView extends ForecastView {
     */
    private String importForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
            "\\Expenses.csv";
+   private String importForecastSaveFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
+           "\\Expenses.old.csv";
    private FileReader in;
    private CSVParser records;
 
@@ -114,14 +119,15 @@ public class CsvForecastView extends ForecastView {
    public List<ForecastTransaction> openForecastTransactionSource() throws ControllerException, BudgetException {
       int i = 0;
       List<ForecastTransaction> forecastTransactions = new ArrayList<>();
-      try {
+
+      try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)))) {
+
          getResolver().say("Update the forecast from the forecast transactions in the CSV file " + importForecastFilename);
 
          // Work on the most recent forecast:
          Forecast forecast = Forecast.getMostRecent();
 
          // Iterate over the CSV records and create a list of forecast transactions from them:
-         BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)));
          BufferedReader in = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
          Iterable<CSVRecord> records = CSVFormat.EXCEL.withHeader(ForecastTransactionHeaders.class).parse(in);
          Calendar plannedDate = Calendar.getInstance();
@@ -207,8 +213,7 @@ public class CsvForecastView extends ForecastView {
 
       } catch (FileNotFoundException e) {
          ControllerException ce = new ControllerException("Transactions file " + importForecastFilename + " not found.");
-         ce.initCause(e);
-         throw (ce);
+         forecastTransactions = null;
       } catch (IOException e) {
          ControllerException ce = new ControllerException("I/O error reading from the transactions file " +
                  importForecastFilename + "on line " + i + ".");
@@ -226,5 +231,21 @@ public class CsvForecastView extends ForecastView {
       }
 
       return forecastTransactions;
+   }
+
+
+   // Close the forecast transactions CSV file and remove it:
+   @Override
+   public void closeForecastTransactionSource() throws ViewException {
+
+      // Create a previous version of the import file:
+      try {
+         Utility.makeSaveFile(importForecastFilename, importForecastSaveFilename);
+      } catch (FinancialException e) {
+         ViewException ve =  new ViewException("Error occured while creating a previous version of the forecast " +
+                 "transaction import file.");
+         ve.initCause(e);
+         throw ve;
+      }
    }
 }

@@ -1,12 +1,15 @@
 package com.hixon.financialApp.model.forecast;
 
-import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.utility.Utility;
 
-import java.sql.*;
+import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
@@ -102,7 +105,7 @@ public class ForecastEngine {
 
             Calendar nextDate = (Calendar) startDate.clone();
             System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) +
-                    Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
+                    "Next Date:  " + Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
                     Utility.calendarDateToStringDate(forecast.getEndDate()));
 
             // For each item in the forecast:

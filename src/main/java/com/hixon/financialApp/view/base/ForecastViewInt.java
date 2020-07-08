@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.view.ViewException;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -26,5 +27,9 @@ public interface ForecastViewInt {
    // Open the source of forecast transactions to update from:
    List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException, BudgetException;
 
-   void updateFromExternalSoure() throws ControllerException, ForecastException, EntityException, SQLException, RegisterException, BudgetException;
+   // Close the source of forecast transactions to update from:
+   void closeForecastTransactionSource() throws ViewException;
+
+   // Update the forecast from an external representation of the forecast like a spreadsheet:
+   void updateFromExternalSource() throws ControllerException, ForecastException, EntityException, SQLException, RegisterException, BudgetException, ViewException;
 }
