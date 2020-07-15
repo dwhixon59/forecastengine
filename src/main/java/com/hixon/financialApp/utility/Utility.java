@@ -108,6 +108,19 @@ public class Utility {
       return dateFormatted;
    }
 
+   // Format a date in human readable timestamp format:
+   public static String calendarDateToStringTimeStamp(Calendar calendar) {
+      String dateFormatted;
+      if (calendar != null) {
+         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
+         fmt.setCalendar(calendar);
+         dateFormatted = fmt.format(calendar.getTime()) + "T00:00:00.000";
+      } else {
+         dateFormatted = "null";
+      }
+      return dateFormatted;
+   }
+
    // Print out a date in human readable format with slashes:
    public static String calendarDateToStringSlashDate(Calendar calendar) {
       String dateFormatted;

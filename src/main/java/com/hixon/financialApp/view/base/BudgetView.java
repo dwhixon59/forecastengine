@@ -26,9 +26,12 @@ public abstract class BudgetView implements BudgetViewInt
     */
    public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;
    public abstract void renderSpendingReportFrontMatter();
+   protected abstract void renderTimePeriodRow(Calendar startDate, Calendar endDate);
+   protected abstract void renderHeaderRow();
    public abstract void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double total)
            throws ForecastException;
-   public abstract void renderTransactionSplit(TransactionSplit split);
+   public abstract void renderTransactionSplit(TransactionSplit split) throws EntityException, SQLException, RegisterException;
+   public abstract void renderTotalRow(double totalIncome, double totalBudgeted, double totalSpent);
    public abstract void renderSpendingReportBackMatter();
    public abstract void closeSpendingReportOutput();
 
@@ -57,9 +60,16 @@ public abstract class BudgetView implements BudgetViewInt
       setToLastBusinessDayBefore(endDate);
       endDate.add(Calendar.DATE, -1);
 
+      // Render the time period and header rows:
+      renderTimePeriodRow(startDate, endDate);
+      renderHeaderRow();
+
       // For each budget item in the budget:
       ResultSet rsbi = BudgetItem.getAllBudgetItems();
       BudgetItem budgetItem;
+      double totalIncome = 0;
+      double totalBudgeted = 0;
+      double totalSpent = 0;
       while (rsbi.next()) {
 
          // Create a budget item from the database row:
@@ -72,14 +82,22 @@ public abstract class BudgetView implements BudgetViewInt
           if (splits.size() > 0) {
 
             // Total the splits:
-            double total = 0;
+            double subTotal = 0;
             for (TransactionSplit split : splits
             ) {
-               total += split.getAmount();
+               subTotal += split.getAmount();
             }
 
+            // Save off the amounts for the totals row:
+            if (budgetItem.getAmount() < 0) {
+               totalBudgeted -= budgetItem.getAmount();
+            } else {
+               totalIncome += budgetItem.getAmount();
+            }
+            if (subTotal < 0) totalSpent -= subTotal;
+
             // Render the budget item:
-            renderBudgetItem(budgetItem, startDate, endDate, total);
+            renderBudgetItem(budgetItem, startDate, endDate, subTotal);
 
             // Render the splits for the budget item:
             for (TransactionSplit split : splits
@@ -88,6 +106,9 @@ public abstract class BudgetView implements BudgetViewInt
             }
          }
       }
+
+      // Render the totals row:
+      renderTotalRow(totalIncome, totalBudgeted, totalSpent);
 
       // Render any trailer matter:
       renderSpendingReportBackMatter();

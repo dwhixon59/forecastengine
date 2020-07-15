@@ -587,8 +587,9 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
                   // If the splits are not based on percentages, then use amounts:
                   if (budgetItemsForMerchant.get(i).getPercentage() == 0) {
-                     splits.add(new TransactionSplit((useEnteredAmounts) ? -enteredAmount :
-                             budgetItemsForMerchant.get(i).getAmount(), budgetItemsForMerchant.get(i), transaction,
+                     splits.add(new TransactionSplit(
+                             (useEnteredAmounts) ? enteredAmount : budgetItemsForMerchant.get(i).getAmount(),
+                             budgetItemsForMerchant.get(i), transaction,
                              null)
                      );
                   } else  // use the percentages:

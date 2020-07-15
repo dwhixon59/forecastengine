@@ -1,0 +1,1901 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+          xmlns:x="urn:schemas-microsoft-com:office:excel"
+          xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+>
+    <Styles>
+        <Style ss:ID="TimePeriod">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="16" ss:Color="#000000"
+                  ss:Bold="1"/>
+        </Style>
+        <Style ss:ID="HeaderRow">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="12" ss:Color="#000000"
+                  ss:Bold="1"/>
+        </Style>
+        <Style ss:ID="CenteredString">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"
+                  ss:Bold="1"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>
+        </Style>
+        <Style ss:ID="CategoryRow">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="12" ss:Color="#000000"
+                  ss:Bold="1"/>
+        </Style>
+        <Style ss:ID="BudgetItemRow">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="12" ss:Color="#000000"></Font>
+        </Style>
+        <Style ss:ID="SplitRow">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="12" ss:Color="#000000"
+                  ss:Bold="1"/>
+        </Style>
+        <Style ss:ID="Date">
+            <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>
+            <NumberFormat ss:Format="&quot;$&quot;#,##0"/>
+        </Style>
+        <Style ss:ID="Amount">
+            <NumberFormat ss:Format="&quot;$&quot;#,##0"/>
+        </Style>
+    </Styles>
+    <Worksheet ss:Name="Spending Report">
+        <Table ss:DefaultRowHeight="15">
+            <Column ss:Index="1" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Column ss:Index="2" ss:StyleID="Amount" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Column ss:Index="3" ss:StyleID="Amount" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Column ss:Index="4" ss:StyleID="Date" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Column ss:Index="5" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Column ss:Index="6" ss:AutoFitWidth="0" ss:Width="110"/>
+            <Row ss:Height="25" ss:StyleID="TimePeriod">
+                <Cell><Data ss:Type="String">05-29-2020 to 06-29-2020</Data></Cell>
+            </Row>
+            <Row ss:Height="18.75" ss:StyleID="HeaderRow">
+                <Cell><Data ss:Type="String">Category</Data></Cell>
+                <Cell><Data ss:Type="String">Payee</Data></Cell>
+                <Cell><Data ss:Type="String">Budgeted Amount</Data></Cell>
+                <Cell><Data ss:Type="String">Actual Amount</Data></Cell>
+                <Cell><Data ss:Type="String">Date</Data></Cell>
+                <Cell><Data ss:Type="String">Merchant</Data></Cell>
+                <Cell><Data ss:Type="String">Memo</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Automotive</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Car insurance</Data></Cell>
+                <Cell><Data ss:Type="Number">-209.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-208.06</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-208.06</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">State Farm</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Tolls</Data></Cell>
+                <Cell><Data ss:Type="Number">-20.72</Data></Cell>
+                <Cell><Data ss:Type="Number">-10.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-22-2020</Data></Cell>
+                <Cell><Data ss:Type="String">SunPass</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Boat</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Boat maintenance</Data></Cell>
+                <Cell><Data ss:Type="Number">-50.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-50.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-50.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dave's Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Boat Storage</Data></Cell>
+                <Cell><Data ss:Type="Number">-133.75</Data></Cell>
+                <Cell><Data ss:Type="Number">-133.75</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-133.75</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Sarasota Boat Storage and Repair</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Children</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Justin's College Fund</Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">School Expenses</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-17.98</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">NeedMyTranscript</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Graduation party invitations</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Clothing</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Children's clothes</Data></Cell>
+                <Cell><Data ss:Type="Number">-25.0</Data></Cell>
+                <Cell><Data ss:Type="Number">57.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">29.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">8.0</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">20.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Danielle's clothes</Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-25.209999999999994</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-25.11</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Poshmark</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-32.11</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Poshmark</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">26.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-16.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Poshmark</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">23.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Dave's clothes</Data></Cell>
+                <Cell><Data ss:Type="Number">-25.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-20.380000000000003</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">6.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">10.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">COSTCO</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-36.38</Data></Cell>
+                <Cell><Data ss:Type="Date">06-09-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">36.38</Data></Cell>
+                <Cell><Data ss:Type="Date">06-09-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dave's Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-36.38</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Belt</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Debt - Unsecured</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">AAdvantage Card - David</Data></Cell>
+                <Cell><Data ss:Type="Number">50.0</Data></Cell>
+                <Cell><Data ss:Type="Number">50.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">50.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">AAdvantage Credit Card</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Debt counseling payment</Data></Cell>
+                <Cell><Data ss:Type="Number">-514.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-514.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-514.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">InCharge Debt Solutions</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Undergrad student loan</Data></Cell>
+                <Cell><Data ss:Type="Number">-260.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-260.03</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-260.03</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Navient Corporation</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Entertainment</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">CBS All Access</Data></Cell>
+                <Cell><Data ss:Type="Number">-11.04</Data></Cell>
+                <Cell><Data ss:Type="Number">-11.04</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-11.04</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Apple</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Disney+</Data></Cell>
+                <Cell><Data ss:Type="Number">-7.92</Data></Cell>
+                <Cell><Data ss:Type="Number">-7.92</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-7.92</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Disney+</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">HBO Now</Data></Cell>
+                <Cell><Data ss:Type="Number">-14.99</Data></Cell>
+                <Cell><Data ss:Type="Number">-14.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-14.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Roku</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Movies</Data></Cell>
+                <Cell><Data ss:Type="Number">-20.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-15.25</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-4.5</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon Prime Video</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-3.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Vudu</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.76</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon Prime Video</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Netflix</Data></Cell>
+                <Cell><Data ss:Type="Number">-17.35</Data></Cell>
+                <Cell><Data ss:Type="Number">-17.35</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-17.35</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Netflix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Pandora</Data></Cell>
+                <Cell><Data ss:Type="Number">-10.91</Data></Cell>
+                <Cell><Data ss:Type="Number">-11.27</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-11.27</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Pandora</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Starz</Data></Cell>
+                <Cell><Data ss:Type="Number">-9.94</Data></Cell>
+                <Cell><Data ss:Type="Number">-9.94</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-9.94</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Apple</Data></Cell>
+                <Cell><Data ss:Type="String">Outlander</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">YouTube TV</Data></Cell>
+                <Cell><Data ss:Type="Number">-56.42</Data></Cell>
+                <Cell><Data ss:Type="Number">-56.42</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-56.42</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Google</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Financial</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Life insurance - Danielle</Data></Cell>
+                <Cell><Data ss:Type="Number">-45.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-44.63</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-44.63</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Banner Life</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Life insurance - David</Data></Cell>
+                <Cell><Data ss:Type="Number">-70.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-70.12</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">70.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-12-2020</Data></Cell>
+                <Cell><Data ss:Type="String">ATM Deposit</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-140.12</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Protective Life Insurance</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Savings</Data></Cell>
+                <Cell><Data ss:Type="Number">-25.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-475.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">100.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Transfer from account Weekly Spending</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-550.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-25.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Bill Pay Envelopes</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Food and Beverage</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Costco - monthly trip</Data></Cell>
+                <Cell><Data ss:Type="Number">-150.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-197.77</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-197.77</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">COSTCO</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Weekly grocery spending</Data></Cell>
+                <Cell><Data ss:Type="Number">-875.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-974.1400000000001</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.73</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-1.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-05-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-20.01</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-26.01</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-1.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-59.87</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">43.62</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-49.19</Data></Cell>
+                <Cell><Data ss:Type="Date">06-21-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Norman's Liquors</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-1.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-04-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-46.95</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.72</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.14</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-2.71</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Circle K</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">65.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-7.45</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">RaceTrac</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-18.08</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-297.52</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">COSTCO</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-12.8</Data></Cell>
+                <Cell><Data ss:Type="Date">06-05-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-5.87</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Speedway</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-22.06</Data></Cell>
+                <Cell><Data ss:Type="Date">06-21-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-184.93</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">39.99</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-5.86</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-64.07</Data></Cell>
+                <Cell><Data ss:Type="Date">06-21-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-22.3</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">CVS Pharmacy</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-16.48</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-24.68</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-4.94</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.15</Data></Cell>
+                <Cell><Data ss:Type="Date">06-12-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walmart</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-47.61</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-67.74</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Publix</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-8.24</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Granite cleaner</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-21.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Starbucks K cups</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-21.98</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Starbucks K cups</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-21.39</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Wild hare ears</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-3.51</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">Wine</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Gifts and Holidays</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Father's day</Data></Cell>
+                <Cell><Data ss:Type="Number">-150.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-2.8100000000000023</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">40.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-92.81</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Cyclonic vacuum</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">50.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dave's Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">Cyclonic vacuum</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Miscellaneous Gifts</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">12.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">12.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Health and Fitness</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Peloton class subscription</Data></Cell>
+                <Cell><Data ss:Type="Number">-41.73</Data></Cell>
+                <Cell><Data ss:Type="Number">-41.73</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-41.73</Data></Cell>
+                <Cell><Data ss:Type="Date">06-21-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Peloton</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">YMCA</Data></Cell>
+                <Cell><Data ss:Type="Number">-17.41</Data></Cell>
+                <Cell><Data ss:Type="Number">-19.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-19.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Sarasota Family YMCA</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Household</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Electronics</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-8.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-8.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Screen protector for Justin's phone</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">HOA Fees</Data></Cell>
+                <Cell><Data ss:Type="Number">-330.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-330.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-330.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Spending Envelopes</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Home goods</Data></Cell>
+                <Cell><Data ss:Type="Number">-50.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-217.42</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">30.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Weekly Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-107.91</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">The Pampered Chef</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-28.88</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Pier 1 Imports</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">120.0</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-47.6</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Bocce balls</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-48.09</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Cookie jar</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-32.1</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Cream and sugar set</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-39.9</Data></Cell>
+                <Cell><Data ss:Type="Date">06-05-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Duvet insert</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-14.95</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Soft Grip Tote</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-47.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Workbench light</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Home improvement</Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-413.69999999999993</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-51.31</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-47.88</Data></Cell>
+                <Cell><Data ss:Type="Date">06-21-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.4</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-245.03</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-17.45</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-5.83</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-18.46</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Bulbs for dining room spotlight</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-11.75</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lowe's</Data></Cell>
+                <Cell><Data ss:Type="String">Bulbs for the picture spotlightl</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-9.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Twisty ties</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Mortgage payment (PITI)</Data></Cell>
+                <Cell><Data ss:Type="Number">-2000.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-1805.3</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-1805.3</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Lakeview Loan Servicing LLC</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Income</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Danielle's net pay </Data></Cell>
+                <Cell><Data ss:Type="Number">4526.7</Data></Cell>
+                <Cell><Data ss:Type="Number">4529.04</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">2265.7</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">McConnaughhay, Coonrod, Pope, Weaver & Stern P.A.</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">2263.34</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">McConnaughhay, Coonrod, Pope, Weaver & Stern P.A.</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">David's net pay 1</Data></Cell>
+                <Cell><Data ss:Type="Number">3042.0</Data></Cell>
+                <Cell><Data ss:Type="Number">2892.39</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">2892.39</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">IBM</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">David's net pay 2</Data></Cell>
+                <Cell><Data ss:Type="Number">3042.0</Data></Cell>
+                <Cell><Data ss:Type="Number">2892.38</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">2892.38</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">IBM</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Misc. Income</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">0.01</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">0.01</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Wells Fargo Bank</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Medical</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Doctors</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-45.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-45.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-05-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Windom Allergy, Asthma and Sinus</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">OTC Medications</Data></Cell>
+                <Cell><Data ss:Type="Number">-20.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-6.909999999999998</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">15.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-16.99</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">CVS Pharmacy</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-4.92</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">CVS Pharmacy</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Prescriptions</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-70.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-60.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-01-2020</Data></Cell>
+                <Cell><Data ss:Type="String">CVS Pharmacy</Data></Cell>
+                <Cell><Data ss:Type="String">Tadalafil and one other</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Walgreens</Data></Cell>
+                <Cell><Data ss:Type="String">Testosterone</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Miscellaneous</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Visitations </Data></Cell>
+                <Cell><Data ss:Type="Number">-50.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-60.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-60.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Livingston's Amusements</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Online Services</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Dropbox</Data></Cell>
+                <Cell><Data ss:Type="Number">-11.99</Data></Cell>
+                <Cell><Data ss:Type="Number">-11.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-11.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-04-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dropbox.com</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">iCloud Storage</Data></Cell>
+                <Cell><Data ss:Type="Number">-0.99</Data></Cell>
+                <Cell><Data ss:Type="Number">-2.9699999999999998</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-0.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Apple</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-0.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Apple</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-0.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Apple</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">New York Times Cooking</Data></Cell>
+                <Cell><Data ss:Type="Number">-5.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-5.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-5.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">The New York Times</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Office 365</Data></Cell>
+                <Cell><Data ss:Type="Number">-10.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-9.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-9.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Microsoft</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Skype to Phone - Danielle</Data></Cell>
+                <Cell><Data ss:Type="Number">-2.99</Data></Cell>
+                <Cell><Data ss:Type="Number">-9.49</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.5</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Skype</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-2.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Skype</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Skype to Phone - David</Data></Cell>
+                <Cell><Data ss:Type="Number">-2.99</Data></Cell>
+                <Cell><Data ss:Type="Number">-2.99</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-2.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Skype</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">The New York Times</Data></Cell>
+                <Cell><Data ss:Type="Number">-15.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-15.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-15.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-04-2020</Data></Cell>
+                <Cell><Data ss:Type="String">The New York Times</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Personal care</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Danielle's Hair Products</Data></Cell>
+                <Cell><Data ss:Type="Number">-30.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-33.56</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-33.56</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Old Spice and Perfect Blonde shampoo</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Danielle's Skin Care and Makeup</Data></Cell>
+                <Cell><Data ss:Type="Number">-57.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-8.45</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-8.45</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Himalayan bath salts</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Supplements</Data></Cell>
+                <Cell><Data ss:Type="Number">-30.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-15.78</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-15.78</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Women's multi-vitamins</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Pets</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Veterinarians</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-33.49</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-33.49</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Animal Medical Clinic of Gulf Gate</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Spending Money</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Danielle's Spending Money</Data></Cell>
+                <Cell><Data ss:Type="Number">-200.0</Data></Cell>
+                <Cell><Data ss:Type="Number">12.340000000000003</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-14.31</Data></Cell>
+                <Cell><Data ss:Type="Date">06-08-2020</Data></Cell>
+                <Cell><Data ss:Type="String">QVC</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-7.84</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">QVC</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-12.54</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">QVC</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">65.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-17.97</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">QVC</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">David's Spending Money</Data></Cell>
+                <Cell><Data ss:Type="Number">-200.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-200.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dave's Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-100.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Dave's Spending Account</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Travel</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Travel Accessories</Data></Cell>
+                <Cell><Data ss:Type="Number">0.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-94.11</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-24.12</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">First aid kit and dog winter coat.</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-69.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-13-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Picnic basket</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Utilities</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Sarasota County Utilities</Data></Cell>
+                <Cell><Data ss:Type="Number">-96.37</Data></Cell>
+                <Cell><Data ss:Type="Number">-114.84</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-114.84</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Sarasota Country Utilities</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Smart phones</Data></Cell>
+                <Cell><Data ss:Type="Number">450.0</Data></Cell>
+                <Cell><Data ss:Type="Number">450.0</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">450.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">AAdvantage Credit Card</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Weekly spending</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Children's allowances</Data></Cell>
+                <Cell><Data ss:Type="Number">-80.0</Data></Cell>
+                <Cell><Data ss:Type="Number">35.01</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">40.0</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-4.99</Data></Cell>
+                <Cell><Data ss:Type="Date">06-04-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Greenlight Web Payments</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Date night</Data></Cell>
+                <Cell><Data ss:Type="Number">-250.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-97.37</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-97.37</Data></Cell>
+                <Cell><Data ss:Type="Date">06-03-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Bohemios Wine & Beer Tapas Bar</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Weekly Spending</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Dining Out</Data></Cell>
+                <Cell><Data ss:Type="Number">-250.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-410.5799999999999</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-21.22</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Burger King</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-40.75</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Missy's Cafe</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-17.84</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Panera Bread</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">4.65</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-28.07</Data></Cell>
+                <Cell><Data ss:Type="Date">06-12-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Asian Kitchen</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-48.88</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Missy's Cafe</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.04</Data></Cell>
+                <Cell><Data ss:Type="Date">06-05-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Taco Bell</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-51.88</Data></Cell>
+                <Cell><Data ss:Type="Date">06-14-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Missy's Cafe</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-4.93</Data></Cell>
+                <Cell><Data ss:Type="Date">06-07-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Taco Bell</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-13.38</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">SUBWAY</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-23.83</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Wendy's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-8.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Starbucks</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.96</Data></Cell>
+                <Cell><Data ss:Type="Date">06-07-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Target</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-6.96</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Starbucks</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.88</Data></Cell>
+                <Cell><Data ss:Type="Date">06-17-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Taco Bell</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-13.44</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Missy's Cafe</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-25.77</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Panera Bread</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-9.1</Data></Cell>
+                <Cell><Data ss:Type="Date">06-02-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Starbucks</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-10.58</Data></Cell>
+                <Cell><Data ss:Type="Date">06-23-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Wendy's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-22.0</Data></Cell>
+                <Cell><Data ss:Type="Date">06-20-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Missy's Cafe</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-24.47</Data></Cell>
+                <Cell><Data ss:Type="Date">05-31-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Culver's</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-8.55</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Shell Service Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-7.7</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Taco Bell</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="CategoryRow">
+                <Cell><Data ss:Type="String">Weekly spending</Data></Cell>
+            </Row>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Gas</Data></Cell>
+                <Cell><Data ss:Type="Number">-275.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-139.59</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-21.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-16-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-29.94</Data></Cell>
+                <Cell><Data ss:Type="Date">06-18-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-24.59</Data></Cell>
+                <Cell><Data ss:Type="Date">06-06-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-27.61</Data></Cell>
+                <Cell><Data ss:Type="Date">06-19-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-5.86</Data></Cell>
+                <Cell><Data ss:Type="Date">05-29-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-30.0</Data></Cell>
+                <Cell><Data ss:Type="Date">05-30-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Marathon Gas Station</Data></Cell>
+                <Cell><Data ss:Type="String">null</Data></Cell>
+            </Row>
+            <Row/>
+            <Row ss:StyleID="BudgetItemRow">
+                <Cell><Data ss:Type="String">Miscellaneous</Data></Cell>
+                <Cell><Data ss:Type="Number">-125.0</Data></Cell>
+                <Cell><Data ss:Type="Number">-7.8</Data></Cell>
+            </Row>
+            <Row>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="String"> </Data></Cell>
+                <Cell><Data ss:Type="Number">-7.8</Data></Cell>
+                <Cell><Data ss:Type="Date">06-15-2020</Data></Cell>
+                <Cell><Data ss:Type="String">Amazon</Data></Cell>
+                <Cell><Data ss:Type="String">Prohibition book</Data></Cell>
+            </Row>
+        </Table>
+    </Worksheet>
+</Workbook>
