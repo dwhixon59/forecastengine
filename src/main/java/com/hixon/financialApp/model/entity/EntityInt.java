@@ -1,9 +1,10 @@
 package com.hixon.financialApp.model.entity;
 
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.utility.Utility;
+import org.apache.commons.lang3.NotImplementedException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,7 +19,7 @@ public interface EntityInt {
    void setDirty(boolean dirty);
 
    // The base CRUD queries:
-   String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException;
+   String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException, NotImplementedException;
    String getInsertOnDuplicateUpdateQuery() throws BudgetException, EntityException, SQLException, ForecastException;
    String getUpdateByIdQuery() throws BudgetException;
    String getDeleteByIdQuery();

@@ -18,7 +18,7 @@ import java.util.List;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 import static com.hixon.financialApp.utility.Utility.setToLastBusinessDayBefore;
 
-public abstract class BudgetView implements BudgetViewInt
+public abstract class AbstractBudgetView extends AbstractView implements BudgetViewInt
 {
 
    /*

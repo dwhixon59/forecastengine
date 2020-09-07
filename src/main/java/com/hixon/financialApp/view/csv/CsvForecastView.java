@@ -3,14 +3,17 @@ package com.hixon.financialApp.view.csv;
 import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.Item;
+import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.ForecastView;
+import com.hixon.financialApp.view.base.AbstractForecastView;
+import com.hixon.financialApp.view.text.ItemsOfInterestReport;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -27,7 +30,7 @@ import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.*;
 
-public class CsvForecastView extends ForecastView {
+public class CsvForecastView extends AbstractForecastView {
 
    /*
     * Fields:
@@ -231,6 +234,11 @@ public class CsvForecastView extends ForecastView {
       }
 
       return forecastTransactions;
+   }
+
+   @Override
+   protected ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File file) {
+      return null;
    }
 
 

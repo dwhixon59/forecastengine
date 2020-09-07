@@ -8,14 +8,14 @@ import com.hixon.financialApp.model.register.FinancialInstitution;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.WellsFargoBank;
+import com.hixon.financialApp.notification.async.file.fileBasedNotificationService;
 import com.hixon.financialApp.utility.FinancialException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.async.file.fileBasedNotificationService;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
-import com.hixon.financialApp.view.excel.SpreadsheetBudgetView;
-import com.hixon.financialApp.view.excel.SpreadsheetForecastView;
-import com.hixon.financialApp.view.excel.SpreadsheetRegisterView;
+import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
+import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
+import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
 
 import java.sql.DriverManager;
 import java.util.Calendar;
@@ -27,18 +27,14 @@ public class Controller {
 
    public static void main(String[] args) throws Exception, BudgetException, ControllerException, RegisterException, ViewException, EntityException {
 
-      // Variables that are used throughout the goal processing:
-      Calendar startDate = null;
-      Forecast forecast = null;
-
       // Interact with the user via the command line for server operations:
       System.out.println("Create a command line transaction Utility.getResolver().");
       Utility.setResolver(new TransactionResolverCmdLine());
 
       // Use Spreadsheet XML as the view for the application:
-      Utility.setRegisterView(new SpreadsheetRegisterView());
-      Utility.setBudgetView(new SpreadsheetBudgetView());
-      Utility.setForecastView(new SpreadsheetForecastView());
+      Utility.setRegisterView(new SpreadsheetXmlRegisterView());
+      Utility.setBudgetView(new SpreadsheetXmlBudgetView());
+      Utility.setForecastView(new SpreadsheetXmlForecastView());
 
       // Use the file based notification service:
       Utility.setNotificationService(new fileBasedNotificationService());
@@ -53,14 +49,16 @@ public class Controller {
                  "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
 
          // Process the goals:
+         Calendar startDate;
          String filename = null;
          boolean inSync = true;
          Register register = null;
          FinancialInstitution financialInstitution = null;
+         String budgetName = "Bill Pay Account";
+         Forecast forecast = Forecast.getMostRecent();
          for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                case "processSkippedTransactions":
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   if (register == null) register = Register.getByName("Bill Pay Account");
                   if (financialInstitution == null) financialInstitution = new WellsFargoBank(register);
                   inSync = register.processSkippedTransactions(forecast);
@@ -72,7 +70,6 @@ public class Controller {
 
                case "importRegisterTransactions":
                   Utility.getResolver().say("Importing the register transactions.");
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   inSync = importer.importCsvRegisterTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The transactions were successfully imported.");
@@ -83,7 +80,6 @@ public class Controller {
                   break;
 
                case "importProvisionalRegisterTransactions":
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   inSync = importer.importCsvProvisionalTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The provisional transactions were successfully imported.");
@@ -121,7 +117,6 @@ public class Controller {
                   double startingBalance = 0;
                   int numberOfMonths = 12;
                   int minimumBalance = 1000;
-                  String budgetName = "Bill Pay Account";
                   forecast = new Forecast(budgetName, startDate, numberOfMonths, startingBalance, minimumBalance);
                   forecastEngine.generateForecast(forecast, startDate);
                   Utility.getResolver().say("The forecast was successfully generated");
@@ -129,7 +124,6 @@ public class Controller {
 
                case "updateFromExternalSource":
                   Utility.getResolver().say("Updating the forecast from an external source.");
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   if (forecast != null) {
                      Utility.getForecastView().updateFromExternalSource();
                   } else {
@@ -138,34 +132,39 @@ public class Controller {
                   break;
 
                case "saveForecast":
-                  if (forecast == null) {
-                     Utility.getResolver().say("You requested to save the forecast, but there isn't a forecast to save.");
-                  } else {
-                     Utility.getResolver().say("Saving the forecast.");
-                     forecast.saveAll();
-                     Utility.getResolver().say("The forecast was successfully saved to the database.");
-                  }
+                  Utility.getResolver().say("Saving the forecast.");
+                  forecast.saveAll();
+                  Utility.getResolver().say("The forecast was successfully saved to the database.");
                   break;
 
                case "updateForecast":
                   Utility.getResolver().say("Updating the forecast.");
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   forecast.updateForecast();
                   Utility.getResolver().say("The forecast was successfully updated.");
                   break;
 
                case "renderShortTermForecast":
                   Utility.getResolver().say("Rendering the short term forecast.");
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   Utility.getForecastView().renderShortTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the short term forecast.");
                   break;
 
                case "renderLongTermForecast":
                   Utility.getResolver().say("Rendering the long term forecast.");
-                  if (forecast == null) forecast = Forecast.getMostRecent();
                   Utility.getForecastView().renderLongTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the long term forecast.");
+                  break;
+
+               case "renderItemsOfInterestReport":
+                  Utility.getResolver().say("Rendering the Items of Interest Report.");
+                  Utility.getNotificationService().sendItemsOfInterestReport();
+                  Utility.getResolver().say("Successfully rendered the Items of Interest Report.");
+                  break;
+
+               case "renderNewTransactionSummaryReport":
+                  Utility.getResolver().say("Rendering the New Transaction Summary Report.");
+                  Utility.getNotificationService().sendNewTransactionSummaryReport();
+                  Utility.getResolver().say("Successfully rendered the New Transaction Summary Report.");
                   break;
 
                default:

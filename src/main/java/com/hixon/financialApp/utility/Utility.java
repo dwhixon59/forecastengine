@@ -1,8 +1,8 @@
 package com.hixon.financialApp.utility;
 
 import com.hixon.financialApp.controller.QuitException;
-import com.hixon.financialApp.model.User;
-import com.hixon.financialApp.view.async.base.NotificationServiceInt;
+import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.*;
 import org.jetbrains.annotations.NotNull;
 

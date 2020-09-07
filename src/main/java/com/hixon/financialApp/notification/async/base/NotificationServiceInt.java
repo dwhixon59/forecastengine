@@ -1,11 +1,13 @@
-package com.hixon.financialApp.view.async.base;
+package com.hixon.financialApp.notification.async.base;
 
-import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -25,5 +27,11 @@ public interface NotificationServiceInt {
    // Send a request to the specified user to classify a transaction:
    void requestAssignSplits(User user, Transaction transaction) throws IOException, EntityException, RegisterException,
            ParseException, BudgetException, SQLException;
+
+   // Create an items of interest report and send it to a user:
+   void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException, SQLException, BudgetException, ViewException;
+
+   // Create a New Transactions Summary Report and send it to a user:"
+    void sendNewTransactionSummaryReport() throws ForecastException, ViewException, IOException, EntityException, SQLException, BudgetException, RegisterException;
 }
 

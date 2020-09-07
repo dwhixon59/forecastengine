@@ -34,6 +34,7 @@ public class Transaction extends IndependentEntity {
    private UUID idMerchant = null;
    private String merchantPayee = null;
    private boolean isImproper = false;
+   private boolean isNew = false;
    private String importRecordId = null;
    private Merchant merchant;
 
@@ -42,20 +43,20 @@ public class Transaction extends IndependentEntity {
    }
 
    private static final String selectQuery = "select bin_to_uuid(idTransaction) as idTransaction, postDate, " +
-           "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
+           "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, importRecordId, " +
            "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant" +
            " from forecastdatabase.transaction ";
 
    private static final String insertQuery = "insert into forecastdatabase.transaction (idTransaction, " +
-           "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, importRecordId, " +
-           "Register_idRegister, Merchant_idMerchant) values(";
+           "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
+           "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
 
    @Override
    public String getInsertQuery() {
       return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
               Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
-              checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", \"" + importRecordId +
-              "\", uuid_to_bin('" + register.getId() + "'), uuid_to_bin('" + getIdMerchant() + "'))";
+              checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", " + isNew + ", \"" +
+              importRecordId + "\", uuid_to_bin('" + register.getId() + "'), uuid_to_bin('" + getIdMerchant() + "'))";
    }
 
    @Override
@@ -63,15 +64,17 @@ public class Transaction extends IndependentEntity {
       return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
               ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
               + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
-              + balance + ", isImproper = " + isImproper + ", importRecordId = \"" + importRecordId + "\", " +
-              "Register_idRegister = uuid_to_bin('" + register.getId() + "'), Merchant_idMerchant = uuid_to_bin('" +
-              getIdMerchant() + "')";
+              + balance + ", isImproper = " + isImproper + ", isNew = " + isNew + ", importRecordId = \"" +
+              importRecordId + "\", Register_idRegister = uuid_to_bin('" + register.getId() + "'), Merchant_idMerchant = " +
+              "uuid_to_bin('" + getIdMerchant() + "')";
    }
 
    private static final String updateQuery = "update forecastdatabase.transaction set idTransaction = ?, " +
            "set postdate = ?, set authorizationDate = ?, set amount = ?, set cleared = ?, set checkNumber = ?, " +
-           "set payee = ?, set balance = ?, set isImproper = ?, set importRecordId = ?, set Register_idRegister = ?, " +
-           "set Merchant_idMerchant = ? where ";
+           "set payee = ?, set balance = ?, set isImproper = ?, set isNew = ?, set importRecordId = ?, " +
+           "set Register_idRegister = ?, set Merchant_idMerchant = ? where ";
+
+   public static String getUpdateIsNewQuery() { return "update forecastdatabase.transaction set isNew = false "; }
 
    @Override
    public String getUpdateByIdQuery() {
@@ -219,6 +222,14 @@ public class Transaction extends IndependentEntity {
       this.isImproper = isImproper;
    }
 
+   public boolean getIsNew() {
+      return isNew;
+   }
+
+   public void setIsNew(boolean isNew) {
+      this.isNew = isNew;
+   }
+
    public String getImportRecordId() {
       return importRecordId;
    }
@@ -259,6 +270,7 @@ public class Transaction extends IndependentEntity {
       }
       balance = 0;
       isImproper = false;
+      isNew = true;
       importRecordId = null;
       this.register = register;
       idRegister = register.getId();
@@ -299,6 +311,7 @@ public class Transaction extends IndependentEntity {
       amount = rs.getDouble("amount");
       balance = rs.getDouble("balance");
       isImproper = rs.getBoolean("isImproper");
+      isNew = rs.getBoolean("isNew");
       importRecordId = rs.getString("importRecordId");
       idRegister = UUID.fromString(rs.getString("idRegister"));
       idMerchant = UUID.fromString(rs.getString("idMerchant"));
@@ -342,7 +355,7 @@ public class Transaction extends IndependentEntity {
                  Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
                  checkNumber + ", Merchant = " + merchantName + ", amount = " + formatDollarAmount(amount) +
                  ",\n\tPayee = " + payee + ", Balance = " + balance + ", Register = " + getRegister().getRegisterName()
-                 + ", Merchant payee = " + merchantPayee + ", Disputed = " + isImproper;
+                 + ", Merchant payee = " + merchantPayee + ", Disputed = " + isImproper + ", isNew = " + isNew;
       } catch (EntityException | SQLException | RegisterException e) {
          e.printStackTrace();
       }
@@ -362,9 +375,10 @@ public class Transaction extends IndependentEntity {
          String registerNameString = (register != null) ? "\tRegister name = " + register.getRegisterName() + "\n" : "";
          String merchantPayeeString = (merchantPayee != null) ? "\tMerchant payee = " + merchantPayee + "\n" : "";
          String disputedString = (isImproper) ? "\tDisputed transaction.\n" : "";
+         String isNewString = (isNew) ? "\tNew Transaction.\n" : "";
          s = new StringBuilder().append("Transaction:  ").append(importRecordId).append("\n").append(postDateString).
                  append(checkNumberString).append(merchantString).append(amountString).append(balanceString).
-                 append(registerNameString).append(merchantPayeeString).append(disputedString).toString();
+                 append(registerNameString).append(merchantPayeeString).append(disputedString).append(isNewString).toString();
       } catch (EntityException | SQLException | RegisterException e) {
          e.printStackTrace();
       }
@@ -392,12 +406,19 @@ public class Transaction extends IndependentEntity {
    }
 
 
+   // Get a list of transactions that have not been previously reported on:
+   public static ResultSet getNewTransactions(Register register) throws EntityException {
+      String query = getSelectQuery() + " where isNew = true order by postDate asc";
+      return getRS(query, "attempting to retieve a list of transactions that were previously " +
+              "skipped during the import process.");
+   }
+
+
    // Get a list of transactions that were previously skipped during the importRegisterTransactions() process.  We know
    // they were skipped because either there is no merchant assigned, or there are no splits assigned, or the
    // transactions has not been reconciled:
    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
       Calendar startDate = forecast.getStartDate();
-      Utility.setToLastBusinessDayBefore(startDate);
       String query = getSelectQuery() + " where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " " +
               "and idTransaction not in " +
               "(select idTransaction from Transaction " +

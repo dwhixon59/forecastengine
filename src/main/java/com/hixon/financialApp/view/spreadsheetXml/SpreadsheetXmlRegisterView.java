@@ -1,9 +1,13 @@
-package com.hixon.financialApp.view.excel;
+package com.hixon.financialApp.view.spreadsheetXml;
 
+import com.hixon.financialApp.model.entity.Entity;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.RegisterViewInt;
+import com.hixon.financialApp.view.base.AbstractRegisterView;
+import com.hixon.financialApp.view.text.NewTransactionSummaryReport;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
@@ -12,8 +16,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.List;
 
-public class SpreadsheetRegisterView implements RegisterViewInt {
+public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
 
     // Create the tab delimited file with the forecast data to import into Excel:
     @Override
@@ -133,5 +138,10 @@ public class SpreadsheetRegisterView implements RegisterViewInt {
             ve.initCause(e);
             throw ve;
         }
+    }
+
+    @Override
+    protected NewTransactionSummaryReport getNewTransactionSummaryReport(User user, List<Entity> items, File file) {
+        return null;
     }
 }

@@ -1,4 +1,4 @@
-package com.hixon.financialApp.model;
+package com.hixon.financialApp.model.user;
 
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;

@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import org.apache.commons.csv.CSVRecord;
 
@@ -12,9 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
-import java.util.UUID;
+import java.util.*;
 
 public class BudgetItem extends Item {
 
@@ -31,6 +30,7 @@ public class BudgetItem extends Item {
    private static final String insertQuery = "insert into ForecastDatabase.Budget_Item (idBudgetItem, category, payee, " +
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Budget_idBudget) values (";
+
 
    @Override
    public String getInsertQuery() throws BudgetException {
@@ -325,5 +325,19 @@ public class BudgetItem extends Item {
 
       String query = getSelectQuery() + " order by category, payee";
       return EntityInt.getRS(query, "getting the budget items for a MTD spending report");
+   }
+
+   // Get a list of the items of interest for a specific user:
+   public static List<BudgetItem> getItemsOfInterest(User user) throws EntityException, SQLException, BudgetException {
+      List<BudgetItem> items = new ArrayList<>();
+
+      String query = getSelectQuery() + "where user = '" + user + "' order by category asc, payee asc";
+      ResultSet rs = EntityInt.getRS(query, " while retrieving a list of items of interest for the user "
+              + user + ".");
+      while (rs.next()) {
+         items.add(new BudgetItem(rs));
+      }
+
+      return items;
    }
 }

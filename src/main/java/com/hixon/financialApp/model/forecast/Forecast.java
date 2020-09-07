@@ -348,6 +348,8 @@ public class Forecast extends IndependentEntity {
    public void updateForecast() throws Exception, EntityException, BudgetException, QuitException, RegisterException {
 
       // Get the starting date of the forecast to update:
+      Utility.getResolver().say("Updating the forecast.  WARNING:  Normally this should begin with the first of next " +
+              "month.");
       Calendar startDate = Utility.askStartDate();
 
       /*

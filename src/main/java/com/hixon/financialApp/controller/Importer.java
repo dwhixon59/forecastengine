@@ -1,6 +1,5 @@
 package com.hixon.financialApp.controller;
 
-import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -9,6 +8,7 @@ import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.*;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialException;
 import com.hixon.financialApp.view.ViewException;
 import org.apache.commons.csv.CSVFormat;

@@ -1,4 +1,4 @@
-package com.hixon.financialApp.view.excel;
+package com.hixon.financialApp.view.spreadsheetXml;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -7,7 +7,7 @@ import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.BudgetView;
+import com.hixon.financialApp.view.base.AbstractBudgetView;
 import org.apache.commons.text.StringEscapeUtils;
 
 import java.io.FileNotFoundException;
@@ -16,7 +16,7 @@ import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.Calendar;
 
-public class SpreadsheetBudgetView extends BudgetView {
+public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
 
    /*
     * Fields:
@@ -48,12 +48,12 @@ public class SpreadsheetBudgetView extends BudgetView {
    /*
     * Constructors:
     */
-   public SpreadsheetBudgetView(String spendingReportFilename, String encoding) {
+   public SpreadsheetXmlBudgetView(String spendingReportFilename, String encoding) {
       this.spendingReportFilename = spendingReportFilename;
       this.encoding = encoding;
    }
 
-   public SpreadsheetBudgetView() {
+   public SpreadsheetXmlBudgetView() {
       this.spendingReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "SpendingReport.xml";
       this.encoding = "UTF-8";

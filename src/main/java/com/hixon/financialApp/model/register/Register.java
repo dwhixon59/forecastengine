@@ -4,6 +4,7 @@ import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
@@ -39,7 +40,7 @@ public class Register extends IndependentEntity {
    private List<Transaction> significantEvents = new ArrayList<Transaction>();
 
 
-   /*
+    /*
     * Getters and setters:
     */
    public UUID getId() {
@@ -368,4 +369,36 @@ public class Register extends IndependentEntity {
       return forecast.getInSync();
 
    } // End processSkippedTransactions().
+
+
+   /**
+    * Get a list of transactions that haven't been reported on before:
+    *
+    * @return List<Entity>  A list of transactions.
+    */
+   public static List<Entity> getNewTransactions(Register register) throws SQLException, EntityException {
+
+      final List<Entity> items = new ArrayList<>();
+
+      // Get a results set of the transactions that haven't been reported on before:
+      ResultSet rs = Transaction.getNewTransactions(register);
+
+      // Then for each transactions in the result set:
+      while (rs.next()) {
+
+            // add it to the list of new transactions:
+            items.add(new Transaction(rs));
+      }
+
+      return items;
+   }
+
+   /**
+    * Set the isNew flag for transactions in this register to false to reflect that the transactions have all been
+    * reported on already.
+    */
+   public void setTransactionsToNotNew() throws EntityException, RegisterException {
+      EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery(), "updated the transactions in Register " +
+              registerName + " to not new.");
+   }
 }

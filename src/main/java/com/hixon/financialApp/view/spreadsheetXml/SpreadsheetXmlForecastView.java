@@ -1,25 +1,25 @@
-package com.hixon.financialApp.view.excel;
+package com.hixon.financialApp.view.spreadsheetXml;
 
 import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.Item;
+import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.ForecastView;
+import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
+import com.hixon.financialApp.view.text.ItemsOfInterestReport;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
 
-public class SpreadsheetForecastView extends ForecastView {
+public class SpreadsheetXmlForecastView extends AbstractForecastView {
 
    protected String longTermForecastFilename;
    protected String shortTermForecastFilename;
@@ -27,7 +27,7 @@ public class SpreadsheetForecastView extends ForecastView {
    protected String encoding;
    private PrintWriter writer;
    private String lastDate = "";
-   private boolean firstItem;
+   private boolean firstItem = true;
    private boolean firstItemInMonth;
    private String category;
    private String lastCategory;
@@ -65,12 +65,16 @@ public class SpreadsheetForecastView extends ForecastView {
       this.encoding = encoding;
    }
 
+   @Override
+   protected ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File file) {
+      return null;
+   }
+
 
    /*
     * Constructors:
     */
-
-   public SpreadsheetForecastView() {
+   public SpreadsheetXmlForecastView() {
       super();
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "ShortTermForecast.xml";
@@ -79,8 +83,8 @@ public class SpreadsheetForecastView extends ForecastView {
       encoding = "UTF-8";
    }
 
-   public SpreadsheetForecastView(String shortTermForecastFilename, String longTermForecastFilename,
-                                  String importForecastFilename, String encoding) {
+   public SpreadsheetXmlForecastView(String shortTermForecastFilename, String longTermForecastFilename,
+                                     String importForecastFilename, String encoding) {
       super();
       this.shortTermForecastFilename = shortTermForecastFilename;
       this.longTermForecastFilename = longTermForecastFilename;
@@ -162,6 +166,11 @@ public class SpreadsheetForecastView extends ForecastView {
             writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0\"/>");
          writer.println("\t</Style>");
 
+         // The Amount column style:
+         writer.println("\t<Style ss:ID=\"Balance\">");
+            writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0;[Red]&quot;$&quot;#,##0\"/>");
+         writer.println("\t</Style>");
+
       writer.println("</Styles>");
 
       // Define the sheet and the table:
@@ -187,7 +196,7 @@ public class SpreadsheetForecastView extends ForecastView {
       writer.println("\t\t<Column ss:Index=\"5\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
       // The running balance column:
-      writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+      writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Balance\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
       // A blank column for spacing between a right justified column followed by a left justified column:
       writer.println("\t\t<Column ss:Index=\"7\" ss:AutoFitWidth=\"0\" ss:Width=\"20\"/>");
@@ -210,10 +219,13 @@ public class SpreadsheetForecastView extends ForecastView {
 
    @Override
    public void renderMonthHeader(Calendar plannedDate) {
+
       writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"MonthRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Utility.calendarDateToMonthYearLongDate(plannedDate) +
               "</Data></Cell>");
+      writer.println("\t\t\t<cell/><cell/><cell/><cell/><cell ss:StyleID=\"Balance\" />");
       writer.println("\t\t</Row>");
+
       writer.println("\t\t<Row ss:Height=\"18.75\" ss:StyleID=\"HeaderRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Date</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Category</Data></Cell>");
@@ -272,15 +284,17 @@ public class SpreadsheetForecastView extends ForecastView {
 
       // The running balance:
       if (firstItem) {
-         writer.println("\t\t\t<Cell><Data ss:Type=\"Number\">" + Utility.doubleToInt(forecastTransaction.getRunningBalance()) +
-                 "</Data></Cell>");
+         writer.println("\t\t\t<Cell ss:StyleID=\"Balance\" ss:Formula=\"=R[-2]C+RC[-2]-RC[-1]\"><Data ss:Type=\"Number\"/>" +
+                 "</Cell>");
          firstItem = false;
          firstItemInMonth = false;
       } else if (firstItemInMonth) {
-         writer.println("\t\t\t<Cell ss:Formula=\"=R[-3]C+RC[-2]-RC[-1]\"><Data ss:Type=\"Number\"></Data></Cell>");
+         writer.println("\t\t\t<Cell ss:StyleID=\"Balance\" ss:Formula=\"=R[-3]C+RC[-2]-RC[-1]\"><Data ss:Type=\"Number\">" +
+                 "</Data></Cell>");
          firstItemInMonth = false;
       } else {
-         writer.println("\t\t\t<Cell ss:Formula=\"=R[-1]C+RC[-2]-RC[-1]\"><Data ss:Type=\"Number\"></Data></Cell>");
+         writer.println("\t\t\t<Cell ss:StyleID=\"Balance\" ss:Formula=\"=R[-1]C+RC[-2]-RC[-1]\"><Data ss:Type=\"Number\">" +
+                 "</Data></Cell>");
       }
 
       // A blank column to separate a right justified column from a left justified column:

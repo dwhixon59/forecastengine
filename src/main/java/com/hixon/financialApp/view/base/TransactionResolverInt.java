@@ -2,7 +2,6 @@ package com.hixon.financialApp.view.base;
 
 import com.hixon.financialApp.controller.Importer;
 import com.hixon.financialApp.controller.QuitException;
-import com.hixon.financialApp.model.User;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -12,6 +11,7 @@ import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.view.ViewException;
 
 import java.io.IOException;
