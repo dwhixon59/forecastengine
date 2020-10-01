@@ -5,6 +5,7 @@ import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
@@ -109,7 +110,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
 
    @Override
    public void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException,
-           SQLException, BudgetException, ViewException {
+           SQLException, BudgetException, ViewException, RegisterException {
       TextForecastView textForecastView = new TextForecastView();
       List<UserResource> reports = textForecastView.renderItemsOfInterestReport();
       for (UserResource userResource: reports
@@ -120,14 +121,17 @@ public class fileBasedNotificationService implements NotificationServiceInt {
    }
 
    @Override
-   public void sendNewTransactionSummaryReport() throws ForecastException, ViewException, IOException, EntityException,
+   public void sendNewTransactionSummaryReport(Register register) throws ForecastException, ViewException, IOException, EntityException,
            SQLException, BudgetException, RegisterException {
-      TextRegisterView textRegisterView = new TextRegisterView();
+      TextRegisterView textRegisterView = new TextRegisterView(register);
       List<UserResource> reports = textRegisterView.renderNewTransactionSummaryReport();
       for (UserResource userResource: reports
       ) {
          Utility.getResolver().say("New Transaction Summary report for user " + userResource.getUser().getFirstName() +
                  " written to the file " + userResource.getFile().getAbsolutePath());
       }
+
+      // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
+      //register.setTransactionsToNotNew();
    }
 }

@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
@@ -29,9 +30,9 @@ public interface NotificationServiceInt {
            ParseException, BudgetException, SQLException;
 
    // Create an items of interest report and send it to a user:
-   void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException, SQLException, BudgetException, ViewException;
+   void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException, SQLException, BudgetException, ViewException, RegisterException;
 
    // Create a New Transactions Summary Report and send it to a user:"
-    void sendNewTransactionSummaryReport() throws ForecastException, ViewException, IOException, EntityException, SQLException, BudgetException, RegisterException;
+    void sendNewTransactionSummaryReport(Register register) throws ForecastException, ViewException, IOException, EntityException, SQLException, BudgetException, RegisterException;
 }
 

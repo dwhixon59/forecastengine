@@ -25,7 +25,11 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
     /*
      * Fields:
      */
-    protected Register register = null;
+    protected Register register;
+
+    public AbstractRegisterView(Register register) {
+        this.register = register;
+    }
 
     /*
      * Getters and Setters:
@@ -56,14 +60,11 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
             }
         }
 
-        // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
-        register.setTransactionsToNotNew();
-
         return reports;
     }
 
     protected UserResource renderNewTransactionSummaryReport(User user) throws EntityException, SQLException, BudgetException,
-            IOException, ViewException, ForecastException {
+            IOException, ViewException, ForecastException, RegisterException {
 
         UserResource userResource = null;
         File NewTransactionSummaryReportFile = File.createTempFile("NewTransactionSummaryReport_" + user.getFirstName() + "_",
@@ -78,9 +79,9 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
     }
 
     protected boolean renderNewTransactionSummaryReport(User user, File file) throws EntityException, SQLException, BudgetException,
-            FileNotFoundException, UnsupportedEncodingException, ViewException, ForecastException {
+            FileNotFoundException, UnsupportedEncodingException, ViewException, ForecastException, RegisterException {
 
-        // Get a set of the New Transaction Summary of the current user:
+        // Get a list of the new transactions for the summary report:
         List<Entity> items = Collections.unmodifiableList(Register.getNewTransactions(register));
 
         // Render an New Transaction Summary report for those items:

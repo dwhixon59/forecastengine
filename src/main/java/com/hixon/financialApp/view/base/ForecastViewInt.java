@@ -34,14 +34,14 @@ public interface ForecastViewInt {
 
    // Render items of interest report for a specific user:
    UserResource renderItemsOfInterestReport(User user) throws EntityException, SQLException, BudgetException, IOException,
-           ViewException, ForecastException;
+           ViewException, ForecastException, RegisterException;
 
    // Render items of interest report for a specific user to a specific file:
    boolean renderItemsOfInterestReport(User user, File file) throws EntityException, SQLException, BudgetException, FileNotFoundException,
-           UnsupportedEncodingException, ViewException, ForecastException;
+           UnsupportedEncodingException, ViewException, ForecastException, RegisterException;
 
    // Render the items of interest report for all users:
    List<UserResource> renderItemsOfInterestReport() throws EntityException, SQLException, BudgetException, IOException,
-           ViewException, ForecastException;
+           ViewException, ForecastException, RegisterException;
 
 }

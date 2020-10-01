@@ -16,7 +16,7 @@ public class Budget extends IndependentEntity {
     */
    private String budgetName = null;
    private static final String selectQuery = "select bin_to_uuid(idBudget) as idbudget, name from " +
-           "ForecastDatabase.Budget ";
+           "budget ";
 
 
    /*

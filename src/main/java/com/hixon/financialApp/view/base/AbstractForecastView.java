@@ -118,8 +118,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         Calendar startDate = Utility.askStartDate();
 
         // Get the starting balance:
-        double startingBalance = 0;
-        double runningBalance = startingBalance;
+        double runningBalance = 0;
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();
@@ -303,7 +302,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     @Override
     public List<UserResource> renderItemsOfInterestReport() throws EntityException, SQLException, BudgetException, IOException,
-            ViewException, ForecastException {
+            ViewException, ForecastException, RegisterException {
 
         // Create a holder for the individual user reports:
         List<UserResource> reports = new ArrayList<>();
@@ -327,7 +326,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     @Override
     public UserResource renderItemsOfInterestReport(User user) throws EntityException, SQLException, BudgetException,
-            IOException, ViewException, ForecastException {
+            IOException, ViewException, ForecastException, RegisterException {
 
         UserResource userResource = null;
         File itemsOfInterestReportFile = File.createTempFile("ItemsOfInterestReport_" + user.getFirstName() + "_",
@@ -343,7 +342,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     @Override
     public boolean renderItemsOfInterestReport(User user, File file) throws EntityException, SQLException, BudgetException,
-            FileNotFoundException, UnsupportedEncodingException, ViewException, ForecastException {
+            FileNotFoundException, UnsupportedEncodingException, ViewException, ForecastException, RegisterException {
 
         // Get a set of the items of interest of the current user:
         List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getForecastTransactionsOfInterest(user));

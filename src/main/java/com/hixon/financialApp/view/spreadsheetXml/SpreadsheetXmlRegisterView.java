@@ -1,6 +1,7 @@
 package com.hixon.financialApp.view.spreadsheetXml;
 
 import com.hixon.financialApp.model.entity.Entity;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
@@ -19,6 +20,10 @@ import java.util.GregorianCalendar;
 import java.util.List;
 
 public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
+
+    public SpreadsheetXmlRegisterView(Register register) {
+        super(register);
+    }
 
     // Create the tab delimited file with the forecast data to import into Excel:
     @Override

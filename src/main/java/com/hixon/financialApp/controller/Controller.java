@@ -1,5 +1,6 @@
 package com.hixon.financialApp.controller;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -31,11 +32,6 @@ public class Controller {
       System.out.println("Create a command line transaction Utility.getResolver().");
       Utility.setResolver(new TransactionResolverCmdLine());
 
-      // Use Spreadsheet XML as the view for the application:
-      Utility.setRegisterView(new SpreadsheetXmlRegisterView());
-      Utility.setBudgetView(new SpreadsheetXmlBudgetView());
-      Utility.setForecastView(new SpreadsheetXmlForecastView());
-
       // Use the file based notification service:
       Utility.setNotificationService(new fileBasedNotificationService());
 
@@ -45,14 +41,22 @@ public class Controller {
       try {
          // Use a MySQL database for persistence:
          Utility.getResolver().say("Connect to the database.");
+//         com.hixon.financialApp.utility.Utility.setDbConnection(DriverManager.getConnection(
+//                 "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
          com.hixon.financialApp.utility.Utility.setDbConnection(DriverManager.getConnection(
-                 "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
+                 "jdbc:mysql://financialappinstance1.ctgwj8jkemeb.us-east-1.rds.amazonaws.com:3306/forecastdatabase",
+                 "admin", "***REMOVED-CREDENTIAL***59"));
+
+         // Use Spreadsheet XML as the view for the application:
+         Utility.setRegisterView(new SpreadsheetXmlRegisterView(Register.getByName("Bill Pay Account")));
+         Utility.setBudgetView(new SpreadsheetXmlBudgetView(Budget.getByName("Bill Pay Account")));
+         Utility.setForecastView(new SpreadsheetXmlForecastView(Forecast.getMostRecent()));
 
          // Process the goals:
          Calendar startDate;
          String filename = null;
          boolean inSync = true;
-         Register register = null;
+         Register register = Register.getByName("Bill Pay Account");
          FinancialInstitution financialInstitution = null;
          String budgetName = "Bill Pay Account";
          Forecast forecast = Forecast.getMostRecent();
@@ -163,7 +167,7 @@ public class Controller {
 
                case "renderNewTransactionSummaryReport":
                   Utility.getResolver().say("Rendering the New Transaction Summary Report.");
-                  Utility.getNotificationService().sendNewTransactionSummaryReport();
+                  Utility.getNotificationService().sendNewTransactionSummaryReport(register);
                   Utility.getResolver().say("Successfully rendered the New Transaction Summary Report.");
                   break;
 

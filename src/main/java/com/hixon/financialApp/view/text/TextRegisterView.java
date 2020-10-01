@@ -1,6 +1,7 @@
 package com.hixon.financialApp.view.text;
 
 import com.hixon.financialApp.model.entity.Entity;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractRegisterView;
@@ -12,6 +13,10 @@ import java.util.Calendar;
 import java.util.List;
 
 public class TextRegisterView extends AbstractRegisterView {
+
+    public TextRegisterView(Register register) {
+        super(register);
+    }
 
     @Override
     public boolean renderTransactionReport(Calendar startDate) throws FileNotFoundException, UnsupportedEncodingException, ViewException {

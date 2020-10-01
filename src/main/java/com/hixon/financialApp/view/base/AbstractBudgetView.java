@@ -1,5 +1,6 @@
 package com.hixon.financialApp.view.base;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -21,7 +22,13 @@ import static com.hixon.financialApp.utility.Utility.setToLastBusinessDayBefore;
 public abstract class AbstractBudgetView extends AbstractView implements BudgetViewInt
 {
 
-   /*
+    private final Budget budget;
+
+    public AbstractBudgetView(Budget budget) {
+        this.budget = budget;
+    }
+
+    /*
     *  Helper methods:
     */
    public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;

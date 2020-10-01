@@ -1,5 +1,6 @@
 package com.hixon.financialApp.view.spreadsheetXml;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -28,7 +29,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
    private String encoding;
 
 
-   /*
+    /*
     * Getters and setters:
     */
    public String getSpendingReportFilename() {
@@ -48,12 +49,14 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
    /*
     * Constructors:
     */
-   public SpreadsheetXmlBudgetView(String spendingReportFilename, String encoding) {
+   public SpreadsheetXmlBudgetView(Budget budget, String spendingReportFilename, String encoding) {
+      super(budget);
       this.spendingReportFilename = spendingReportFilename;
       this.encoding = encoding;
    }
 
-   public SpreadsheetXmlBudgetView() {
+   public SpreadsheetXmlBudgetView(Budget budget) {
+      super(budget);
       this.spendingReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "SpendingReport.xml";
       this.encoding = "UTF-8";

@@ -31,7 +31,7 @@ public class Register extends IndependentEntity {
     * Fields in the Register class:
     */
    private static final String selectQuery = "select bin_to_uuid(idRegister) as idRegister, name, account_type, " +
-           "account_number, bin_to_uuid(Budget_idBudget) as idBudget from ForecastDatabase.Register ";
+           "account_number, bin_to_uuid(Budget_idBudget) as idBudget from register ";
 
    private String registerName = null;
    private String accountType = null;

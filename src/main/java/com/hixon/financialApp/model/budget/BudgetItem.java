@@ -22,12 +22,12 @@ public class BudgetItem extends Item {
     */
    private static final String selectQuery = "select bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
            "Budget_Item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
-           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from ForecastDatabase.Budget_Item ";
+           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from budget_Item ";
    public static String getSelectQuery() {
       return selectQuery;
    }
 
-   private static final String insertQuery = "insert into ForecastDatabase.Budget_Item (idBudgetItem, category, payee, " +
+   private static final String insertQuery = "insert into budget_Item (idBudgetItem, category, payee, " +
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Budget_idBudget) values (";
 
@@ -43,9 +43,9 @@ public class BudgetItem extends Item {
               generateHowPaid(howPaid) + "', uuid_to_bin('" + idBudget + "'))";
    }
 
-   private static final String updateQuery = "update ForecastDatabase.Budget_Item set ";
+   private static final String updateQuery = "update budget_Item set ";
 
-   private static final String deleteQuery = "delete from ForecastDatabase.Budget_Item where ";
+   private static final String deleteQuery = "delete from budget_Item where ";
 
    // Budget that this BudgetItem belongs to:
    protected UUID idBudget = null;
@@ -190,7 +190,7 @@ public class BudgetItem extends Item {
          throw new BudgetException("Budget item ID may not be null in call to getPayeeById(idBudgetItem).");
       }
 
-      String query = "select payee from ForecastDatabase.Budget_Item where idBudgetItem = uuid_to_bin('" +
+      String query = "select payee from budget_Item where idBudgetItem = uuid_to_bin('" +
               idBudgetItem + "')";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
@@ -285,7 +285,7 @@ public class BudgetItem extends Item {
       super.save(method);
 
       // Mark all the forecasts that use the budget this item belongs to as out of sync with the budget:
-      String updateInSyncQuery = "update forecastdatabase.forecast set inSync = 0 where Budget_idBudget = " +
+      String updateInSyncQuery = "update forecast set inSync = 0 where Budget_idBudget = " +
               "uuid_to_bin('" + idBudget + "')";
       EntityInt.executeUpdate(updateInSyncQuery, "Database error attempting to set the " +
               "inSync flag on the forecast.");

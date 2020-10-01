@@ -295,6 +295,19 @@ public class Utility {
       return dateFormatted;
    }
 
+   // Convert a Calendar date to a short month - day format:
+   public static String calendarDateToMonthDayDate(Calendar calendar) {
+      String dateFormatted;
+      if (calendar != null) {
+         SimpleDateFormat fmt = new SimpleDateFormat("MM-dd");
+         fmt.setCalendar(calendar);
+         dateFormatted = fmt.format(calendar.getTime());
+      } else {
+         dateFormatted = "null";
+      }
+      return dateFormatted;
+   }
+
    // Convert a long "month - year" date string to a Calendar object:
    public static Calendar MonthYearLongDateToCalendarDate(String stringDate) throws ParseException {
       Calendar calendarDate = Calendar.getInstance();

@@ -4,8 +4,10 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.Register;
+import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
@@ -47,7 +49,7 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
 
     @Override
     public void renderReportFrontMatter() {
-        pw.println("Items of Interest to " + user.getFirstName() + ":");
+        pw.println("New transaction summary for " + user.getFirstName() + ":");
     }
 
     @Override
@@ -61,13 +63,20 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
     }
 
     @Override
-    public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException {
-        ForecastTransaction forecastTransaction = (ForecastTransaction) item;
-        pw.println(forecastTransaction.getForecastItem().getPayee() + "\t" + ((forecastTransaction.getRemainingAmount() ==
-                0) ? "$0.00" : Utility.formatDollarAmount(-forecastTransaction.getRemainingAmount())));
-        Utility.getResolver().say(forecastTransaction.getForecastItem().getPayee() + "\t" +
-                ((forecastTransaction.getRemainingAmount() == 0) ? "$0.00" :
-                        Utility.formatDollarAmount(-forecastTransaction.getRemainingAmount())));
+    public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException, RegisterException {
+        Transaction transaction = (Transaction) item;
+
+        String date = Utility.calendarDateToMonthDayDate(
+                (transaction.getAuthorizationDate() != null) ? transaction.getAuthorizationDate() : transaction.getPostDate()
+        );
+        pw.println(date + "\t" + transaction.getMerchant().getName() + "\t" + ((transaction.getAmount() ==
+                0) ? "$0.00" : Utility.formatDollarAmount(-transaction.getAmount())));
+
+        String categorization = "";
+        for (TransactionSplit split: TransactionSplit.getSplitsForTransaction(transaction)
+            ) {
+            pw.println(split);
+        }
     }
 
     @Override

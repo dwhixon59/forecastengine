@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
@@ -37,7 +38,7 @@ public class Renderer<T extends ViewReportInt> {
      */
     // Render a report:
     public boolean renderReport() throws FileNotFoundException, UnsupportedEncodingException, ViewException,
-            EntityException, ForecastException, SQLException, BudgetException {
+            EntityException, ForecastException, SQLException, BudgetException, RegisterException {
 
         // Open the output and output the front matter:
         reportObject.openReportOutput();

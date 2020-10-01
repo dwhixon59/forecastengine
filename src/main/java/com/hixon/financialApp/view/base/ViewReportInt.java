@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.view.ViewException;
 
 import java.io.FileNotFoundException;
@@ -21,7 +22,7 @@ public interface ViewReportInt {
 
    List<Entity> getItems();
 
-   void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException;
+   void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException, RegisterException;
 
    void renderSummaryRow();
 
