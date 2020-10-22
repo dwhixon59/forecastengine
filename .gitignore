@@ -1,3 +1,5 @@
 *.tsv
 *.csv
+*.class
 .idea/vcs.xml
+
