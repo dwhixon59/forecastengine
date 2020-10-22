@@ -30,7 +30,7 @@ public interface NotificationServiceInt {
            ParseException, BudgetException, SQLException;
 
    // Create an items of interest report and send it to a user:
-   void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException, SQLException, BudgetException, ViewException, RegisterException;
+   void sendItemsOfInterestReport() throws Exception, EntityException, BudgetException, ViewException, RegisterException;
 
    // Create a New Transactions Summary Report and send it to a user:"
     void sendNewTransactionSummaryReport(Register register) throws ForecastException, ViewException, IOException, EntityException, SQLException, BudgetException, RegisterException;

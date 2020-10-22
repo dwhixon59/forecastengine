@@ -109,8 +109,8 @@ public class fileBasedNotificationService implements NotificationServiceInt {
    }
 
    @Override
-   public void sendItemsOfInterestReport() throws ForecastException, IOException, EntityException,
-           SQLException, BudgetException, ViewException, RegisterException {
+   public void sendItemsOfInterestReport() throws Exception, EntityException,
+           BudgetException, ViewException, RegisterException {
       TextForecastView textForecastView = new TextForecastView();
       List<UserResource> reports = textForecastView.renderItemsOfInterestReport();
       for (UserResource userResource: reports
@@ -132,6 +132,6 @@ public class fileBasedNotificationService implements NotificationServiceInt {
       }
 
       // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
-      //register.setTransactionsToNotNew();
+      register.setTransactionsToNotNew();
    }
 }

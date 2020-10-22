@@ -10,7 +10,7 @@ public class MerchantPayee extends DependentEntity {
    /*
     * Fields in the Wells Fargo download file transaction classifier:
     */
-   private static final String insertQuery = "insert into forecastdatabase.merchant_payee (Merchant_idMerchant, payee) " +
+   private static final String insertQuery = "insert into merchant_payee (Merchant_idMerchant, payee) " +
            "values (";
    private UUID idMerchant;
    private String payee = null;

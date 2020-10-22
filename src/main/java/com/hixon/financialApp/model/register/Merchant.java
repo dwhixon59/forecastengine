@@ -22,10 +22,10 @@ public class Merchant extends IndependentEntity {
     * Fields in the Merchant class:
     */
    public static final String selectQuery = "select bin_to_uuid(m.idMerchant) as 'm.idMerchant', m.name as 'm.name', " +
-           "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser' from forecastdatabase.merchant m";
-   public static final String selectJoinPayeeQuery = selectQuery + " inner join forecastdatabase.merchant_payee mp on " +
+           "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser' from merchant m";
+   public static final String selectJoinPayeeQuery = selectQuery + " inner join merchant_payee mp on " +
            "m.idMerchant = mp.Merchant_idMerchant ";
-   public static final String insertQuery = "insert into forecastdatabase.merchant (idMerchant, name, askAlways, " +
+   public static final String insertQuery = "insert into merchant (idMerchant, name, askAlways, " +
            "User_idUser) values (";
 
    private String name = null;

@@ -42,7 +42,7 @@ public class VirtualRegister extends Register {
         PreparedStatement preparedStmt = null;
         ResultSet rs = null;
         try {
-            String query = "select bin_to_uuid(idBudget) from ForecastDatabase.Budget where name = ?";
+            String query = "select bin_to_uuid(idBudget) from budget where name = ?";
             preparedStmt = dbConnection.prepareStatement(query);
             preparedStmt.setString(1, budgetName);
             rs = preparedStmt.executeQuery();

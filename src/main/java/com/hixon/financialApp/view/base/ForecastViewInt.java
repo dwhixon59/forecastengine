@@ -12,9 +12,7 @@ import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.view.ViewException;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -33,15 +31,15 @@ public interface ForecastViewInt {
            RegisterException, BudgetException, ViewException, IOException;
 
    // Render items of interest report for a specific user:
-   UserResource renderItemsOfInterestReport(User user) throws EntityException, SQLException, BudgetException, IOException,
-           ViewException, ForecastException, RegisterException;
+   UserResource renderItemsOfInterestReport(User user) throws EntityException, Exception, BudgetException,
+           ViewException, RegisterException;
 
    // Render items of interest report for a specific user to a specific file:
-   boolean renderItemsOfInterestReport(User user, File file) throws EntityException, SQLException, BudgetException, FileNotFoundException,
-           UnsupportedEncodingException, ViewException, ForecastException, RegisterException;
+   boolean renderItemsOfInterestReport(User user, File file) throws EntityException, Exception, BudgetException,
+           ViewException, RegisterException;
 
    // Render the items of interest report for all users:
-   List<UserResource> renderItemsOfInterestReport() throws EntityException, SQLException, BudgetException, IOException,
-           ViewException, ForecastException, RegisterException;
+   List<UserResource> renderItemsOfInterestReport() throws EntityException, Exception, BudgetException,
+           ViewException, RegisterException;
 
 }

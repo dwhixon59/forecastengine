@@ -65,7 +65,7 @@ public class ItemOfInterest extends DependentEntity {
         return selectColumns;
     }
 
-    public static final String selectQuery = "select" + selectColumns + "from forecastdatabase.Items_Of_Interest ii";
+    public static final String selectQuery = "select" + selectColumns + "from items_of_interest ii";
 
     public static String getSelectQuery() {
         return selectQuery;

@@ -301,8 +301,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
 
     @Override
-    public List<UserResource> renderItemsOfInterestReport() throws EntityException, SQLException, BudgetException, IOException,
-            ViewException, ForecastException, RegisterException {
+    public List<UserResource> renderItemsOfInterestReport() throws EntityException, Exception, BudgetException,
+            ViewException, RegisterException {
 
         // Create a holder for the individual user reports:
         List<UserResource> reports = new ArrayList<>();
@@ -325,8 +325,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     }
 
     @Override
-    public UserResource renderItemsOfInterestReport(User user) throws EntityException, SQLException, BudgetException,
-            IOException, ViewException, ForecastException, RegisterException {
+    public UserResource renderItemsOfInterestReport(User user) throws EntityException, Exception, BudgetException,
+            ViewException, RegisterException {
 
         UserResource userResource = null;
         File itemsOfInterestReportFile = File.createTempFile("ItemsOfInterestReport_" + user.getFirstName() + "_",
@@ -341,8 +341,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     }
 
     @Override
-    public boolean renderItemsOfInterestReport(User user, File file) throws EntityException, SQLException, BudgetException,
-            FileNotFoundException, UnsupportedEncodingException, ViewException, ForecastException, RegisterException {
+    public boolean renderItemsOfInterestReport(User user, File file) throws EntityException, Exception, BudgetException,
+            ViewException, RegisterException {
 
         // Get a set of the items of interest of the current user:
         List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getForecastTransactionsOfInterest(user));

@@ -34,7 +34,7 @@ public class Transaction extends IndependentEntity {
    private UUID idMerchant = null;
    private String merchantPayee = null;
    private boolean isImproper = false;
-   private boolean isNew = false;
+   private boolean isNew = true;
    private String importRecordId = null;
    private Merchant merchant;
 
@@ -45,9 +45,9 @@ public class Transaction extends IndependentEntity {
    private static final String selectQuery = "select bin_to_uuid(idTransaction) as idTransaction, postDate, " +
            "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, importRecordId, " +
            "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant" +
-           " from forecastdatabase.transaction ";
+           " from transaction ";
 
-   private static final String insertQuery = "insert into forecastdatabase.transaction (idTransaction, " +
+   private static final String insertQuery = "insert into transaction (idTransaction, " +
            "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
            "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
 
@@ -69,19 +69,19 @@ public class Transaction extends IndependentEntity {
               "uuid_to_bin('" + getIdMerchant() + "')";
    }
 
-   private static final String updateQuery = "update forecastdatabase.transaction set idTransaction = ?, " +
+   private static final String updateQuery = "update transaction set idTransaction = ?, " +
            "set postdate = ?, set authorizationDate = ?, set amount = ?, set cleared = ?, set checkNumber = ?, " +
            "set payee = ?, set balance = ?, set isImproper = ?, set isNew = ?, set importRecordId = ?, " +
            "set Register_idRegister = ?, set Merchant_idMerchant = ? where ";
 
-   public static String getUpdateIsNewQuery() { return "update forecastdatabase.transaction set isNew = false "; }
+   public static String getUpdateIsNewQuery() { return "update transaction set isNew = false "; }
 
    @Override
    public String getUpdateByIdQuery() {
       return updateQuery;
    }
 
-   private static final String deleteQuery = "delete from forecastdatabase.transaction where ";
+   private static final String deleteQuery = "delete from transaction where ";
 
    @Override
    public String getDeleteByIdQuery() {
@@ -416,14 +416,14 @@ public class Transaction extends IndependentEntity {
 
    // Get a list of transactions that were previously skipped during the importRegisterTransactions() process.  We know
    // they were skipped because either there is no merchant assigned, or there are no splits assigned, or the
-   // transactions has not been reconciled:
+   // transactions have not been reconciled:
    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
       Calendar startDate = forecast.getStartDate();
       String query = getSelectQuery() + " where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " " +
               "and idTransaction not in " +
-              "(select idTransaction from Transaction " +
-              "inner join Transaction_Split on idTransaction = Transaction_idTransaction " +
-              "inner join Forecast_Transaction_Split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
+              "(select idTransaction from transaction " +
+              "inner join transaction_split on idTransaction = Transaction_idTransaction " +
+              "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
               "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem) " +
               "order by postDate asc";
       return getRS(query, "attempting to retieve a list of transactions that were previously " +

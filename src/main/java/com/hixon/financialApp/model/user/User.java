@@ -156,13 +156,13 @@ public class User extends IndependentEntity {
    public static String getSelectColumns() {
       return selectColumns;
    }
-   public static final String selectQuery = "select" + getSelectColumns() + " from forecastdatabase.User u" ;
+   public static final String selectQuery = "select" + getSelectColumns() + " from user u" ;
    public static String getSelectQuery() {
       return selectQuery;
    }
 
    // The insert query:
-   public static final String insertQuery = "insert into ForecastDatabase.User (idUser, userName, password, firstName, " +
+   public static final String insertQuery = "insert into user (idUser, userName, password, firstName, " +
            "lastName, email, phoneNumber) values (";
    @Override
    public String getInsertQuery() {
@@ -171,7 +171,7 @@ public class User extends IndependentEntity {
    }
 
    // The update query:
-   public static final String updateQuery = "update ForecastDatabase.User set ";
+   public static final String updateQuery = "update user set ";
    public String getupdateClause() {
       return  "userName = " + userName + ", password = " + password + ", firstName = " + firstName + ", lastName = "
               + lastName + ", email = " + email + ", phoneNumber = " + phoneNumber;
@@ -188,7 +188,7 @@ public class User extends IndependentEntity {
    }
    
    // The delete query:
-   public static final String deleteQuery = "delete from ForecastDatabase.User ";
+   public static final String deleteQuery = "delete from user ";
    public static String getDeleteQuery() {return deleteQuery;}
    @Override
    public String getDeleteByIdQuery() {

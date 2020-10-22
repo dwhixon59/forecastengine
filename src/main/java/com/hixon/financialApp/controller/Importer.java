@@ -171,6 +171,8 @@ public class Importer {
                     merchant);
             if (provisionalTransaction != null) {
                transaction.setId(provisionalTransaction.getId());
+               transaction.setIsImproper(provisionalTransaction.getIsImproper());
+               transaction.setIsNew(provisionalTransaction.getIsNew());
             }
 
             // At this point the transaction is complete, so save it off:

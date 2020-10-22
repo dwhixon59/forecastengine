@@ -34,10 +34,6 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    private String lastCategory;
    private final CsvForecastView csvForecastView = new CsvForecastView();
 
-   public SpreadsheetXmlForecastView(Forecast forecast) {
-      this.forecast = forecast;
-   }
-
 
     /*
     * Getters and setters:
@@ -79,8 +75,18 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    /*
     * Constructors:
     */
-   public SpreadsheetXmlForecastView() {
-      super();
+   public SpreadsheetXmlForecastView() throws EntityException, SQLException {
+      this.forecast = Forecast.getMostRecent();
+      shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+              "ShortTermForecast.xml";
+      longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+              "LongTermForecast.xml";
+      encoding = "UTF-8";
+   }
+
+
+   public SpreadsheetXmlForecastView(Forecast forecast) {
+      this.forecast = forecast;
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "ShortTermForecast.xml";
       longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
@@ -89,8 +95,8 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    }
 
    public SpreadsheetXmlForecastView(String shortTermForecastFilename, String longTermForecastFilename,
-                                     String importForecastFilename, String encoding) {
-      super();
+                                     String importForecastFilename, String encoding) throws EntityException, SQLException {
+      this.forecast = Forecast.getMostRecent();
       this.shortTermForecastFilename = shortTermForecastFilename;
       this.longTermForecastFilename = longTermForecastFilename;
       this.importForecastFilename = importForecastFilename;

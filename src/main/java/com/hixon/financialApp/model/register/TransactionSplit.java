@@ -144,12 +144,12 @@ public class TransactionSplit extends DependentEntity {
     * Load and save methods:
     */
    private static final String selectQuery = "select amount, bin_to_uuid(BudgetItem_idBudgetItem) as idBudgetItem, " +
-           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo from forecastdatabase.transaction_split ";
+           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo from transaction_split ";
    public static String getSelectQuery() {
       return selectQuery;
    }
 
-   private static final String insertQuery = "insert into ForecastDatabase.Transaction_Split (amount, " +
+   private static final String insertQuery = "insert into transaction_split (amount, " +
            "BudgetItem_idBudgetItem, Transaction_idTransaction, memo) values (";
    @Override
    public String getInsertQuery() throws BudgetException, ForecastException {
@@ -166,7 +166,7 @@ public class TransactionSplit extends DependentEntity {
       return null;
    }
 
-   private static final String deleteQuery = "delete from ForecastDatabase.Transaction_Split ";
+   private static final String deleteQuery = "delete from transaction_split ";
    @Override
    public String getDeleteByIdQuery() {
       return null;
@@ -210,6 +210,17 @@ public class TransactionSplit extends DependentEntity {
       return s;
    }
 
+   public String toStringConcise() {
+      String s = null;
+      try {
+         String memoString = (memo != null) ? ".  Memo:  " + memo : "";
+         s = getBudgetItem().getPayee() + Utility.formatDollarAmount(amount) + memoString;
+      } catch (Exception | EntityException | BudgetException e) {
+         e.printStackTrace();
+      }
+      return s;
+   }
+
 
    /*
     * Main methods for TransactionSplit
@@ -247,14 +258,14 @@ public class TransactionSplit extends DependentEntity {
            throws EntityException {
       String selectQuery = "select ts.amount, bin_to_uuid(ts.BudgetItem_idBudgetItem) as idBudgetItem, " +
               "bin_to_uuid(ts.Transaction_idTransaction) as idTransaction, ts.memo, ";
-      String query = selectQuery + "t.authorizationDate as 'date' from forecastdatabase.transaction_split ts " +
-              "inner join ForecastDatabase.Transaction t on ts.Transaction_idTransaction = " +
+      String query = selectQuery + "t.authorizationDate as 'date' from transaction_split ts " +
+              "inner join transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +
               "t.authorizationDate is not null and t.authorizationDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " and t.authorizationDate <= " + Utility.calendarDateToSqlDateString(endDate);
       query += " union ";
-      query += selectQuery + " t.postDate as 'date' from forecastdatabase.transaction_split ts inner join " +
-              "ForecastDatabase.Transaction t on ts.Transaction_idTransaction = " +
+      query += selectQuery + " t.postDate as 'date' from transaction_split ts inner join " +
+              "transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +
               "t.authorizationDate is null and t.postDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " and t.postDate <= " + Utility.calendarDateToSqlDateString(endDate);
@@ -283,5 +294,4 @@ public class TransactionSplit extends DependentEntity {
       Calendar endDate = Calendar.getInstance();
       return getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
    }
-
 }

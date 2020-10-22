@@ -158,7 +158,7 @@ public class Register extends IndependentEntity {
    public static Register getByAccountNumber(String accountNumber) throws SQLException, RegisterException {
 
       try {
-         String query = "select bin_to_uuid(idRegister) from ForecastDatabase.Register where Account_Number = '" +
+         String query = "select bin_to_uuid(idRegister) from register where Account_Number = '" +
                  accountNumber + "'";
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);

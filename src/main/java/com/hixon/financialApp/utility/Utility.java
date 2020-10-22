@@ -379,6 +379,13 @@ public class Utility {
       String numberAsString = "$" + decimalFormat.format(amount);
       return numberAsString;
    }
+   public static String formatRoundedDollarAmount(double amount) {
+      long roundedAmount = Math.round(amount);
+      String formattedAmount = (amount ==
+              0) ? "$0.00" : formatDollarAmount(roundedAmount);
+      formattedAmount = formattedAmount.substring(0, formattedAmount.length()-3);
+      return formattedAmount;
+   }
 
    public static int doubleToInt(double value) {
       return (int) Math.round(value);

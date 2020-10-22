@@ -1,10 +1,10 @@
 package com.hixon.financialApp.model.budget;
 
-import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
+import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -704,7 +704,7 @@ public abstract class Item extends IndependentEntity {
 
    public static int getItemCount() throws SQLException, EntityException {
       // Find out how many budget items there are:
-      ResultSet rs = EntityInt.getSingletonRS("select count(*) from forecastdatabase.budgetItem",
+      ResultSet rs = EntityInt.getSingletonRS("select count(*) from budgetItem",
               "Database error attempting to retrieve a list of items in the budget.");
       try {
          rs.next();

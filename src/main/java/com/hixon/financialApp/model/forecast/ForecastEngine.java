@@ -183,7 +183,7 @@ public class ForecastEngine {
             try {
                 rs = stmt.executeQuery("select bin_to_uuid(idBudgetItem), category, payee, period, AMOUNT, " +
                         "startDate, numberOfPayments, endDate, ItemType, howPaid, searchString, " +
-                        "bin_to_uuid(Budget_idBudget) from ForecastDatabase.BudgetItem order by AMOUNT desc");
+                        "bin_to_uuid(Budget_idBudget) from budgetItem order by AMOUNT desc");
             } catch (SQLException e) {
                 stmt.close();
                 ForecastException fe = new ForecastException(" SQL Error attempting to retrieve a list of items in the budget.");

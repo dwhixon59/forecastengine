@@ -24,10 +24,10 @@ public class ForecastTransactionSplit extends DependentEntity {
    public static final String selectQuery = "select bin_to_uuid(ForecastTransaction_idForecastTransaction) as " +
            "'idForecastTransaction', bin_to_uuid(Transaction_Split_idBudgetItem) as idBudgetItem, " +
            "bin_to_uuid(Transaction_Split_idTransaction) as 'idTransaction', disposition from " +
-           "ForecastDatabase.Forecast_Transaction_Split ";
+           "forecast_transaction_split ";
 
    // The insert query:
-   public static final String insertQuery = "insert into ForecastDatabase.Forecast_Transaction_Split " +
+   public static final String insertQuery = "insert into forecast_transaction_split " +
            "(ForecastTransaction_idForecastTransaction, Transaction_Split_idBudgetItem, " +
            "Transaction_Split_idTransaction, disposition) values (";
 
@@ -44,7 +44,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    }
 
    // The update query:
-   private static final String updateQuery = "update ForecastDatabase.Forecast_Transaction set ";
+   private static final String updateQuery = "update forecast_transaction set ";
    @Override
    public String getUpdateByIdQuery() {
       return updateQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +
@@ -53,7 +53,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    }
 
    // The delete query:
-   private static final String deleteQuery = "delete from ForecastDatabase.Forecast_Transaction where ";
+   private static final String deleteQuery = "delete from forecast_transaction where ";
    @Override
    public String getDeleteByIdQuery() {
       return deleteQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +

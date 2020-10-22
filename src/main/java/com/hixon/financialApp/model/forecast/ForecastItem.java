@@ -35,7 +35,10 @@ public class ForecastItem extends Item {
    /*
     * Getters and setters:
     */
-   public Forecast getForecast() {
+   public Forecast getForecast() throws EntityException, SQLException {
+      if (forecast == null) {
+         forecast = Forecast.getById(idForecast);
+      }
       return forecast;
    }
    public void setForecast(Forecast forecast) {
@@ -156,6 +159,19 @@ public class ForecastItem extends Item {
       return forecastItem;
    }
 
+   public static ForecastItem getByBudgetItemId(Forecast forecast, UUID idBudgetItem) throws EntityException, ForecastException,
+           BudgetException {
+      ResultSet rs = EntityInt.getRSById(selectQuery + " where Forecast_idForecast = uuid_to_bin('" +
+                      forecast.getId() + "') and BudgetItem_idbudgetItem = ", idBudgetItem,
+              "attempting to retrieve a forecast item based on the following budget item:  " + idBudgetItem
+                       + "in the forecast " + forecast);
+      ForecastItem forecastItem = null;
+      if (rs != null) {
+         forecastItem = new ForecastItem(rs);
+      }
+      return forecastItem;
+   }
+
 
    /*
     * Load and save methods:
@@ -171,12 +187,12 @@ public class ForecastItem extends Item {
       return selectColumns;
    }
 
-   public static final String selectQuery = "select" + selectColumns + "from ForecastDatabase.Forecast_Item fi";
+   public static final String selectQuery = "select" + selectColumns + "from forecast_item fi";
    public static String getSelectQuery() {
       return selectQuery;
    }
 
-   private static final String insertQuery = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category," +
+   private static final String insertQuery = "insert into forecast_item (idForecastItem, category," +
            " payee, period, amount, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Forecast_idForecast";
    @Override
@@ -205,7 +221,7 @@ public class ForecastItem extends Item {
       return null;
    }
 
-   protected static final String updateQuery = "update ForecastDatabase.Forecast_Item set ";
+   protected static final String updateQuery = "update forecast_item set ";
    @Override
    public String getUpdateByIdQuery() throws BudgetException {
       return updateQuery + " category = '" + category + "', payee = '" +
@@ -218,7 +234,7 @@ public class ForecastItem extends Item {
               idBudgetItem + "') where idForecastItem = uuid_to_bin('" + id + "')";
    }
 
-   private static final String deleteQuery = "delete from ForecastDatabase.Forecast_Item where ";
+   private static final String deleteQuery = "delete from forecast_item where ";
    @Override
    public String getDeleteByIdQuery() {
       return deleteQuery + "idForecastItem = uuid_to_bin('" + id + "')";
@@ -300,6 +316,11 @@ public class ForecastItem extends Item {
    @Override
    public String toString() {
       return "Forecast  " + super.toString() + ", BudgetItem ID = " + idBudgetItem;
+   }
+
+   // Get the Budget Item associated wit this Forecast Item:
+   public BudgetItem getBudgetItem() throws EntityException, BudgetException {
+      return BudgetItem.getById(getIdBudgetItem());
    }
 
 

@@ -21,13 +21,13 @@ public class BudgetItem extends Item {
     * Fields:
     */
    private static final String selectQuery = "select bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
-           "Budget_Item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
-           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from budget_Item ";
+           "budget_item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
+           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from budget_item ";
    public static String getSelectQuery() {
       return selectQuery;
    }
 
-   private static final String insertQuery = "insert into budget_Item (idBudgetItem, category, payee, " +
+   private static final String insertQuery = "insert into budget_item (idBudgetItem, category, payee, " +
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Budget_idBudget) values (";
 
@@ -43,9 +43,9 @@ public class BudgetItem extends Item {
               generateHowPaid(howPaid) + "', uuid_to_bin('" + idBudget + "'))";
    }
 
-   private static final String updateQuery = "update budget_Item set ";
+   private static final String updateQuery = "update budget_item set ";
 
-   private static final String deleteQuery = "delete from budget_Item where ";
+   private static final String deleteQuery = "delete from budget_item where ";
 
    // Budget that this BudgetItem belongs to:
    protected UUID idBudget = null;
@@ -190,7 +190,7 @@ public class BudgetItem extends Item {
          throw new BudgetException("Budget item ID may not be null in call to getPayeeById(idBudgetItem).");
       }
 
-      String query = "select payee from budget_Item where idBudgetItem = uuid_to_bin('" +
+      String query = "select payee from budget_item where idBudgetItem = uuid_to_bin('" +
               idBudgetItem + "')";
       try {
          Statement statement = Utility.getDbConnection().createStatement();

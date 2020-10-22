@@ -94,13 +94,13 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
                 "from (" +
                    "select B.category as category, B.payee as payee, B.amount as 'plannedAmount', 0 as 'actualAmount'," +
                    " -B.amount as 'plannedVsActual' " +
-                      "from forecastdatabase.ForecastTransaction A, forecastdatabase.forecastitem B " +
+                      "from forecast_transaction A, forecastitem B " +
                       "where A.ForecastItem_idForecastItem = B.idForecastItem and A.plannedDate < " +
                           Utility.calendarDateToSqlDateString(startDate) + " " +
                       "union " +
                       "select B.category, B.payee, 0 as 'plannedAmount', A.actualAmount as 'actualAmount', " +
                           "A.actualAmount as 'plannedVsActual' " +
-                      "from forecastdatabase.transaction A, forecastdatabase.budgetitem B " +
+                      "from transaction A, budgetitem B " +
                       "where A.BudgetItem_idBudgetItem = B.idBudgetItem and A.actualDate >= " +
                           Utility.calendarDateToSqlDateString(startDate) + " and " +
                           "A.actualDate <= " + Utility.calendarDateToSqlDateString(startDate) +

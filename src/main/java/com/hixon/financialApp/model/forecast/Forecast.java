@@ -5,6 +5,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
@@ -45,19 +46,24 @@ public class Forecast extends IndependentEntity {
    private boolean inSync = true;
    private static final String selectQuery = "select bin_to_uuid(idForecast) as idForecast, description, " +
            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
-           "bin_to_uuid(Budget_idBudget) as idBudget from forecastdatabase.forecast ";
+           "bin_to_uuid(Budget_idBudget) as idBudget from forecast ";
 
    public static String getSelectQuery() {
       return selectQuery;
    }
 
-   private static final String insertQuery = "insert into forecastdatabase.forecast (idForecast, description, " +
+   private static final String insertQuery = "insert into forecast (idForecast, description, " +
            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
            "values (";
-   private static final String updateQuery = "update ForecastDatabase.Forecast set ";
-   private static final String deleteQuery = "delete from ForecastDatabase.Forecast where ";
+   private static final String updateQuery = "update forecast set ";
+   private static final String deleteQuery = "delete from forecast where ";
 
-   // The types of significant events that can be generated:
+    public static Forecast getById(UUID idForecast) throws EntityException, SQLException {
+          return new Forecast(EntityInt.getRSById(selectQuery + "where idForecast = ", idForecast,
+                  "Database error encountered trying to retrieve a forecast."));
+    }
+
+    // The types of significant events that can be generated:
    public enum SignificantEvents {daysBelowMinimumBalance}
 
 
@@ -170,7 +176,7 @@ public class Forecast extends IndependentEntity {
       PreparedStatement preparedStmt = null;
       ResultSet rs = null;
       try {
-         String query = "select bin_to_uuid(idBudget) from ForecastDatabase.Budget where name = ?";
+         String query = "select bin_to_uuid(idBudget) from budget where name = ?";
          preparedStmt = Utility.getDbConnection().prepareStatement(query);
          preparedStmt.setString(1, budgetName);
          rs = preparedStmt.executeQuery();
@@ -223,7 +229,7 @@ public class Forecast extends IndependentEntity {
       try {
          // Insert the forecast tuple:
          errorMessage = "SQL error attempting to insert the Forecast object into the database.";
-         String query = "insert into ForecastDatabase.Forecast (idForecast, description, dateGenerated, " +
+         String query = "insert into forecast (idForecast, description, dateGenerated, " +
                  "startDate, startingBalance, endDate, endingBalance, numberOfMonths, inSync, Budget_idBudget) " +
                  "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?)) on duplicate key update " +
                  "description = ?, dateGenerated = ?, startDate =?, startingBalance = ?, endDate = ?, " +
@@ -264,7 +270,7 @@ public class Forecast extends IndependentEntity {
       try {
           // Insert the forecast item tuples:
          errorMessage = "SQL error attempting to insert a forecast item into the database.";
-         String query = "insert into ForecastDatabase.Forecast_Item (idForecastItem, category, payee, period, amount, " +
+         String query = "insert into forecast_item (idForecastItem, category, payee, period, amount, " +
                  "startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, howPaid," +
                  "Forecast_idForecast, BudgetItem_idBudgetItem) values (UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, ?," +
                  " ?, ?, UUID_TO_BIN(?), UUID_TO_BIN(?))";
@@ -304,7 +310,7 @@ public class Forecast extends IndependentEntity {
       try {
          // Insert the forecast transaction tuples:
          errorMessage = "SQL error attempting to insert a forecast transaction into the database.";
-         String query = "insert into ForecastDatabase.Forecast_Transaction (idForecastTransaction, remainingAmount, " +
+         String query = "insert into forecast_transaction (idForecastTransaction, remainingAmount, " +
                  "plannedDate, firstOccurrence, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), ?, ?, ?, " +
                  "UUID_TO_BIN(?))";
          preparedStmt = dbConnection.prepareStatement(query);
@@ -360,7 +366,7 @@ public class Forecast extends IndependentEntity {
       endDate.add(MONTH, numberOfMonths);
 
       // Update all the forecast items in the forecast from the current budget items:
-      String query = "update ForecastDatabase.Forecast_Item fi inner join ForecastDatabase.Budget_Item bi on " +
+      String query = "update forecast_item fi inner join budget_item bi on " +
               "fi.BudgetItem_idBudgetItem = bi.idBudgetItem set fi.category = bi.category, fi.payee = bi.payee, " +
               "fi.period = bi.period, fi.amount = bi.amount, fi.startDate = bi.startDate, fi.numberOfPayments = " +
               "bi.numberOfPayments, fi.endDate = bi.endDate, fi.itemType = bi.itemType, fi.howImportant =" +
@@ -371,7 +377,7 @@ public class Forecast extends IndependentEntity {
       // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
       // was created:
       query = BudgetItem.getSelectQuery() + "where idBudgetItem not in (select distinct BudgetItem_idBudgetItem from " +
-              "ForecastDatabase.Forecast_Item)";
+              "forecast_item)";
       ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
 
       // Insert any new forecast items that weren't originally included:

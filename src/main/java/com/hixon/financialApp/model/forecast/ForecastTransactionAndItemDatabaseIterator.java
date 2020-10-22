@@ -34,7 +34,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
 
       // Get a result set with all the credits:
       String selectCreditsQuery = "select" + ForecastTransaction.getSelectColumns() + ", " + ForecastItem.getSelectColumns() +
-              " from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
+              " from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount > 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " order by ft.plannedDate asc, ft.remainingAmount desc";
@@ -47,7 +47,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
 
       // Get a result set with all the debits:
       String selectDebitsQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
-              "from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
+              "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount < 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " order by ft.plannedDate asc, ft.remainingAmount asc";
@@ -60,7 +60,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
 
       // Get a result set with all the placeholders (zero amounts):
       String selectPlaceholdersQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
-              "from Forecast_Transaction ft inner join Forecast_Item fi on ft.ForecastItem_idForecastItem = " +
+              "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount = 0.00 and fi.amount = 0.00 and ft.plannedDate >= " +
               Utility.calendarDateToSqlDateString(startDate) + " order by ft.plannedDate asc, fi.payee asc";

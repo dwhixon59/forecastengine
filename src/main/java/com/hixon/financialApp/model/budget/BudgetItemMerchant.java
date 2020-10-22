@@ -1,12 +1,12 @@
 package com.hixon.financialApp.model.budget;
 
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -29,17 +29,16 @@ public class BudgetItemMerchant extends DependentEntity {
    UUID idMerchant;
 
    private static final String selectQuery = "select amount, percentage, BudgetItem_idBudgetItem as idBudgetItem, " +
-           "Merchant_idMerchant as idMerchant from forecastdatabase.budgetitem_merchant ";
+           "Merchant_idMerchant as idMerchant from budgetitem_merchant ";
 
-   private static final String insertQuery = "insert into forecastdatabase.budgetitem_merchant (amount, percentage, " +
+   private static final String insertQuery = "insert into budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
 
-   private static final String selectItemsForMerchantQuery = "select bin_to_uuid(Budget_Item.idBudgetItem) as " +
-           "'idBudgetItem', category, payee, period, Budget_Item.amount, runningBalance, startDate, numberOfPayments, "
+   private static final String selectItemsForMerchantQuery = "select bin_to_uuid(budget_item.idBudgetItem) as " +
+           "'idBudgetItem', category, payee, period, budget_item.amount, runningBalance, startDate, numberOfPayments, "
            + "endDate, ItemType, howImportant, howOccurs, howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget', " +
-           "BudgetItem_Merchant.amount as merchant_amount, BudgetItem_Merchant.percentage as merchant_percentage from " +
-           "ForecastDatabase.Budget_Item inner join ForecastDatabase.BudgetItem_Merchant on Budget_Item.idBudgetItem = " +
-           "BudgetItem_idBudgetItem ";
+           "budgetitem_merchant.amount as merchant_amount, budgetitem_merchant.percentage as merchant_percentage from " +
+           "budget_item inner join budgetitem_merchant on idBudgetItem = BudgetItem_idBudgetItem ";
 
 
    /*
