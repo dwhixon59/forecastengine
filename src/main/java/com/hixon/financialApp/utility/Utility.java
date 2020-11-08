@@ -13,6 +13,8 @@ import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.Locale;
@@ -197,6 +199,15 @@ public class Utility {
       if (sqlDate != null) {
          calendarDate = new GregorianCalendar();
          calendarDate.setTime(sqlDate);
+      }
+      return calendarDate;
+   }
+
+   // Convert a Java LocalDate to a Java Calendar date:
+   public static Calendar localDateToCalendarDate(LocalDate sqlLocalDate) {
+      Calendar calendarDate = null;
+      if (sqlLocalDate != null) {
+         calendarDate = GregorianCalendar.from(sqlLocalDate.atStartOfDay(ZoneId.systemDefault()));
       }
       return calendarDate;
    }

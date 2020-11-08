@@ -9,6 +9,7 @@ import com.hixon.financialApp.utility.Utility;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.UUID;
 
@@ -303,8 +304,8 @@ public class Transaction extends IndependentEntity {
    public void loadFromResultSet(ResultSet rs) throws SQLException {
 
       id = UUID.fromString(rs.getString("idTransaction"));
-      postDate = Utility.SqlDateToCalendarDate(rs.getDate("postDate"));
-      authorizationDate = Utility.SqlDateToCalendarDate(rs.getDate("authorizationDate"));
+      postDate = Utility.localDateToCalendarDate(rs.getObject("postDate", LocalDate.class));
+      authorizationDate = Utility.localDateToCalendarDate(rs.getObject("authorizationDate", LocalDate.class));
       cleared = rs.getBoolean("cleared");
       checkNumber = rs.getInt("checkNumber");
       payee = rs.getString("payee");

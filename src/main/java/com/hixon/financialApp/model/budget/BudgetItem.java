@@ -8,12 +8,15 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import org.apache.commons.csv.CSVRecord;
 
-import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
-import java.util.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.UUID;
 
 public class BudgetItem extends Item {
 
@@ -140,12 +143,8 @@ public class BudgetItem extends Item {
          period = parsePeriodType(rs.getString("period"));
          amount = rs.getDouble("amount");
          runningBalance = rs.getDouble("runningBalance");
-         startDate.setTime(rs.getDate("startDate"));
-         Date tempDate = rs.getDate("endDate");
-         if (tempDate != null) {
-            endDate = new GregorianCalendar();
-            endDate.setTime(tempDate);
-         }
+         startDate = Utility.localDateToCalendarDate(rs.getObject("startDate", LocalDate.class));
+         endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
          numberOfPayments = rs.getInt("numberOfPayments");
          itemType = parseItemType(rs.getString("ItemType"));
          howImportant = parseHowImportant(rs.getString("howImportant"));

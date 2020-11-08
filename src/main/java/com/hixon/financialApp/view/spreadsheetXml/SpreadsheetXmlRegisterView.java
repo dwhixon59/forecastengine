@@ -15,6 +15,7 @@ import java.io.UnsupportedEncodingException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.List;
@@ -60,17 +61,17 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
                 }
                 String cleared = new String((rs.getBoolean(4)) ? "*" : "");
                 writer.println(
-                        Utility.SqlDateToStringDate(rs.getDate(1)) + "\t" +
-                                rs.getString(2) + "\t" +
-                                credit + "\t" +
-                                debit + "\t" +
-                                cleared + "\t" +
-                                "\t" + // skip the running balance column
-                                rs.getString(5) + "\t" +
-                                "\t"  + // skip the comments column
-                                rs.getString(6) + "\t" +
-                                rs.getString(7) + "\t" +
-                                rs.getString(8)
+                        Utility.localDateToCalendarDate(rs.getObject("Transaction.actualDate", LocalDate.class)) + "\t" +
+                        rs.getString(2) + "\t" +
+                        credit + "\t" +
+                        debit + "\t" +
+                        cleared + "\t" +
+                        "\t" + // skip the running balance column
+                        rs.getString(5) + "\t" +
+                        "\t"  + // skip the comments column
+                        rs.getString(6) + "\t" +
+                        rs.getString(7) + "\t" +
+                        rs.getString(8)
                 );
                 i++;
             }

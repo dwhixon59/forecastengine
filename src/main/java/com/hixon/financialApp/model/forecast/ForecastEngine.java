@@ -6,10 +6,10 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.utility.Utility;
 
-import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
@@ -65,11 +65,10 @@ public class ForecastEngine {
                     continue;
 
                 // If this budget item expires before the beginning of the forecast window then skip it:
-                Date budgetItemEndDateDb = rs.getDate("endDate");
+                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("endDate",
+                        LocalDate.class));
                 if (budgetItemEndDateDb != null) {
-                    Calendar budgetItemEndDate = new GregorianCalendar();
-                    budgetItemEndDate.setTime(budgetItemEndDateDb);
-                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0)
+                    if (budgetItemEndDateDb.compareTo(forecast.getStartDate()) < 0)
                         continue;
                 }
 
@@ -100,8 +99,9 @@ public class ForecastEngine {
              inserted into the forecasting transactions table.  Finally, the forecasting object is returned.
             */
             // Retrieve a handle to the list of items in the forecast:
-            ResultSet rs = EntityInt.getRS(ForecastItem.getSelectQuery(), "Database error attempting to" +
-                    " retrieve a list of items in the forecast.");
+            ResultSet rs = EntityInt.getRS(ForecastItem.getSelectQuery() +
+                    " where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')",
+                    "Database error attempting to retrieve a list of items in the forecast.");
 
             Calendar nextDate = (Calendar) startDate.clone();
             System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) +
@@ -120,15 +120,12 @@ public class ForecastEngine {
                     continue;
 
                 // If this forecast item expires before the beginning of the forecast window then skip it:
-                Date budgetItemEndDateDb = rs.getDate("fi.endDate");
+                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("fi.endDate",
+                        LocalDate.class));
                 if (budgetItemEndDateDb != null) {
-                    Calendar budgetItemEndDate = new GregorianCalendar();
-                    budgetItemEndDate.setTime(budgetItemEndDateDb);
-                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0)
+                    if (budgetItemEndDateDb.compareTo(forecast.getStartDate()) < 0)
                         continue;
                 }
-
-                //forecastItem = new ForecastItem(rs);
 
                 // Set the current date to the first date after the start date of the forecast window:
                 nextDate = forecastItem.getFirstDateOnOrAfter(startDate);
@@ -207,16 +204,15 @@ public class ForecastEngine {
                 if (rs.getString("Period").equalsIgnoreCase("On-Demand")) continue;
 
                 // If this item expires before the beginning of the forecast window, then skip it:
-                Date budgetItemEndDateDb = rs.getDate("endDate");
+                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("endDate",
+                        LocalDate.class));
                 if (budgetItemEndDateDb != null) {
-                    Calendar budgetItemEndDate = new GregorianCalendar();
-                    budgetItemEndDate.setTime(budgetItemEndDateDb);
-                    if (budgetItemEndDate.compareTo(forecast.getStartDate()) < 0) continue;
+                    if (budgetItemEndDateDb.compareTo(forecast.getStartDate()) < 0) continue;
                 }
 
                 // If the item doesn't occur this month, then skip it:
                 if (!forecast.fallsWithinForecastWindow(
-                        Utility.SqlDateToCalendarDate(rs.getDate("startDate")))
+                        Utility.localDateToCalendarDate(rs.getObject("startDate", LocalDate.class)))
                    ) continue;
 
                 // If the item occurs only once this month:

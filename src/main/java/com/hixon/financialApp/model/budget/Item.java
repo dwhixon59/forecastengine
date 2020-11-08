@@ -1218,11 +1218,11 @@ public abstract class Item extends IndependentEntity {
       } else {
          endDate = "null";
       }
-      String line = "Item:  id = " + id + ", category = " + category + ", payee = " + payee +
-              ", period = " + period + ", amount = " + amount + ", running balance = " + runningBalance +
-              ", start date = " + Utility.calendarDateToStringDate(startDate) + " number of payments = " +
-              numberOfPayments + ", end date = " + endDate + ", item type = " + itemType + ", how important = " +
-              howImportant + ", how occurs = " + howOccurs +", how paid = " + howPaid + ".";
+      String line = "Item:  \t\nid = " + id + ", \t\ncategory = " + category + ", \t\npayee = " + payee +
+              ", \t\nperiod = " + period + ", \t\namount = " + amount + ", \t\nrunning balance = " + runningBalance +
+              ", \t\nstart date = " + Utility.calendarDateToStringDate(startDate) + " \t\nnumber of payments = " +
+              numberOfPayments + ", \t\nend date = " + endDate + ", \t\nitem type = " + itemType + ", \t\nhow important = " +
+              howImportant + ", \t\nhow occurs = " + howOccurs +", \t\nhow paid = " + howPaid + ".";
       return line;
    }
 }

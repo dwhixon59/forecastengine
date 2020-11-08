@@ -14,6 +14,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 import java.util.Objects;
@@ -198,10 +199,10 @@ public class Forecast extends IndependentEntity {
       super(false);
       this.id = UUID.fromString(rs.getString("idForecast"));
       this.description = rs.getString("description");
-      this.dateGenerated = Utility.SqlDateToCalendarDate(rs.getDate("dateGenerated"));
-      this.startDate = Utility.SqlDateToCalendarDate(rs.getDate("startDate"));
+      this.dateGenerated = Utility.localDateToCalendarDate(rs.getObject("dateGenerated", LocalDate.class));
+      this.startDate = Utility.localDateToCalendarDate(rs.getObject("dateGenerated", LocalDate.class));
       this.startingBalance = rs.getDouble("startingBalance");
-      this.endDate = Utility.SqlDateToCalendarDate(rs.getDate("endDate"));
+      this.endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
       this.endingBalance = rs.getDouble("endingBalance");
       this.numberOfMonths = rs.getInt("numberOfMonths");
       this.idBudget = UUID.fromString(rs.getString("idBudget"));
@@ -354,24 +355,37 @@ public class Forecast extends IndependentEntity {
    public void updateForecast() throws Exception, EntityException, BudgetException, QuitException, RegisterException {
 
       // Get the starting date of the forecast to update:
-      Utility.getResolver().say("Updating the forecast.  WARNING:  Normally this should begin with the first of next " +
-              "month.");
-      Calendar startDate = Utility.askStartDate();
+      boolean done = false;
+      Calendar updateStartDate = null;
+      while (!done) {
+         Utility.getResolver().say("Updating the forecast.  WARNING:  Normally this should begin with the first of next " +
+                 "month.");
+         updateStartDate = Utility.askStartDate();
+         Calendar nextMonth = Calendar.getInstance();
+         nextMonth.add(MONTH, 1);
+         if (updateStartDate.get(MONTH) != nextMonth.get(MONTH) || updateStartDate.get(Calendar.DATE) != 1) {
+            done = Utility.getResolver().getYesOrNo("You did not select the first of next month.  Are you sure?");
+         } else {
+            done = true;
+         }
+      }
 
       /*
        Update up the end date so that the forecast window will be the same number of months as it was originally
        set to be:
       */
-      endDate = (Calendar) startDate.clone();
+      endDate = (Calendar) updateStartDate.clone();
       endDate.add(MONTH, numberOfMonths);
 
       // Update all the forecast items in the forecast from the current budget items:
-      String query = "update forecast_item fi inner join budget_item bi on " +
-              "fi.BudgetItem_idBudgetItem = bi.idBudgetItem set fi.category = bi.category, fi.payee = bi.payee, " +
-              "fi.period = bi.period, fi.amount = bi.amount, fi.startDate = bi.startDate, fi.numberOfPayments = " +
-              "bi.numberOfPayments, fi.endDate = bi.endDate, fi.itemType = bi.itemType, fi.howImportant =" +
-              " bi.howImportant, fi.howOccurs = bi.howOccurs, fi.howPaid = bi.howPaid where fi.Forecast_idForecast =" +
-              " uuid_to_bin('" + id + "')";
+      String query =
+              "update forecast_item fi " +
+              "inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+              "set fi.category = bi.category, fi.payee = bi.payee, fi.period = bi.period, fi.amount = bi.amount, " +
+              "fi.startDate = bi.startDate, fi.numberOfPayments = bi.numberOfPayments, fi.endDate = bi.endDate, " +
+              "fi.itemType = bi.itemType, fi.howImportant = bi.howImportant, fi.howOccurs = bi.howOccurs, " +
+              "fi.howPaid = bi.howPaid " +
+              "where fi.Forecast_idForecast = uuid_to_bin('" + id + "')";
       executeUpdate(query, "updating the forecast items from the budget items");
 
       // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
@@ -380,39 +394,35 @@ public class Forecast extends IndependentEntity {
               "forecast_item)";
       ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
 
-      // Insert any new forecast items that weren't originally included:
+      // Create forecast items for budget items that weren't previously included:
       ForecastItem forecastItem;
       while (rs.next()) {
          forecastItem = new ForecastItem(this, rs);
          forecastItem.save(INSERT);
       }
 
-      // First clean up the old transactions (prior to the month before the current month:
-      // TODO: clean up old transactions.
-
-      // Now set the first occurrence of every forecast transaction to "first occurrence":
-      // TODO:  set all the forecast transactions to "not the first occurrence".
-      // TODO:  set the first occurrence of every forecast transaction to "first occurence".
-
-      // We don't have to delete any forecast items that reference budget items that no longer exist, because the ones
-      // after the update start date will be deleted with all the other forecast items and not regenerated because
-      // they don't have budget items to regenerate them from.  If they occur before the update start date, then we
-      // shouldn't mess with them:
+      // We don't have to delete any forecast items generated from budget items that no longer exist, because they are
+      // presumably the basis of some forecast transactions that may still be in the forecast.  However we ned to expire
+      // them so they no longer generate new forecast transactions.
+      ForecastItem.expireOldForecastItems();
 
       // Delete all of the forecast transactions that occur after the update start date:
       query = ForecastTransaction.getDeleteQuery() + "where plannedDate >= " +
-              Utility.calendarDateToSqlDateString(startDate);
+              Utility.calendarDateToSqlDateString(updateStartDate);
       executeUpdate(query, "deleting all the forecast transactions after " +
-              Utility.calendarDateToStringDate(startDate));
+              Utility.calendarDateToStringDate(updateStartDate));
 
-      // Generate the updated portion of the forecast starting on start date:
+      // Generate the updated portion of the forecast starting on the update start date:
       this.transactions = new ForecastTransaction[numberOfMonths * 31];
       ForecastEngine forecastEngine = new ForecastEngine();
-      forecastEngine.generateForecastTransactions(this, startDate);
+      forecastEngine.generateForecastTransactions(this, updateStartDate);
 
       // Save the updated portion of the forecast:
-      save();
       saveForecastTransactions();
+
+      // The forecast engine doesn't know that we are updating a forecast.  It will have set the first occurrence
+      // properly for a new forecast.  Fix up the flags in the updated forecast.
+      ForecastTransaction.cleanUpForecast(this);
 
    } // End Forecast.update().
 

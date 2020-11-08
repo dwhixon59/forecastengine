@@ -298,7 +298,15 @@ public class WellsFargoBank extends Bank {
    // Remove any serial number, etc. from a token:
    private String addCleanToken(String payeeToken) {
       String[] tokens = payeeToken.split("\\*");
-      return (tokens[0].length() > 0) ? tokens[0] : tokens[1];
+      String token;
+      if (tokens.length == 0) {
+         token = "";
+      } else if (tokens.length == 1) {
+         token = tokens[0];
+      } else {
+         token = (tokens[0].length() > 0) ? tokens[0] : tokens[1];
+      }
+      return token;
    }
 
    // Remove city, state and the word "RECURRING" from a token list:

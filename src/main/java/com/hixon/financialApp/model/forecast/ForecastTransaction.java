@@ -2,6 +2,7 @@ package com.hixon.financialApp.model.forecast;
 
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.budget.ItemOfInterest;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -18,6 +19,7 @@ import com.sun.istack.internal.Nullable;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -194,7 +196,7 @@ public class ForecastTransaction extends IndependentEntity {
     public ForecastTransaction(ResultSet rs) throws SQLException {
         super(false);
         this.id = UUID.fromString(rs.getString("ft.idForecastTransaction"));
-        this.plannedDate = Utility.SqlDateToCalendarDate(rs.getDate("ft.plannedDate"));
+        this.plannedDate = Utility.localDateToCalendarDate(rs.getObject("ft.plannedDate", LocalDate.class));
         this.firstOccurrence = rs.getBoolean("ft.firstOccurrence");
         this.found = rs.getBoolean("ft.found");
         this.remainingAmount = rs.getDouble("ft.remainingAmount");
@@ -236,6 +238,10 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     public static final String selectQuery = "select" + selectColumns + "from forecast_transaction ft";
+
+    public static final String getSelectQuery() {
+        return selectQuery;
+    }
 
     // The insert query:
     public static final String insertQuery = "insert into forecast_transaction (idForecastTransaction, " +
@@ -320,14 +326,38 @@ public class ForecastTransaction extends IndependentEntity {
     private static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 
-        String selectQuery = "select bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', ft.remainingAmount, " +
-                "ft.plannedDate, ft.firstOccurrence, ft.found, ft.updatedTimeStamp as 'ft.version', " +
-                "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem', fi.category, fi.payee, fi.amount " +
-                "as 'plannedAmount' from forecast_transaction ft inner join " +
-                "forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem inner join" +
-                " budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem where " +
-                "ft.remainingAmount <> 0 and bi.idBudgetItem = uuid_to_bin('" + idBudgetItem + "') and " +
-                "fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "') order by ft.plannedDate asc ";
+        String selectQuery =
+                "select bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', ft.remainingAmount, " +
+                        "ft.plannedDate, ft.firstOccurrence, ft.found, ft.updatedTimeStamp as 'ft.version', " +
+                        "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem', fi.category, " +
+                        "fi.payee, fi.amount as 'plannedAmount' " +
+                        "from forecast_transaction ft " +
+                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                        "inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                        "where ft.remainingAmount <> 0 and bi.idBudgetItem = uuid_to_bin('" + idBudgetItem + "') " +
+                        "and fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "') " +
+                        "order by ft.plannedDate asc ";
+
+        ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
+                "get a list of Forecast Transactions by date.");
+
+        return new ForecastTransactionDatabaseIterator(rs);
+
+    }
+
+    private static ForecastTransactionIterator getNonZeroForecastTransactionsForForecastItem(ForecastItem forecastItem)
+            throws EntityException, SQLException {
+
+        String selectQuery =
+                "select bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', ft.remainingAmount, " +
+                        "ft.plannedDate, ft.firstOccurrence, ft.found, ft.updatedTimeStamp as 'ft.version', " +
+                        "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem', fi.category, " +
+                        "fi.payee, fi.amount as 'plannedAmount' " +
+                        "from forecast_transaction ft " +
+                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                        "where ft.remainingAmount <> 0 and fi.idForecastItem = uuid_to_bin('" + forecastItem.getId() + "') " +
+                        "and fi.Forecast_idForecast = uuid_to_bin('" + forecastItem.getForecast().getId() + "') " +
+                        "order by ft.plannedDate asc ";
 
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
                 "get a list of Forecast Transactions by date.");
@@ -388,9 +418,21 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Helper methods:
      */
-    // Determine whether a date falls within the period this forecast transaction is effective:
+    // Timing of a date with respect to the applicability period of a forecast transaction:
     enum Timing {PRIOR_TO, WITHIN, AFTER, UNDEFINED}
 
+    /**
+     * Determine the timing of a date with respect to the applicability period of a forecast transaction.
+     *
+     * @param date The date to determine the timing of.
+     * @return PRIOR_TO if the date is prior to the applicability period of the transaction.  WITHIN if the date is
+     * within the applicabiity of the transaction.  AFTER if the date occurs after the applicability period of the
+     * transaction.
+     * @throws ForecastException
+     * @throws EntityException
+     * @throws BudgetException
+     * @throws SQLException
+     */
     public Timing fallsWithinWindow(Calendar date) throws ForecastException, EntityException, BudgetException, SQLException {
         Timing timing = null;
         int comparison = date.compareTo(plannedDate);
@@ -419,12 +461,22 @@ public class ForecastTransaction extends IndependentEntity {
             case ENVELOPE:  // The period is from the date of the forecast transaction to the day after the previous occurrence
                 // If the date passed in is before the date of this forecast transaction:
                 if (comparison < 0) {
-                    // Then if it is after the date of the previous forecast transaction:
-                    if (date.compareTo(getForecastItem().getPreviousDateOfOccurrence(plannedDate)) > 0) {
-                        // then it is within the period of this forecast transaction.
+
+                    // Get the date of the previous transaction (if one exists):
+                    Calendar previousTransaction = getForecastItem().getPreviousDateOfOccurrence(plannedDate);
+
+                    // If there is a previous forecast transaction:
+                    if (previousTransaction != null) {
+                        // Then if it is after the date of the previous forecast transaction:
+                        if (date.compareTo(previousTransaction) > 0) {
+                            // then it is within the period of this forecast transaction.
+                            timing = Timing.WITHIN;
+                        } else { // else it is prior to the period of this forecast transaction.
+                            timing = Timing.PRIOR_TO;
+                        }
+                    } else {
+                        // if there isn't a previous transaction, then consider it within the current transaction:
                         timing = Timing.WITHIN;
-                    } else { // else it is prior to the period of this forecast transaction.
-                        timing = Timing.PRIOR_TO;
                     }
                 } else { // the date passed in is either equal to or after the date of this forecast transaction:
                     // If date passed in is the same as the date of this forecast item:
@@ -454,12 +506,12 @@ public class ForecastTransaction extends IndependentEntity {
     public String toString() {
         String s;
         try {
-            s = "Forecast Transaction:  Planned Date = " + Utility.calendarDateToStringDate(this.getPlannedDate()) +
-                    ", Category = " + this.getForecastItem().getCategory() +
-                    ", Payee =  " + this.getForecastItem().getPayee() + ", Budgeted Amount = " +
-                    Utility.formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
-                    Utility.formatDollarAmount(remainingAmount) + ", first occurrence = " + firstOccurrence + ", found = "
-                    + found + ", Forecast transaction - ID = " + this.getId().toString() + ", Next significant event = " +
+            s = "Forecast Transaction:  \n\tPlanned Date = " + Utility.calendarDateToStringDate(this.getPlannedDate()) +
+                    ", \n\tCategory = " + this.getForecastItem().getCategory() +
+                    ", \n\tPayee =  " + this.getForecastItem().getPayee() + ", \n\tBudgeted Amount = " +
+                    Utility.formatDollarAmount(forecastItem.getAmount()) + ", \n\tRemaining Amount = " +
+                    Utility.formatDollarAmount(remainingAmount) + ", \n\tFirst occurrence = " + firstOccurrence + ", \n\tfound = "
+                    + found + ", \n\tForecast transaction - ID = " + this.getId().toString() + ", \n\tNext significant event = " +
                     this.getNextSignificantEvent();
         } catch (Exception | EntityException | BudgetException e) {
             s = "Unable to print out the forecast transaction.";
@@ -915,7 +967,7 @@ public class ForecastTransaction extends IndependentEntity {
      * Find the transaction in the forecast that applies to the specified date:
      *
      * @param forecastItem The forecast item that we are looking for a forecast transaction instance for.
-     * @param date The date of interest.
+     * @param date         The date of interest.
      * @return The applicable forecast transaction.  Null if there is none (hasn't occurred yet in the forecast).
      * @throws SQLException
      * @throws EntityException
@@ -925,14 +977,15 @@ public class ForecastTransaction extends IndependentEntity {
     public static ForecastTransaction getApplicableForecastTransaction(ForecastItem forecastItem, Calendar date)
             throws Exception, EntityException, BudgetException, RegisterException {
 
-        // Find the non-zero forecast transaction that applies to this period of that item:
+        // For efficiency purposes, first look for a non-zero forecast transaction (one that isn't exhausted) that
+        // applies to the specified forecast item on the specified date:
         ForecastTransaction forecastTransaction = getApplicableNonZeroOccurrence(forecastItem, date);
 
         // If there isn't one:
         if (forecastTransaction == null) {
 
             // then look for an exhausted (zero) forecast item that applies to the specified date:
-            forecastTransaction = findLastOccurenceBeforeDate(forecastItem, date);
+            forecastTransaction = getApplicableZeroOccurrence(forecastItem, date);
         }
 
         return forecastTransaction;
@@ -945,7 +998,7 @@ public class ForecastTransaction extends IndependentEntity {
      * applicability period of the specified date, roll up the old forecast transactions until we get to the one that is.
      *
      * @param forecastItem The item to find a forecast transaction for.
-     * @param date The that defines the applicability period.
+     * @param date         The that defines the applicability period.
      * @return The applicable forecast transaction if there is one, else null.
      */
     @Nullable
@@ -956,8 +1009,7 @@ public class ForecastTransaction extends IndependentEntity {
         // Get a list of forecast transactions beginning with the earliest non-zero amount occurrence of a forecast
         // transaction in the forecast for the budget item associated with the forecast item:
         ForecastTransactionIterator it =
-                ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(forecastItem.getIdBudgetItem(),
-                        forecastItem.getForecast().getId());
+                ForecastTransaction.getNonZeroForecastTransactionsForForecastItem(forecastItem);
 
         // Find the forecast transaction in the list that this split applies to.  Roll up any old forecast transactions
         // encountered in the process:
@@ -994,7 +1046,10 @@ public class ForecastTransaction extends IndependentEntity {
                                 if (forecastTransaction != null) {
                                     forecastTransaction.setRemainingAmount(forecastTransaction.getRemainingAmount() +
                                             remainingAmount);
-                                } else break;
+                                    forecastTransaction.save(UPDATE);
+                                } else {
+                                    break;
+                                }
                             }
                             break;
 
@@ -1028,18 +1083,23 @@ public class ForecastTransaction extends IndependentEntity {
 
 
     /**
-     * Find the last occurrence of a forecast transaction for a forecast item prior to the specified date:
+     * Find the applicable forecast transaction for a forecast on the specified date given the fact that there are no
+     * non-zero transactions that apply to it.  Given that fact, the algorithm is to simply get the head a list of
+     * transactions for the item in descending order beginning with the last transaction to occur on or before the
+     * specified date. If that transaction does not apply to the date, then the next occurrence of a forecast
+     * transaction must apply (the applicability period is prior to the item) so return it (if there is one).
+     *
      * @param forecastItem
      * @param date
      * @return
      */
-    private static ForecastTransaction findLastOccurenceBeforeDate(ForecastItem forecastItem, Calendar date)
+    private static ForecastTransaction getApplicableZeroOccurrence(ForecastItem forecastItem, Calendar date)
             throws SQLException, EntityException, ForecastException, BudgetException {
 
         ForecastTransaction forecastTransaction = null;
 
         // Find the last occurrence of a forecast transaction on or before today for this item of interest:
-        String lastOccurrenceQuery =
+        String lastOccurrenceBeforeDateQuery =
                 "select fi.category as 'fi.category', fi.payee as 'fi.payee', " + ForecastTransaction.getSelectColumns() +
                         "from forecast_transaction ft " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
@@ -1049,40 +1109,36 @@ public class ForecastTransaction extends IndependentEntity {
                         "fi.payee = \"" + forecastItem.getPayee() + "\" " +
                         "order by ft.plannedDate desc " +
                         "limit 1";
-        ResultSet rsLO = EntityInt.getRS(lastOccurrenceQuery, "retrieve the latest occurrence of a " +
-                "the forecast transaction for forecast item" + forecastItem + ".");
+        ResultSet rsLO = EntityInt.getRS(lastOccurrenceBeforeDateQuery, "retrieve the latest occurrence " +
+                "of a the forecast transaction for forecast item" + forecastItem + " before " +
+                Utility.calendarDateToStringDate(date) + ".");
 
-        // If there is a last occurrence of a forecast transaction for the forecast item:
+        // If there is a last occurrence before today of a forecast transaction for the forecast item:
         if (rsLO.next()) {
 
             forecastTransaction = new ForecastTransaction(rsLO);
 
-            // then if today's date falls within the effective window of this forecast transaction:
+            // Check if today's date falls within the effective window of this forecast transaction:
             Timing timing = forecastTransaction.fallsWithinWindow(date);
             switch (timing) {
 
                 case PRIOR_TO:
-                case AFTER:
-                    // today's date does not fall within the window of this forecast transaction, so try the next one:
-                    ForecastTransaction nextOccurrence = getNextOccurrence(forecastItem, date);
-
-                    // Make sure that it applies to the date we are interested in:
-                    Timing nextOccurrenceTiming = nextOccurrence.fallsWithinWindow(date);
-                    if (nextOccurrenceTiming != Timing.WITHIN) {
-
-                        // If today's date is in between the end of the last occurrence window and prior to the next
-                        // occurrence window, then the next occurrence was delayed manually causing a gap between the
-                        // windows.  So the last occurrence still applies.  In any other case, something is wrong, so
-                        // throw an exception:
-                        if (timing != Timing.AFTER || nextOccurrenceTiming != Timing.PRIOR_TO) {
-                            throw new ForecastException("Failed to find an applicable forecast transaction for " + forecastItem);
-                        }
-                    }
-                    break;
+                    // The specified date is prior to the applicability window of this forecast transaction, which is
+                    // not possible given that this transaction occurs before that date.
+                    throw new ForecastException("A date which occurs after the planned date of a forecast " +
+                            "transaction was determined to be prior to the applicability period of the transaction," +
+                            "which is not possible.");
 
                 case WITHIN:
-                    // today's date falls within the effective window of this forecast transaction so this is the
-                    // one we are looking for, so add it to the list:
+                    // The specified date falls within the applicability window of this forecast transaction so this is
+                    // the one we are looking for:
+                    break;
+
+                case AFTER:
+                    // The specified date occurs after the applicability window of the last transaction scheduled that
+                    // date.  By the "bracketing principle" if forecast transaction immediately prior to a date does
+                    // not apply to that date, then one immediately after must, so return that one:
+                    forecastTransaction = getNextOccurrence(forecastItem, date);
                     break;
 
             }
@@ -1090,24 +1146,61 @@ public class ForecastTransaction extends IndependentEntity {
 
             // but if there isn't a latest occurrence, then try the next occurrence:
             forecastTransaction = getNextOccurrence(forecastItem, date);
+
+            // Check if the specified date falls within the effective window of this forecast transaction:
+            if (forecastTransaction != null) {
+                Timing timing = forecastTransaction.fallsWithinWindow(date);
+                switch (timing) {
+
+                    case PRIOR_TO:
+                        // The specified date occurs before the applicability window of the next transaction in the forecast
+                        // for the specified forecast item.  Since there was not a forecast transaction with a planned date
+                        // prior to the specified date, then the date must be before the first occurrence of that forecast
+                        // item in the forecast.  Therefore there is no applicable forecast transaction.
+                        forecastTransaction = null;
+                        break;
+
+                    case WITHIN:
+                        // The specified date falls within the applicability window of this forecast transaction so this is
+                        // the one we are looking for:
+                        break;
+
+                    case AFTER:
+                        // The specified date is after to the applicability window of this forecast transaction, which is
+                        // not possible given that this transaction occurs after that date.
+                        throw new ForecastException("A date which occurs prior to the planned date of a forecast " +
+                                "transaction was determined to be after the applicability period of the transaction," +
+                                "which is not possible.");
+
+                }
+            }
         }
 
         return forecastTransaction;
     }
 
 
+    /**
+     * Get the next occurrence of a forecast transaction for a forecast item after a specified date:
+     *
+     * @param forecastItem
+     * @param date
+     * @return
+     * @throws EntityException
+     * @throws SQLException
+     * @throws ForecastException
+     * @throws BudgetException
+     */
     private static ForecastTransaction getNextOccurrence(ForecastItem forecastItem, Calendar date)
             throws EntityException, SQLException, ForecastException, BudgetException {
 
-        // then get the next occurrence of a forecast transaction for the budget item of interest:
+        // then get the next occurrence of a forecast transaction for the forecast item of interest after the specified
+        // date:
         String nextOccurrenceQuery =
-                "select fi.category as 'fi.category', fi.payee as 'fi.payee'," + ForecastTransaction.getSelectColumns() +
-                        "from forecast_transaction ft " +
-                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
-                        "inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
-                        "inner join items_of_interest ii on bi.idBudgetItem = ii.BudgetItem_idBudgetItem " +
-                        "where ft.plannedDate >= current_date() and fi.category = \"" + forecastItem.getCategory() +
-                        "\" and fi.payee = \"" + forecastItem.getPayee() + "\" " +
+                ForecastTransaction.getSelectQuery() +
+                        " where " +
+                        "ft.ForecastItem_idForecastItem = uuid_to_bin ('" + forecastItem.getId() + "') and " +
+                        "ft.plannedDate > " + Utility.calendarDateToSqlDateString(date) + " " +
                         "order by ft.plannedDate asc " +
                         "limit 1";
         ResultSet rsNO = EntityInt.getRS(nextOccurrenceQuery, "retrieve the next occurrence of a forecast " +
@@ -1123,12 +1216,68 @@ public class ForecastTransaction extends IndependentEntity {
 
         } else {
 
-            // Then this is an odd situation as there should HAVE been one, except for very unusual cases:
-            Utility.getResolver().say("Warning:  There is no forecast transaction for forecast item " +
-                    forecastItem.getCategory() + ", " + forecastItem.getPayee() + " that applies to today's date.");
+            // This is normal if the forecast item is unplanned because unplanned forecast items only occur in the forecast
+            // if they are required to reconcile transaction splits.  However if it isn't unplanned:
+            if (forecastItem.getHowOccurs() != Item.HowOccurs.UNPLANNED) {
+                // Then this is an odd situation.  The item either expired, or the forecast ended:
+                Utility.getResolver().say("Warning:  There is no forecast transaction for forecast item " +
+                        forecastItem.getCategory() + ", " + forecastItem.getPayee() + " that occurs after today's date.");
+            }
         }
 
         return forecastTransaction;
     }
 
+    /**
+     * Clean up the forecast.  This is required when forecasts are updated or merged.  Reset all the first occurrence
+     * flags and roll up any expired transactions while we are at it (good hygiene):
+     *
+     * @param forecast The forecast to be cleaned up.
+     * @throws EntityException
+     * @throws RegisterException
+     * @throws SQLException
+     */
+    public static void cleanUpForecast(Forecast forecast) throws EntityException, RegisterException, Exception, BudgetException {
+
+        // Set all the forecast transactions to "not the first occurrence".
+        EntityInt.executeUpdate(getUpdateQuery() + "firstOccurrence = false", "attempting to set " +
+                "the first occurrence flags to false in the forecast.");
+
+        // Set the first occurrence of every forecast transaction to "first occurrence" and roll up any expired
+        // transactions.  The algorithm used is to go get all the forecast items in the forecast then for each one get
+        // the earliest occurrence of a forecast transaction for it in the forecast and set that occurrence as the first
+        // occurrence, then get the applicable transaction to today's date which will roll any expired transactions
+        // as a side effect:
+        ResultSet rsFI = ForecastItem.getAllUsableForecastItemsInForecast(forecast);
+        Calendar today = Calendar.getInstance();
+        if (rsFI != null) {
+            Utility.getResolver().say("\nCleaning up the forecast.");
+            while (rsFI.next()) {
+
+                // Get the first occurrence of a forecast transaction for the current forecast item:
+                String firstOccurrenceQuery = getSelectQuery() + " where ft.ForecastItem_idForecastItem = uuid_to_bin('"
+                        + rsFI.getString("fi.idForecastItem") + "') order by ft.plannedDate asc limit 1";
+                ResultSet rsFT = EntityInt.getRS(firstOccurrenceQuery, "retrieve the first occurrence of a " +
+                        "forecast transaction for forecast item" + new ForecastItem(rsFI));
+
+                // If we found one, then update it to indicate that it is the first occurrence:
+                if (rsFT != null && rsFT.next()) {
+                    ForecastTransaction forecastTransaction = new ForecastTransaction(rsFT);
+                    String updateSql = getUpdateQuery() + "firstOccurrence = true where idForecastTransaction " +
+                            "= uuid_to_bin('" + rsFT.getString("ft.idForecastTransaction") + "')";
+                    EntityInt.executeUpdate(updateSql, "attempting to retrieve the firstOccurrence of the " +
+                            "forecast transaction with ID = " + rsFT.getString("ft.idForecastTransaction"));
+
+                    // Call getApplicableForecastTransaction() just to cause it to roll up expired transactions if any:
+                    ForecastItem forecastItem = new ForecastItem(rsFI);
+                    ForecastTransaction.getApplicableForecastTransaction(forecastItem, today);
+                } else {
+                    // It is unusual for usable forecast item not to occur in the forecast, so issue a warning:
+                        ForecastItem forecastItem = new ForecastItem(rsFI);
+                        Utility.getResolver().say("\nWARNING:  This forecast item does not occur in the forecast:\n" +
+                                forecastItem.toString());
+                }
+            }
+        }
+    }
 } // End class ForecastTransaction.
