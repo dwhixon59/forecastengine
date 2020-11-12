@@ -1138,7 +1138,37 @@ public class ForecastTransaction extends IndependentEntity {
                     // The specified date occurs after the applicability window of the last transaction scheduled that
                     // date.  By the "bracketing principle" if forecast transaction immediately prior to a date does
                     // not apply to that date, then one immediately after must, so return that one:
-                    forecastTransaction = getNextOccurrence(forecastItem, date);
+                    ForecastTransaction nextForecastTransaction = getNextOccurrence(forecastItem, date);
+
+                    // Check to see if the returned forecast transaction is applicable to the specified date.  If not,
+                    // then the specified date is in a hole between the applicability windows of the forecast transaction
+                    // preceding the specified date and the forecast transaction immediately following that date.  This
+                    // can occur if the user manually adjusts the planned dates of forecast transactions creating holes
+                    // between them.
+                    timing = nextForecastTransaction.fallsWithinWindow(date);
+                    switch (timing) {
+
+                        case PRIOR_TO:
+                            // The specified date is prior to the applicability window of this forecast transaction, which
+                            // means we are in a hole between the applicability windows of the preceding and succeeding
+                            // forecast transactions.  In this case return the preceding forecast transaction:
+                            // not possible given that this transaction occurs before that date.
+                            break;
+
+                        case WITHIN:
+                            // The specified date falls within the applicability window of this forecast transaction so this is
+                            // the one we are looking for:
+                           break;
+
+                        case AFTER:
+                            // The specified date occurs after the applicability window of the next forecast transaction
+                            // planned, which is a violation of the "bracketing principle":
+                            throw new ForecastException("The next forecast transaction \n" + nextForecastTransaction +
+                                    "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayDate(date) +
+                                    " is \n" + forecastTransaction + "\nwhich is also prior to the specified date, which " +
+                                    "should not occur.");
+                    }
+
                     break;
 
             }

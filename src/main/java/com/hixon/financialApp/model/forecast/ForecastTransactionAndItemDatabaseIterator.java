@@ -62,7 +62,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
       String selectPlaceholdersQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
               "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
-              "ft.remainingAmount = 0.00 and fi.amount = 0.00 and ft.plannedDate >= " +
+              "ft.remainingAmount = 0.00 and fi.amount = 0.00 and fi.howOccurs <> 'U' and ft.plannedDate >= " +
               Utility.calendarDateToSqlDateString(startDate) + " order by ft.plannedDate asc, fi.payee asc";
       rsPlaceholders = EntityInt.getRS(selectPlaceholdersQuery, "Database error occurred attempting to " +
               "get a list of placeholder forecast transactions by date.");

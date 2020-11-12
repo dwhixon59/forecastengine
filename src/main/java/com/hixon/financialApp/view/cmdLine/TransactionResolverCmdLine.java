@@ -484,11 +484,22 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
    }
 
 
-   /*
+   /**
     * getSplits()
     *
     * Interact with the user to confirm or override the budget item amounts and then create splits for them.  Allow the
     * user to add new budget items and create splits for them as well.
+    *
+    * @param transaction The transaction to get the splits for.
+    * @param splits A list of splits that this function will add the splits to.
+    * @param merchant
+    * @param budgetItemsForMerchant
+    * @param skipAllowed
+    * @param inquireAllowed
+    * @throws ViewException
+    * @throws EntityException
+    * @throws BudgetException
+    * @throws RegisterException
     */
    @Override
    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
@@ -527,7 +538,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                     budgetItemsForMerchant.size(), false, true);
          }
 
-         // Create the splits:
+         // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
+         // Add a new budget item to current Merchant:
          if (amounts[0].equalsIgnoreCase("a")) {
             assignMoreBudgetItems(merchant, budgetItemsForMerchant);
             done = false;
