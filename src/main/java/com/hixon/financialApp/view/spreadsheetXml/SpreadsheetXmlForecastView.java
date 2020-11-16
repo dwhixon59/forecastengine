@@ -143,20 +143,20 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
             writer.println("\t\tss:Bold=\"1\"/>");
          writer.println("\t</Style>");
 
-         // The header row default cell font style:
+         // The header row default Cell font style:
          writer.println("\t<Style ss:ID=\"HeaderRow\">");
             writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"12\" ss:Color=\"#000000\"");
             writer.println("\t\tss:Bold=\"1\"/>");
          writer.println("\t</Style>");
 
-         // The centered header string cell style:
+         // The centered header string Cell style:
          writer.println("\t<Style ss:ID=\"CenteredHeader\">");
             writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"11\" ss:Color=\"#000000\"");
             writer.println("\t\tss:Bold=\"1\"/>");
             writer.println("\t\t<Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Bottom\"/>");
          writer.println("\t</Style>");
 
-         // The Forecast Transaction row default cell style:
+         // The Forecast Transaction row default Cell style:
          writer.println("\t<Style ss:ID=\"ForecastTransaction\" ss:Name=\"Normal\">");
             writer.println("\t\t<Alignment ss:Vertical=\"Bottom\"/>");
             writer.println("\t\t<Borders/>");
@@ -177,9 +177,16 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
             writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0\"/>");
          writer.println("\t</Style>");
 
-         // The Amount column style:
+         // The Balance column style:
          writer.println("\t<Style ss:ID=\"Balance\">");
-            writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0;[Red]&quot;$&quot;#,##0\"/>");
+         writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0;[Red]&quot;$&quot;#,##0\"/>");
+         writer.println("\t</Style>");
+
+         // The Header Balance column style:
+         writer.println("\t<Style ss:ID=\"HeaderBalance\">");
+         writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"16\" ss:Color=\"#000000\"");
+         writer.println("\t\tss:Bold=\"1\"/>");
+         writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0;[Red]&quot;$&quot;#,##0\"/>");
          writer.println("\t</Style>");
 
       writer.println("</Styles>");
@@ -229,12 +236,18 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    }
 
    @Override
-   public void renderMonthHeader(Calendar plannedDate) {
+   public void renderMonthHeader(Calendar plannedDate, double runningBalance) {
 
       writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"MonthRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Utility.calendarDateToMonthYearLongDate(plannedDate) +
               "</Data></Cell>");
-      writer.println("\t\t\t<cell/><cell/><cell/><cell/><cell ss:StyleID=\"Balance\" />");
+      writer.println("\t\t\t<Cell/><Cell/><Cell/><Cell/>");
+      if (firstItem) {
+         writer.println("\t\t\t<Cell ss:StyleID=\"HeaderBalance\"><Data ss:Type=\"Number\">" + runningBalance + "</Data></Cell>");
+      } else {
+         writer.println("\t\t\t<Cell ss:StyleID=\"HeaderBalance\" ss:Formula=\"=R[-1]C\">" +
+                 "<Data ss:Type=\"Number\"></Data></Cell>");
+      }
       writer.println("\t\t</Row>");
 
       writer.println("\t\t<Row ss:Height=\"18.75\" ss:StyleID=\"HeaderRow\">");

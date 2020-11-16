@@ -24,7 +24,7 @@ public interface ForecastViewInt {
            BudgetException;
 
    // Render the long term forecast:
-   boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException;
+   boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException, RegisterException;
 
    // Update the forecast from an external representation of the forecast like a spreadsheet:
    void updateFromExternalSource() throws ControllerException, ForecastException, EntityException, SQLException,

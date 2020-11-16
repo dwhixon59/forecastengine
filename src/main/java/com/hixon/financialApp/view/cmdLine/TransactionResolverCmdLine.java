@@ -306,9 +306,10 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
    // The account number was not in the payee string, so ask the user for help:
    @Override
-   public String resolveUnmatchedAccount(String payee) throws RegisterException {
+   public String resolveUnmatchedAccount(String payee, double amount) throws RegisterException {
       String accountNumber = null;
-      say("There is no account number in the following transaction payee: " + payee + ".");
+      say("There is no account number in the following transaction: " + payee + " for " +
+              Utility.formatDollarAmount(amount) + ".");
       say("Enter the last four digits of the account number to assign this transaction to:  ");
       List<Register> registers = Register.getListOf();
       for (Register register : registers

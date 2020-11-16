@@ -30,12 +30,14 @@ public class Register extends IndependentEntity {
    /*
     * Fields in the Register class:
     */
-   private static final String selectQuery = "select bin_to_uuid(idRegister) as idRegister, name, account_type, " +
-           "account_number, bin_to_uuid(Budget_idBudget) as idBudget from register ";
+   private static final String selectQuery = "select bin_to_uuid(r.idRegister) as 'r.idRegister', r.name as 'r.name', " +
+           "r.account_type as 'r.account_type', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
+           "bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' from register r";
 
    private String registerName = null;
    private String accountType = null;
    private String accountNumber = null;
+   private double balance = 0;
    private UUID idBudget = null;
    private List<Transaction> significantEvents = new ArrayList<Transaction>();
 
@@ -71,6 +73,14 @@ public class Register extends IndependentEntity {
       this.accountNumber = accountNumber;
    }
 
+   public double getBalance() {
+      return balance;
+   }
+
+   public void setBalance(double balance) {
+      this.balance = balance;
+   }
+
    public UUID getIdBudget() {
       return idBudget;
    }
@@ -79,8 +89,16 @@ public class Register extends IndependentEntity {
       this.idBudget = idBudget;
    }
 
+   public void setSignificantEvents(List<Transaction> significantEvents) {
+      this.significantEvents = significantEvents;
+   }
+
    public List<Transaction> getSignificantEvents() {
       return significantEvents;
+   }
+
+   public static String getSelectQuery() {
+      return selectQuery;
    }
 
    @Override
@@ -93,9 +111,23 @@ public class Register extends IndependentEntity {
       return null;
    }
 
+   // The update query:
+   public static final String updateQuery = "update register set ";
+
+   public static String getUpdateQuery() {
+      return updateQuery;
+   }
+
+   public String getupdateClause() {
+      return "name = '" + registerName + "', account_type = '" + accountType + "', account_number = '" + accountNumber + "', " +
+              "balance = " + balance +  ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+              "where idRegister = uuid_to_bin('" + id + "')";
+   }
+
+
    @Override
    public String getUpdateByIdQuery() throws BudgetException {
-      return null;
+      return getUpdateQuery() + getupdateClause();
    }
 
    @Override
@@ -121,11 +153,12 @@ public class Register extends IndependentEntity {
       try {
          if (rs != null) {
 
-            this.id = UUID.fromString(rs.getString("idRegister"));
-            this.registerName = rs.getString("name");
-            this.accountType = rs.getString("account_type");
-            this.accountNumber = rs.getString("account_number");
-            this.idBudget = UUID.fromString(rs.getString("idBudget"));
+            this.id = UUID.fromString(rs.getString("r.idRegister"));
+            this.registerName = rs.getString("r.name");
+            this.accountType = rs.getString("r.account_type");
+            this.accountNumber = rs.getString("r.account_number");
+            this.balance = rs.getDouble("r.balance");
+            this.idBudget = UUID.fromString(rs.getString("r.idBudget"));
 
          } else {
             throw new RegisterException("Result set passed into Register(rs) is empty or null.");
@@ -150,35 +183,14 @@ public class Register extends IndependentEntity {
     * Load and save methods:
     */
    public static Register getById(UUID idRegister) throws EntityException, SQLException, RegisterException {
-      ResultSet rs = EntityInt.getRSById(selectQuery + "where idRegister = ", idRegister, "Database error encountered trying to " +
-              "retrieve register with id = " + idRegister);
+      ResultSet rs = EntityInt.getRSById(selectQuery + " where r.idRegister = ", idRegister,
+              "Database error encountered trying to retrieve register with id = " + idRegister);
       return new Register(rs);
-   }
-
-   public static Register getByAccountNumber(String accountNumber) throws SQLException, RegisterException {
-
-      try {
-         String query = "select bin_to_uuid(idRegister) from register where Account_Number = '" +
-                 accountNumber + "'";
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(query);
-         if (rs.next()) {
-            Register register = new Register(rs);
-            return register;
-         } else {
-            return null;
-         }
-      } catch (SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to retrieve a register with the " +
-                 "account number " + accountNumber);
-         re.initCause(e);
-         throw re;
-      }
    }
 
    public static Register getByLastFourDigits(String lastFourDigits) throws SQLException, RegisterException {
 
-      String query = selectQuery + "where Account_Number like '%" + lastFourDigits + "'";
+      String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
       try {
          System.out.println("SQL statement is: " + query);
          Statement statement = Utility.getDbConnection().createStatement();
@@ -201,7 +213,7 @@ public class Register extends IndependentEntity {
       // Find the ID of the named budget:
       PreparedStatement preparedStmt = null;
       ResultSet rs = null;
-      String query = selectQuery + "where name = '" + registerName + "'";
+      String query = selectQuery + " where r.name = '" + registerName + "'";
       try {
          preparedStmt = Utility.getDbConnection().prepareStatement(query);
          rs = preparedStmt.executeQuery();
@@ -241,9 +253,6 @@ public class Register extends IndependentEntity {
          re.initCause(e);
          throw re;
       }
-   }
-
-   public void save() {
    }
 
 

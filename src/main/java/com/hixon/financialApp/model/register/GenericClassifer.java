@@ -105,7 +105,7 @@ public class GenericClassifer implements FinancialInstitution {
     }
 
     @Override
-    public String parseMerchantPayee(String payee) throws ParseException, RegisterException, SQLException {
+    public String parseMerchantPayee(String payee, double amount) throws ParseException, RegisterException, SQLException {
         return null;
     }
 

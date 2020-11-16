@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.*;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
@@ -56,7 +57,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract void renderLongTermForecastFrontMatter();
 
-    protected abstract void renderMonthHeader(Calendar plannedDate);
+    protected abstract void renderMonthHeader(Calendar plannedDate, double runningBalance);
 
     protected abstract void renderForecastTransaction(ForecastTransaction forecastTransaction, int credit, int debit)
             throws EntityException, SQLException, ForecastException, BudgetException;
@@ -110,15 +111,16 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
 
     @Override
-    public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException {
+    public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException, RegisterException {
 
         this.forecast = forecast;
 
         // Get the first day of the forecast rendering:
         Calendar startDate = Utility.askStartDate();
 
-        // Get the starting balance:
-        double runningBalance = 0;
+        // Get the starting balance.  Take if from the first register associated with the budget for now:
+        List<Register> registers = forecast.getBudget().getRegisters();
+        double runningBalance = registers.get(0).getBalance();
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();
@@ -131,6 +133,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         int currentMonth = -1;
         while (forecastTransaction != null) {
 
+            // If the month changed, write out a header line with the name of the month:
+            if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
+                renderMonthHeader(forecastTransaction.getPlannedDate(), runningBalance);
+                currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+            }
+
             runningBalance += forecastTransaction.getRemainingAmount();
             forecastTransaction.setRunningBalance(runningBalance);
 
@@ -142,12 +150,6 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             } else {
                 credit = 0;
                 debit = -Utility.doubleToInt(forecastTransaction.getRemainingAmount());
-            }
-
-            // If the month changed, write out a header line with the name of the month:
-            if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
-                renderMonthHeader(forecastTransaction.getPlannedDate());
-                currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
             }
 
             // Write out the forecast line:

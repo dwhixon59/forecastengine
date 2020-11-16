@@ -97,7 +97,7 @@ public class WellsFargoBank extends Bank {
       }
 
       // Parse out the merchant name:
-      transaction.setMerchantPayee(parseMerchantPayee(transaction.getPayee()));
+      transaction.setMerchantPayee(parseMerchantPayee(transaction.getPayee(), transaction.getAmount()));
 
       transaction.setDirty(true);
    }
@@ -125,16 +125,16 @@ public class WellsFargoBank extends Bank {
          throw new ParseException("Too few tokens in the line.", 0);
       }
 
-      // Figure out which merchant the transaction is associated with:
-      payeeTokens = tokens[2].split(" ");
-      String merchantPayee = parseMerchantPayee(tokens[2]);
-
       // Make sure there are both a credit and debit for the Transaction constructor:
       String credit;
+      double amount = 0;
       if (tokens.length < 4) {
          credit = "0.00";
       } else {
          credit = tokens[3];
+         try {
+            amount = Utility.parseDollarAmount(credit);
+         } catch (NumberFormatException e) { }
       }
       String debit;
       if (tokens.length < 5) {
@@ -142,14 +142,21 @@ public class WellsFargoBank extends Bank {
       } else
       {
          debit = tokens[4];
+         try {
+            amount = -Utility.parseDollarAmount(debit);
+         } catch (NumberFormatException e) { }
       }
+
+      // Figure out which merchant the transaction is associated with:
+      payeeTokens = tokens[2].split(" ");
+      String merchantPayee = parseMerchantPayee(tokens[2], amount);
 
       // Create a transaction based on the provisional record:
       return new Transaction(register, tokens[1], tokens[2], credit, debit, merchantPayee);
    }
 
    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-   public String parseMerchantPayee(String payee) throws RegisterException, SQLException {
+   public String parseMerchantPayee(String payee, double amount) throws RegisterException, SQLException {
 
       // Construct the merchant payee string from portions of the bank payee string:
       String merchantPayee;
@@ -205,7 +212,7 @@ public class WellsFargoBank extends Bank {
             for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
             String accountNumber;
             if (i == payeeTokens.length) {
-               accountNumber = resolver.resolveUnmatchedAccount(payee);
+               accountNumber = resolver.resolveUnmatchedAccount(payee, amount);
             } else {
                accountNumber = payeeTokens[i];
             }

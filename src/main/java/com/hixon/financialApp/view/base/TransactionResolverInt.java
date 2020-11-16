@@ -37,7 +37,7 @@ public interface TransactionResolverInt {
 
    public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString) throws ViewException, RegisterException, EntityException;
 
-   String resolveUnmatchedAccount(String payee) throws RegisterException;
+   String resolveUnmatchedAccount(String payee, double amount) throws RegisterException;
 
    // Assign new budget items to an existing list of budget items:
    void assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)

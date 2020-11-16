@@ -27,7 +27,7 @@ public interface FinancialInstitution {
    // Convert the data to a usable format that can be processed by our analysis software or code (CSV, JSON, XML, SQL, etc.)
 
    // Parse a payee string from a particular bank into a Merchant payee:
-   String parseMerchantPayee(String payee) throws ParseException, RegisterException, SQLException;
+   String parseMerchantPayee(String payee, double amount) throws ParseException, RegisterException, SQLException;
 
    // Create a transaction and load it from a provisional CSV record:
    Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException, RegisterException;

@@ -166,17 +166,24 @@ public class Importer {
              * Phase 2:  Reconcile the transaction with any existing provisional transactions
              */
 
-            // If there is a provisional transaction for this transaction, then use the same ID:
+            // If there is a provisional transaction for this transaction, then use the same ID.  Also, if there is a
+            // provisional transaction, then the amount of this transaction has already been deducted from the register
+            // balance, so no need to do that:
             Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(record,
                     merchant);
             if (provisionalTransaction != null) {
                transaction.setId(provisionalTransaction.getId());
                transaction.setIsImproper(provisionalTransaction.getIsImproper());
                transaction.setIsNew(provisionalTransaction.getIsNew());
+            } else {
+               // Since there is no provisional transaction, the amount has not yet been deducted from the register
+               // balance, so deduct it now:
+               register.setBalance(register.getBalance() + transaction.getAmount());
             }
 
             // At this point the transaction is complete, so save it off:
             transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+            register.update();
 
             // Tell the user what we just did:
             getResolver().say("Imported a bank transaction to " + merchant.getName() + " for " +
@@ -525,6 +532,11 @@ public class Importer {
 
                   // Save the transaction and associated items:
                   provisionalTransactions.get(provTrxIndex).save(INSERT);
+
+                  // Update the balance in the register and save it:
+                  register.setBalance(register.getBalance() + transaction.getAmount());
+                  register.update();
+
                   for (TransactionSplit split : splits != null ? splits : null) {
                      System.out.println(split.toString());
                      split.save();
@@ -551,6 +563,10 @@ public class Importer {
                      // Confirm that with the user and remove if they agree:
                      if (getResolver().askDeleteRegisterTransaction(registerTransactions.get(regTrxIndex))) {
                         registerTransactions.get(regTrxIndex).delete();
+
+                        // Update the balance in the register to put back the amount previously deducted and save it:
+                        register.setBalance(register.getBalance() - transaction.getAmount());
+                        register.update();
                      }
 
                      // Move to the next register transaction:

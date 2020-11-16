@@ -93,7 +93,7 @@ public class CsvForecastView extends AbstractForecastView {
    }
 
    @Override
-   public void renderMonthHeader(Calendar plannedDate) {
+   public void renderMonthHeader(Calendar plannedDate, double runningBalance) {
 
    }
 

@@ -30,7 +30,7 @@ public class TextForecastView extends AbstractForecastView {
     }
 
     @Override
-    protected void renderMonthHeader(Calendar plannedDate) {
+    protected void renderMonthHeader(Calendar plannedDate, double runningBalance) {
 
     }
 

@@ -1,6 +1,7 @@
 package com.hixon.financialApp.model.forecast;
 
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.Item;
@@ -64,7 +65,7 @@ public class Forecast extends IndependentEntity {
                   "Database error encountered trying to retrieve a forecast."));
     }
 
-    // The types of significant events that can be generated:
+   // The types of significant events that can be generated:
    public enum SignificantEvents {daysBelowMinimumBalance}
 
 
@@ -433,6 +434,12 @@ public class Forecast extends IndependentEntity {
    public void createTransactionsArray() {
       this.transactions = new ForecastTransaction[numberOfMonths * 31];
    }
+
+   public Budget getBudget() throws EntityException, BudgetException, SQLException {
+      Budget budget = Budget.getById(idBudget);
+      return budget;
+   }
+
 
 
    /*
