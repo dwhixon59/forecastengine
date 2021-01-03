@@ -21,6 +21,7 @@ import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.Spl
 import static java.util.Calendar.DATE;
 
 public class TransactionSplit extends DependentEntity {
+   public static final double TAX_RATE = 0.07;
 
    /*
     * Fields:
@@ -38,7 +39,7 @@ public class TransactionSplit extends DependentEntity {
    SplitDisposition disposition = SplitDisposition.ASSIGN;
 
 
-   /*
+    /*
     * Getters and setters for BudgetItemMerchant:
     */
    public double getAmount() {
@@ -269,7 +270,7 @@ public class TransactionSplit extends DependentEntity {
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +
               "t.authorizationDate is null and t.postDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " and t.postDate <= " + Utility.calendarDateToSqlDateString(endDate);
-      query += " order by 4 asc";
+      query += " order by date asc";
       ResultSet rs = EntityInt.getRS(query, "while trying to get the splits for a budget item");
       return rs;
    }
@@ -294,4 +295,80 @@ public class TransactionSplit extends DependentEntity {
       Calendar endDate = Calendar.getInstance();
       return getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
    }
+
+   /**
+    * Distribute the remainder (unallocated) amount of a transaction across some of the splits associated with the
+    * transaction.  The remainder can be split two ways; by splitting the amount evenly across the designated splits, or
+    * apportioned across the designated splits by the amount of the split.  Apportionment works well for things like adding
+    * sales tax to split amounts. If there are both even and apportioned splits, the apportioned splits are done first
+    * and then the remaining amount is evenly spread across the even splits.
+    *
+    * @param evenRemainders The indexes of the splits to receive evenly divided amount of the remainder.
+    * @param apportionedRemainders The indexes of the splits to receive apportioned amounts of the remainder.
+    * @param addTaxItems The indexes of the splits that need tax added.
+    * @param splits A list of the splits for the transaction.
+    * @return The amount spread across the splits.
+    */
+   public static boolean splitRemainder(double transactionAmount, List<Integer> evenRemainders, List<Integer>
+           apportionedRemainders, List<Integer> addTaxItems, List<TransactionSplit> splits) {
+
+      // Compute the total number of splits to spread across:
+      int numberOfSplits = apportionedRemainders.size() + evenRemainders.size();
+
+      // Compute the remainder to spread across the splits:
+      double splitsAmount = 0;
+      for (TransactionSplit split: splits
+           ) {
+         splitsAmount += split.getAmount();
+      }
+      double remainder = transactionAmount - splitsAmount;
+
+      // First add tax to any splits that require it and subtract the taxes from the remainder:
+      double totalTax = 0;
+      for (int index: addTaxItems
+      ) {
+         double tax = Math.round((splits.get(index).getAmount() * 100.0) * TAX_RATE)/100.0;
+         splits.get(index).setAmount(splits.get(index).getAmount() + tax);
+         totalTax += tax;
+      }
+      remainder -= totalTax;
+
+      // Apportion the remainder across the splits named in the apportionedRemainders list:
+      double totalApportionedAmount = 0;
+      for (int index: apportionedRemainders
+           ) {
+         TransactionSplit split = splits.get(index);
+         double splitAmount = split.getAmount();
+         double apportionedAmount = (splitAmount / transactionAmount) * splitsAmount;
+         apportionedAmount = Math.round(apportionedAmount * 100.0) / 100.0;
+         splitAmount += apportionedAmount;
+         split.setAmount(splitAmount);
+         totalApportionedAmount += apportionedAmount;
+      }
+      remainder -= totalApportionedAmount;
+
+      // Now evenly split what's left over the splits name in the evenRemainders list:
+      double evenRemainderAmount = remainder / evenRemainders.size();
+      evenRemainderAmount = Math.round(evenRemainderAmount * 100.0) / 100.0;
+      for (int index: evenRemainders
+      ) {
+         splits.get(index).setAmount(splits.get(index).getAmount() + evenRemainderAmount);
+      }
+
+      // Finally, fix up any rounding errors in the transaction total based on the splits.  The rounding error should
+      // be no greater than one penney per split so only fix it if the difference is in that range:
+      double totalSplitsAmount = 0;
+      for (TransactionSplit split: splits
+           ) {
+         totalSplitsAmount += split.getAmount();
+      }
+      double roundingError = Math.round((transactionAmount - totalSplitsAmount) * 100.0) / 100.0;
+      double maxRoundingError = (addTaxItems.size() + apportionedRemainders.size() + evenRemainders.size())* 0.005;
+      if (Math.abs(roundingError) >= 0.01 && Math.abs(roundingError) <= maxRoundingError) {
+         splits.get(0).setAmount(splits.get(0).getAmount() + roundingError);
+      }
+
+      return true;
+   }
+
 }

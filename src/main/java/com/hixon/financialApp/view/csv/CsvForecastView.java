@@ -249,7 +249,7 @@ public class CsvForecastView extends AbstractForecastView {
       // Create a previous version of the import file:
       try {
          Utility.makeSaveFile(importForecastFilename, importForecastSaveFilename);
-      } catch (FinancialException e) {
+      } catch (Exception e) {
          ViewException ve =  new ViewException("Error occured while creating a previous version of the forecast " +
                  "transaction import file.");
          ve.initCause(e);

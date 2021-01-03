@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.text.NewTransactionSummaryReport;
 
@@ -57,6 +58,9 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
             UserResource userResource = renderNewTransactionSummaryReport(user);
             if (userResource != null) {
                 reports.add(userResource);
+            } else {
+                Utility.getResolver().say("\nNo new transactions to report on.");
+                break;
             }
         }
 

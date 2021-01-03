@@ -1,11 +1,13 @@
 package com.hixon.financialApp.view.text;
 
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
@@ -13,6 +15,7 @@ import com.hixon.financialApp.view.base.AbstractForecastReport;
 
 import java.io.*;
 import java.sql.SQLException;
+import java.util.Calendar;
 import java.util.List;
 
 
@@ -54,6 +57,8 @@ public class ItemsOfInterestReport extends AbstractForecastReport {
    @Override
    public void renderReportFrontMatter() {
       pw.println("Items of Interest to " + user.getFirstName() + ":");
+      pw.println("Item, Remaining, Budgeted/Spent");
+      pw.println("------------------------------------");
    }
 
    @Override
@@ -67,13 +72,20 @@ public class ItemsOfInterestReport extends AbstractForecastReport {
    }
 
    @Override
-   public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException {
+   public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException,
+           RegisterException {
       ForecastTransaction forecastTransaction = (ForecastTransaction) item;
-      pw.println(forecastTransaction.getForecastItem().getPayee() + "\t" + ((forecastTransaction.getRemainingAmount() ==
-              0) ? "$0.00" : Utility.formatDollarAmount(-forecastTransaction.getRemainingAmount())));
-      Utility.getResolver().say(forecastTransaction.getForecastItem().getPayee() + "\t" +
-              ((forecastTransaction.getRemainingAmount() == 0) ? "$0.00" :
-                      Utility.formatDollarAmount(-forecastTransaction.getRemainingAmount())));
+      BudgetItem budgetItem = forecastTransaction.getForecastItem().getBudgetItem();
+      String remainingAmountString = Utility.formatRoundedDollarAmount(-forecastTransaction.getRemainingAmount());
+      Calendar periodEndDate = budgetItem.getFirstDateOnOrAfter(Calendar.getInstance());
+      periodEndDate.add(Calendar.DATE, -1);
+      remainingAmountString += " (" + periodEndDate.get(Calendar.DATE) + ")";
+      double amountSpentMTD = budgetItem.getAmountSpentMTD();
+      String totalAmountForMonth = Utility.formatRoundedDollarAmount(-amountSpentMTD);
+      double amountBudgetedForMonth = Math.abs(budgetItem.getBudgetedAmountForCurrentMonth());
+      String amountBudgetedForMonthString = Utility.formatRoundedDollarAmount(amountBudgetedForMonth);
+      pw.println(forecastTransaction.getForecastItem().getPayee() + "  " + remainingAmountString + ", " +
+              amountBudgetedForMonthString + "/" + totalAmountForMonth);
    }
 
    @Override

@@ -4,9 +4,11 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import org.apache.commons.csv.CSVRecord;
+import org.jetbrains.annotations.Contract;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -53,7 +55,7 @@ public class BudgetItem extends Item {
    // Budget that this BudgetItem belongs to:
    protected UUID idBudget = null;
 
-   // Column headers in an import file:
+    // Column headers in an import file:
    public enum Headers {
       ID_BUDGET_ITEM, CATEGORY, PAYEE, PERIOD, AMOUNT, RUNNING_BALANCE, START_DATE, NUMBER_OF_PAYMENTS, END_DATE,
       ITEM_TYPE, HOW_IMPORTANT, HOW_OCCURS, HOW_PAID, ID_BUDGET
@@ -319,6 +321,9 @@ public class BudgetItem extends Item {
       }
    }
 
+   /*
+    * Main methods:
+    */
    // Get an alphabetical list of all the budget items:
    public static ResultSet getAllBudgetItems() throws EntityException {
 
@@ -339,4 +344,80 @@ public class BudgetItem extends Item {
 
       return items;
    }
+
+
+   /**
+    * Get the amount of money budgeted for this budget item in the current month.
+    *
+    * @return The amount of money budgeted for this item in the current month.
+    */
+   public double getBudgetedAmountForCurrentMonth() throws ForecastException {
+      Calendar month = Calendar.getInstance();
+      return getBudgetedAmountForMonth(month);
+   }
+
+
+   /**
+    * Get the amount of money budgeted for this budget item in a given month.
+    *
+    * @param month The month to compute the budgeted amount for.  It does not matter what the date of the month is
+    *              set to.
+    * @return The amount of money budgeted for this budget item in a given month.
+    */
+   @Contract(pure = true)
+   public double getBudgetedAmountForMonth(Calendar month) throws ForecastException {
+
+      // Set the start date for the period to the first day of the month passed in:
+      Calendar startDate = (Calendar) month.clone();
+      startDate.set(Calendar.DATE, 1);
+
+      // Set the end date for the period to the last day of the month passed in:
+      Calendar endDate = (Calendar) month.clone();
+      endDate.set(Calendar.DATE, endDate.getMaximum(Calendar.DATE));
+
+      // Get the budgeted amount for the date range matching the specified month:
+      return getBudgetedAmountInPeriod(startDate, endDate);
+   }
+
+   /**
+    * Get the amount of money budgeted for this budget item in a period (date range).
+    *
+    * @param startDate Staring date of the period to get the total amount for.
+    * @param endDate Ending date of the period to get the total amount for.
+    * @return
+    */
+   public double getBudgetedAmountInPeriod(Calendar startDate, Calendar endDate) throws ForecastException {
+
+      // Get the date of the first time this budget item would occur in the given period:
+      Calendar nextDate = getFirstDateInWindow(startDate, endDate);
+
+      // While there would be more occurrences of the budget item in the period, total them up:
+      double total = 0;
+      while (nextDate != null && endDate.after(nextDate)){
+         total += getAmount();
+         nextDate = getNextDateOnOrBefore(nextDate, endDate);
+      }
+
+      return total;
+   }
+
+   /**
+    * Get the total amount spent on a budget item month-to-date:
+    */
+   public double getAmountSpentMTD() throws EntityException, SQLException,
+           RegisterException {
+
+      // Get a list of the splits for this budget item month-to-date:
+      List<TransactionSplit> splits = TransactionSplit.getSplitsListForBudgetItemMTD(this);
+
+      // Total the amounts of the splits:
+      double total = 0;
+      for (TransactionSplit split: splits
+           ) {
+         total += split.getAmount();
+      }
+
+      return total;
+   }
+
 }

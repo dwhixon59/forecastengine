@@ -425,6 +425,9 @@ public class Forecast extends IndependentEntity {
       // properly for a new forecast.  Fix up the flags in the updated forecast.
       ForecastTransaction.cleanUpForecast(this);
 
+      // Mark the forecast and insync now:
+      inSync = true;
+
    } // End Forecast.update().
 
 

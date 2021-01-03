@@ -111,7 +111,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
 
     @Override
-    public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException, RegisterException {
+    public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException,
+            QuitException, RegisterException {
 
         this.forecast = forecast;
 
@@ -121,6 +122,15 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // Get the starting balance.  Take if from the first register associated with the budget for now:
         List<Register> registers = forecast.getBudget().getRegisters();
         double runningBalance = registers.get(0).getBalance();
+
+        // Verify the starting balance.  Update it if required:
+        if (Utility.getResolver().getYesOrNo("Computed current balance of the " +
+                registers.get(0).getRegisterName() + " is " + Utility.formatDollarAmount(runningBalance) +
+                "  Do you want to update it?")) {
+            runningBalance = Utility.getResolver().getDollarAmount();
+            registers.get(0).setBalance(runningBalance);
+            registers.get(0).update();
+        }
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();

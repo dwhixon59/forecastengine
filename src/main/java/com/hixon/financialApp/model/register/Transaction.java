@@ -415,19 +415,29 @@ public class Transaction extends IndependentEntity {
    }
 
 
-   // Get a list of transactions that were previously skipped during the importRegisterTransactions() process.  We know
-   // they were skipped because either there is no merchant assigned, or there are no splits assigned, or the
-   // transactions have not been reconciled:
+   /**
+    * Get a list of transactions that were skipped with respect to a particular forecast during the
+    * importRegisterTransactions() process.  We know they were skipped because the transactions have not been
+    * reconciled to the specified forecast.  Only consider transactions in the last month to speed up processing.
+    *
+    * @param forecast The forecast that the transactions were skipped in.
+    * @return
+    * @throws EntityException
+    */
    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
       Calendar startDate = forecast.getStartDate();
+      Calendar oneMonthAgo = Calendar.getInstance();
+      oneMonthAgo.add(Calendar.MONTH, -1);
+      if (oneMonthAgo.after(startDate)) startDate = oneMonthAgo;
       String query = getSelectQuery() + " where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " " +
               "and idTransaction not in " +
               "(select idTransaction from transaction " +
               "inner join transaction_split on idTransaction = Transaction_idTransaction " +
               "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
-              "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem) " +
+              "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
+              "where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + ") " +
               "order by postDate asc";
-      return getRS(query, "attempting to retieve a list of transactions that were previously " +
+      return getRS(query, "attempting to retrieve a list of transactions that were previously " +
               "skipped during the import process.");
    }
 

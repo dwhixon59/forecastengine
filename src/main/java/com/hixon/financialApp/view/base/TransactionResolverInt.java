@@ -35,7 +35,7 @@ public interface TransactionResolverInt {
    public List<BudgetItemMerchant> assignBudgetItems(Merchant transaction)
            throws BudgetException, ParseException, SQLException, ViewException, EntityException, RegisterException;
 
-   public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString) throws ViewException, RegisterException, EntityException;
+   public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount) throws ViewException, RegisterException, EntityException;
 
    String resolveUnmatchedAccount(String payee, double amount) throws RegisterException;
 
@@ -121,5 +121,8 @@ public interface TransactionResolverInt {
 
    // Have the user select a username from a list of usernames (taken from a list of users):
    public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException;
+
+   // Ask the user to enter a dollar amount:
+   double getDollarAmount();
 }
 

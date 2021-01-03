@@ -103,7 +103,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
       if (
               forecastDebitTransaction != null &&
               (forecastPlaceholderTransaction == null ||
-                 forecastCreditTransaction.getPlannedDate().compareTo(forecastPlaceholderTransaction.getPlannedDate()) <= 0)
+                 forecastDebitTransaction.getPlannedDate().compareTo(forecastPlaceholderTransaction.getPlannedDate()) <= 0)
       )
       {
          forecastTransaction = forecastDebitTransaction;
@@ -115,7 +115,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
          }
       }
       else
-      // then pkaceholders:
+      // then placeholders:
       if (forecastPlaceholderTransaction != null) {
          forecastTransaction = forecastPlaceholderTransaction;
          if (rsPlaceholders.next()) {

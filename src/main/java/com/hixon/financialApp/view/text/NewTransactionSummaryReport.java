@@ -1,6 +1,7 @@
 package com.hixon.financialApp.view.text;
 
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -19,6 +20,12 @@ import java.util.List;
 
 public class NewTransactionSummaryReport extends AbstractRegisterReport {
 
+    public static final String SPACE = " ";
+    public static final String MINUS_SIGN = "-";
+    public static final String PLUS_SIGN = "+";
+    public static final String ASTERISK = "*";
+    public static final int MAX_PAYEE_LENGTH = 24;
+    public static final String INDENT = "   ";
     private final User user;
     private final List<Entity> items;
     private final File reportFile;
@@ -63,12 +70,14 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
     }
 
     @Override
-    public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException,
+    public void renderItemRow(Entity itemEntity) throws EntityException, ForecastException, SQLException, BudgetException,
             RegisterException {
-        Transaction transaction = (Transaction) item;
+
+        // Cast the entity passed in to what it really is. This is required because we are using generics:
+        Transaction transaction = (Transaction) itemEntity;
 
         // Use a short version of the date to take less space:
-        String date = Utility.calendarDateToMonthDayDate(
+        String date = Utility.calendarDateToMonthDayStringDate(
                 (transaction.getAuthorizationDate() != null) ? transaction.getAuthorizationDate() : transaction.getPostDate()
         );
 
@@ -84,43 +93,106 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
         }
 
         // Output the transaction line:
-        pw.println(date + " " + merchant + " " + amount);
+        pw.println(date + SPACE + merchant + SPACE + amount);
 
         // Output the splits under the payee indented one tab:
         List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
         if (splits != null) {
             for (TransactionSplit split : splits
             ) {
-                String splitAmount = Utility.formatRoundedDollarAmount(Math.abs(split.getAmount()));
+
+                // Warn the user if the amount is under or over what is expected, or is not in the forecast.  If the
+                // amount is less that expected, prefix the split with a minus sign.  If the amount is more than
+                // expected, then prefix the split with a plus sign.  If the amount was not expected at all, then
+                // prefix the amount with an asterisk:
+                String expectation = SPACE;
+                switch (split.getBudgetItem().getHowOccurs()) {
+                    case ENVELOPE:
+                        // In the case of envelopes, no single split is over or under.  Only the total over a period
+                        // could be more or less than expected, so there is no expectation for an envelope item entity.
+                        break;
+
+                    case PERIODIC:
+                        if (!split.getBudgetItem().isWithinNormalAmountVariance(split.getAmount())) {
+                            double differance = Utility.currencyDifference(split.getBudgetItem().getAmount(), split.getAmount());
+                            if (differance < 0) {
+                                expectation = MINUS_SIGN;
+                            } else {
+                                expectation = PLUS_SIGN;
+                            }
+                        }
+                        break;
+
+                    case UNPLANNED:
+                        expectation = ASTERISK;
+                        // In the case of unplanned items, if there is an expected amount, then add the over/under flag:
+                        if (!split.getBudgetItem().isWithinNormalAmountVariance(split.getAmount())) {
+                            double difference = Utility.currencyDifference(split.getBudgetItem().getAmount(), split.getAmount());
+                            if (difference < 0) {
+                                expectation += MINUS_SIGN;
+                            } else {
+                                expectation += PLUS_SIGN;
+                            }
+                        }
+                        break;
+
+                    case COLLECTION:
+                        // In the case of envelopes, no single split is ever "under" and is only considered "over" if the
+                        // MTD amount exceeds the entire amount budgeted for that category in the current month:
+                        if (Utility.currencyDifference(split.getBudgetItem().getAmountSpentMTD(),
+                                split.getBudgetItem().getBudgetedAmountForCurrentMonth()) < 0) {
+                            expectation = PLUS_SIGN;
+                        }
+                        break;
+
+                    case VARIABLE_PERIODIC:
+                        // In the case of variable periodic expenses, the split is expected, so it can't be unexpected.
+                        // Furthermore, there is no expected amount for the split so it can't be over or under:
+                        break;
+
+                    default:
+                        throw new BudgetException("Unknown howOccurs type in switch statement.");
+                }
+                pw.print(INDENT + expectation);
 
                 // Only print the amount if it is different than the transaction amount, which only happens when there is
                 // more that one split:
-                splitAmount = (splits.size() > 1) ? " " + splitAmount : "";
+                String splitAmount = Utility.formatRoundedDollarAmount(Math.abs(split.getAmount()));
+                splitAmount = (splits.size() > 1) ? SPACE + splitAmount : "";
 
                 // Print as much of the split payee that will fit with the amount on an iPhone 11:
                 String splitPayee = split.getBudgetItem().getPayee();
-                int truncatedPayeeLength = 27 - splitAmount.length();
+                int truncatedPayeeLength = MAX_PAYEE_LENGTH - splitAmount.length();
                 if (splitPayee.length() > truncatedPayeeLength) {
                     splitPayee = splitPayee.substring(0, truncatedPayeeLength);
                 }
 
                 // Output the split line without the memo:
-                String line = "\t" + splitPayee + splitAmount;
+                String line = splitPayee + splitAmount;
+                int remainingSpace = 27 - line.length();
                 pw.print(line);
+
+                // Print the planned vs. actual amounts for the month:
+                double amountBudgeted = (split.getBudgetItem().getHowOccurs() == Item.HowOccurs.UNPLANNED) ?
+                        split.getBudgetItem().getAmount() : split.getBudgetItem().getBudgetedAmountForCurrentMonth();
+                String plannedVsActual = null;
+                plannedVsActual = " (" + Utility.formatRoundedDollarAmount(Math.abs(amountBudgeted)) + "/" +
+                        Utility.formatRoundedDollarAmount(Math.abs(split.getBudgetItem().getAmountSpentMTD())) + ")";
+                pw.print(plannedVsActual);
+                remainingSpace -= plannedVsActual.length();
 
                 // Add the memo if there is one.
                 String memo = "";
                 if (split.getMemo() != null) {
 
-                    int remainingSpace = 27 - line.length();
                     int memoLength = split.getMemo().length();
 
                     // Put it on the same line if it fits:
                     if (memoLength <= remainingSpace) {
-                        memo = " " + split.getMemo();
+                        memo = SPACE + split.getMemo();
                     } else if (remainingSpace > 5) {
                         // truncate the memo if there is room for at least the first 6 characters:
-                        memo = " " + split.getMemo().substring(0, remainingSpace);
+                        memo = SPACE + split.getMemo().substring(0, remainingSpace);
                     } else {
                         //  otherwise put it on the next line:
                         int len = (split.getMemo().length() <= 21) ? split.getMemo().length() : 21;
@@ -136,7 +208,7 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
 
     @Override
     public void renderSummaryRow() {
-
+        pw.println("\nCurrent Balance:  " + Utility.formatRoundedDollarAmount(register.getBalance()));
     }
 
     @Override

@@ -192,7 +192,6 @@ public class Register extends IndependentEntity {
 
       String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
       try {
-         System.out.println("SQL statement is: " + query);
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
          if (rs.next()) {
@@ -237,7 +236,6 @@ public class Register extends IndependentEntity {
 
       try {
 
-         System.out.println("SQL statement is: " + selectQuery);
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(selectQuery);
          List<Register> registers = new ArrayList<>();
@@ -287,7 +285,7 @@ public class Register extends IndependentEntity {
             if (merchant == null) {
                merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                if (merchant == null) {
-                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
+                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
                   if (merchant == null) {
                      switch (resolver.getTerminationCondition()) {
                         case SKIP:
@@ -334,7 +332,8 @@ public class Register extends IndependentEntity {
             }
 
             // Tell the user about the bank transaction we are processing:
-            getResolver().say("Imported a bank transaction to " + merchant.getName() + " for " +
+            String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
+            getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
                     formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
                     ((transaction.getAuthorizationDate() != null) ?
                             calendarDateToStringDate(transaction.getAuthorizationDate()) :
@@ -345,6 +344,10 @@ public class Register extends IndependentEntity {
             if (splits == null) {
                splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
             }
+
+            // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
+            // transaction report with the new data:
+            transaction.setIsNew(true);
 
             // Save the transaction and associated items:
             transaction.save(INSERT_ON_DUPLICATE_UPDATE);

@@ -1,6 +1,7 @@
 package com.hixon.financialApp.view.spreadsheetXml;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -204,12 +205,11 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Merchant</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Memo</Data></Cell>");
       writer.println("\t\t</Row>");
-
    }
 
    @Override
-   public void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double total) throws
-           ForecastException {
+   public void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double plannedAmount,
+                                double actualAmount) throws ForecastException, EntityException, BudgetException {
 
       // Output a blank line to visually separate the budget items:
       writer.println("\t\t<Row/>");
@@ -226,11 +226,9 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
       // Output the budget item row:
       writer.println("\t\t<Row ss:StyleID=\"BudgetItemRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + budgetItem.getPayee() + "</Data></Cell>");
-      writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" + budgetItem.getAmountForDateRange(startDate, endDate) +
-              "</Data></Cell>");
-      writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" + total + "</Data></Cell>");
+      writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" + plannedAmount + "</Data></Cell>");
+      writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" + actualAmount + "</Data></Cell>");
       writer.println("\t\t</Row>");
-
    }
 
    @Override
@@ -250,22 +248,22 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
    }
 
    @Override
-   public void renderTotalRow(double totaIncome, double totalBudgeted, double totalSpent) {
+   public void renderTotalRow(double budgetedIncome, double actualIncome, double budgetedSpending, double actualSpending) {
       String line;
       writer.println("\t<Row/>");
       writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"TimePeriod\">");
       writer.println("\t\t<Cell><Data ss:Type=\"String\">Summary Information:</Data></Cell>");
       writer.println("\t</Row>");
       writer.println("\t<Row ss:StyleID=\"CategoryRow\">");
-      line = "Total budgeted:  " + Utility.formatDollarAmount(totalBudgeted) + ", Total spent:  " +
-              Utility.formatDollarAmount(totalSpent) + ", Over/Under:  " +
-              Utility.formatDollarAmount(totalBudgeted - totalSpent);
+      line = "Total budgeted spending:  " + Utility.formatDollarAmount(budgetedSpending) + ", Actual spending:  " +
+              Utility.formatDollarAmount(actualSpending) + ", Over/Under:  " +
+              Utility.formatDollarAmount(actualSpending - budgetedSpending);
       writer.println("\t\t<Cell><Data ss:Type=\"String\">" + line + "</Data></Cell>");
       writer.println("\t</Row>");
       writer.println("\t<Row ss:StyleID=\"CategoryRow\">");
-      line = "Total income:  " + Utility.formatDollarAmount(totaIncome) + ", Total spending:  " +
-              Utility.formatDollarAmount(totalSpent) + ", Over/Under:  " +
-              Utility.formatDollarAmount(totaIncome - totalSpent);
+      line = "Total budgeted income:  " + Utility.formatDollarAmount(budgetedIncome) + ", Actual income:  " +
+              Utility.formatDollarAmount(actualIncome) + ", Over/Under:  " +
+              Utility.formatDollarAmount(actualIncome - budgetedIncome);
       writer.println("\t\t<Cell><Data ss:Type=\"String\">" + line + "</Data></Cell>");
       writer.println("\t</Row>");
    }

@@ -19,8 +19,7 @@ import java.util.List;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 import static com.hixon.financialApp.utility.Utility.setToLastBusinessDayBefore;
 
-public abstract class AbstractBudgetView extends AbstractView implements BudgetViewInt
-{
+public abstract class AbstractBudgetView extends AbstractView implements BudgetViewInt {
 
     private final Budget budget;
 
@@ -29,99 +28,173 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
     }
 
     /*
-    *  Helper methods:
-    */
-   public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;
-   public abstract void renderSpendingReportFrontMatter();
-   protected abstract void renderTimePeriodRow(Calendar startDate, Calendar endDate);
-   protected abstract void renderHeaderRow();
-   public abstract void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double total)
-           throws ForecastException;
-   public abstract void renderTransactionSplit(TransactionSplit split) throws EntityException, SQLException, RegisterException;
-   public abstract void renderTotalRow(double totalIncome, double totalBudgeted, double totalSpent);
-   public abstract void renderSpendingReportBackMatter();
-   public abstract void closeSpendingReportOutput();
+     *  Helper methods:
+     */
+    public abstract void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;
+
+    public abstract void renderSpendingReportFrontMatter();
+
+    protected abstract void renderTimePeriodRow(Calendar startDate, Calendar endDate);
+
+    protected abstract void renderHeaderRow();
+
+    public abstract void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double plannedAmount,
+                                          double actualAmount) throws ForecastException, EntityException, BudgetException;
+
+    public abstract void renderTransactionSplit(TransactionSplit split) throws EntityException, SQLException, RegisterException;
+
+    public abstract void renderTotalRow(double budgetedIncome, double actualIncome, double budgetedSpending, double actualSpending);
+
+    public abstract void renderSpendingReportBackMatter();
+
+    public abstract void closeSpendingReportOutput();
 
 
-   /*
-    *  Main methods:
-    */
-   // Create and render a month-to-date spending report as an XML spreadsheet file that can be imported into a spreadsheet:
-   @Override
-   public void renderPlannedVsActualReport(Calendar startDateParm) throws FileNotFoundException, UnsupportedEncodingException,
-           EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException {
+    /*
+     *  Main methods:
+     */
 
-      // Insulate the parameter from side effects:
-      Calendar startDate = (Calendar) startDateParm.clone();
+    /**
+     * Create and render a spending report for a given month as an XML spreadsheet file that can be imported into a
+     * spreadsheet.
+     *
+     * @param month The month to report on.
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException
+     * @throws EntityException
+     * @throws SQLException
+     * @throws BudgetException
+     * @throws RegisterException
+     * @throws ForecastException
+     * @throws ViewException
+     */
+    @Override
+    public void renderSpendingReportForMonth(Calendar month) throws FileNotFoundException, UnsupportedEncodingException,
+            EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException {
 
-      // Open the output and output the header:
-      openSpendingReportOutput();
-      renderSpendingReportFrontMatter();
+        // Insulate the parameter from side effects:
+        Calendar startDate = (Calendar) month.clone();
 
-      // Set the start and end dates to be the last business days of the previous month and the day before the last day
-      // of the requested month since that is when I get paid:
-      startDate.set(Calendar.DATE, 1);
-      Calendar endDate = (Calendar) startDateParm.clone();
-      endDate.add(Calendar.MONTH, 1);
-      setToLastBusinessDayBefore(startDate);
-      setToLastBusinessDayBefore(endDate);
-      endDate.add(Calendar.DATE, -1);
+        // Set the start and end dates to be the last business days of the previous month and the day before the last day
+        // of the requested month since that is when I get paid:
+        startDate.set(Calendar.DATE, 1);
+        Calendar endDate = (Calendar) month.clone();
+        endDate.add(Calendar.MONTH, 1);
+        setToLastBusinessDayBefore(startDate);
+        setToLastBusinessDayBefore(endDate);
+        endDate.add(Calendar.DATE, -1);
 
-      // Render the time period and header rows:
-      renderTimePeriodRow(startDate, endDate);
-      renderHeaderRow();
+        // Render the report:
+        renderPlannedVsActualReport(startDate, endDate);
+    }
 
-      // For each budget item in the budget:
-      ResultSet rsbi = BudgetItem.getAllBudgetItems();
-      BudgetItem budgetItem;
-      double totalIncome = 0;
-      double totalBudgeted = 0;
-      double totalSpent = 0;
-      while (rsbi.next()) {
 
-         // Create a budget item from the database row:
-         budgetItem = new BudgetItem(rsbi);
+    /**
+     * Create and render a planned vs. actual spending report for a given date range as an XML spreadsheet file that can
+     * be imported into a spreadsheet.
+     *
+     * @param startDate The starting date of the reporting period.
+     * @param endDate   Then ending date of the reporting period.
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException
+     * @throws EntityException
+     * @throws SQLException
+     * @throws BudgetException
+     * @throws RegisterException
+     * @throws ForecastException
+     * @throws ViewException
+     */
+    @Override
+    public void renderPlannedVsActualReport(Calendar startDate, Calendar endDate)
+            throws FileNotFoundException, UnsupportedEncodingException, EntityException, SQLException, BudgetException,
+            RegisterException, ForecastException, ViewException {
 
-         // Get all the transaction splits for the current budget item:
-         List<TransactionSplit> splits = TransactionSplit.getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
+        // Open the output and output the header:
+        openSpendingReportOutput();
+        renderSpendingReportFrontMatter();
 
-         // If there are any splits for this budget item in the current month:
-          if (splits.size() > 0) {
+        // Render the time period and header rows:
+        renderTimePeriodRow(startDate, endDate);
+        renderHeaderRow();
 
-            // Total the splits:
-            double subTotal = 0;
+        // For each budget item in the budget:
+        ResultSet rsbi = BudgetItem.getAllBudgetItems();
+        BudgetItem budgetItem;
+
+        // Amounts for this item in this period:
+        double totalBudgetedForThisItem = 0;
+        double totalActualAmountForThisItem = 0;
+
+        // Overall income for this period:
+        double totalBudgetedIncome = 0;
+        double totalActualIncome = 0;
+
+        // Overall spending for this period:
+        double totalBudgetedSpending = 0;
+        double totalActualSpending = 0;
+
+        // Iterate over each item in thd budget and output spending on it:
+        while (rsbi.next()) {
+
+            // Create a budget item from the database row:
+            budgetItem = new BudgetItem(rsbi);
+
+            // Get the total amount budgeted to spend on this item in the specified perior:
+            totalBudgetedForThisItem = budgetItem.getBudgetedAmountInPeriod(startDate, endDate);
+
+            // Get all the transaction splits for the current budget item:
+            List<TransactionSplit> splits = TransactionSplit.getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
+
+            // Total the splits to find out how much was spent on this budget item in the specified period.  Do this here
+            // rather than call a function because we need the list of splits later on and from an efficiency perspective
+            // we should only retrieve them once:
+            totalActualAmountForThisItem = 0;
             for (TransactionSplit split : splits
             ) {
-               subTotal += split.getAmount();
+                totalActualAmountForThisItem += split.getAmount();
             }
 
-            // Save off the amounts for the totals row:
-            if (budgetItem.getAmount() < 0) {
-               totalBudgeted -= budgetItem.getAmount();
-            } else {
-               totalIncome += budgetItem.getAmount();
+            // Only include items that either occurred, or were expected to occur in the specified period:
+            if (totalBudgetedForThisItem != 0 || totalActualAmountForThisItem != 0) {
+
+                /*
+                 * Keep track the total amount budgeted and spent in the period over all items for the report summary line:
+                 */
+                // If this budget item is an expense:
+                if (budgetItem.getAmount() < 0) {
+
+                    // then add it to the total amount budgeted to spend in the period:
+                    totalBudgetedSpending -= totalBudgetedForThisItem;
+                    totalActualSpending -= totalActualAmountForThisItem;
+
+                // else if this item is income:
+                } else {
+
+                    // then add it ot the total amount of income expected in the period:
+                    totalBudgetedIncome += totalBudgetedForThisItem;
+                    totalActualIncome += totalActualAmountForThisItem;
+                }
+
+                // Render the budget item:
+                renderBudgetItem(budgetItem, startDate, endDate, totalBudgetedForThisItem,
+                        totalActualAmountForThisItem);
+
+                // Render the splits for the budget item:
+                for (TransactionSplit split : splits
+                ) {
+                    renderTransactionSplit(split);
+                }
             }
-            if (subTotal < 0) totalSpent -= subTotal;
+        }
 
-            // Render the budget item:
-            renderBudgetItem(budgetItem, startDate, endDate, subTotal);
+        // Render the totals row:double budgetedIncome, double actualIncome, double budgetedSpending, double actualSpending
+        renderTotalRow(totalBudgetedIncome, totalActualIncome, totalBudgetedSpending, totalActualSpending);
 
-            // Render the splits for the budget item:
-            for (TransactionSplit split : splits
-            ) {
-               renderTransactionSplit(split);
-            }
-         }
-      }
+        // Render any trailer matter:
+        renderSpendingReportBackMatter();
 
-      // Render the totals row:
-      renderTotalRow(totalIncome, totalBudgeted, totalSpent);
-
-      // Render any trailer matter:
-      renderSpendingReportBackMatter();
-
-      // Close the output file:
-      closeSpendingReportOutput();
-      getResolver().say("MTD Spending Report successfully rendered.");
-   }
+        // Close the output file:
+        closeSpendingReportOutput();
+        getResolver().say("MTD Spending Report successfully rendered.");
+    }
 }

@@ -401,4 +401,54 @@ public class ForecastItem extends Item {
                 "forecast items.");
     }
 
+    /**
+     * Get the total amount spent on this item in the current month.
+     *
+     * @return The amount spent on this forecast item during the current month.
+     * @throws ForecastException
+     */
+    public double getTotalAmountForCurrentMonth() throws ForecastException {
+
+        Calendar currentMonth = Calendar.getInstance();
+        return getTotalAmountForMonth(currentMonth);
+    }
+
+    /**
+     * Get the total amount spent on this item in a specific month.
+     *
+     * @param month The month for which to compute total spending on this forecast item.
+     * @return The amount spent on this forecast item during the specified month.
+     * @throws ForecastException
+     */
+    public double getTotalAmountForMonth(Calendar month) throws ForecastException {
+
+        Calendar monthStart = Calendar.getInstance();
+        monthStart.set(Calendar.DATE, 1);
+        Calendar monthEnd = Calendar.getInstance();
+        monthEnd.set(Calendar.DATE, monthEnd.getActualMaximum(Calendar.DAY_OF_MONTH));
+        return getAmountForDateRange(monthStart, monthEnd);
+    }
+
+    /**
+     * Get the planned amount to spend on this item in a specific date range.
+     *
+     * @param startDateParm The starting date of the date range over which to compute spending.
+     * @param endDateParm   The ending date of the date range over which to compute spending.
+     * @return The amount spent on this forecast item during the specified date range.
+     * @throws ForecastException
+     */
+    public double getAmountForDateRange(Calendar startDateParm, Calendar endDateParm) throws ForecastException {
+
+        // Clone nextDate to protect it from side effects:
+        Calendar nextDate = (Calendar) startDateParm.clone();
+
+        // Compute the amount for the specified date range:
+        nextDate = getFirstDateOnOrAfter(nextDate);
+        double sum = 0;
+        while (nextDate != null) {
+            sum += amount;
+            nextDate = getNextDateOnOrBefore(nextDate, endDateParm);
+        }
+        return sum;
+    }
 }

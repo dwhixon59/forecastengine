@@ -273,7 +273,6 @@ public class WellsFargoBank extends Bank {
 
             break;
       }
-      System.out.println("Parsed merchant payee = " + merchantPayee);
       return merchantPayee;
    }
 

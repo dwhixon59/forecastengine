@@ -7,7 +7,7 @@ public abstract class AbstractRegisterReport extends AbstractViewReport {
     /*
      * Fields:
      */
-    Register register = null;
+    protected Register register = null;
 
     /*
      * Constructors:

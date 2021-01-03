@@ -13,8 +13,18 @@ import java.util.Calendar;
 
 public interface BudgetViewInt {
 
+        /**
+         * Create and render a spending report for a given month as an XML spreadsheet file that can be imported into a
+         * spreadsheet.
+         *
+         * @param month The month to report on.
+         */
+        public void renderSpendingReportForMonth(Calendar month) throws FileNotFoundException, UnsupportedEncodingException,
+                EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException;
+
         // Render the spending report:
-        void renderPlannedVsActualReport(Calendar startDate) throws FileNotFoundException,
-                UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException;
+        void renderPlannedVsActualReport(Calendar startDate, Calendar endDate) throws FileNotFoundException,
+                UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException,
+                ForecastException, ViewException;
 
 }

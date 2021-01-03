@@ -20,10 +20,7 @@ import com.sun.istack.internal.Nullable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.*;
 import static com.hixon.financialApp.model.entity.EntityInt.executeUpdate;
@@ -638,7 +635,7 @@ public class ForecastTransaction extends IndependentEntity {
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
                             int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(), transaction.getDate());
-                            if (!split.getBudgetItem().withinNormalDateVariance(variance)) {
+                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
                                 UserResponse resp = resolver.assignSplitDateToForecastTransaction(split, forecastTransaction);
@@ -724,7 +721,7 @@ public class ForecastTransaction extends IndependentEntity {
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
                             int variance = Utility.daysBeteween(transaction.getDate(), forecastTransaction.getPlannedDate());
-                            if (!split.getBudgetItem().withinNormalDateVariance(variance)) {
+                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
                                 UserResponse resp = resolver.assignSplitDateToForecastTransaction(split, forecastTransaction);
@@ -779,7 +776,7 @@ public class ForecastTransaction extends IndependentEntity {
         UserResponse resp;
         double remainingAmount = 0;
         // If the amount is substantially different than the assigned budget items:
-        if (!split.getBudgetItem().withinNormalAmountVariance(forecastTransaction.getRemainingAmount() - split.getAmount())) {
+        if (!split.getBudgetItem().isWithinNormalAmountVariance(forecastTransaction.getRemainingAmount(), split.getAmount())) {
 
             // Ask the user to determine if the split is an occurrence of the forecast transaction:
             resp = resolver.transactionAmountDiscrepancy(transaction, split, forecastTransaction);
@@ -945,6 +942,18 @@ public class ForecastTransaction extends IndependentEntity {
                 items.add(forecastTransaction);
             }
         }
+
+        //  Sort the list in ascending order by payee:
+        Comparator<Entity> comparator = (t1, t2) -> {
+            try {
+                String t1Key = ((ForecastTransaction) t1).getForecastItem().getBudgetItem().getPayee();
+                String t2Key = ((ForecastTransaction) t2).getForecastItem().getBudgetItem().getPayee();
+                return t1Key.compareTo(t2Key);
+            } catch (EntityException | SQLException | ForecastException | BudgetException e) {
+                throw new ClassCastException(e.getMessage());
+            }
+        };
+        items.sort(comparator);
         return items;
     }
 
@@ -1164,7 +1173,7 @@ public class ForecastTransaction extends IndependentEntity {
                             // The specified date occurs after the applicability window of the next forecast transaction
                             // planned, which is a violation of the "bracketing principle":
                             throw new ForecastException("The next forecast transaction \n" + nextForecastTransaction +
-                                    "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayDate(date) +
+                                    "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayStringDate(date) +
                                     " is \n" + forecastTransaction + "\nwhich is also prior to the specified date, which " +
                                     "should not occur.");
                     }

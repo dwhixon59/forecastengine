@@ -1,12 +1,12 @@
 package com.hixon.financialApp.utility;
 
 import com.hixon.financialApp.controller.QuitException;
-import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -22,6 +22,10 @@ import java.util.Locale;
 import static java.util.Calendar.*;
 
 public class Utility {
+
+   // Threshold for comparing currency amounts using doubles or floats.  Consider equal if the difference is less than
+   // 1/2 of a cent:
+   private static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
 
    // Common database connection for the App:
    private static Connection dbConnection;
@@ -307,7 +311,7 @@ public class Utility {
    }
 
    // Convert a Calendar date to a short month - day format:
-   public static String calendarDateToMonthDayDate(Calendar calendar) {
+   public static String calendarDateToMonthDayStringDate(Calendar calendar) {
       String dateFormatted;
       if (calendar != null) {
          SimpleDateFormat fmt = new SimpleDateFormat("MM-dd");
@@ -426,6 +430,31 @@ public class Utility {
       return calendarDate;
    }
 
+    public static boolean isEqualCurrency(double d1, double d2) {
+      return Math.abs(d1 - d2) < CURRENCY_COMPARISON_THRESHOLD;
+    }
+
+   public static double currencyDifference(double amount1, double amount2) {
+
+      double difference = amount1 - amount2;
+
+      // If the values are nearly equal, return zero:
+      if (Utility.isEqualCurrency(amount1, amount2)) {
+
+         difference = 0.00;
+
+      } else if (
+              amount1 >= Utility.CURRENCY_COMPARISON_THRESHOLD ||
+             (amount1 > -Utility.CURRENCY_COMPARISON_THRESHOLD && amount1 < Utility.CURRENCY_COMPARISON_THRESHOLD)
+      ) {
+
+         // We are dealing with a credit, so subtraction yields the opposite of what were are looking for; invert it:
+         difference = -difference;
+      }
+
+      return difference;
+   }
+
    public enum StartDateType {
       FIRST_OF_LAST_MONTH, FIRST_OF_THIS_MONTH, TODAY, FIRST_OF_NEXT_MONTH, ONE_MONTH_FROM_TODAY,
       ARBITRARY_DATE
@@ -525,19 +554,28 @@ public class Utility {
       return false;
    }
 
-   // Identify the user that is the target of some action:
-   User getUser() {
-      return null;
+   // Create a file:
+   public static Boolean createFile(String currentFilename) throws IOException {
+      File file = new File(currentFilename);
+      return file.createNewFile();
    }
 
-   ;
+   // Create a previous version of a file and clear the current version:
+   public static Boolean makeSaveFileAndClear(String currentFilename) throws IOException {
+      boolean retVal = false;
+      if (makeSaveFile(currentFilename, appendToFilename(currentFilename, "old"))) {
+         retVal = createFile(currentFilename);
+      }
+      return retVal;
+   }
+
 
    // Create a previous version of a file:
-   public static Boolean makeSaveFile(String currentFilename) throws FinancialException {
+   public static Boolean makeSaveFile(String currentFilename) {
       return makeSaveFile(currentFilename, appendToFilename(currentFilename, "old"));
    }
 
-   public static Boolean makeSaveFile(String currentFilename, String saveFilename) throws FinancialException {
+   public static Boolean makeSaveFile(String currentFilename, String saveFilename) {
 
       Boolean result = false;
       boolean done;

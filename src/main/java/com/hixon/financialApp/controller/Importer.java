@@ -55,6 +55,15 @@ public class Importer {
       return importRecordId;
    }
 
+   private void logImportEvent(Transaction transaction, Merchant merchant) {
+      String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
+      getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
+              formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
+              ((transaction.getAuthorizationDate() != null) ?
+                      calendarDateToStringDate(transaction.getAuthorizationDate()) :
+                      calendarDateToStringDate(transaction.getPostDate())));
+   }
+
 
    /*
     * Main methods:
@@ -130,7 +139,7 @@ public class Importer {
 
             // If there wasn't a merchant associated with the transaction payee then assign or create one:
             if (merchant == null) {
-               merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
+               merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
 
                // If the user aborted the merchant assignment process then figure out what to do:
                if (merchant == null) {
@@ -186,11 +195,7 @@ public class Importer {
             register.update();
 
             // Tell the user what we just did:
-            getResolver().say("Imported a bank transaction to " + merchant.getName() + " for " +
-                    formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
-                    ((transaction.getAuthorizationDate() != null) ?
-                            calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                            calendarDateToStringDate(transaction.getPostDate())));
+            logImportEvent(transaction, merchant);
 
             /*
              * Phase 3:  Assign the splits to the transaction:
@@ -385,7 +390,7 @@ public class Importer {
 
                // If we couldn't find a merchant for the transaction, get some help from the user to create one:
                if (merchant == null) {
-                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee());
+                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
                   if (merchant == null) {
                      switch (resolver.getTerminationCondition()) {
                         case SKIP:
@@ -488,11 +493,12 @@ public class Importer {
                   }
 
                   // Tell the user about the bank transaction we are processing:
-                  System.out.println("\n*** Imported a bank transaction to " + merchant.getName() + " for " +
+                  String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
+                  getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
                           formatDollarAmount(Math.abs(provisionalTransactions.get(provTrxIndex).getAmount())) + " on " +
                           ((provisionalTransactions.get(provTrxIndex).getAuthorizationDate() != null) ?
                                   calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getAuthorizationDate()) :
-                                  calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getPostDate())) + "***");
+                                  calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getPostDate())));
 
                   // Get the splits for the transaction:
                   List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
@@ -578,7 +584,7 @@ public class Importer {
 
          // Save off the pending transactions file:
          if (file.exists()) {
-            makeSaveFile(filename);
+            makeSaveFileAndClear(filename);
          }
 
          // TODO: Save the import event:

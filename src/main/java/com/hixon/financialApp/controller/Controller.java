@@ -63,6 +63,8 @@ public class Controller {
          for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                case "processSkippedTransactions":
+                  Utility.getResolver().say("\n\n========================================================================");
+                  Utility.getResolver().say("PROCESS SKIPPED TRANSACTIONS");
                   if (register == null) register = Register.getByName("Bill Pay Account");
                   if (financialInstitution == null) financialInstitution = new WellsFargoBank(register);
                   inSync = register.processSkippedTransactions(forecast);
@@ -70,10 +72,12 @@ public class Controller {
                      forecast.updateForecast();
                      Utility.getResolver().say("The long term forecast was successfully updated.");
                   }
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "importRegisterTransactions":
-                  Utility.getResolver().say("Importing the register transactions.");
+                  Utility.getResolver().say("\n\n========================================================================");
+                  Utility.getResolver().say("IMPORT REGISTER TRANSACTIONS");
                   inSync = importer.importCsvRegisterTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The transactions were successfully imported.");
@@ -81,9 +85,11 @@ public class Controller {
                      forecast.updateForecast();
                      Utility.getResolver().say("The long term forecast was successfully updated.");
                   }
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "importProvisionalRegisterTransactions":
+                  Utility.getResolver().say("\n\n========================================================================");
                   inSync = importer.importCsvProvisionalTransactionFile("Wells Fargo Bank",
                           "Bill Pay Account", forecast);
                   Utility.getResolver().say("The provisional transactions were successfully imported.");
@@ -91,30 +97,38 @@ public class Controller {
                      forecast.updateForecast();
                      Utility.getResolver().say("The long term forecast was successfully updated.");
                   }
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "importBudgetItems":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Importing the budget items.");
                   importer.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
                           "Finances\\Expenses\\BudgetItems.csv");
                   Utility.getResolver().say("The budget items were successfully imported.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderRegister":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the register.");
                   startDate = Utility.askStartDate();
                   Utility.getRegisterView().renderTransactionReport(startDate);
                   Utility.getResolver().say("The register was successfully rendered");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderSpendingReport":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the spending report.");
-                  startDate = Utility.getResolver().getSpendingReportMonth();
-                  Utility.getBudgetView().renderPlannedVsActualReport(startDate);
+                  Calendar month = Utility.getResolver().getSpendingReportMonth();
+                  Utility.getBudgetView().renderSpendingReportForMonth(month);
                   Utility.getResolver().say("The spending report was successfully rendered");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "createForecast":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Create the forecast.");
                   ForecastEngine forecastEngine = new ForecastEngine();
                   startDate = Utility.askStartDate();
@@ -124,51 +138,66 @@ public class Controller {
                   forecast = new Forecast(budgetName, startDate, numberOfMonths, startingBalance, minimumBalance);
                   forecastEngine.generateForecast(forecast, startDate);
                   Utility.getResolver().say("The forecast was successfully generated");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "updateFromExternalSource":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Updating the forecast from an external source.");
                   if (forecast != null) {
                      Utility.getForecastView().updateFromExternalSource();
                   } else {
                      Utility.getResolver().say("There is no forecast to update.");
                   }
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "saveForecast":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Saving the forecast.");
                   forecast.saveAll();
                   Utility.getResolver().say("The forecast was successfully saved to the database.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "updateForecast":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Updating the forecast.");
                   forecast.updateForecast();
                   Utility.getResolver().say("The forecast was successfully updated.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderShortTermForecast":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the short term forecast.");
                   Utility.getForecastView().renderShortTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the short term forecast.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderLongTermForecast":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the long term forecast.");
                   Utility.getForecastView().renderLongTermForecast(forecast);
                   Utility.getResolver().say("Successfully rendered the long term forecast.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderItemsOfInterestReport":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the Items of Interest Report.");
                   Utility.getNotificationService().sendItemsOfInterestReport();
                   Utility.getResolver().say("Successfully rendered the Items of Interest Report.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                case "renderNewTransactionSummaryReport":
+                  Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the New Transaction Summary Report.");
                   Utility.getNotificationService().sendNewTransactionSummaryReport(register);
                   Utility.getResolver().say("Successfully rendered the New Transaction Summary Report.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
                default:
