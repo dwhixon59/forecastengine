@@ -322,7 +322,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         say("Select the account to assign this transaction to:  ");
         List<Register> registers = Register.getListOf();
         for (int i = 1; i <= registers.size(); i++) {
-            Register register = registers.get(i-1);
+            Register register = registers.get(i - 1);
             say("   " + i + ".  " + register.getRegisterName() + ", " + register.getAccountType() + ", " +
                     register.getAccountNumber());
         }
@@ -340,19 +340,26 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         say("Failed to find any budget items for merchant " + merchant.getName());
         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
         assignMoreBudgetItems(merchant, budgetItems);
+
+        // A null value for budget items means to check the termination condition, so it the termination condition
+        // isn't "found", then null out the budget items list:
+        if (terminationCondition != FOUND) {
+            budgetItems = null;
+        }
+
         return budgetItems;
     }
 
     // Assign new budget items to an existing list of budget items:
     @Override
-    public void assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
+    public TerminationCondition assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
             throws BudgetException, ViewException, EntityException, RegisterException {
 
         try {
             boolean done = false;
             while (!done) {
-                ask("Enter a budget item payee, and optionally, a fixed amount and fixed percentage" +
-                        ": ");
+                ask("Enter a budget item payee, and optionally, a fixed amount and fixed percentage (or 's' or " +
+                        "'q'): ");
                 String line = in.nextLine();
                 switch (line) {
                     case "":
@@ -367,11 +374,11 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         say("The import process cannot be restarted.");
                         continue;
 
-                    case "skip":
+                    case "s":
                         terminationCondition = SKIP;
                         break;
 
-                    case "quit":
+                    case "q":
                         terminationCondition = QUIT;
                         break;
 
@@ -406,8 +413,11 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                 } // End switch on entered budget item.
 
                 // Ask the user if they are done:
-                done = !getYesOrNo("Assign another category to merchant " + merchant.getName());
-
+                if (terminationCondition == FOUND) {
+                    done = !getYesOrNo("Assign another category to merchant " + merchant.getName());
+                } else {
+                    done = true;
+                }
             } // End while there are budget items to enter.
 
         } catch (Exception e) {
@@ -416,6 +426,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             ve.initCause(e);
             throw ve;
         }
+        return terminationCondition;
     }
 
     /**

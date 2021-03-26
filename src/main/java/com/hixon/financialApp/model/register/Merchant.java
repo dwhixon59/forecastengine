@@ -11,6 +11,7 @@ import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
@@ -248,8 +249,14 @@ public class Merchant extends IndependentEntity {
    // Add a budget item to the merchant:
    public BudgetItemMerchant addBudgetItem(BudgetItem budgetItem, double amount, int percentage) throws EntityException,
            RegisterException, BudgetException, SQLException {
-      BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
-      budgetItemMerchant.save();
+      BudgetItemMerchant budgetItemMerchant = null;
+      try {
+         budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
+         budgetItemMerchant.save();
+      } catch (SQLIntegrityConstraintViolationException se) {
+         Utility.getResolver().say("That budget item is already associated with this merchant.");
+         budgetItemMerchant = BudgetItemMerchant.getByItemAndMerchant(budgetItem, this);
+      }
       return budgetItemMerchant;
    }
 

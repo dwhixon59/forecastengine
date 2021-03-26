@@ -27,6 +27,7 @@ public class User extends IndependentEntity {
    String email;
    String phoneNumber;
    Calendar updatedTimestamp;
+   String personalFileSystem;
 
 
    /*
@@ -81,6 +82,9 @@ public class User extends IndependentEntity {
       this.updatedTimestamp = updatedTimestamp;
    }
 
+   public String getPersonalFileSystem() { return personalFileSystem; }
+   public void setPersonalFileSystem(String personalFileSystem) { this.personalFileSystem = personalFileSystem; }
+
    /*
     * Constructors:
     */
@@ -91,7 +95,7 @@ public class User extends IndependentEntity {
 
    // Full constructors (with and without ID:
    public User(String userName, String password, String firstName, String lastName, String email, String phoneNumber,
-               Calendar updatedTimestamp) {
+               String personalFileSystem, Calendar updatedTimestamp) {
       super(true);
       this.userName = userName;
       this.password = password;
@@ -99,10 +103,11 @@ public class User extends IndependentEntity {
       this.lastName = lastName;
       this.email = email;
       this.phoneNumber = phoneNumber;
+      this.personalFileSystem = personalFileSystem;
       this.updatedTimestamp = (Calendar) updatedTimestamp.clone();
    }
    public User(UUID id, String userName, String password, String firstName, String lastName, String email,
-               String phoneNumber, Calendar updatedTimestamp) {
+               String phoneNumber, String personalFileSystem, Calendar updatedTimestamp) {
       super(false);
       this.id = id;
       this.userName = userName;
@@ -111,6 +116,7 @@ public class User extends IndependentEntity {
       this.lastName = lastName;
       this.email = email;
       this.phoneNumber = phoneNumber;
+      this.personalFileSystem = personalFileSystem;
       this.updatedTimestamp = (Calendar) updatedTimestamp.clone();
    }
 
@@ -124,6 +130,7 @@ public class User extends IndependentEntity {
       this.lastName = rs.getString("u.lastName");
       this.email = rs.getString("u.email");
       this.phoneNumber = rs.getString("u.phoneNumber");
+      this.personalFileSystem = rs.getString("u.personalFileSystem");
       this.updatedTimestamp = Utility.SqlTimestampToCalendarDate(rs.getTimestamp("u.updatedTimestamp"));
    }
 
@@ -140,6 +147,7 @@ public class User extends IndependentEntity {
               ", lastName='" + lastName + '\'' +
               ", email='" + email + '\'' +
               ", phoneNumber='" + phoneNumber + '\'' +
+              ", personalFileSystem='" + personalFileSystem + '\'' +
               ", updatedTimestamp ='" + Utility.calendarDateToStringDate(updatedTimestamp) + '\'' +
               ", id=" + id +
               '}';
@@ -152,7 +160,7 @@ public class User extends IndependentEntity {
    // The select query:
    public static final String selectColumns = " bin_to_uuid(u.idUser) as 'u.id', u.userName as 'u.userName', u.password " +
            "as 'u.password', u.firstName as 'u.firstName', u.lastName as 'u.lastName', u.email as 'u.email', " +
-           "u.phoneNumber as 'u.phoneNumber', u.updatedTimeStamp as 'u.updatedTimeStamp'";
+           "u.phoneNumber as 'u.phoneNumber', u.personalFileSystem, u.updatedTimeStamp as 'u.updatedTimeStamp'";
    public static String getSelectColumns() {
       return selectColumns;
    }
@@ -163,18 +171,19 @@ public class User extends IndependentEntity {
 
    // The insert query:
    public static final String insertQuery = "insert into user (idUser, userName, password, firstName, " +
-           "lastName, email, phoneNumber) values (";
+           "lastName, email, phoneNumber, personalFileSystem) values (";
    @Override
    public String getInsertQuery() {
       return insertQuery + "uuid_to_bin('" + id + "'), " + userName + ", " + password + ", " + firstName + ", " +
-              lastName + ", " + email + ", " + phoneNumber + "')";
+              lastName + ", " + email + ", " + phoneNumber+ ", " + personalFileSystem + "')";
    }
 
    // The update query:
    public static final String updateQuery = "update user set ";
    public String getupdateClause() {
       return  "userName = " + userName + ", password = " + password + ", firstName = " + firstName + ", lastName = "
-              + lastName + ", email = " + email + ", phoneNumber = " + phoneNumber;
+              + lastName + ", email = " + email + ", phoneNumber = " + phoneNumber + ", personalFileSystem = " +
+              personalFileSystem;
    }
    @Override
    public String getUpdateByIdQuery() throws BudgetException {
@@ -216,5 +225,4 @@ public class User extends IndependentEntity {
       }
       return users;
    }
-
 }

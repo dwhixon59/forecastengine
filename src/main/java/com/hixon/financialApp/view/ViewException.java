@@ -1,8 +1,8 @@
 package com.hixon.financialApp.view;
 
-import com.hixon.financialApp.utility.FinancialException;
+import com.hixon.financialApp.utility.FinancialAppException;
 
-public class ViewException extends FinancialException {
+public class ViewException extends FinancialAppException {
     public ViewException(String s) {
         super(s);
     }

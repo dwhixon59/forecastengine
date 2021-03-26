@@ -154,6 +154,15 @@ public class BudgetItemMerchant extends DependentEntity {
       return new BudgetItemMerchant(rs);
    }
 
+   public static BudgetItemMerchant getByItemAndMerchant(BudgetItem budgetItem, Merchant merchant) throws EntityException,
+           SQLException, BudgetException {
+      String query = selectQuery + " where BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "') and " +
+              "Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')";
+      ResultSet rs = EntityInt.getRS(query, "Database error occurred retrieving BudgetItemMerchant for " +
+              "budget item = " + budgetItem.getPayee() + " and merchant " + merchant.getName());
+      return new BudgetItemMerchant(rs);
+   }
+
    public void save() throws RegisterException, EntityException, BudgetException, SQLException {
       try {
 

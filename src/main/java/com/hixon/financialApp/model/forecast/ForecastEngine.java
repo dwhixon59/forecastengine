@@ -132,7 +132,7 @@ public class ForecastEngine {
 
                 // For each instance of the period between the start date and the end of the forecast period:
                 boolean firstOccurrence = true;
-                while (forecast.fallsWithinForecastWindow(nextDate)) {
+                while (forecast.fallsWithinForecastWindow(nextDate) && !forecastItem.isExpired(nextDate)) {
 
                     // Add the forecast transaction to the forecast:
                     forecast.addTransactionOnDate(forecastItem, startDate, nextDate, firstOccurrence);

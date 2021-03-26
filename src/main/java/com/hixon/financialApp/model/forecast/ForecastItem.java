@@ -238,8 +238,8 @@ public class ForecastItem extends Item {
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return updateQuery + " category = '" + category + "', payee = '" +
-                payee + "', period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", startDate = "
+        return updateQuery + " category = \"" + category + "\", payee = \"" +
+                payee + "\", period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", startDate = "
                 + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments + ", " +
                 "endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemtype = '" +
                 Item.generateItemType(itemType) + "', howImportant = '" + Item.generateHowImportant(howImportant) +

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement />
+  <nodes>
+    <node x="356.0" y="320.0">com.hixon.financialApp.view.text.OverdueItemsReport</node>
+    <node x="260.0" y="240.0">com.hixon.financialApp.view.text.ForecastReport</node>
+    <node x="276.0" y="160.0">com.hixon.financialApp.view.text.TextReport</node>
+    <node x="260.0" y="80.0">com.hixon.financialApp.view.base.AbstractReport</node>
+    <node x="120.0" y="320.0">com.hixon.financialApp.view.text.ItemsOfInterestReport</node>
+    <node x="440.0" y="80.0">com.hixon.financialApp.view.base.Renderer</node>
+    <node x="192.0" y="0.0">com.hixon.financialApp.view.base.AbstractView</node>
+    <node x="64.0" y="160.0">com.hixon.financialApp.view.text.ForecastView</node>
+    <node x="32.0" y="80.0">com.hixon.financialApp.view.base.AbstractForecastView</node>
+    <node x="382.0" y="0.0">com.hixon.financialApp.view.base.ViewReportInt</node>
+    <node x="0.0" y="0.0">com.hixon.financialApp.view.base.ForecastViewInt</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="com.hixon.financialApp.view.text.TextReport" target="com.hixon.financialApp.view.base.AbstractReport">
+      <point x="0.0" y="-15.0" />
+      <point x="0.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.base.AbstractForecastView" target="com.hixon.financialApp.view.base.ForecastViewInt">
+      <point x="-52.0" y="-15.0" />
+      <point x="0.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.base.Renderer" target="com.hixon.financialApp.view.base.ViewReportInt">
+      <point x="0.0" y="-15.0" />
+      <point x="38.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.base.AbstractForecastView" target="com.hixon.financialApp.view.base.AbstractView">
+      <point x="52.0" y="-15.0" />
+      <point x="188.0" y="55.0" />
+      <point x="228.0" y="55.0" />
+      <point x="-36.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.base.AbstractReport" target="com.hixon.financialApp.view.base.ViewReportInt">
+      <point x="40.0" y="-15.0" />
+      <point x="380.0" y="55.0" />
+      <point x="420.0" y="55.0" />
+      <point x="-38.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.text.ForecastReport" target="com.hixon.financialApp.view.text.TextReport">
+      <point x="0.0" y="-15.0" />
+      <point x="0.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.text.ItemsOfInterestReport" target="com.hixon.financialApp.view.text.ForecastReport">
+      <point x="0.0" y="-15.0" />
+      <point x="228.0" y="295.0" />
+      <point x="300.0" y="295.0" />
+      <point x="-40.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.base.AbstractReport" target="com.hixon.financialApp.view.base.AbstractView">
+      <point x="-40.0" y="-15.0" />
+      <point x="36.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.text.OverdueItemsReport" target="com.hixon.financialApp.view.text.ForecastReport">
+      <point x="0.0" y="-15.0" />
+      <point x="452.0" y="295.0" />
+      <point x="380.0" y="295.0" />
+      <point x="40.0" y="15.0" />
+    </edge>
+    <edge source="com.hixon.financialApp.view.text.ForecastView" target="com.hixon.financialApp.view.base.AbstractForecastView">
+      <point x="0.0" y="-15.0" />
+      <point x="0.0" y="15.0" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic Group" zoom="1.0" x="597.8076923076922" y="325.7307692307692" />
+  <SelectedNodes />
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

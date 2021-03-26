@@ -2,7 +2,7 @@ package com.hixon.financialApp.model.register;
 
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 
-public abstract class Bank implements FinancialInstitution {
+public abstract class Bank implements FinancialInstitutionInt {
 
    /*
     * Fields in the Wells Fargo download file transaction classifier:

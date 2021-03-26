@@ -3,13 +3,9 @@ package com.hixon.financialApp.view.base;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.view.ViewException;
 
-import java.io.FileNotFoundException;
-import java.io.UnsupportedEncodingException;
-import java.sql.SQLException;
 import java.util.List;
 
 public class Renderer<T extends ViewReportInt> {
@@ -37,8 +33,8 @@ public class Renderer<T extends ViewReportInt> {
      * Main methods:
      */
     // Render a report:
-    public boolean renderReport() throws FileNotFoundException, UnsupportedEncodingException, ViewException,
-            EntityException, ForecastException, SQLException, BudgetException, RegisterException {
+    public boolean renderReport() throws Exception, ViewException,
+            EntityException, BudgetException, RegisterException {
 
         // Open the output and output the front matter:
         reportObject.openReportOutput();
@@ -49,9 +45,11 @@ public class Renderer<T extends ViewReportInt> {
 
         // For each item in the report:
         List<Entity> items = reportObject.getItems();
-        for (Entity item : items
-        ) {
-            reportObject.renderItemRow(item);
+        if (items != null) {
+            for (Entity item : items
+            ) {
+                reportObject.renderItemRow(item);
+            }
         }
 
         // Render the summary row:

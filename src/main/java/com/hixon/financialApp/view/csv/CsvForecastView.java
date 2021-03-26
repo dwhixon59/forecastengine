@@ -9,11 +9,13 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.user.User;
-import com.hixon.financialApp.utility.FinancialException;
+import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsReport;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -37,8 +39,6 @@ public class CsvForecastView extends AbstractForecastView {
     */
    private String importForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
            "\\Expenses.csv";
-   private String importForecastSaveFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
-           "\\Expenses.old.csv";
    private FileReader in;
    private CSVParser records;
 
@@ -58,7 +58,8 @@ public class CsvForecastView extends AbstractForecastView {
    /*
     * Constructors:
     */
-   public CsvForecastView() {
+   public CsvForecastView(Forecast forecast) throws EntityException, SQLException {
+      super(Forecast.getMostRecent());
 
    }
 
@@ -241,6 +242,41 @@ public class CsvForecastView extends AbstractForecastView {
       return null;
    }
 
+   @Override
+   protected OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile) {
+      return null;
+   }
+
+   @Override
+   protected UpcomingItemsReport getUpcomingItemsReport(Forecast forecast, List<Entity> items, File reportFile) {
+      return null;
+   }
+
+   @Override
+   public List<UserResource> renderOverdueItemsReport(Forecast forecast) {
+      return null;
+   }
+
+   @Override
+   public UserResource renderOverdueItemsReport(Forecast forecast, User user) throws EntityException, ViewException {
+      return null;
+   }
+
+   @Override
+   public boolean renderOverdueItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException {
+      return false;
+   }
+
+   @Override
+   public UserResource renderUpcomingItemsReport(Forecast forecast, User user) throws EntityException, ViewException {
+      return null;
+   }
+
+   @Override
+   public boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException {
+      return false;
+   }
+
 
    // Close the forecast transactions CSV file and remove it:
    @Override
@@ -248,7 +284,7 @@ public class CsvForecastView extends AbstractForecastView {
 
       // Create a previous version of the import file:
       try {
-         Utility.makeSaveFile(importForecastFilename, importForecastSaveFilename);
+         Utility.versionFile(importForecastFilename);
       } catch (Exception e) {
          ViewException ve =  new ViewException("Error occured while creating a previous version of the forecast " +
                  "transaction import file.");

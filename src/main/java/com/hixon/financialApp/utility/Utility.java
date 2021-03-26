@@ -1,12 +1,13 @@
 package com.hixon.financialApp.utility;
 
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.*;
+import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -434,6 +435,14 @@ public class Utility {
       return Math.abs(d1 - d2) < CURRENCY_COMPARISON_THRESHOLD;
     }
 
+   /**
+    * This function rationalizes the concept of difference between two amounts to always return a positive value if
+    * the difference
+    *
+    * @param amount1
+    * @param amount2
+    * @return
+    */
    public static double currencyDifference(double amount1, double amount2) {
 
       double difference = amount1 - amount2;
@@ -443,10 +452,7 @@ public class Utility {
 
          difference = 0.00;
 
-      } else if (
-              amount1 >= Utility.CURRENCY_COMPARISON_THRESHOLD ||
-             (amount1 > -Utility.CURRENCY_COMPARISON_THRESHOLD && amount1 < Utility.CURRENCY_COMPARISON_THRESHOLD)
-      ) {
+      } else if (amount1 >= Utility.CURRENCY_COMPARISON_THRESHOLD) {
 
          // We are dealing with a credit, so subtraction yields the opposite of what were are looking for; invert it:
          difference = -difference;
@@ -455,11 +461,63 @@ public class Utility {
       return difference;
    }
 
+   /**
+    * Copy a file to the using the specified filename to the users personal file system.
+    * @param user The user who's personal file system is the target path of the copy operation.
+    * @param sourceFilePath Path of the source file.
+    * @param destinationFilename The desired filename.  No path as that is the user's personal file system.
+    */
+    public static void copyToUsersFileSystem(User user, File sourceFilePath, String destinationFilename) throws IOException {
+
+       // Get the user's personal file system:
+       String usersPersonalFileSystem = user.getPersonalFileSystem();
+
+       // Copy the source file to the user's file system:
+       FileUtils.copyFile(sourceFilePath, new File(usersPersonalFileSystem + "\\" + destinationFilename));
+    }
+
+
+   /**
+    * This utility method appends the second file (file2) to the first file (file1).
+    *
+    * @param file1  The file to be appended to.
+    * @param file2  The file to append to file1
+    */
+   public static void appendToFile(File file1, File file2) {
+      FileReader fr = null;
+      FileWriter fw = null;
+      try {
+         fr = new FileReader(file2);
+
+         fw = new FileWriter(file1,true);
+
+         int c = fr.read();
+         fw.write("\n");
+         while(c!=-1) {
+            fw.write(c);
+            c = fr.read();
+         }
+      } catch(IOException e) {
+         e.printStackTrace();
+      } finally {
+         closeFile(fr);
+         closeFile(fw);
+      }
+   }
+
+
    public enum StartDateType {
       FIRST_OF_LAST_MONTH, FIRST_OF_THIS_MONTH, TODAY, FIRST_OF_NEXT_MONTH, ONE_MONTH_FROM_TODAY,
       ARBITRARY_DATE
    }
 
+   /**
+    * Ask the user for the starting date for rendering a forecast.  Getting a start date is not strictly necessary.  Most
+    * of the time the user wants to render the entire forecast, not just the transactions on or after a certain date.
+    *
+    * @return The date that the forecast rendering should begin on.
+    * @throws QuitException
+    */
    public static Calendar askStartDate() throws QuitException {
       // Get the starting date type:
       UserResponse response = getResolver().getForecastStartDate();
@@ -495,6 +553,16 @@ public class Utility {
       return startDate;
    }
 
+   /**
+    * Get the number of days between two Calendar dates.  The algorithm is to clear the hours, minutes and seconds
+    * values and then get the time difference in milliseconds between the two dates.  Then divide by the number of
+    * milliseconds in a day and then round to an integer.
+    *
+    * @param firstDate The first date, presumably the earliest date, though that is not required.
+    * @param secondDate The second date, presumably the later date, though that is not required.
+    * @return The number of days between the two dates disregarding the time portion.  Positive if second date is after
+    * the first date.  Negative if second date is earlier than the first date.
+    */
    public static int daysBeteween(Calendar firstDate, Calendar secondDate) {
       int oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
       Calendar firstDate2 = Calendar.getInstance();
@@ -554,53 +622,114 @@ public class Utility {
       return false;
    }
 
+
    // Create a file:
    public static Boolean createFile(String currentFilename) throws IOException {
       File file = new File(currentFilename);
       return file.createNewFile();
    }
 
+
+   /**
+    * This utility method closes a file and handles any exceptions.
+    *
+    * @param stream The stream to be closed.
+    */
+   public static void closeFile(Closeable stream) {
+      try {
+         if (stream != null) {
+            stream.close();
+         }
+      } catch(IOException e) {
+      }
+   }
+
+
+   /**
+    *  Insert some text at the end of a filename, but before the file extension.  So a.b becomes ac.b  The algorithm
+    *  used is to find the first occurence of a dat (period) and then insert the new text just before that dot.
+    *  Therefore this function likely won't work on filenames that have more than one dot.
+    *
+    * @param filename The filename to insert the next text into.
+    * @param appendText The text to be inserted between the filename and file extension.
+    * @return The new filename with the text inserted.
+    */
+   public static String appendToFilename(@NotNull String filename, @NotNull String appendText) {
+      return filename.substring(0, filename.indexOf(".")) + appendText + filename.substring(filename.indexOf("."));
+   }
+
+
    // Create a previous version of a file and clear the current version:
-   public static Boolean makeSaveFileAndClear(String currentFilename) throws IOException {
+   public static Boolean versionFileAndClear(String currentFilename) throws IOException {
       boolean retVal = false;
-      if (makeSaveFile(currentFilename, appendToFilename(currentFilename, "old"))) {
+      if (versionFile(currentFilename)) {
          retVal = createFile(currentFilename);
       }
       return retVal;
    }
 
+   /**
+    * Version the file whose name matches "filename" in a particular user's personal file system.
+    * @param user The user whose persoanl file system contains the file to be versioned.
+    * @param filename The name of the file to be versioned.
+    */
+   public static void versionUserFile(User user, String filename) {
 
-   // Create a previous version of a file:
-   public static Boolean makeSaveFile(String currentFilename) {
-      return makeSaveFile(currentFilename, appendToFilename(currentFilename, "old"));
+      // Get the root of the user's personal file system:
+      String userFileSystem = user.getPersonalFileSystem();
+
+      // Version that file:
+      versionFile(userFileSystem + "\\" + filename);
    }
 
-   public static Boolean makeSaveFile(String currentFilename, String saveFilename) {
+   /**
+    * Create a previous version of a file.  Delete any previous ".old" version of the file and rename the current version
+    * to ".old".
+    *
+    * @param currentFilename Name of the file to create a ".old" version of.
+    * @return True if the file versioning succeeded.  False if file does not exist, or unable to delete the file, etc.
+    */
+   public static Boolean versionFile(String currentFilename) {
+      return versionFile(currentFilename, "_old");
+   }
+
+
+   /**
+    * Create a previous version of a file by appending the filename extension passed in to the current filename just
+    * before the file extension. If a file with that name already exists, delete it.  The filename extension is appended
+    * as is, so if you want a dot before the extension, then pass it in, e.g. ".old" not "old".
+    *
+    * @param currentFilename  The name of the file to be versioned.
+    * @param oldFilenameExtension  The extension to be appended to the current filename to effectively version it.
+    * @return True if the file versions succeeded.  False if file does not exist, or unable to delete the file, etc.
+    */
+   public static Boolean versionFile(String currentFilename, String oldFilenameExtension) {
 
       Boolean result = false;
       boolean done;
 
       // Delete the previous save file:
-      File saveFile = new File(saveFilename);
+      String saveFileName = appendToFilename(currentFilename, oldFilenameExtension);
+      File saveFile = new File(saveFileName);
       if (saveFile.exists()) {
          done = false;
          while (!done) {
             done = true;
             if (saveFile.delete()) {
-               getResolver().say(saveFilename + " deleted successfully");
+               getResolver().say(saveFileName + " deleted successfully");
                result = true;
             } else {
-               getResolver().say("Error occured attempting to delete the file " + saveFilename);
+               getResolver().say("Error occured attempting to delete the file " + saveFileName);
                done = !getResolver().getYesOrNo("Would you like to try again?");
                if (done) {
                   getResolver().say("Failed to rename the file " + currentFilename + " to " +
-                          saveFilename);
+                          saveFileName);
                   result = false;
                }
             }
          }
       } else {
-         getResolver().say("Old file " + saveFilename + " was not deleted because it does not exist.");
+         getResolver().say("Old file " + saveFileName + " was not deleted because it does not exist.");
          result = true;
       }
 
@@ -611,14 +740,14 @@ public class Utility {
             done = false;
             while (!done) {
                if (currentFile.renameTo(saveFile)) {
-                  getResolver().say(currentFilename + " successfully renamed to " + saveFilename);
+                  getResolver().say(currentFilename + " successfully renamed to " + saveFileName);
                   done = true; result = true;
                } else {
-                  getResolver().say("Unable to rename the file " + currentFilename + " to " + saveFilename);
+                  getResolver().say("Unable to rename the file " + currentFilename + " to " + saveFileName);
                   done = !getResolver().getYesOrNo("Would you like to try again?");
                   if (done) {
                      getResolver().say("Failed to rename the file " + currentFilename + " to " +
-                             saveFilename);
+                             saveFileName);
                      result = false;
                   }
                }
@@ -629,16 +758,10 @@ public class Utility {
          }
       }
       else {
-         getResolver().say("New file " + currentFilename + " was not renamed because delete of " + saveFilename +
+         getResolver().say("New file " + currentFilename + " was not renamed because delete of " + saveFileName +
                  " failed.");
       }
       return result;
-   }
-
-   // Insert some text at the end of a filename, but before the file extension, so a.b becomes a.c.b:
-   public static String appendToFilename(@NotNull String filename, @NotNull String appendText) {
-      return filename.substring(0, filename.indexOf(".") + 1) + appendText + filename.substring(filename.indexOf("."),
-              filename.length());
    }
 
 }

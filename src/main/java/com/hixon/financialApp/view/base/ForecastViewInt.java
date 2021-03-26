@@ -42,4 +42,22 @@ public interface ForecastViewInt {
    List<UserResource> renderItemsOfInterestReport() throws EntityException, Exception, BudgetException,
            ViewException, RegisterException;
 
+   // Render the overdue items report for all users:
+   List<UserResource> renderOverdueItemsReport(Forecast forecast) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
+   // Render items of interest report for a specific user:
+   UserResource renderOverdueItemsReport(Forecast forecast, User user) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
+   // Render items of interest report for a specific user to a specific file:
+   boolean renderOverdueItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException, Exception, RegisterException, BudgetException;
+
+   // Render the upcoming items report for all users:
+   List<UserResource> renderUpcomingItemsReport(Forecast forecast) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
+   // Render upcoming items report for a specific user:
+   UserResource renderUpcomingItemsReport(Forecast forecast, User user) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
+   // Render upcoming items report for a specific user to a specific file:
+   boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
 }

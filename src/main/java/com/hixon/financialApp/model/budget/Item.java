@@ -25,10 +25,22 @@ import static java.lang.Math.abs;
 public abstract class Item extends IndependentEntity {
 
     /*
+     * Constants:
+     */
+    // The name of the budget category that contains all the income items. These items have special considerations, for
+    // example they are taxable.
+    public static final String INCOME_CATEGORY_NAME = "Income";
+
+    // The month-day-full-year format:
+    protected static final SimpleDateFormat sdfMDY = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
+
+    // The acceptable variance for the amount an item is 5%:
+    private static final double ACCEPTABLE_VARIANCE = 0.05;
+
+
+    /*
      * Fields:
      */
-    protected static final SimpleDateFormat sdfMDY = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
-    private static final double ACCEPTABLE_VARIANCE = 0.05;
     protected String category = null;
     protected String payee = null;
     protected PeriodType period;
@@ -62,7 +74,11 @@ public abstract class Item extends IndependentEntity {
     // How frequently this forecast item is expected to occur:
     public enum PeriodType {
         ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, SEMIMONTHLY, SCHOOLYEARSEMIMONTHLY, MONTHLY, SIXWEEKS, BIMONTHLY, QUARTERLY, SEMIANNUALLY,
-        ANNUALLY
+        ANNUALLY;
+    }
+
+    public boolean isExpired(Calendar nextDate) {
+        return (getEndDate() == null) ? false : getEndDate().compareTo(nextDate) < 0;
     }
 
     // Type of expense:
@@ -127,6 +143,10 @@ public abstract class Item extends IndependentEntity {
         ONLINE_PAYMENT, // Manual online-payment "OP"
         RECURRING_PAYMENT, // Recurring payment "RP"
         TRANSFER // "TX"
+    }
+
+    public static boolean isIncomeCategory(String name) {
+        return name.equalsIgnoreCase(Item.INCOME_CATEGORY_NAME);
     }
 
 
@@ -246,6 +266,12 @@ public abstract class Item extends IndependentEntity {
     /*
      *  Helper methods:
      */
+
+
+    public boolean isIncome() {
+        return itemType == INCOME;
+    }
+
     // Get the amount spent on this item in a typical month like January, February, etc.:
     public double getAverageAmountForMonth(int month) {
         double monthlyAmount = 0;
@@ -700,7 +726,7 @@ public abstract class Item extends IndependentEntity {
 
     // Determine if a given number of days of variance between the planned and actual dates of occurrence of an item of
     // this type is OK:
-    public boolean isWithinNormalDateVariance(int variance) {
+    public static boolean isWithinNormalDateVariance(int variance, PeriodType period) {
         boolean isOk = false;
 
         switch (period) {
@@ -732,8 +758,8 @@ public abstract class Item extends IndependentEntity {
     }
 
     /**
-     *  Determine if a given amount of variance between the planned and actual amounts of an occurrence of an item of
-     *  a particular type is OK.
+     * Determine if a given amount of variance between the planned and actual amounts of an occurrence of an item of
+     * a particular type is OK.
      *
      * @param actualAmount The amount to determine if it is within an acceptable variance to this item's amount.
      * @return true if the difference between actualAmount and the amount of this item is <= the acceptable variance of
@@ -744,31 +770,35 @@ public abstract class Item extends IndependentEntity {
     }
 
     /**
-      *  Determine if an amount of variance between two arbitrary amounts (presumably planned vs. actual) are within the
-      *  normal variance of this item.
-      *
-      * @param amount1 The first amount to determine the difference from; presumably the "planned" amount.
-      * @param amount2 The second amount to determine the differnece from; presumably the "actual" amount.
-      * @return true if the difference between amount1 and amount2 is <= the acceptable variance of this item.
-      */
-    public boolean isWithinNormalAmountVariance(double amount1, double amount2) {
+     * Determine if an amount of variance between two arbitrary amounts (presumably planned vs. actual) are within the
+     * normal variance of this item.
+     *
+     * @param plannedAmount The first amount to determine the difference from; presumably the "planned" amount.
+     * @param actualAmount  The second amount to determine the difference from; presumably the "actual" amount.
+     * @return true if the difference between plannedAmount and actualAmount is <= the acceptable variance of this item.
+     */
+    public boolean isWithinNormalAmountVariance(double plannedAmount, double actualAmount) {
 
         // Compute the variance between the two amounts:
-        double variance = amount1 - amount2;
+        double variance = Utility.currencyDifference(plannedAmount, actualAmount);
 
-        // Determine if the variance is acceptable based upon the amount and the how the item occurs:
+        // Determine if the variance is acceptable based upon the amount and what kind of an item it is:
         boolean isOk = true;
-        if (!Utility.isEqualCurrency(amount, variance)) {
+        if (variance != 0.00) {
             switch (howOccurs) {
                 case ENVELOPE:
                     // Envelope type budget items have no expectation as the amount of a single transaction.  Their
                     // expectation is as to the total amount spent in a period.
                     break;
 
-                case COLLECTION:  // Collection and unplanned categories have no expectation as the amount of a single
-                case UNPLANNED:   // transaction, other than that no single transaction should exceed the total amount in
-                    // the budget item plus 5%.
-                    isOk = Math.abs(variance) < Math.abs(amount * ACCEPTABLE_VARIANCE);
+                case COLLECTION:
+                case UNPLANNED:
+                    // Collection and unplanned categories have no expectation as the amount of a single transaction.
+                    // For these types of items we only care that the actual amount did not exceed the planned amount by
+                    // more than other than 5% of budget item amount:
+                    if (variance > 0.00) {
+                        isOk = variance < Math.abs(amount * ACCEPTABLE_VARIANCE);
+                    }
                     break;
 
                 case PERIODIC:  // Periodic and unplanned transactions can vary no more than 5%
@@ -780,9 +810,8 @@ public abstract class Item extends IndependentEntity {
                     isOk = Math.abs(variance) < Math.abs(amount * acceptableVariance);
                     break;
 
-                case VARIABLE_PERIODIC:  // Variable periodic transactions can vary from half to double the amount:
-                    double transactionAmount = Math.abs(amount) + variance;
-                    isOk = (transactionAmount > (Math.abs(amount) / 2)) && (transactionAmount < (Math.abs(amount) * 2));
+                case VARIABLE_PERIODIC:  // Variable periodic transactions can vary plus or minus 20%:
+                    isOk = Math.abs(variance) < Math.abs(amount * 0.20);
                     break;
             }
         }
@@ -945,15 +974,16 @@ public abstract class Item extends IndependentEntity {
 
             case QUARTERLY:
                 // Quarterly dates occur on the same date each year, so set the next date year to be the same as the
-                // start date of the forecast:
+                // start date of the item:
                 nextDate.set(onOrAfterDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
 
                 // Increment by quarters till the nextDate is on or after the forecast start date:
                 while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 3);
 
                 // Decrement by quarters till the nextDate is less than 3 months ahead of the forecast start date:
-                while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 3)
-                    nextDate.add(Calendar.MONTH, -3);
+                Calendar nextQuarter = (Calendar) onOrAfterDate.clone();
+                nextQuarter.add(Calendar.MONTH, 3);
+                while (nextDate.compareTo(nextQuarter) >= 0) nextDate.add(Calendar.MONTH, -3);
                 break;
 
             case SEMIANNUALLY:
@@ -989,7 +1019,7 @@ public abstract class Item extends IndependentEntity {
         // Check post-conditions:
         if (nextDate != null && nextDate.compareTo(onOrAfterDateParm) < 0) {
             throw new ForecastException("Next date (" + Utility.calendarDateToStringDate(nextDate) + ") must be on or " +
-                    "after the specified date" + Utility.calendarDateToStringDate(onOrAfterDateParm) + ").");
+                    "after the specified date (" + Utility.calendarDateToStringDate(onOrAfterDateParm) + ").");
         }
 
         return nextDate;

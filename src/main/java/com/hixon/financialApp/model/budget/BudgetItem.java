@@ -25,9 +25,14 @@ public class BudgetItem extends Item {
    /*
     * Fields:
     */
-   private static final String selectQuery = "select bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
+   private static final String selectColumns = "bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
            "budget_item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
-           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' from budget_item ";
+           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' ";
+   public static String getSelectColumns() {
+      return selectColumns;
+   }
+
+   private static final String selectQuery = "select " + getSelectColumns() + "from budget_item ";
    public static String getSelectQuery() {
       return selectQuery;
    }
@@ -36,8 +41,7 @@ public class BudgetItem extends Item {
            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
            "howPaid, Budget_idBudget) values (";
 
-
-   @Override
+    @Override
    public String getInsertQuery() throws BudgetException {
 
       return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
@@ -331,6 +335,45 @@ public class BudgetItem extends Item {
       return EntityInt.getRS(query, "getting the budget items for a MTD spending report");
    }
 
+   /**
+    * Get a result set consisting of all the budget items that have not expired as of the specified date.  This
+    * method is useful to get a filtered list of budget items that does not include any of the ones that are no
+    * longer in use.
+    *
+    * @param date The for which the budget items must be valid (unexpired).
+    * @return A result set of budget items that does not include any expired budget items.
+    * @throws EntityException
+    */
+   public static ResultSet getAllUnexpiredBudgetItems(Calendar date) throws EntityException {
+
+      String query = getSelectQuery() + " where endDate is null or endDate >= " +
+              Utility.calendarDateToSqlDateString(date) + "order by category, payee";
+      return EntityInt.getRS(query, "getting the budget items for a MTD spending report");
+
+   }
+
+   /**
+    * Get a list of budget items joined with their splits and transactions that are instances of them.
+    *
+    * @param startDate The result set will contain only the items that have not expired as of this date and only
+    *                  splits associated with transactions that occurred on or after this date.
+    * @return ResultSet containing the joined items and splits.
+    */
+   public static ResultSet getBudgetItemsWithSplits(Calendar startDate) throws EntityException {
+
+      ResultSet rs = null;
+
+      String query = "select " + getSelectColumns() + ", " + TransactionSplit.getSelectColumns() + " " +
+              "from budget_item " +
+              "right outer join transaction_split on bi.idBudgetItem = ts.BudgetItem_idBudgetItem " +
+              "right outer join transaction on ts.Transaction_idTransaction = tr.idTransaction" +
+              "where bi.endDate = null or bi.endDate >= " + Utility.calendarDateToSqlDateString(startDate) +
+              "order by bi.category + bi.payee";
+      EntityInt.getRS(query, "retrieve a list of budget items joined with their splits and transactions");
+
+      return rs;
+   }
+
    // Get a list of the items of interest for a specific user:
    public static List<BudgetItem> getItemsOfInterest(User user) throws EntityException, SQLException, BudgetException {
       List<BudgetItem> items = new ArrayList<>();
@@ -368,34 +411,35 @@ public class BudgetItem extends Item {
    public double getBudgetedAmountForMonth(Calendar month) throws ForecastException {
 
       // Set the start date for the period to the first day of the month passed in:
-      Calendar startDate = (Calendar) month.clone();
-      startDate.set(Calendar.DATE, 1);
+      Calendar monthStartDate = (Calendar) month.clone();
+      monthStartDate.set(Calendar.DATE, 1);
 
       // Set the end date for the period to the last day of the month passed in:
-      Calendar endDate = (Calendar) month.clone();
-      endDate.set(Calendar.DATE, endDate.getMaximum(Calendar.DATE));
+      Calendar monthEndDate = (Calendar) month.clone();
+      int lastDayOfMonth = monthEndDate.getActualMaximum(Calendar.DATE);
+      monthEndDate.set(Calendar.DATE, lastDayOfMonth);
 
       // Get the budgeted amount for the date range matching the specified month:
-      return getBudgetedAmountInPeriod(startDate, endDate);
+      return getBudgetedAmountInPeriod(monthStartDate, monthEndDate);
    }
 
    /**
     * Get the amount of money budgeted for this budget item in a period (date range).
     *
-    * @param startDate Staring date of the period to get the total amount for.
-    * @param endDate Ending date of the period to get the total amount for.
+    * @param periodStartDate Staring date of the period to get the total amount for.
+    * @param periodEndDate Ending date of the period to get the total amount for.
     * @return
     */
-   public double getBudgetedAmountInPeriod(Calendar startDate, Calendar endDate) throws ForecastException {
+   public double getBudgetedAmountInPeriod(Calendar periodStartDate, Calendar periodEndDate) throws ForecastException {
 
       // Get the date of the first time this budget item would occur in the given period:
-      Calendar nextDate = getFirstDateInWindow(startDate, endDate);
+      Calendar nextDate = getFirstDateInWindow(periodStartDate, periodEndDate);
 
       // While there would be more occurrences of the budget item in the period, total them up:
       double total = 0;
-      while (nextDate != null && endDate.after(nextDate)){
+      while (nextDate != null && periodEndDate.after(nextDate)){
          total += getAmount();
-         nextDate = getNextDateOnOrBefore(nextDate, endDate);
+         nextDate = getNextDateOnOrBefore(nextDate, periodEndDate);
       }
 
       return total;

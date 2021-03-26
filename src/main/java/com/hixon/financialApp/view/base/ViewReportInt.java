@@ -26,7 +26,7 @@ public interface ViewReportInt {
 
    void renderSummaryRow();
 
-   void renderReportBackMatter();
+   void renderReportBackMatter() throws EntityException, SQLException, ForecastException, BudgetException, Exception, RegisterException;
 
    void closeReportOutput();
 

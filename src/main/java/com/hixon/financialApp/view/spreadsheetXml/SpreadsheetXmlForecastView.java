@@ -9,11 +9,14 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
 import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
 import java.io.*;
 import java.sql.SQLException;
@@ -32,7 +35,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    private boolean firstItemInMonth;
    private String category;
    private String lastCategory;
-   private final CsvForecastView csvForecastView = new CsvForecastView();
+   private CsvForecastView csvForecastView = null;
 
 
     /*
@@ -71,31 +74,74 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
       return null;
    }
 
+   @Override
+   protected OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile) {
+      return null;
+   }
+
+   @Override
+   protected UpcomingItemsReport getUpcomingItemsReport(Forecast forecast, List<Entity> items, File reportFile) {
+      return null;
+   }
+
+   @Override
+   public List<UserResource> renderOverdueItemsReport(Forecast forecast) {
+      return null;
+   }
+
+   @Override
+   public UserResource renderOverdueItemsReport(Forecast forecast, User user) throws EntityException, ViewException {
+      return null;
+   }
+
+   @Override
+   public boolean renderOverdueItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException {
+      return false;
+   }
+
+   @Override
+   public List<UserResource> renderUpcomingItemsReport(Forecast forecast) throws EntityException, ViewException {
+      return null;
+   }
+
+   @Override
+   public UserResource renderUpcomingItemsReport(Forecast forecast, User user) throws EntityException, ViewException {
+      return null;
+   }
+
+   @Override
+   public boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException {
+      return false;
+   }
+
 
    /*
     * Constructors:
     */
    public SpreadsheetXmlForecastView() throws EntityException, SQLException {
-      this.forecast = Forecast.getMostRecent();
+      super(Forecast.getMostRecent());
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "ShortTermForecast.xml";
       longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "LongTermForecast.xml";
       encoding = "UTF-8";
+      csvForecastView = new CsvForecastView(forecast);
    }
 
 
-   public SpreadsheetXmlForecastView(Forecast forecast) {
-      this.forecast = forecast;
+   public SpreadsheetXmlForecastView(Forecast forecast) throws EntityException, SQLException {
+      super(forecast);
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "ShortTermForecast.xml";
       longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
               "LongTermForecast.xml";
       encoding = "UTF-8";
+      csvForecastView = new CsvForecastView(forecast);
    }
 
-   public SpreadsheetXmlForecastView(String shortTermForecastFilename, String longTermForecastFilename,
+   public SpreadsheetXmlForecastView(Forecast forecast, String shortTermForecastFilename, String longTermForecastFilename,
                                      String importForecastFilename, String encoding) throws EntityException, SQLException {
+      super(forecast);
       this.forecast = Forecast.getMostRecent();
       this.shortTermForecastFilename = shortTermForecastFilename;
       this.longTermForecastFilename = longTermForecastFilename;
@@ -103,6 +149,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
       this.encoding = encoding;
       firstItem = true;
       firstItemInMonth = true;
+      csvForecastView = new CsvForecastView(forecast);
    }
 
 
@@ -117,6 +164,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    @Override
    public void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException {
       Utility.getResolver().say("Long term forecast will be rendered to the file: " + longTermForecastFilename);
+      Utility.versionFile(longTermForecastFilename);
       writer = new PrintWriter(longTermForecastFilename, encoding);
    }
 

@@ -5,12 +5,12 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastEngine;
-import com.hixon.financialApp.model.register.FinancialInstitution;
+import com.hixon.financialApp.model.register.FinancialInstitutionInt;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.WellsFargoBank;
 import com.hixon.financialApp.notification.async.file.fileBasedNotificationService;
-import com.hixon.financialApp.utility.FinancialException;
+import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
@@ -57,16 +57,14 @@ public class Controller {
          String filename = null;
          boolean inSync = true;
          Register register = Register.getByName("Bill Pay Account");
-         FinancialInstitution financialInstitution = null;
-         String budgetName = "Bill Pay Account";
+         FinancialInstitutionInt financialInstitution = new WellsFargoBank(register);;
+         Budget budget = Budget.getByName("Bill Pay Account");
          Forecast forecast = Forecast.getMostRecent();
          for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                case "processSkippedTransactions":
                   Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("PROCESS SKIPPED TRANSACTIONS");
-                  if (register == null) register = Register.getByName("Bill Pay Account");
-                  if (financialInstitution == null) financialInstitution = new WellsFargoBank(register);
                   inSync = register.processSkippedTransactions(forecast);
                   if (!inSync) {
                      forecast.updateForecast();
@@ -78,8 +76,8 @@ public class Controller {
                case "importRegisterTransactions":
                   Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("IMPORT REGISTER TRANSACTIONS");
-                  inSync = importer.importCsvRegisterTransactionFile("Wells Fargo Bank",
-                          "Bill Pay Account", forecast);
+                  inSync = importer.importCsvRegisterTransactionFile(financialInstitution,
+                          register, forecast);
                   Utility.getResolver().say("The transactions were successfully imported.");
                   if (!inSync) {
                      forecast.updateForecast();
@@ -90,12 +88,22 @@ public class Controller {
 
                case "importProvisionalRegisterTransactions":
                   Utility.getResolver().say("\n\n========================================================================");
-                  inSync = importer.importCsvProvisionalTransactionFile("Wells Fargo Bank",
-                          "Bill Pay Account", forecast);
+                  inSync = importer.importCsvProvisionalTransactionFile(financialInstitution,
+                          register, forecast);
                   Utility.getResolver().say("The provisional transactions were successfully imported.");
                   if (!inSync) {
                      forecast.updateForecast();
                      Utility.getResolver().say("The long term forecast was successfully updated.");
+                  }
+                  Utility.getResolver().say("------------------------------------------------------------------------");
+                  break;
+
+               case "verifyRegisterBalance":
+                  Utility.getResolver().say("\n\n========================================================================");
+                  Utility.getResolver().say("Verify register balance and update if necessary.");
+                  if (!Utility.getRegisterView().verifyRegisterBalance(register)) {
+                     Utility.getResolver().say("The balance ot the register " + register.getRegisterName() + " was " +
+                             "successfully updated.");
                   }
                   Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
@@ -106,6 +114,14 @@ public class Controller {
                   importer.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
                           "Finances\\Expenses\\BudgetItems.csv");
                   Utility.getResolver().say("The budget items were successfully imported.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
+                  break;
+
+               case "renderBudgetSummaryReport":
+                  Utility.getResolver().say("\n\n========================================================================");
+                  Utility.getResolver().say("Rendering the Budget Summary Report.");
+                  Utility.getBudgetView().renderBudgetSummaryReport();
+                  Utility.getResolver().say("Successfully rendered the New Budget Summary Report.");
                   Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
@@ -135,7 +151,7 @@ public class Controller {
                   double startingBalance = 0;
                   int numberOfMonths = 12;
                   int minimumBalance = 1000;
-                  forecast = new Forecast(budgetName, startDate, numberOfMonths, startingBalance, minimumBalance);
+                  forecast = new Forecast(budget, startDate, numberOfMonths, startingBalance, minimumBalance);
                   forecastEngine.generateForecast(forecast, startDate);
                   Utility.getResolver().say("The forecast was successfully generated");
                   Utility.getResolver().say("------------------------------------------------------------------------");
@@ -187,8 +203,16 @@ public class Controller {
                case "renderItemsOfInterestReport":
                   Utility.getResolver().say("\n\n========================================================================");
                   Utility.getResolver().say("Rendering the Items of Interest Report.");
-                  Utility.getNotificationService().sendItemsOfInterestReport();
+                  Utility.getNotificationService().sendItemsOfInterestReport(forecast);
                   Utility.getResolver().say("Successfully rendered the Items of Interest Report.");
+                  Utility.getResolver().say("------------------------------------------------------------------------");
+                  break;
+
+               case "renderOverdueAndUpcomingItemsReport":
+                  Utility.getResolver().say("\n\n========================================================================");
+                  Utility.getResolver().say("Rendering the Overdue and Upcoming Items Report.");
+                  Utility.getNotificationService().sendOverdueAndUpcomingItemsReport(forecast);
+                  Utility.getResolver().say("Successfully rendered the Overdue and Upcoming Items Report.");
                   Utility.getResolver().say("------------------------------------------------------------------------");
                   break;
 
@@ -209,7 +233,7 @@ public class Controller {
          System.out.println("\nClose the connection to the database.");
          Utility.getDbConnection().close();
 
-      } catch (Exception | FinancialException e) {
+      } catch (Exception | FinancialAppException e) {
          if (Utility.getDbConnection() != null) {
             Utility.getDbConnection().close();
          }

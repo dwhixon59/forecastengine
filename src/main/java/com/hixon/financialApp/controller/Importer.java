@@ -9,7 +9,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.*;
 import com.hixon.financialApp.model.user.User;
-import com.hixon.financialApp.utility.FinancialException;
+import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.view.ViewException;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
@@ -69,32 +69,21 @@ public class Importer {
     * Main methods:
     */
    // Import transactions from a bank in CSV format into the register:
-   public boolean importCsvRegisterTransactionFile(String financialInstitutionName, String registerName,
+   public boolean importCsvRegisterTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
                                                    Forecast forecast) throws ControllerException, ViewException,
            EntityException, SQLException, BudgetException, RegisterException {
-      return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILE_PATHNAME, financialInstitutionName, registerName,
+      return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILE_PATHNAME, financialInstitution, register,
               forecast);
    }
-   public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, String financialInstitutionName,
-                                                   String registerName, Forecast forecast)
+   public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt financialInstitution,
+                                                   Register register, Forecast forecast)
            throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException {
       getResolver().say("Import new transactions from the file " + clearedTransactionsFilename + " into the register '"
-              + registerName + "'.");
+              + register.getRegisterName() + "'.");
 
       int i = 0;
       try {
          Transaction transaction;
-
-         // Instantiate the target register:
-         Register register = Register.getByName(registerName);
-
-         // Instantiate the proper type of financialInstitution:
-         FinancialInstitution financialInstitution = null;
-         switch (financialInstitutionName) {
-
-            case "Wells Fargo Bank":
-               financialInstitution = new WellsFargoBank(register);
-         }
 
          /*
           * Import transactions from the CSV file:
@@ -167,7 +156,7 @@ public class Importer {
                }
             }
 
-            // then update the transaction merchant info from the merchant that we just assinged or created:
+            // then update the transaction merchant info from the merchant that we just assigned or created:
             transaction.setMerchant(merchant);
             transaction.setIdMerchant(merchant.getId());
 
@@ -292,7 +281,7 @@ public class Importer {
           * Phase 7:  Clean up and terminate:
           */
          // Create a save version of the import file:
-         makeSaveFile(clearedTransactionsFilename);
+         versionFile(clearedTransactionsFilename);
 
          // TODO: Save the import event:
 
@@ -316,7 +305,7 @@ public class Importer {
                  clearedTransactionsFilename + " on line " + i + ".");
          ce.initCause(e);
          throw ce;
-      } catch (FinancialException e) {
+      } catch (FinancialAppException e) {
          ControllerException ve =  new ControllerException("Error occured while creating a previous version of the " +
                  "forecast transaction import file.");
          ve.initCause(e);
@@ -333,32 +322,22 @@ public class Importer {
    /*
     *  Import the provisional transactions from the import file:
     */
-   public boolean importCsvProvisionalTransactionFile(String financialInstitutionName, String registerName,
-         Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException, FinancialException {
-      return importCsvProvisionalTransactionFile(PROVISIONAL_TRANSACTIONS_FILE_PATHNAME, financialInstitutionName,
-              registerName, forecast);
+   public boolean importCsvProvisionalTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
+                                                      Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException, FinancialAppException {
+      return importCsvProvisionalTransactionFile(PROVISIONAL_TRANSACTIONS_FILE_PATHNAME, financialInstitution,
+              register, forecast);
    }
 
-   public boolean importCsvProvisionalTransactionFile(String filename, String financialInstitutionName,
-              String registerName, Forecast forecast) throws RegisterException, ControllerException,
-              EntityException, BudgetException, FinancialException {
+   public boolean importCsvProvisionalTransactionFile(String filename, FinancialInstitutionInt financialInstitution,
+                                                      Register register, Forecast forecast) throws RegisterException,
+           ControllerException, EntityException, BudgetException, FinancialAppException {
+
       getResolver().say("Import provisional transactions from the file " + filename + " into the register '" +
-              registerName + "'.");
+              register.getRegisterName() + "'.");
 
       int provTrxIndex = 0;
       try {
          Transaction transaction = null;
-
-         // Instantiate the target register:
-         Register register = Register.getByName(registerName);
-
-         // Instantiate the proper type of financialInstitution:
-         FinancialInstitution financialInstitution = null;
-         switch (financialInstitutionName) {
-
-            case "Wells Fargo Bank":
-               financialInstitution = new WellsFargoBank(register);
-         }
 
          /*
           * Create a list of new provisional register transactions in ascending payee + amount order from the import file:
@@ -436,7 +415,7 @@ public class Importer {
              * Retrieve a list of the existing provisional transactions from the database and them sort them in ascending
              * order by merchant + amount :
              */
-            ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() + " where cleared = false",
+            ResultSet rs = EntityInt.getRS(Transaction.getSelectQueryNoPrefix() + " where cleared = false",
                     "attempting to retrieve a list of provisional transactions.");
             List<Transaction> registerTransactions = new ArrayList<>();
             while (rs.next()) {
@@ -584,7 +563,7 @@ public class Importer {
 
          // Save off the pending transactions file:
          if (file.exists()) {
-            makeSaveFileAndClear(filename);
+            versionFileAndClear(filename);
          }
 
          // TODO: Save the import event:
@@ -606,7 +585,7 @@ public class Importer {
       // Tell the user the number of transactions imported:
       if (provTrxIndex > 0) {
          getResolver().say("Successfully imported " + provTrxIndex + " provisional transactions into the register:  " +
-                 registerName + " from file " + filename + ".");
+                 register + " from file " + filename + ".");
       } else {
          getResolver().say("The import file " + filename + " was empty or did not exist.  No provisional transactions " +
                  "were imported");

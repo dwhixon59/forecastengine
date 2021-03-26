@@ -9,11 +9,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Calendar;
 
-public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financialApp.model.forecast.ForecastTransactionDatabaseIterator {
+public class ForecastTransactionAndItemDatabaseIterator implements ForecastTransactionIterator {
 
    /*
     * Fields::
     */
+   private Forecast forecast;
    private Calendar startDate;
    ResultSet rsCredits;
    ForecastTransaction forecastCreditTransaction;
@@ -29,7 +30,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
    public ForecastTransactionAndItemDatabaseIterator(Forecast forecast, Calendar startDate) throws
            EntityException, SQLException, ForecastException, BudgetException {
       super();
-      setForecast(forecast);
+      this.forecast= forecast;
       this.startDate = startDate;
 
       // Get a result set with all the credits:
@@ -37,7 +38,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
               " from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount > 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
-              " order by ft.plannedDate asc, ft.remainingAmount desc";
+              " order by ft.plannedDate asc, ft.remainingAmount desc, idForecastTransaction asc";
       rsCredits = EntityInt.getRS(selectCreditsQuery, "Database error occurred attempting to " +
               "get a list of credit forecast transactions by date.");
       if (rsCredits.next()) {
@@ -50,7 +51,7 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
               "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount < 0.00 and ft.plannedDate >= " + Utility.calendarDateToSqlDateString(startDate) +
-              " order by ft.plannedDate asc, ft.remainingAmount asc";
+              " order by ft.plannedDate asc, ft.remainingAmount asc, idForecastTransaction asc";
       rsDebits = EntityInt.getRS(selectDebitsQuery, "Database error occurred attempting to " +
               "get a list of debit forecast transactions by date.");
       if (rsDebits.next()) {
@@ -58,12 +59,12 @@ public class ForecastTransactionAndItemDatabaseIterator extends com.hixon.financ
          forecastDebitTransaction.setForecastItem(new ForecastItem(rsDebits));
       }
 
-      // Get a result set with all the placeholders (zero amounts):
+      // Get a result set with all the placeholders (zero amounts) after today's date:
       String selectPlaceholdersQuery = "select" + ForecastTransaction.getSelectColumns() + "," + ForecastItem.getSelectColumns() +
               "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
               "fi.idForecastItem where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
               "ft.remainingAmount = 0.00 and fi.amount = 0.00 and fi.howOccurs <> 'U' and ft.plannedDate >= " +
-              Utility.calendarDateToSqlDateString(startDate) + " order by ft.plannedDate asc, fi.payee asc";
+              "current_date order by ft.plannedDate asc, fi.payee asc, idForecastTransaction asc";
       rsPlaceholders = EntityInt.getRS(selectPlaceholdersQuery, "Database error occurred attempting to " +
               "get a list of placeholder forecast transactions by date.");
       if (rsPlaceholders.next()) {

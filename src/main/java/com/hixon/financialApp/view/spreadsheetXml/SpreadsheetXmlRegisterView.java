@@ -2,7 +2,6 @@ package com.hixon.financialApp.view.spreadsheetXml;
 
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.register.Register;
-import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractRegisterView;
@@ -147,7 +146,7 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
     }
 
     @Override
-    protected NewTransactionSummaryReport getNewTransactionSummaryReport(User user, List<Entity> items, File file) {
+    protected NewTransactionSummaryReport getNewTransactionSummaryReport(Register register, List<Entity> items, File file) {
         return null;
     }
 }

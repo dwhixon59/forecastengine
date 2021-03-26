@@ -9,64 +9,28 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
-import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.AbstractRegisterReport;
+import com.hixon.financialApp.view.base.RegisterReport;
 
 import java.io.*;
 import java.sql.SQLException;
 import java.util.List;
 
-public class NewTransactionSummaryReport extends AbstractRegisterReport {
+public class NewTransactionSummaryReport extends RegisterReport {
 
-    public static final String SPACE = " ";
-    public static final String MINUS_SIGN = "-";
-    public static final String PLUS_SIGN = "+";
-    public static final String ASTERISK = "*";
-    public static final int MAX_PAYEE_LENGTH = 24;
-    public static final String INDENT = "   ";
-    private final User user;
-    private final List<Entity> items;
-    private final File reportFile;
-    private PrintWriter pw;
-
-    public NewTransactionSummaryReport(Register register, User user, List<Entity> items, File file) {
-        super(register);
-
-        this.user = user;
-        this.items = items;
-        this.reportFile = file;
+    /*
+     * Constructors:
+     */
+    public NewTransactionSummaryReport(Register register, List<Entity> items, File reportFile) throws FileNotFoundException {
+        super(register, items, reportFile);
     }
 
     /*
      * Output the report:
      */
     @Override
-    public void openReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException {
-        boolean append = false;
-        boolean autoFlush = true;
-        String charset = "UTF-8";
-
-        FileOutputStream fos = new FileOutputStream(reportFile, append);
-        OutputStreamWriter osw = new OutputStreamWriter(fos, charset);
-        BufferedWriter bw = new BufferedWriter(osw);
-        pw = new PrintWriter(bw, autoFlush);
-    }
-
-    @Override
     public void renderReportFrontMatter() {
         pw.println("New transaction summary:");
-    }
-
-    @Override
-    public void renderHeaderRow() {
-
-    }
-
-    @Override
-    public List<Entity> getItems() {
-        return items;
     }
 
     @Override
@@ -114,24 +78,24 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
 
                     case PERIODIC:
                         if (!split.getBudgetItem().isWithinNormalAmountVariance(split.getAmount())) {
-                            double differance = Utility.currencyDifference(split.getBudgetItem().getAmount(), split.getAmount());
-                            if (differance < 0) {
-                                expectation = MINUS_SIGN;
-                            } else {
-                                expectation = PLUS_SIGN;
+                            double difference = Utility.currencyDifference(split.getBudgetItem().getAmount(), split.getAmount());
+                            if (difference < 0) {
+                                expectation = AMOUNT_LESS_THAN_EXPECTED;
+                            } else if (difference > 0) {
+                                expectation = AMOUNT_MORE_THAN_EXPECTED;
                             }
                         }
                         break;
 
                     case UNPLANNED:
-                        expectation = ASTERISK;
+                        expectation = TRANSACTION_UNEXPECTED;
                         // In the case of unplanned items, if there is an expected amount, then add the over/under flag:
                         if (!split.getBudgetItem().isWithinNormalAmountVariance(split.getAmount())) {
                             double difference = Utility.currencyDifference(split.getBudgetItem().getAmount(), split.getAmount());
-                            if (difference < 0) {
-                                expectation += MINUS_SIGN;
-                            } else {
-                                expectation += PLUS_SIGN;
+                            if (difference <= -1) {
+                                expectation += AMOUNT_LESS_THAN_EXPECTED;
+                            } else if (difference >= 1){
+                                expectation += AMOUNT_MORE_THAN_EXPECTED;
                             }
                         }
                         break;
@@ -141,7 +105,7 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
                         // MTD amount exceeds the entire amount budgeted for that category in the current month:
                         if (Utility.currencyDifference(split.getBudgetItem().getAmountSpentMTD(),
                                 split.getBudgetItem().getBudgetedAmountForCurrentMonth()) < 0) {
-                            expectation = PLUS_SIGN;
+                            expectation = AMOUNT_MORE_THAN_EXPECTED;
                         }
                         break;
 
@@ -175,8 +139,7 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
                 // Print the planned vs. actual amounts for the month:
                 double amountBudgeted = (split.getBudgetItem().getHowOccurs() == Item.HowOccurs.UNPLANNED) ?
                         split.getBudgetItem().getAmount() : split.getBudgetItem().getBudgetedAmountForCurrentMonth();
-                String plannedVsActual = null;
-                plannedVsActual = " (" + Utility.formatRoundedDollarAmount(Math.abs(amountBudgeted)) + "/" +
+                String plannedVsActual = " (" + Utility.formatRoundedDollarAmount(Math.abs(amountBudgeted)) + "/" +
                         Utility.formatRoundedDollarAmount(Math.abs(split.getBudgetItem().getAmountSpentMTD())) + ")";
                 pw.print(plannedVsActual);
                 remainingSpace -= plannedVsActual.length();
@@ -195,7 +158,7 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
                         memo = SPACE + split.getMemo().substring(0, remainingSpace);
                     } else {
                         //  otherwise put it on the next line:
-                        int len = (split.getMemo().length() <= 21) ? split.getMemo().length() : 21;
+                        int len = Math.min(split.getMemo().length(), 21);
                         memo = "\n\tMemo: " + split.getMemo().substring(0, len);
                     }
                 }
@@ -209,16 +172,6 @@ public class NewTransactionSummaryReport extends AbstractRegisterReport {
     @Override
     public void renderSummaryRow() {
         pw.println("\nCurrent Balance:  " + Utility.formatRoundedDollarAmount(register.getBalance()));
-    }
-
-    @Override
-    public void renderReportBackMatter() {
-
-    }
-
-    @Override
-    public void closeReportOutput() {
-        pw.close();
     }
 }
 

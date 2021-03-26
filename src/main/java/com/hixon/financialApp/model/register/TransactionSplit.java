@@ -144,14 +144,20 @@ public class TransactionSplit extends DependentEntity {
    /*
     * Load and save methods:
     */
-   private static final String selectQuery = "select amount, bin_to_uuid(BudgetItem_idBudgetItem) as idBudgetItem, " +
-           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo from transaction_split ";
+   private static final String selectColumns = "amount, bin_to_uuid(BudgetItem_idBudgetItem) as idBudgetItem, " +
+           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo ";
+
+   public static String getSelectColumns() {
+      return selectColumns;
+   }
+
    public static String getSelectQuery() {
-      return selectQuery;
+      return "select " + getSelectColumns() + "from transaction_split ";
    }
 
    private static final String insertQuery = "insert into transaction_split (amount, " +
            "BudgetItem_idBudgetItem, Transaction_idTransaction, memo) values (";
+
    @Override
    public String getInsertQuery() throws BudgetException, ForecastException {
       return null;
@@ -179,7 +185,7 @@ public class TransactionSplit extends DependentEntity {
    }
 
    public static TransactionSplit getbyId(UUID idBudgetItem, UUID idTransaction) throws EntityException, RegisterException {
-      ResultSet rs = EntityInt.getSingletonRS(selectQuery + "where Budget_Item_idbBudgetItem = " +
+      ResultSet rs = EntityInt.getSingletonRS(getSelectQuery() + "where Budget_Item_idbBudgetItem = " +
           "uuid_to_bin('" + idBudgetItem + "') and Transaction_idTransaction = uuid_to_bin('" + idTransaction + "'))",
          "trying to retrieve a transaction split");
       return (rs != null) ? new TransactionSplit(rs) : null;
@@ -230,7 +236,7 @@ public class TransactionSplit extends DependentEntity {
    public static List<TransactionSplit> getSplitsForTransaction(Transaction transaction) throws RegisterException {
 
       // Find out what budget items are associated with the transaction for this transaction:
-      String query = selectQuery + "where Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
+      String query = getSelectQuery() + "where Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);

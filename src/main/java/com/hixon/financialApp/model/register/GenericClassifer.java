@@ -12,7 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 
-public class GenericClassifer implements FinancialInstitution {
+public class GenericClassifer implements FinancialInstitutionInt {
 
     protected BudgetItem[] budgetItems;
 

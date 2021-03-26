@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.*;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
@@ -14,6 +15,8 @@ import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -25,6 +28,14 @@ import java.util.*;
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 
+/**
+ * The AbstractForecastView class implements the {@link ForecastViewInt}, provides default implementations of its
+ * methods where appropriate, and contains the logic common to the different methods of user interaction with the
+ * forecast model.  For example all the code for interacting with the forecast database, for the purpose of rendering
+ * a forecast for the user, is here.  Code specific to a particular type of rendering of the forecast (spreadsheet, html,
+ * etc.) is contained in the concrete ForecastView classes in the packages associated with the particular type of view
+ * (text, JSON, XML, spreadsheet, HTML, etc.).
+ */
 public abstract class AbstractForecastView extends AbstractView implements ForecastViewInt {
 
     /*
@@ -49,6 +60,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
      * Constructors:
      */
 
+    public AbstractForecastView(Forecast forecast) {
+        this.forecast = forecast;
+    }
 
     /*
      * Helper methods:
@@ -70,7 +84,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException, BudgetException;
 
-    protected abstract ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File file);
+    protected abstract ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File reportFile) throws FileNotFoundException;
+
+    protected abstract OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException;
+
+    protected abstract UpcomingItemsReport getUpcomingItemsReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException;
+
 
     /*
      * Main methods:
@@ -117,24 +136,18 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         this.forecast = forecast;
 
         // Get the first day of the forecast rendering:
-        Calendar startDate = Utility.askStartDate();
+        Calendar startDate = forecast.getStartDate();
 
         // Get the starting balance.  Take if from the first register associated with the budget for now:
         List<Register> registers = forecast.getBudget().getRegisters();
         double runningBalance = registers.get(0).getBalance();
 
-        // Verify the starting balance.  Update it if required:
-        if (Utility.getResolver().getYesOrNo("Computed current balance of the " +
-                registers.get(0).getRegisterName() + " is " + Utility.formatDollarAmount(runningBalance) +
-                "  Do you want to update it?")) {
-            runningBalance = Utility.getResolver().getDollarAmount();
-            registers.get(0).setBalance(runningBalance);
-            registers.get(0).update();
-        }
-
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();
         renderLongTermForecastFrontMatter();
+
+        // Set all the running balances to zero in the database:
+        ForecastTransaction.zeroRunningBalances();
 
         // Iterate over all the forecast transactions in chronological order beginning on the start date:
         ForecastTransactionIterator forecastTransactions =
@@ -151,6 +164,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
             runningBalance += forecastTransaction.getRemainingAmount();
             forecastTransaction.setRunningBalance(runningBalance);
+            forecastTransaction.save(EntityInt.SaveMethod.UPDATE);
 
             int credit;
             int debit;
@@ -263,7 +277,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                 ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
                         if (forecastItem == null) {
 
-                            // then create a forecast item so we have something to link the forecast transaction split to:
+                            // then create a forecast item so we have something to link the forecast transaction to:
                             BudgetItem budgetItem = BudgetItem.getByPayee(ssForecastTransaction.getForecastItem().getPayee());
                             // TODO:  Handle if the budget item isn't found.
                             ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
@@ -306,12 +320,6 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     } // End updateFromExternalSource(Connection dbConnection).
 
-
-    public void renderItemsOfInterestReport(File itemsOfInterestReport) {
-
-    }
-
-
     @Override
     public List<UserResource> renderItemsOfInterestReport() throws EntityException, Exception, BudgetException,
             ViewException, RegisterException {
@@ -331,8 +339,6 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 reports.add(userResource);
             }
         }
-
-
         return reports;
     }
 
@@ -369,4 +375,128 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         }
         return result;
     }
+
+
+    @Override
+    public List<UserResource> renderUpcomingItemsReport(Forecast forecast) throws EntityException, ViewException, Exception, BudgetException, RegisterException {
+
+        // Create a holder for the individual user reports:
+        List<UserResource> reports = new ArrayList<>();
+
+        // Get a list of users:
+        List<User> users = User.getAllUsers();
+
+        // For each user:
+        for (int i = 0; i < users.size(); i++)
+        {
+            // Render an upcoming items report for the current user:
+            UserResource userResource = renderUpcomingItemsReport(forecast, users.get(i));
+            reports.add(userResource);
+        }
+        return reports;
+    }
+
+    @Override
+    public UserResource renderUpcomingItemsReport(Forecast forecast, User user) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        UserResource userResource = null;
+        File upcomingItemsReportFile = File.createTempFile("UpcomingItemsReport_" + user.getFirstName() + "_",
+                ".txt");
+        if (renderUpcomingItemsReport(forecast, user, upcomingItemsReportFile)) {
+            userResource = new UserResource(user, UserResource.ResourceType.upcomingItemsReport,
+                    upcomingItemsReportFile);
+        } else {
+            upcomingItemsReportFile.delete();
+        }
+        return userResource;
+    }
+
+    @Override
+    public boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        // Calculate the end date.  The algorithm is that the end date is always the end of a pay period.  For the 25th
+        // through the 10th of the month, the end date is the 14th.  For the 10th through the 25th it is the end of the
+        // month.
+        Calendar endDate = Calendar.getInstance();
+        if (endDate.get(Calendar.DATE) >= 25) {
+            endDate.add(Calendar.MONTH, 1);
+            endDate.set(Calendar.DATE, 14);
+        } else if (endDate.get(Calendar.DATE) < 10) {
+            endDate.set(Calendar.DATE, 14);
+        } else {
+            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
+        }
+
+        // Get a list of upcoming items through the end date:
+        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getItemsUpToDate(forecast, endDate));
+
+        // Render an upcoming items report for those items:
+        boolean result = false;
+        if (items.size() > 0) {
+            UpcomingItemsReport report = getUpcomingItemsReport(forecast, items, file);
+            Renderer<UpcomingItemsReport> renderer = new Renderer<>(report);
+            renderer.renderReport();
+            result = true;
+        }
+        return result;
+    }
+
+
+    @Override
+    public List<UserResource> renderOverdueItemsReport(Forecast forecast) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        // Create a holder for the individual user reports:
+        List<UserResource> reports = new ArrayList<>();
+
+        // Get a list of users:
+        List<User> users = User.getAllUsers();
+
+        // For each user:
+        for (int i = 0; i < users.size(); i++)
+        {
+            // Render an items of interest report for the current user:
+            UserResource userResource = renderOverdueItemsReport(forecast, users.get(i));
+            reports.add(userResource);
+        }
+        return reports;
+    }
+
+    @Override
+    public UserResource renderOverdueItemsReport(Forecast forecast, User user) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        UserResource userResource = null;
+        File overdueItemsReportFile = File.createTempFile("OverdueItemsReport" + user.getFirstName() + "_",
+                ".txt");
+        if (renderOverdueItemsReport(forecast, user, overdueItemsReportFile)) {
+            userResource = new UserResource(user, UserResource.ResourceType.overdueItemsReport,
+                    overdueItemsReportFile);
+        } else {
+            overdueItemsReportFile.delete();
+        }
+        return userResource;
+    }
+
+    @Override
+    public boolean renderOverdueItemsReport(Forecast forecast, User user, File file) throws EntityException,
+            ViewException, Exception,
+            RegisterException, BudgetException {
+
+        // Get a list of the overdue items:
+        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getOverdueItems(user));
+
+        // Render an overdue items report for those items:
+        boolean result = false;
+        if (items.size() > 0) {
+            OverdueItemsReport report = getOverdueItemsReport(forecast, items, file);
+            Renderer<OverdueItemsReport> renderer = new Renderer<>(report);
+            renderer.renderReport();
+            result = true;
+        }
+        return result;
+    }
+
 } // End class AbstractForecastView.

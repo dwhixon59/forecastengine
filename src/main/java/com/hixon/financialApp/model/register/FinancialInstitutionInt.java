@@ -7,7 +7,7 @@ import org.apache.commons.csv.CSVRecord;
 import java.sql.SQLException;
 import java.text.ParseException;
 
-public interface FinancialInstitution {
+public interface FinancialInstitutionInt {
 
    // Get the base name that will be used in constructing the import record ID:
    String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException;

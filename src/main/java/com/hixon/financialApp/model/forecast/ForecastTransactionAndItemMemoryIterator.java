@@ -2,7 +2,7 @@ package com.hixon.financialApp.model.forecast;
 
 import java.util.Calendar;
 
-public class ForecastTransactionMemoryIterator implements ForecastTransactionIterator {
+public class ForecastTransactionAndItemMemoryIterator implements ForecastTransactionIterator {
 
     Forecast forecast = null;
     ForecastTransaction[] transactions = null;
@@ -10,13 +10,11 @@ public class ForecastTransactionMemoryIterator implements ForecastTransactionIte
     ForecastTransaction nextTransaction = null;
     Calendar startDate = null;
 
-   public ForecastTransactionMemoryIterator(Forecast forecast, Calendar startDate) throws ForecastException {
+   public ForecastTransactionAndItemMemoryIterator(Forecast forecast, Calendar startDate) throws ForecastException {
        setForecast(forecast);
        this.startDate = startDate;
    }
 
-
-   @Override
     public void setForecast(Forecast forecast) throws ForecastException {
         if (forecast == null) throw new ForecastException("Forecast must not be null.");
         this.forecast = forecast;
@@ -26,7 +24,6 @@ public class ForecastTransactionMemoryIterator implements ForecastTransactionIte
         if (i == transactions.length) throw new ForecastException("No transactions in the forecast.");
         nextTransaction = transactions[i];
     }
-
 
     @Override
     public ForecastTransaction getNext() throws ForecastException {

@@ -40,7 +40,7 @@ public interface TransactionResolverInt {
    String resolveUnmatchedAccount(String payee, double amount) throws RegisterException;
 
    // Assign new budget items to an existing list of budget items:
-   void assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
+   Importer.TerminationCondition assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
            throws BudgetException, ViewException, EntityException, RegisterException;
 
    List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant,
