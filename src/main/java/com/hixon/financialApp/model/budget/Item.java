@@ -272,52 +272,64 @@ public abstract class Item extends IndependentEntity {
         return itemType == INCOME;
     }
 
-    // Get the amount spent on this item in a typical month like January, February, etc.:
-    public double getAverageAmountForMonth(int month) {
-        double monthlyAmount = 0;
+    /**
+     * Get the amount spent on this item in a typical year (not any particular year).  The algorithm used is to
+     * calculate the daily amount by dividing the amount by the number of days in the type of period it has.  Then
+     * multiply that by the number of days in a year to get the annual amount.
+     *
+     * @return The annual amount of this item.
+     */
+    public double getForecastAnnualAmount() {
+        double monthlyAmount = 0.0;
         switch (period) {
             case ON_DEMAND:
-                monthlyAmount = 0;
+                monthlyAmount = 0.0;
                 break;
             case DAILY:
-                monthlyAmount = amount * 365 / 12;
+                monthlyAmount = amount * 365.0;
                 break;
             case WEEKLY:
-                monthlyAmount = amount / 7 * 365 / 12;
+                monthlyAmount = amount / 7.0 * 365.0;
                 break;
             case BIWEEKLY:
-                monthlyAmount = amount / 14 * 365 / 12;
+                monthlyAmount = amount / 14.0 * 365.0;
                 break;
             case SEMIMONTHLY:
-                monthlyAmount = amount * 2;
+                monthlyAmount = amount * 24.0;
                 break;
             case SCHOOLYEARSEMIMONTHLY:
-                if (month >= 6 && month <= 8) {
-                    monthlyAmount = 0;
-                } else {
-                    monthlyAmount = amount;
-                }
+                monthlyAmount = amount * 9.0;
                 break;
             case MONTHLY:
-                monthlyAmount = amount;
+                monthlyAmount = amount * 12.0;
                 break;
             case SIXWEEKS:
-                monthlyAmount = amount / 42 * 365 / 12;
+                monthlyAmount = amount / 42.0 * 365.0;
                 break;
             case BIMONTHLY:
-                monthlyAmount = amount / 2;
+                monthlyAmount = amount * 6.0;
                 break;
             case QUARTERLY:
-                monthlyAmount = amount / 3;
+                monthlyAmount = amount * 4.0;
                 break;
             case ANNUALLY:
-                monthlyAmount = amount / 12;
+                monthlyAmount = amount;
                 break;
             case SEMIANNUALLY:
-                monthlyAmount = amount / 6;
+                monthlyAmount = amount * 2.0;
                 break;
         }
-        return 0;
+        return monthlyAmount;
+    }
+
+    /**
+     * Get the amount spent on this item in a typical month (not any particular month).  The algorithm used is to
+     * divide the annual amount by the number of months in a year.
+     *
+     * @return The annual amount of this item divided by 12.
+     */
+    public double getAverageAmountForAMonth() {
+        return getForecastAnnualAmount() / 12.0;
     }
 
     public static PeriodType parsePeriodType(String dbPeriod) throws BudgetException {
@@ -724,36 +736,55 @@ public abstract class Item extends IndependentEntity {
         }
     }
 
+    /**
+     * Determine if a given number of days of variance between the planned and actual dates of occurrence of an item of
+     * this type is OK.
+     *
+     * @param variance The difference between the planned date of occurrence and the actual date of occurrence.
+     * @return True if the variance is OK for this type of item.
+     */
+    public boolean isWithinNormalDateVariance(int variance) throws BudgetException {
+        return isWithinNormalDateVariance(variance, getPeriod(), getHowOccurs());
+    }
+
     // Determine if a given number of days of variance between the planned and actual dates of occurrence of an item of
     // this type is OK:
-    public static boolean isWithinNormalDateVariance(int variance, PeriodType period) {
-        boolean isOk = false;
+    public static boolean isWithinNormalDateVariance(int variance, PeriodType period, HowOccurs howOccurs)
+            throws BudgetException {
 
-        switch (period) {
-            case DAILY:
-                isOk = false;
-                break;
-            case WEEKLY:
-                isOk = variance > -2 && variance < 2;
-                break;
-            case BIWEEKLY:
-                isOk = variance > -3 && variance < 3;
-                break;
-            case SEMIMONTHLY:
-            case SCHOOLYEARSEMIMONTHLY:
-            case MONTHLY:
-            case SIXWEEKS:
-                isOk = variance > -4 && variance < 4;
-                break;
-            case BIMONTHLY:
-            case QUARTERLY:
-            case SEMIANNUALLY:
-            case ANNUALLY:
-                isOk = variance > -8 && variance < 8;
-                break;
-            case ON_DEMAND:
-                isOk = variance > -8 && variance < 8;
+        boolean isOk = true;
+
+        // Only periodic transactions can be considered overdue so if it's periodic:
+        if (howOccurs == Item.HowOccurs.PERIODIC || howOccurs == Item.HowOccurs.VARIABLE_PERIODIC) {
+            switch (period) {
+                case DAILY:
+                    isOk = false;
+                    break;
+                case WEEKLY:
+                    isOk = variance > -2 && variance < 2;
+                    break;
+                case BIWEEKLY:
+                    isOk = variance > -3 && variance < 3;
+                    break;
+                case SEMIMONTHLY:
+                case SCHOOLYEARSEMIMONTHLY:
+                case MONTHLY:
+                case SIXWEEKS:
+                    isOk = variance > -4 && variance < 4;
+                    break;
+                case BIMONTHLY:
+                case QUARTERLY:
+                case SEMIANNUALLY:
+                case ANNUALLY:
+                    isOk = variance > -8 && variance < 8;
+                    break;
+                case ON_DEMAND:
+                    isOk = variance > -8 && variance < 8;
+                default:
+                    throw new BudgetException("Unknow HowOccurs type " + howOccurs + " in switch statement.");
+            }
         }
+
         return isOk;
     }
 
@@ -836,6 +867,8 @@ public abstract class Item extends IndependentEntity {
         if (startDate.compareTo(onOrAfterDate) > 0) {
             onOrAfterDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
                     startDate.get(Calendar.DATE));
+            nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
+                    startDate.get(Calendar.DATE));
         }
 
         // Get the day of the week of the first occurrence of this budget item:
@@ -861,27 +894,14 @@ public abstract class Item extends IndependentEntity {
                 break;
 
             case BIWEEKLY:
-                // If the day of the month of the start date is on or after the day of the month of the forecast start date:
-                if (startDate.get(Calendar.DATE) >= onOrAfterDate.get(Calendar.DATE)) {
-
-                    // Then start this transaction on that date in the year and month of the forecast start date:
-                    nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
-                            startDate.get(Calendar.DATE));
-
-                } else {
-
-                    // if the forecast start date day of the month is less than or equal to two weeks after the item
-                    // start date:
-                    if (onOrAfterDate.get(Calendar.DATE) <= (startDate.get(Calendar.DATE) + 14)) {
-                        // then make the next date two weeks after the start date day of the month:
-                        nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
-                                startDate.get(Calendar.DATE) + 14);
-
-                    } else {
-                        // the forecast start date is more than two weeks after the item start date so add 4 weeks:
-                        nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
-                                startDate.get(Calendar.DATE) + 28);
-                    }
+                // The algorithm is to calculate the number of 14 day periods between the start date of this item and
+                // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
+                // a 14 day period that the on-or-after-date falls.  So take 14 - the remainder, which is the part of a
+                // 14 days period that remains till the next date of this item, and add it to the on-or-after-date.
+                int daysTillNextOccurrence = 14 - (Utility.daysBeteween(startDate, onOrAfterDate) % 14);
+                Utility.copyDate(onOrAfterDate, nextDate);
+                if (daysTillNextOccurrence != 14) {
+                    nextDate.add(Calendar.DATE, daysTillNextOccurrence);
                 }
                 break;
 
@@ -995,7 +1015,7 @@ public abstract class Item extends IndependentEntity {
                 while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 6);
 
                 // Decrement by half-years till the nextDate is less than 6 months ahead of the forecast start date:
-                while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 3)
+                while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 6)
                     nextDate.add(Calendar.MONTH, -6);
                 break;
 
@@ -1019,7 +1039,8 @@ public abstract class Item extends IndependentEntity {
         // Check post-conditions:
         if (nextDate != null && nextDate.compareTo(onOrAfterDateParm) < 0) {
             throw new ForecastException("Next date (" + Utility.calendarDateToStringDate(nextDate) + ") must be on or " +
-                    "after the specified date (" + Utility.calendarDateToStringDate(onOrAfterDateParm) + ").");
+                    "after the specified date (" + Utility.calendarDateToStringDate(onOrAfterDateParm) + ").  " +
+                    "item is:  " + this.toString());
         }
 
         return nextDate;
@@ -1262,6 +1283,21 @@ public abstract class Item extends IndependentEntity {
                 ", \t\nstart date = " + Utility.calendarDateToStringDate(startDate) + " \t\nnumber of payments = " +
                 numberOfPayments + ", \t\nend date = " + endDate + ", \t\nitem type = " + itemType + ", \t\nhow important = " +
                 howImportant + ", \t\nhow occurs = " + howOccurs + ", \t\nhow paid = " + howPaid + ".";
+        return line;
+    }
+
+
+    // Format an item as a string:
+    public String toStringShort() {
+
+        String endDate = null;
+        if (this.endDate != null) {
+            endDate = Utility.calendarDateToStringDate(this.endDate);
+        } else {
+            endDate = "null";
+        }
+        String line = "Item: Category = " + category + ", Payee = " + payee + ", Amount = " + amount + ", Start Date = " +
+                Utility.calendarDateToStringDate(startDate) + ".";
         return line;
     }
 }

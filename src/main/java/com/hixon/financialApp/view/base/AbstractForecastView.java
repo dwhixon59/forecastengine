@@ -238,12 +238,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                     // Keep track of the list item number for debugging purposes:
                     i++;
+                    System.out.println("Current forecast transaction:  " + ssForecastTransaction.toStringShort());
 
                     // If the current spreadsheet forecast transaction has an ID (the update case):
                     if (ssForecastTransaction.getId() != null) {
 
                         // then get the matching forecast transaction from the database:
-                        System.out.println("Current forecast transaction:  " + ssForecastTransaction);
                         ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(ssForecastTransaction.getId());
 
                         // and if a matching forecast transaction was found in the database:
@@ -254,12 +254,21 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                             // then if the forecast planned date has been modified then update the database transaction:
                             if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
+                                System.out.println("Date modified for forecast transaction:  " + ssForecastTransaction);
                                 Utility.copyDate(ssForecastTransaction.getPlannedDate(), dbForecastTransaction.getPlannedDate());
                             }
 
-                            // and if the remaining amount has been modified, then update the database transaction:
+                            // and if the remaining amount has been modified:
                             if (ssForecastTransaction.getRemainingAmount() != dbForecastTransaction.getRemainingAmount()) {
-                                dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
+
+                                // and the difference is not just rounding to the nearest dollar for display purposes:
+                                if (Math.abs(ssForecastTransaction.getRemainingAmount() -
+                                        dbForecastTransaction.getRemainingAmount()) > 0.50) {
+
+                                    // then update the database transaction:
+                                    System.out.println("Amount modified for forecast transaction:  " + ssForecastTransaction);
+                                    dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
+                                }
                             }
 
                             // and save the updated forecast transaction to the database:

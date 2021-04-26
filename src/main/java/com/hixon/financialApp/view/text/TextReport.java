@@ -25,6 +25,7 @@ public class TextReport extends AbstractReport {
     public static final int MAX_PAYEE_LENGTH = 24;
     public static final String INDENT = "   ";
     public static final String COMMA = ",";
+    public static final String TAB = "\t";
     protected final File reportFile;
     protected PrintWriter pw;
 

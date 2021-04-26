@@ -13,8 +13,9 @@ public class BudgetCategoryReportRow extends ReportRow {
      * Fields:
      */
     int includedItems;
-    double plannedAmount;
-    double actualAmount;
+    double averageAnnualAmount;
+    double plannedAmountInPeriod;
+    double actualAmountInPeriod;
     BudgetCategory budgetCategory;
     BudgetTotalsReportRow budgetTotalsReportRow;
 
@@ -32,45 +33,110 @@ public class BudgetCategoryReportRow extends ReportRow {
         includedItems++;
     }
 
-    public double getPlannedAmount() {
-        return plannedAmount;
+    public double getPlannedAmountInPeriod() {
+        return plannedAmountInPeriod;
     }
-    public void setPlannedAmount(double plannedAmount) {
-        this.plannedAmount = plannedAmount;
+    public void setPlannedAmountInPeriod(double plannedAmountInPeriod) {
+        this.plannedAmountInPeriod = plannedAmountInPeriod;
     }
     public void incrementPlannedAmount(double plannedAmount) {
-        this.plannedAmount += plannedAmount;
+        this.plannedAmountInPeriod += plannedAmount;
     }
 
     public double getPercentPlannedAmount() {
         double percentPlannedAmount;
         if (budgetCategory.getCategoryType() == BudgetCategory.CategoryType.EXPENSE) {
-            percentPlannedAmount = (plannedAmount / budgetTotalsReportRow.getTotalPlannedSpending()) * 100.0;
+            if (
+                    budgetTotalsReportRow.getTotalPlannedSpendingInPeriod() < -0.5 ||
+                    budgetTotalsReportRow.getTotalPlannedSpendingInPeriod() > 0.5
+            ) {
+                percentPlannedAmount = (plannedAmountInPeriod / budgetTotalsReportRow.getTotalPlannedSpendingInPeriod()) * 100.0;
+            } else {
+                percentPlannedAmount =  0;
+            }
         } else {
-            percentPlannedAmount = (actualAmount / budgetTotalsReportRow.getTotalPlannedIncome()) * 100.0;
+            if (
+                    budgetTotalsReportRow.getTotalPlannedIncomeInPeriod() < -0.5 ||
+                    budgetTotalsReportRow.getTotalPlannedIncomeInPeriod() > 0.5
+            ) {
+                percentPlannedAmount = (plannedAmountInPeriod / budgetTotalsReportRow.getTotalPlannedIncomeInPeriod()) * 100.0;
+            } else {
+                percentPlannedAmount = 0;
+            }
         }
-        return percentPlannedAmount;
+        return Math.abs(percentPlannedAmount);
     }
 
-    public double getActualAmount() {
-        return actualAmount;
+    public double getActualAmountInPeriod() {
+        return actualAmountInPeriod;
     }
-    public void setActualAmount(double actualAmount) {
-        this.actualAmount = actualAmount;
+    public void setActualAmountInPeriod(double actualAmountInPeriod) {
+        this.actualAmountInPeriod = actualAmountInPeriod;
     }
     public void incrementActualAmount(double amount) {
-        actualAmount += amount;
+        actualAmountInPeriod += amount;
     }
 
     public double getPercentActualAmount() {
         double percentActualAmount;
         if (budgetCategory.getCategoryType() == BudgetCategory.CategoryType.EXPENSE) {
-            percentActualAmount = (actualAmount / budgetTotalsReportRow.getTotalActualSpending()) * 100.0;
+            if (
+                    budgetTotalsReportRow.getTotalActualSpendingInPeriod() < -0.5 ||
+                    budgetTotalsReportRow.getTotalActualSpendingInPeriod() > 0.5
+            ) {
+                percentActualAmount = (actualAmountInPeriod / budgetTotalsReportRow.getTotalActualSpendingInPeriod()) * 100.0;
+            } else {
+                percentActualAmount = 0;
+            }
         } else {
-            percentActualAmount = (actualAmount / budgetTotalsReportRow.getTotalActualIncome()) * 100.0;
+            if (
+                    budgetTotalsReportRow.getTotalActualIncomeInPeriod() < -0.5 ||
+                    budgetTotalsReportRow.getTotalActualIncomeInPeriod() > 0.5
+            ) {
+                percentActualAmount = (actualAmountInPeriod / budgetTotalsReportRow.getTotalActualIncomeInPeriod()) * 100.0;
+            } else {
+                percentActualAmount = 0;
+            }
         }
-        return percentActualAmount;
+        return Math.abs(percentActualAmount);
     }
+
+    public double getForecastAnnualAmount() {
+        return averageAnnualAmount;
+    }
+
+    public void setAverageAnnualAmount(double averageAnnualAmount) {
+        this.averageAnnualAmount = averageAnnualAmount;
+    }
+
+    public void incrementForecastAnnualAmount(double budgetItemAverageAnnualAmount) {
+        setAverageAnnualAmount(getForecastAnnualAmount() + budgetItemAverageAnnualAmount);
+    }
+
+    public double getPercentAverageAnnualAmount() {
+        double percentAverageAnnualAmount;
+        if (budgetCategory.getCategoryType() == BudgetCategory.CategoryType.EXPENSE) {
+            if (
+                    budgetTotalsReportRow.getTotalActualSpendingInPeriod() < -0.5 ||
+                            budgetTotalsReportRow.getTotalActualSpendingInPeriod() > 0.5
+            ) {
+                percentAverageAnnualAmount = (actualAmountInPeriod / budgetTotalsReportRow.getTotalActualSpendingInPeriod()) * 100.0;
+            } else {
+                percentAverageAnnualAmount = 0;
+            }
+        } else {
+            if (
+                    budgetTotalsReportRow.getTotalActualIncomeInPeriod() < -0.5 ||
+                            budgetTotalsReportRow.getTotalActualIncomeInPeriod() > 0.5
+            ) {
+                percentAverageAnnualAmount = (actualAmountInPeriod / budgetTotalsReportRow.getTotalActualIncomeInPeriod()) * 100.0;
+            } else {
+                percentAverageAnnualAmount = 0;
+            }
+        }
+        return Math.abs(percentAverageAnnualAmount);
+    }
+
 
     public BudgetCategory getBudgetCategory() {
         return budgetCategory;
@@ -91,8 +157,8 @@ public class BudgetCategoryReportRow extends ReportRow {
      */
     public BudgetCategoryReportRow(BudgetCategory budgetCategory, BudgetTotalsReportRow budgetTotalsReportRow) {
         this.includedItems = 0;
-        this.plannedAmount = 0;
-        this.actualAmount = 0;
+        this.plannedAmountInPeriod = 0;
+        this.actualAmountInPeriod = 0;
         this.budgetCategory = budgetCategory;
         this.budgetTotalsReportRow = budgetTotalsReportRow;
     }

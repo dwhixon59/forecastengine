@@ -415,7 +415,7 @@ public class Importer {
              * Retrieve a list of the existing provisional transactions from the database and them sort them in ascending
              * order by merchant + amount :
              */
-            ResultSet rs = EntityInt.getRS(Transaction.getSelectQueryNoPrefix() + " where cleared = false",
+            ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() + " where tr.cleared = false",
                     "attempting to retrieve a list of provisional transactions.");
             List<Transaction> registerTransactions = new ArrayList<>();
             while (rs.next()) {

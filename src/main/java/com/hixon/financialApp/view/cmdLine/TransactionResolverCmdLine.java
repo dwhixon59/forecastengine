@@ -75,7 +75,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     @Override
     public boolean getYesOrNo(String question) {
-        say(question + " (y/n): ");
+        ask(question + " (y/n): ");
         while (true) {
             String line = in.nextLine();
             if (line.equalsIgnoreCase("y")) return true;

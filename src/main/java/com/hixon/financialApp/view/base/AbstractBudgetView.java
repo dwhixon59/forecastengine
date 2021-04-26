@@ -3,11 +3,13 @@ package com.hixon.financialApp.view.base;
 import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.FileNotFoundException;
 import java.io.UnsupportedEncodingException;
@@ -39,6 +41,12 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
 
     protected abstract void renderHeaderRow();
 
+    public abstract void renderBudgetCategoryReportRow(BudgetCategoryReportRow budgetCategoryReportRow);
+
+    public abstract void renderBudgetItemReportRow(BudgetItemReportRow budgetItemReportRow);
+
+    public abstract void renderTransactionSplitReportRow(TransactionSplitReportRow transactionSplitReportRow) throws EntityException, SQLException, RegisterException;
+
     public abstract void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double plannedAmount,
                                           double actualAmount) throws ForecastException, EntityException, BudgetException;
 
@@ -58,8 +66,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
 
     protected abstract void renderBudgetSummaryReportHeaderRow();
 
-    protected abstract void renderBudgetSummaryReportTotalsRow(double totalBudgetedIncome, double totalActualIncome,
-                                                               double totalBudgetedSpending, double totalActualSpending);
+    protected abstract void renderBudgetSummaryReportSummary(BudgetTotalsReportRow budgetTotalsReportRow);
 
 
     /*
@@ -145,7 +152,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         double totalBudgetedSpending = 0;
         double totalActualSpending = 0;
 
-        // Iterate over each item in thd budget and output spending on it:
+        // Iterate over each item in the budget and output spending on it:
         while (rsbi.next()) {
 
             // Create a budget item from the database row:
@@ -210,6 +217,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         getResolver().say("MTD Spending Report successfully rendered.");
     }
 
+
     /**
      * @inheritDoc
      */
@@ -234,112 +242,142 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         renderBudgetSummaryReportTitleRow(startDate, endDate);
         renderBudgetSummaryReportHeaderRow();
 
-        // For each budget item in the budget:
-        ResultSet budgetItemsWithSplits = BudgetItem.getBudgetItemsWithSplits(startDate);
+        // Get a list of all the items in the budget joined with their associated transaction splits and transactions:
+        ResultSet budgetItemsWithSplits = BudgetItem.getBudgetItemsWithSplits(startDate, endDate);
 
-        // Amounts for this item in this period:
-        double totalBudgetedForThisItem = 0;
-        double totalActualAmountForThisItem = 0;
+        // If there are items in the result set:
+        if (budgetItemsWithSplits.next()) {
 
-        // Overall income for this period:
-        double totalBudgetedIncome = 0;
-        double totalActualIncome = 0;
+            // Create a list of rows in the report and add all the category, budget item and transaction split rows to the list:
+            BudgetTotalsReportRow budgetTotalsReportRow = new BudgetTotalsReportRow();
+            List<ReportRow> reportRows = new ArrayList<>();
+            addCategoriesToSummaryReport(budgetTotalsReportRow, reportRows, budgetItemsWithSplits, startDate,
+                    endDate);
 
-        // Overall spending for this period:
-        double totalBudgetedSpending = 0;
-        double totalActualSpending = 0;
+            // Iterate over each category, budget and transaction split rows in the list of rows and output them to the
+            // report using the appropriate method for that type of row:
+            BudgetCategoryReportRow budgetCategoryReportRow = null;
+            BudgetItemReportRow budgetItemReportRow = null;
+            TransactionSplitReportRow transactionSplitReportRow = null;
+            for (ReportRow reportRow : reportRows
+            ) {
 
-        // Iterate over each row in the item + split + transaction result set and create a list of objects:
-        BudgetTotalsReportRow budgetTotalsReportRow = new BudgetTotalsReportRow();
-        List<ReportRow> reportRows = new ArrayList<>();
-        BudgetItem budgetItem = null;
-        Boolean done = !budgetItemsWithSplits.next();
+                // If the current row in the report is a Budget Category:
+                if (reportRow.getClass() == BudgetCategoryReportRow.class) {
+                    budgetCategoryReportRow = (BudgetCategoryReportRow) reportRow;
+
+                    // then render the budget category:
+                    renderBudgetCategoryReportRow(budgetCategoryReportRow);
+
+                } else if (reportRow.getClass() == BudgetItemReportRow.class) {
+                    budgetItemReportRow = (BudgetItemReportRow) reportRow;
+
+                    // then render the budget item:
+                    renderBudgetItemReportRow(budgetItemReportRow);
+
+                } else if (reportRow.getClass() == TransactionSplitReportRow.class) {
+                    transactionSplitReportRow = (TransactionSplitReportRow) reportRow;
+
+                    // then render the transaction split:
+                    renderTransactionSplitReportRow(transactionSplitReportRow);
+
+                } else {
+                    throw new ViewException("Unrecognized report row type encounterd while generating the Budget Summary " +
+                            "Report.");
+                }
+            }
+
+            // Render the totals section of the report:
+            renderBudgetSummaryReportSummary(budgetTotalsReportRow);
+
+        } else {
+            Utility.getResolver().say("[WARN]  There were no items in the budget to report on.");
+        }
+
+        // Render any trailer matter:
+        renderSpendingReportBackMatter();
+
+        // Close the output file:
+        closeSpendingReportOutput();
+        getResolver().say("Budget Summary Report successfully rendered.");
+    }
+
+
+    /**
+     * Add the categories to the report rows list and for each category, call a method to add the budget items in that
+     * category to the report rows list.
+     *
+     * @param budgetTotalsReportRow The totals row for the report.  This method will update it with the sum of all the
+     *                              categories in the report.
+     * @param reportRows A list of categories, budget item and transaction split rows tha will be included in the report.
+     * @param budgetItemsWithSplits Result set on the database that contains all the information that will be included
+     *                             in the report.
+     * @param startDate The beginning date of the reporting period.
+     * @param endDate The ending date of the reporting period.
+     * @return boolean indicator that indicates if the result set from the database is exhausted.
+     * @throws BudgetException
+     * @throws SQLException
+     */
+    private boolean addCategoriesToSummaryReport(BudgetTotalsReportRow budgetTotalsReportRow, List<ReportRow> reportRows,
+         ResultSet budgetItemsWithSplits, Calendar startDate, Calendar endDate) throws BudgetException, SQLException,
+            RegisterException, ForecastException {
+
+        boolean done = false;
         while (!done) {
 
             // Create a category object from the database row and add it to the list:
             BudgetCategory budgetCategory = new BudgetCategory(budgetItemsWithSplits);
-            BudgetCategoryReportRow budgetCategoryReportRow = new BudgetCategoryReportRow(budgetCategory, budgetTotalsReportRow);
+            BudgetCategoryReportRow budgetCategoryReportRow = new BudgetCategoryReportRow(budgetCategory,
+                    budgetTotalsReportRow);
             reportRows.add(budgetCategoryReportRow);
 
-            // Add each budget item within that category to the list:
-            while (budgetItemsWithSplits.getString("bi.category").equalsIgnoreCase(budgetCategory.getName())) {
+            // Add the budget items within this category to the list of rows in the report:
+            done = addBudgetItems(budgetCategoryReportRow, reportRows, budgetItemsWithSplits, startDate, endDate);
 
-                // Keep track of the number of items in this category:
-                budgetCategoryReportRow.incrementIncludedItems();
-
-                // Create a budget item from the database row:
-                budgetItem = new BudgetItem(budgetItemsWithSplits);
-
-                // Keep the user updated with what is going on:
-                Utility.getResolver().say("Processing budget item " + budgetItem.getCategory() + ", " +
-                        budgetItem.getPayee() + ".");
-
-                // Create a BudgetItemReportRow for this budget item and add it to the list:
-                BudgetItemReportRow budgetItemReportRow = new BudgetItemReportRow(budgetItem,budgetCategoryReportRow);
-                reportRows.add(budgetItemReportRow);
-
-                // Compute the total amount budgeted to spend on this budget item in the specified period:
-                budgetItemReportRow.setPlannedAmount(budgetItem.getBudgetedAmountInPeriod(startDate, endDate));
-
-                // Keep track of the total planned spending (or income) on this budget category:
-                budgetCategoryReportRow.incrementPlannedAmount(budgetItemReportRow.getPlannedAmount());
-
-                // Keep track of the total planned spending or income for the period:
-                if (budgetItemReportRow.getBudgetItem().isIncome()) {
-                    budgetTotalsReportRow.incrementTotalBudgetedIncome(budgetItemReportRow.getPlannedAmount());
-                } else {
-                    budgetTotalsReportRow.incrementTotalBudgetedSpending(budgetItemReportRow.getPlannedAmount());
-                }
-
-                // Add all the transaction splits for the current budget item:
-                while (!done && budgetItemsWithSplits.getString("bi.payee").equalsIgnoreCase(
-                        budgetItem.getPayee())) {
-
-                    // Keep track of the number of splits in this budget item:
-                    budgetItemReportRow.incrementIncludedSplits();
-
-                    // Create a transaction split and a transaction from the database row:
-                    TransactionSplit transactionSplit = new TransactionSplit(budgetItemsWithSplits);
-                    Transaction transaction = new Transaction(budgetItemsWithSplits);
-
-                    // Create a TransactionSplitReportRow for this row in the ResultSet and add it to the list:
-                    TransactionSplitReportRow transactionSplitReportRow = new TransactionSplitReportRow(transactionSplit,
-                            transaction);
-                    reportRows.add(budgetItemReportRow);
-
-                    // Keep track of the total planned spending on this budget category:
-                    budgetCategoryReportRow.incrementActualAmount(transactionSplitReportRow.getTransactionSplit().getAmount());
-
-                    // Keep track of the total actual spending or income for the period:
-                    if (budgetItemReportRow.getBudgetItem().isIncome()) {
-                        budgetTotalsReportRow.incrementTotalActualSpending(budgetItemReportRow.getActualAmount());
-                    } else {
-                        budgetTotalsReportRow.incrementTotalActualIncome(budgetItemReportRow.getActualAmount());
-                    }
-
-                    if (!budgetItemsWithSplits.next()) {
-                        done = true;
-                    }
-                }
+            // Update the totals report row with the totals spent on this category:
+            if (budgetCategory.isIncome()) {
+                budgetTotalsReportRow.incrementTotalForecastIncome(budgetCategoryReportRow.getForecastAnnualAmount());
+                budgetTotalsReportRow.incrementTotalPlannedIncome(budgetCategoryReportRow.getPlannedAmountInPeriod());
+                budgetTotalsReportRow.incrementTotalActualIncome(budgetCategoryReportRow.getActualAmountInPeriod());
+            } else {
+                budgetTotalsReportRow.incrementTotalForecastSpending(budgetCategoryReportRow.getForecastAnnualAmount());
+                budgetTotalsReportRow.incrementTotalPlannedSpending(budgetCategoryReportRow.getPlannedAmountInPeriod());
+                budgetTotalsReportRow.incrementTotalActualSpending(budgetCategoryReportRow.getActualAmountInPeriod());
             }
         }
+        return true;
+    }
 
-        // Iterate over each item in the budget and output spending on it:
-        while (budgetItemsWithSplits.next()) {
+    /**
+     * Add the budget items to the report rows list and for each budget item, call a method to add the transaction splits
+     * associated with that budget item.
+     *
+     * @param budgetCategoryReportRow The category row for the list of budget items that we are processing.  This method
+     *                                will update it with the sum of all the budget items in the category.
+     * @param reportRows A list of categories, budget item and transaction split rows tha will be included in the report.
+     * @param budgetItemsWithSplits Result set on the database that contains all the information that will be included
+     *                             in the report.
+     * @param startDate The beginning date of the reporting period.
+     * @param endDate The ending date of the reporting period.
+     * @return true if the result set from the database is exhausted.
+     * @throws BudgetException
+     * @throws SQLException
+     * @throws ForecastException
+     * @throws RegisterException
+     */
+    @NotNull
+    private Boolean addBudgetItems(BudgetCategoryReportRow budgetCategoryReportRow, List<ReportRow> reportRows,
+       ResultSet budgetItemsWithSplits, Calendar startDate, Calendar endDate) throws SQLException, BudgetException,
+            ForecastException, RegisterException {
 
-            // Only include items that either occurred, or were expected to occur in the specified period:
-            if (totalBudgetedForThisItem != 0 || totalActualAmountForThisItem != 0) {
+        // Add each budget item within the specified category to the list:
+        BudgetItem budgetItem;
+        boolean done = false;
+        while (!done && budgetItemsWithSplits.getString(
+                "bi.category").equalsIgnoreCase(budgetCategoryReportRow.getBudgetCategory().getName())) {
 
-                // Render the budget item:
-                renderBudgetItem(budgetItem, startDate, endDate, totalBudgetedForThisItem,
-                        totalActualAmountForThisItem);
-
-                // Render the splits for the budget item:
-//                for (TransactionSplit split : splits
-//                ) {
-//                    renderTransactionSplit(split, true);
-//                }
-            }
+            // Keep track of the number of items in this category:
+            budgetCategoryReportRow.incrementIncludedItems();
 
             // Create a budget item from the database row:
             budgetItem = new BudgetItem(budgetItemsWithSplits);
@@ -348,63 +386,87 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
             Utility.getResolver().say("Processing budget item " + budgetItem.getCategory() + ", " +
                     budgetItem.getPayee() + ".");
 
-            // Get the total amount budgeted to spend on this item in the specified perior:
-            totalBudgetedForThisItem = budgetItem.getBudgetedAmountInPeriod(startDate, endDate);
+            // Create a BudgetItemReportRow for this budget item and add it to the list:
+            BudgetItemReportRow budgetItemReportRow = new BudgetItemReportRow(budgetItem, budgetCategoryReportRow);
+            reportRows.add(budgetItemReportRow);
 
-            // Get all the transaction splits for the current budget item:
-            List<TransactionSplit> splits = TransactionSplit.getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
+            // Set the total amount budgeted to spend on this budget item over the next year into the budget item row:
+            budgetItemReportRow.setForecastAnnualAmount(budgetItem.getForecastAnnualAmount());
 
-            // Total the splits to find out how much was spent on this budget item in the specified period.  Do this here
-            // rather than call a function because we need the list of splits later on and from an efficiency perspective
-            // we should only retrieve them once:
-            totalActualAmountForThisItem = 0;
-            for (TransactionSplit split : splits
-            ) {
-                totalActualAmountForThisItem += split.getAmount();
+            // Set the total amount budgeted to spend on this budget item last year into the budget item row:
+            budgetItemReportRow.setPlannedAmountInPeriod(budgetItem.getBudgetedAmountInPeriod(startDate, endDate));
+
+            // Add the transaction splits to the list (which will set the total amount spent on this budget item):
+            done = addTransactionSplitsToSummaryReport(budgetItemReportRow, reportRows, budgetItemsWithSplits);
+
+            // Increment the budget category totals with the amounts from this budget item:
+            budgetCategoryReportRow.incrementForecastAnnualAmount(budgetItemReportRow.getForecastAnnualAmount());
+            budgetCategoryReportRow.incrementPlannedAmount(budgetItemReportRow.getPlannedAmountInPeriod());
+            budgetCategoryReportRow.incrementActualAmount(budgetItemReportRow.getActualAmountInPeriod());
+
+            // Now if there were any splits, the in the process of adding them we will have moved to the next budget
+            // item (or exhausted the ResultSet), so we are already on the next budget item and we do not need to
+            // advance to it.  However, if there were no transaction splits then we are still sitting on budget item
+            // row that we just processed and we need to move to the next one:
+            if (budgetItemReportRow.getIncludedSplits() == 0 && !budgetItemsWithSplits.next()) {
+                done = true;
             }
+        }
+        return done;
+    }
 
-            // Only include items that either occurred, or were expected to occur in the specified period:
-            if (totalBudgetedForThisItem != 0 || totalActualAmountForThisItem != 0) {
 
-                /*
-                 * Keep track the total amount budgeted and spent in the period over all items for the report summary line:
-                 */
-                // If this budget item is an expense:
-                if (budgetItem.getAmount() < 0) {
+    /**
+     * Add the budget items to the report rows list and for each budget item, call a method to add the transaction splits
+     * associated with that budget item.
+     *
+     * @param budgetItemReportRow The category row for the list of budget items that we are processing.  This method
+     *                                will update it with the sum of all the budget items in the category.
+     * @param reportRows A list of categories, budget item and transaction split rows tha will be included in the report.
+     * @param budgetItemsWithSplits Result set on the database that contains all the information that will be included
+     *                             in the report.
+     * @return true if the result set from the database is exhausted.
+     * @throws BudgetException
+     * @throws SQLException
+     * @throws ForecastException
+     * @throws RegisterException
+     */
+    @NotNull
+    private boolean addTransactionSplitsToSummaryReport(BudgetItemReportRow budgetItemReportRow,
+                List<ReportRow> reportRows, ResultSet budgetItemsWithSplits) throws SQLException, RegisterException {
 
-                    // then add it to the total amount budgeted to spend in the period:
-                    totalBudgetedSpending -= totalBudgetedForThisItem;
-                    totalActualSpending -= totalActualAmountForThisItem;
+        // The ResultSet is not exhausted:
+        boolean done = false;
 
-                    // else if this item is income:
-                } else {
+        // If there are any splits:
+        budgetItemsWithSplits.getString("ts.idTransaction");
+        if (!budgetItemsWithSplits.wasNull()) {
 
-                    // then add it ot the total amount of income expected in the period:
-                    totalBudgetedIncome += totalBudgetedForThisItem;
-                    totalActualIncome += totalActualAmountForThisItem;
-                }
+            // then for or each split for the current budget item:
+            while (!done && budgetItemsWithSplits.getString("bi.payee").equalsIgnoreCase(
+                    budgetItemReportRow.getBudgetItem().getPayee())) {
 
-                // Render the budget item:
-                renderBudgetItem(budgetItem, startDate, endDate, totalBudgetedForThisItem,
-                        totalActualAmountForThisItem);
+                // Create a transaction split, transaction and a Merchant from the database row:
+                TransactionSplit transactionSplit = new TransactionSplit(budgetItemsWithSplits);
+                Transaction transaction = new Transaction(budgetItemsWithSplits);
+                Merchant merchant = new Merchant(budgetItemsWithSplits);
 
-                // Render the splits for the budget item:
-                for (TransactionSplit split : splits
-                ) {
-                    renderTransactionSplit(split, true);
+                // Create a TransactionSplitReportRow for this row in the ResultSet and add it to the list:
+                TransactionSplitReportRow transactionSplitReportRow = new TransactionSplitReportRow(transactionSplit,
+                        transaction, merchant);
+                reportRows.add(transactionSplitReportRow);
+
+                // Keep track of the number of splits in this budget item:
+                budgetItemReportRow.incrementIncludedSplits();
+
+                // Put the actual amount spent on this budget item last year into the budget item row:
+                budgetItemReportRow.incrementActualAmount(transactionSplit.getAmount());
+
+                if (!budgetItemsWithSplits.next()) {
+                    done = true;
                 }
             }
         }
-
-        // Render the totals row:double budgetedIncome, double actualIncome, double budgetedSpending, double actualSpending
-        renderBudgetSummaryReportTotalsRow(totalBudgetedIncome, totalActualIncome, totalBudgetedSpending, totalActualSpending);
-
-        // Render any trailer matter:
-        renderSpendingReportBackMatter();
-
-        // Close the output file:
-        closeSpendingReportOutput();
-        getResolver().say("Budget Summary Report successfully rendered.");
-
+        return done;
     }
 }

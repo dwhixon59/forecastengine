@@ -3,7 +3,9 @@ package com.hixon.financialApp.model.budget;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
@@ -25,16 +27,18 @@ public class BudgetItem extends Item {
    /*
     * Fields:
     */
-   private static final String selectColumns = "bin_to_uuid(idBudgetItem) as 'idBudgetItem', category, payee, period, " +
-           "budget_item.amount, runningBalance, startDate, numberOfPayments, endDate, ItemType, howImportant, howOccurs, " +
-           "howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget' ";
+   private static final String selectColumns = "bin_to_uuid(bi.idBudgetItem) as 'bi.idBudgetItem', bi.category as " +
+           "'bi.category', bi.payee as 'bi.payee', bi.period as 'bi.period', bi.amount as 'bi.amount', " +
+           "bi.runningBalance as 'bi.runningBalance', bi.startDate as 'bi.startDate', bi.numberOfPayments as " +
+           "'bi.numberOfPayments', bi.endDate as 'bi.endDate', bi.itemType as 'bi.itemType', bi.howImportant as " +
+           "'bi.howImportant', bi.howOccurs as 'bi.howOccurs', bi.howPaid as 'bi.howPaid', bin_to_uuid(bi.Budget_idBudget) " +
+           "as 'bi.idBudget' ";
    public static String getSelectColumns() {
       return selectColumns;
    }
 
-   private static final String selectQuery = "select " + getSelectColumns() + "from budget_item ";
    public static String getSelectQuery() {
-      return selectQuery;
+      return "select " + getSelectColumns() + "from budget_item bi";
    }
 
    private static final String insertQuery = "insert into budget_item (idBudgetItem, category, payee, " +
@@ -134,7 +138,7 @@ public class BudgetItem extends Item {
     */
 
    public static BudgetItem getById(UUID idBudgetItem) throws EntityException, BudgetException {
-      return new BudgetItem(EntityInt.getRSById(selectQuery + "where idBudgetItem = ", idBudgetItem,
+      return new BudgetItem(EntityInt.getRSById(getSelectQuery() + " where bi.idBudgetItem = ", idBudgetItem,
               "Database error encountered trying to retrieve a budget item."));
    }
 
@@ -143,20 +147,20 @@ public class BudgetItem extends Item {
       try {
          if (rs == null) throw new BudgetException("Result set to loadFromResultSet from must not be null.");
 
-         id = UUID.fromString(rs.getString("idBudgetItem"));
-         category = rs.getString("category");
-         payee = rs.getString("payee");
-         period = parsePeriodType(rs.getString("period"));
-         amount = rs.getDouble("amount");
-         runningBalance = rs.getDouble("runningBalance");
-         startDate = Utility.localDateToCalendarDate(rs.getObject("startDate", LocalDate.class));
-         endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
-         numberOfPayments = rs.getInt("numberOfPayments");
-         itemType = parseItemType(rs.getString("ItemType"));
-         howImportant = parseHowImportant(rs.getString("howImportant"));
-         howOccurs = parseHowOccurs(rs.getString("howOccurs"));
-         howPaid = parseHowPaid(rs.getString("howPaid"));
-         idBudget = UUID.fromString(rs.getString("idBudget"));
+         id = UUID.fromString(rs.getString("bi.idBudgetItem"));
+         category = rs.getString("bi.category");
+         payee = rs.getString("bi.payee");
+         period = parsePeriodType(rs.getString("bi.period"));
+         amount = rs.getDouble("bi.amount");
+         runningBalance = rs.getDouble("bi.runningBalance");
+         startDate = Utility.localDateToCalendarDate(rs.getObject("bi.startDate", LocalDate.class));
+         endDate = Utility.localDateToCalendarDate(rs.getObject("bi.endDate", LocalDate.class));
+         numberOfPayments = rs.getInt("bi.numberOfPayments");
+         itemType = parseItemType(rs.getString("bi.ItemType"));
+         howImportant = parseHowImportant(rs.getString("bi.howImportant"));
+         howOccurs = parseHowOccurs(rs.getString("bi.howOccurs"));
+         howPaid = parseHowPaid(rs.getString("bi.howPaid"));
+         idBudget = UUID.fromString(rs.getString("bi.idBudget"));
          setDirty(false);
 
       } catch (SQLException e) {
@@ -170,7 +174,7 @@ public class BudgetItem extends Item {
 
 
    public static BudgetItem getByPayee(String payee) throws BudgetException {
-      String query = selectQuery + "where payee = \"" + payee + "\"";
+      String query = getSelectQuery() + " where payee = \"" + payee + "\"";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
@@ -357,21 +361,37 @@ public class BudgetItem extends Item {
     *
     * @param startDate The result set will contain only the items that have not expired as of this date and only
     *                  splits associated with transactions that occurred on or after this date.
+    * @param endDate
     * @return ResultSet containing the joined items and splits.
     */
-   public static ResultSet getBudgetItemsWithSplits(Calendar startDate) throws EntityException {
+   public static ResultSet getBudgetItemsWithSplits(Calendar startDate, Calendar endDate) throws EntityException {
 
       ResultSet rs = null;
 
-      String query = "select " + getSelectColumns() + ", " + TransactionSplit.getSelectColumns() + " " +
-              "from budget_item " +
-              "right outer join transaction_split on bi.idBudgetItem = ts.BudgetItem_idBudgetItem " +
-              "right outer join transaction on ts.Transaction_idTransaction = tr.idTransaction" +
-              "where bi.endDate = null or bi.endDate >= " + Utility.calendarDateToSqlDateString(startDate) +
-              "order by bi.category + bi.payee";
-      EntityInt.getRS(query, "retrieve a list of budget items joined with their splits and transactions");
-
-      return rs;
+      String query = "select " + getSelectColumns() + ", " + TransactionSplit.getSelectColumns() + ", " +
+              Transaction.getSelectColumns() + ", " + Merchant.getSelectColumns() + " " +
+              "from budget_item bi " +
+              "left outer join transaction_split ts on bi.idBudgetItem = ts.BudgetItem_idBudgetItem " +
+              "left outer join transaction tr on ts.Transaction_idTransaction = tr.idTransaction " +
+              "left outer join merchant m on tr.Merchant_idMerchant = m.idMerchant " +
+              "where " +
+                  "(" +
+                     "bi.endDate is null or " +
+                     "bi.endDate >= " + Utility.calendarDateToSqlDateString(startDate) + " or " +
+                     "(" +
+                        "bi.endDate < " + Utility.calendarDateToSqlDateString(startDate) + " and " +
+                        "ts.amount is not null " +
+                    ")" +
+                 ") and " +
+                 "(" +
+                    "(" +
+                       "tr.postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " and " +
+                       "tr.postDate <= " + Utility.calendarDateToSqlDateString(endDate) +
+                     ") or " +
+                     "tr.postDate is null" +
+              ") " +
+              "order by bi.category, bi.payee, tr.postDate";
+      return EntityInt.getRS(query, "retrieve a list of budget items joined with their splits and transactions");
    }
 
    // Get a list of the items of interest for a specific user:

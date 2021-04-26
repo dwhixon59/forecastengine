@@ -159,7 +159,7 @@ public class Controller {
 
                case "updateFromExternalSource":
                   Utility.getResolver().say("\n\n========================================================================");
-                  Utility.getResolver().say("Updating the forecast from an external source.");
+                  Utility.getResolver().say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
                   if (forecast != null) {
                      Utility.getForecastView().updateFromExternalSource();
                   } else {

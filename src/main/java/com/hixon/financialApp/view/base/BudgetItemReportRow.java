@@ -13,8 +13,9 @@ public class BudgetItemReportRow extends ReportRow {
      * Fields:
      */
     private int includedSplits;
-    private double plannedAmount;
-    private double actualAmount;
+    private double averageAnnualAmount;
+    private double plannedAmountInPeriod;
+    private double actualAmountInPeriod;
     private final BudgetItem budgetItem;
     private final BudgetCategoryReportRow budgetCategoryReportRow;
 
@@ -31,30 +32,61 @@ public class BudgetItemReportRow extends ReportRow {
         includedSplits++;
     }
 
-    public double getPlannedAmount() {
-        return plannedAmount;
+    public double getPlannedAmountInPeriod() {
+        return plannedAmountInPeriod;
     }
-    public void setPlannedAmount(double plannedAmount) {
-        this.plannedAmount = plannedAmount;
+    public void setPlannedAmountInPeriod(double plannedAmountInPeriod) {
+        this.plannedAmountInPeriod = plannedAmountInPeriod;
     }
     public void incrementPlannedAmount(double plannedAmount) {
-        this.plannedAmount += plannedAmount;
+        this.plannedAmountInPeriod += plannedAmount;
     }
     public double getPercentPlannedAmount() {
-        return (plannedAmount / budgetCategoryReportRow.getPlannedAmount()) * 100.0;
+        if (
+                budgetCategoryReportRow.getPlannedAmountInPeriod() < -0.5 ||
+                budgetCategoryReportRow.getPlannedAmountInPeriod() > 0.5
+        ) {
+            return Math.abs((plannedAmountInPeriod / budgetCategoryReportRow.getPlannedAmountInPeriod()) * 100.0);
+        } else {
+            return 0.0;
+        }
      }
 
-    public double getActualAmount() {
-        return actualAmount;
+    public double getActualAmountInPeriod() {
+        return actualAmountInPeriod;
     }
-    public void setActualAmount(double actualAmount) {
-        this.actualAmount = actualAmount;
+    public void setActualAmountInPeriod(double actualAmountInPeriod) {
+        this.actualAmountInPeriod = actualAmountInPeriod;
     }
     public void incrementActualAmount(double actualAmount) {
-        this.actualAmount += actualAmount;
+        this.actualAmountInPeriod += actualAmount;
     }
     public double getPercentActualAmount() {
-        return (actualAmount / budgetCategoryReportRow.getActualAmount()) * 100;
+        if (
+                budgetCategoryReportRow.getActualAmountInPeriod() < -0.5 ||
+                budgetCategoryReportRow.getActualAmountInPeriod() > 0.5
+        ) {
+            return Math.abs((actualAmountInPeriod / budgetCategoryReportRow.getActualAmountInPeriod()) * 100);
+        } else {
+            return 0.0;
+        }
+    }
+
+    public double getForecastAnnualAmount() {
+        return averageAnnualAmount;
+    }
+    public void setForecastAnnualAmount(double averageAnnualAmount) {
+        this.averageAnnualAmount = averageAnnualAmount;
+    }
+    public double getPercentForecastAnnualAmount() {
+        if (
+                budgetCategoryReportRow.getForecastAnnualAmount() < -0.5 ||
+                        budgetCategoryReportRow.getForecastAnnualAmount() > 0.5
+        ) {
+            return Math.abs((averageAnnualAmount / budgetCategoryReportRow.getForecastAnnualAmount()) * 100);
+        } else {
+            return 0.0;
+        }
     }
 
     public BudgetItem getBudgetItem() {
@@ -64,7 +96,6 @@ public class BudgetItemReportRow extends ReportRow {
 
     /*
      * Constructors:
-     */
     /**
      * Create a ReportCategoryRow information object.
      *
@@ -72,8 +103,9 @@ public class BudgetItemReportRow extends ReportRow {
      */
     public BudgetItemReportRow(BudgetItem budgetItem, BudgetCategoryReportRow budgetCategoryReportRow) {
         this.includedSplits = 0;
-        this.plannedAmount = 0;
-        this.actualAmount = 0;
+        this.averageAnnualAmount = 0;
+        this.plannedAmountInPeriod = 0;
+        this.actualAmountInPeriod = 0;
         this.budgetItem = budgetItem;
         this.budgetCategoryReportRow = budgetCategoryReportRow;
     }

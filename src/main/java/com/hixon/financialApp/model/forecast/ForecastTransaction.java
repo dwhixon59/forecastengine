@@ -188,7 +188,6 @@ public class ForecastTransaction extends IndependentEntity {
         this.firstOccurrence = firstOccurrence;
         idForecastItem = item.getId();
         forecastItem = item;
-        System.out.println(this.toString());
     }
 
     public ForecastTransaction(ResultSet rs) throws SQLException {
@@ -444,6 +443,17 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Helper methods:
      */
+
+    /**
+     * Determines whether this forecast transaction is overdue as of today's date.
+     *
+     * @return True if the this forecast transaction is considered overdue today.
+     */
+    private boolean isOverdue() throws BudgetException {
+        int variance = Utility.daysBeteween(getPlannedDate(), Calendar.getInstance());
+        return !forecastItem.isWithinNormalDateVariance(variance);
+    }
+
     // Timing of a date with respect to the applicability period of a forecast transaction:
     enum Timing {PRIOR_TO, WITHIN, AFTER, UNDEFINED}
 
@@ -678,8 +688,7 @@ public class ForecastTransaction extends IndependentEntity {
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
                             int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(), transaction.getDate());
-                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance,
-                                    forecastTransaction.getForecastItem().getPeriod())) {
+                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
                                 UserResponse resp = resolver.assignSplitDateToForecastTransaction(split, forecastTransaction);
@@ -765,8 +774,7 @@ public class ForecastTransaction extends IndependentEntity {
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
                             int variance = Utility.daysBeteween(transaction.getDate(), forecastTransaction.getPlannedDate());
-                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance,
-                                    forecastTransaction.getForecastItem().getPeriod())) {
+                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
                                 UserResponse resp = resolver.assignSplitDateToForecastTransaction(split, forecastTransaction);
@@ -1371,8 +1379,12 @@ public class ForecastTransaction extends IndependentEntity {
         // Get a result set from the database for the overdue items.  Overdue items are unreconciled items that are
         // unacceptably past their planned date:
         Calendar currentDate = Calendar.getInstance();
-        String selectQuery = getSelectQuery() + " where plannedDate < " + Utility.calendarDateToSqlDateString(currentDate) +
-                " and remainingAmount > 0";
+        String selectQuery =
+                "select " + getSelectColumns() + ", " + ForecastItem.getSelectColumns() +
+                        "from forecast_transaction ft inner join forecast_item fi " +
+                        "on ft.ForecastItem_idForecastItem = fi.idForecastItem" +
+                        " where plannedDate < " + Utility.calendarDateToSqlDateString(currentDate) +
+                        " and remainingAmount <> 0";
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
                 "get a list of overdue Forecast Transactions.");
 
@@ -1380,8 +1392,9 @@ public class ForecastTransaction extends IndependentEntity {
         List<Entity> overdueItemsList = new ArrayList<>();
         while (rs.next()) {
             ForecastTransaction forecastTransaction = new ForecastTransaction(rs);
-            int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(), currentDate);
-            if (!BudgetItem.isWithinNormalDateVariance(variance, forecastTransaction.getForecastItem().getPeriod())) {
+            ForecastItem forecastItem = new ForecastItem(rs);
+            forecastTransaction.setForecastItem(forecastItem);
+            if (forecastTransaction.isOverdue()) {
                 overdueItemsList.add(forecastTransaction);
             }
         }
@@ -1408,16 +1421,9 @@ public class ForecastTransaction extends IndependentEntity {
             if (forecastTransaction.getPlannedDate().compareTo(today) < 0) {
 
                 // Then if it is not an overdue transaction (only periodic transactions can be overdue):
-                if (forecastTransaction.getForecastItem().getHowOccurs() == Item.HowOccurs.PERIODIC ||
-                        forecastTransaction.getForecastItem().getHowOccurs() == Item.HowOccurs.VARIABLE_PERIODIC) {
-                    int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(), today);
-                    if (BudgetItem.isWithinNormalDateVariance(variance, forecastTransaction.getForecastItem().getPeriod())) {
+                if (!forecastTransaction.isOverdue()) {
 
-                        // include it in the list:
-                        upcomingItemsList.add(forecastTransaction);
-                    }
-                } else {
-                    // It's not a periodic transaction, so it can't be overdue, therefore include it in the list:
+                    // include it in the list:
                     upcomingItemsList.add(forecastTransaction);
                 }
             } else {

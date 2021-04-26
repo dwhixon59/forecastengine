@@ -43,24 +43,21 @@ public class Transaction extends IndependentEntity {
         TRANSACTION_DATE, AMOUNT, CLEARED, CHECK_NUMBER, PAYEE
     }
 
-    private static final String selectQuery = "select bin_to_uuid(idTransaction) as tr.idTransaction," +
-            " postDate as tr.postDate, authorizationDate as tr.authorizationDate, amount as tr.amount, " +
-            "cleared as tr.cleared, checkNumber as tr.checkNumber, payee as tr.payee, balance as tr.balance, " +
-            "isImproper as tr.isImproper, isNew as tr.isNew, importRecordId as tr.importRecordId, " +
-            "bin_to_uuid(Register_idRegister) as tr.idRegister, bin_to_uuid(Merchant_idMerchant) as tr.idMerchant" +
-            " from transaction ";
+    private static final String selectColumns = "bin_to_uuid(tr.idTransaction) as 'tr.idTransaction', " +
+            "tr.postDate as 'tr.postDate', tr.authorizationDate as 'tr.authorizationDate', tr.amount as 'tr.amount', " +
+            "tr.cleared as 'tr.cleared', tr.checkNumber as 'tr.checkNumber', tr.payee as 'tr.payee', " +
+            "tr.balance as 'tr.balance', tr.isImproper as 'tr.isImproper', tr.isNew as 'tr.isNew', " +
+            "tr.importRecordId as 'tr.importRecordId', bin_to_uuid(tr.Register_idRegister) as 'tr.idRegister', " +
+            "bin_to_uuid(tr.Merchant_idMerchant) as 'tr.idMerchant'";
+
+    public static String getSelectColumns() {
+        return selectColumns;
+    }
+
+    private static final String selectQuery = "select " + getSelectColumns() + " from transaction tr";
 
     public static String getSelectQuery() {
         return selectQuery;
-    }
-
-    private static final String selectQueryNoPrefix = "select bin_to_uuid(idTransaction) as idTransaction, postDate, " +
-            "authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, importRecordId, " +
-            "bin_to_uuid(Register_idRegister) as idRegister, bin_to_uuid(Merchant_idMerchant) as idMerchant" +
-            " from transaction ";
-
-    public static String getSelectQueryNoPrefix() {
-        return selectQueryNoPrefix;
     }
 
     private static final String insertQuery = "insert into transaction (idTransaction, " +
@@ -303,16 +300,15 @@ public class Transaction extends IndependentEntity {
      */
 
     public static Transaction getById(UUID idTransaction) throws EntityException, SQLException {
-        return new Transaction(getRSById(getSelectQueryNoPrefix() + "where idTransaction =", idTransaction,
+        return new Transaction(getRSById(getSelectQuery() + " where tr.idTransaction =", idTransaction,
                 "Database error encountered trying to retrieve a transaction."));
     }
 
     public static Transaction getByImportRecordId(String importRecordId) throws EntityException, SQLException {
-        ResultSet rs = getRS(getSelectQueryNoPrefix() + "where importRecordId = \"" + importRecordId + "\"",
+        ResultSet rs = getRS(getSelectQuery() + " where tr.importRecordId = \"" + importRecordId + "\"",
                 "Database error encountered trying to retrieve a transaction by importRecordId.");
         Transaction transaction = null;
         if (rs.next()) {
-            //TODO: create a log message for this:  System.out.println("Transaction \"" + importRecordId + "\" already imported.  Skipping.");
             transaction = new Transaction(rs);
         }
         return transaction;
@@ -320,19 +316,19 @@ public class Transaction extends IndependentEntity {
 
     public void loadFromResultSet(ResultSet rs) throws SQLException {
 
-        id = UUID.fromString(rs.getString("idTransaction"));
-        postDate = Utility.localDateToCalendarDate(rs.getObject("postDate", LocalDate.class));
-        authorizationDate = Utility.localDateToCalendarDate(rs.getObject("authorizationDate", LocalDate.class));
-        cleared = rs.getBoolean("cleared");
-        checkNumber = rs.getInt("checkNumber");
-        payee = rs.getString("payee");
-        amount = rs.getDouble("amount");
-        balance = rs.getDouble("balance");
-        isImproper = rs.getBoolean("isImproper");
-        isNew = rs.getBoolean("isNew");
-        importRecordId = rs.getString("importRecordId");
-        idRegister = UUID.fromString(rs.getString("idRegister"));
-        idMerchant = UUID.fromString(rs.getString("idMerchant"));
+        id = UUID.fromString(rs.getString("tr.idTransaction"));
+        postDate = Utility.localDateToCalendarDate(rs.getObject("tr.postDate", LocalDate.class));
+        authorizationDate = Utility.localDateToCalendarDate(rs.getObject("tr.authorizationDate", LocalDate.class));
+        cleared = rs.getBoolean("tr.cleared");
+        checkNumber = rs.getInt("tr.checkNumber");
+        payee = rs.getString("tr.payee");
+        amount = rs.getDouble("tr.amount");
+        balance = rs.getDouble("tr.balance");
+        isImproper = rs.getBoolean("tr.isImproper");
+        isNew = rs.getBoolean("tr.isNew");
+        importRecordId = rs.getString("tr.importRecordId");
+        idRegister = UUID.fromString(rs.getString("tr.idRegister"));
+        idMerchant = UUID.fromString(rs.getString("tr.idMerchant"));
     }
 
 
@@ -411,8 +407,8 @@ public class Transaction extends IndependentEntity {
     public static Transaction getFirstProvisionalTransaction(UUID idMerchant, double amount) throws EntityException,
             SQLException {
 
-        ResultSet rs = getRS(getSelectQueryNoPrefix() + " where Merchant_idMerchant = uuid_to_bin('" + idMerchant +
-                "') and amount = " + amount + " and cleared = false order by postDate asc", "Database error" +
+        ResultSet rs = getRS(getSelectQuery() + " where tr.Merchant_idMerchant = uuid_to_bin('" + idMerchant +
+                "') and tr.amount = " + amount + " and tr.cleared = false order by tr.postDate asc", "Database error" +
                 " occured while trying to retrieve any provisional transactions that match a merchant and amount.");
         Transaction transaction = null;
         if (rs != null) {
@@ -426,7 +422,7 @@ public class Transaction extends IndependentEntity {
 
     // Get a list of transactions that have not been previously reported on:
     public static ResultSet getNewTransactions(Register register) throws EntityException {
-        String query = getSelectQueryNoPrefix() + " where isNew = true order by postDate asc";
+        String query = getSelectQuery() + " where tr.isNew = true order by tr.postDate asc";
         return getRS(query, "attempting to retieve a list of transactions that were previously " +
                 "skipped during the import process.");
     }
@@ -435,7 +431,7 @@ public class Transaction extends IndependentEntity {
     /**
      * Get a list of transactions that were skipped with respect to a particular forecast during the
      * importRegisterTransactions() process.  We know they were skipped because the transactions have not been
-     * reconciled to the specified forecast.  Only consider transactions in the last month to speed up processing.
+     * reconciled to the specified forecast.
      *
      * @param forecast The forecast that the transactions were skipped in.
      * @return
@@ -443,16 +439,17 @@ public class Transaction extends IndependentEntity {
      */
     public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
         Calendar startDate = forecast.getStartDate();
-        Calendar oneMonthAgo = Calendar.getInstance();
-        oneMonthAgo.add(Calendar.MONTH, -1);
-        if (oneMonthAgo.after(startDate)) startDate = oneMonthAgo;
-        String query = getSelectQueryNoPrefix() + " where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + " " +
-                "and idTransaction not in " +
+        Calendar threeMonthsAgo = Calendar.getInstance();
+        threeMonthsAgo.add(Calendar.MONTH, -3);
+        if (threeMonthsAgo.after(startDate)) startDate = threeMonthsAgo;
+        String query = getSelectQuery() + " " +
+                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(threeMonthsAgo) + " and " +
+                "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +
                 "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
-                "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
-                "where postDate >= " + Utility.calendarDateToSqlDateString(startDate) + ") " +
+                    "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
+                ") " +
                 "order by postDate asc";
         return getRS(query, "attempting to retrieve a list of transactions that were previously " +
                 "skipped during the import process.");

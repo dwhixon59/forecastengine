@@ -304,6 +304,7 @@ public class Forecast extends IndependentEntity {
             for (ForecastTransaction transaction : this.transactions) {
                 if (transaction != null) {
                     ForecastTransaction forecastTransaction = transaction;
+                    Utility.getResolver().say("Updating " + forecastTransaction.getForecastItem().toStringShort() );
                     while (forecastTransaction != null) {
                         preparedStmt.setString(1, forecastTransaction.getId().toString());
                         preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
@@ -377,7 +378,7 @@ public class Forecast extends IndependentEntity {
 
         // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
         // was created:
-        query = BudgetItem.getSelectQuery() + "where idBudgetItem not in (select distinct BudgetItem_idBudgetItem from " +
+        query = BudgetItem.getSelectQuery() + " where idBudgetItem not in (select distinct BudgetItem_idBudgetItem from " +
                 "forecast_item)";
         ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
 

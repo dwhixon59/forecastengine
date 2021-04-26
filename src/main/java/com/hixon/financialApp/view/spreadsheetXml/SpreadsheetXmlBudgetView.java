@@ -9,7 +9,7 @@ import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.AbstractBudgetView;
+import com.hixon.financialApp.view.base.*;
 import org.apache.commons.text.StringEscapeUtils;
 
 import java.io.FileNotFoundException;
@@ -30,6 +30,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
     private String spendingReportFilename;
     private String encoding;
     private String budgetSummaryReportFilename;
+    private boolean firstCategory = true;
 
 
     /*
@@ -214,7 +215,6 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
         //logger.debug("Exit renderHeaderRow()");
     }
 
-
     @Override
     public void renderBudgetItem(BudgetItem budgetItem, Calendar startDate, Calendar endDate, double plannedAmount,
                                  double actualAmount) throws ForecastException, EntityException, BudgetException {
@@ -386,15 +386,40 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
         writer.println("\t\tss:Bold=\"0\"/>");
         writer.println("\t</Style>");
 
-        // The split row date column style:
+        // The date column style:
         writer.println("\t<Style ss:ID=\"Date\">");
         writer.println("\t\t<Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Bottom\"/>");
         writer.println("\t\t<NumberFormat ss:Format=\"Short Date\"/>");
         writer.println("\t</Style>");
 
-        // The split row amount column style:
+        // The amount column style:
         writer.println("\t<Style ss:ID=\"Amount\">");
         writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0\"/>");
+        writer.println("\t</Style>");
+
+        // The bold amount column style:
+        writer.println("\t<Style ss:ID=\"BoldAmount\">");
+        writer.println("\t\t<NumberFormat ss:Format=\"&quot;$&quot;#,##0\"/>");
+        writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"12\" ss:Color=\"#000000\"");
+        writer.println("\t\tss:Bold=\"0\"/>");
+        writer.println("\t</Style>");
+
+        // The percent column style:
+        writer.println("\t<Style ss:ID=\"Percent\">");
+        writer.println("\t\t<NumberFormat ss:Format=\"0%\"/>");
+        writer.println("\t</Style>");
+
+        // The bold percent column style:
+        writer.println("\t<Style ss:ID=\"BoldPercent\">");
+        writer.println("\t\t<NumberFormat ss:Format=\"0%\"/>");
+        writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"12\" ss:Color=\"#000000\"");
+        writer.println("\t\tss:Bold=\"0\"/>");
+        writer.println("\t</Style>");
+
+        // The summary row default cell font style:
+        writer.println("\t<Style ss:ID=\"SummaryRow\">");
+        writer.println("\t\t<Font ss:FontName=\"Calibri\" x:Family=\"Swiss\" ss:Size=\"12\" ss:Color=\"#000000\"");
+        writer.println("\t\tss:Bold=\"1\"/>");
         writer.println("\t</Style>");
 
         writer.println("</Styles>");
@@ -413,20 +438,32 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
         // The category and budget item column:
         writer.println("\t\t<Column ss:Index=\"1\" ss:AutoFitWidth=\"0\" ss:Width=\"110\"/>");
 
-        // The budgeted amount column:
+        // The annual amount column:
         writer.println("\t\t<Column ss:Index=\"2\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
+        // The percent annual amount column:
+        writer.println("\t\t<Column ss:Index=\"3\" ss:StyleID=\"Percent\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+
+        // The planned amount column:
+        writer.println("\t\t<Column ss:Index=\"4\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+
+        // The percent planned amount column:
+        writer.println("\t\t<Column ss:Index=\"5\" ss:StyleID=\"Percent\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+
         // The actual amount column:
-        writer.println("\t\t<Column ss:Index=\"3\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+        writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+
+        // The percent actual amount column:
+        writer.println("\t\t<Column ss:Index=\"7\" ss:StyleID=\"Percent\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
         // The date column:
-        writer.println("\t\t<Column ss:Index=\"4\" ss:StyleID=\"Date\" ss:AutoFitWidth=\"0\" ss:Width=\"60\"/>");
+        writer.println("\t\t<Column ss:Index=\"8\" ss:StyleID=\"Date\" ss:AutoFitWidth=\"0\" ss:Width=\"60\"/>");
 
         // The merchant column:
-        writer.println("\t\t<Column ss:Index=\"5\" ss:AutoFitWidth=\"0\" ss:Width=\"110\"/>");
+        writer.println("\t\t<Column ss:Index=\"9\" ss:AutoFitWidth=\"0\" ss:Width=\"110\"/>");
 
         // The memo column:
-        writer.println("\t\t<Column ss:Index=\"6\" ss:AutoFitWidth=\"0\" ss:Width=\"110\"/>");
+        writer.println("\t\t<Column ss:Index=\"10\" ss:AutoFitWidth=\"0\" ss:Width=\"110\"/>");
 
         //logger.debug("Exit renderBudgetSummaryReportFrontMatter()");
     }
@@ -448,38 +485,273 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
     protected void renderBudgetSummaryReportHeaderRow() {
         //logger.debug("Enter renderBudgetSummaryHeaderRow()");
 
-        writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"TitleRow\">");
+        writer.println("\t\t<Row ss:StyleID=\"HeaderRow\">");
         writer.println("\t\t\t<Cell/>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Annual</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">%</Data></Cell>");
         writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Planned</Data></Cell>");
         writer.println("\t\t\t<Cell><Data ss:Type=\"String\">%</Data></Cell>");
         writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Actual</Data></Cell>");
         writer.println("\t\t\t<Cell><Data ss:Type=\"String\">%</Data></Cell>");
         writer.println("\t\t</Row>");
 
+        firstCategory = true;
+
         //logger.debug("Exit renderBudgetSummaryHeaderRow()");
     }
 
     @Override
-    protected void renderBudgetSummaryReportTotalsRow(double totalBudgetedIncome, double totalActualIncome, double
-            totalBudgetedSpending, double totalActualSpending) {
+    public void renderBudgetCategoryReportRow(BudgetCategoryReportRow budgetCategoryReportRow) {
+
+        // Output a blank line to visually separate the budget categories for each category except the one after
+        // the header row:
+        if (firstCategory)  {
+            firstCategory = false;
+        } else {
+            writer.println("\t\t<Row/>");
+        }
+
+        writer.println("\t\t<Row ss:StyleID=\"CategoryRow\">");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + budgetCategoryReportRow.getBudgetCategory().getName() +
+                "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getForecastAnnualAmount() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getPercentAverageAnnualAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getPlannedAmountInPeriod() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getPercentPlannedAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getActualAmountInPeriod() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetCategoryReportRow.getPercentActualAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t</Row>");
+    }
+
+    @Override
+    public void renderBudgetItemReportRow(BudgetItemReportRow budgetItemReportRow) {
+
+        // Output the budget item row:
+        writer.println("\t\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + budgetItemReportRow.getBudgetItem().getPayee() +
+                "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getForecastAnnualAmount() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getPercentForecastAnnualAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getPlannedAmountInPeriod() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getPercentPlannedAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getActualAmountInPeriod() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Percent\"><Data ss:Type=\"Number\">" +
+                budgetItemReportRow.getPercentActualAmount()/100 + "</Data></Cell>");
+        writer.println("\t\t</Row>");
+    }
+
+    @Override
+    public void renderTransactionSplitReportRow(TransactionSplitReportRow transactionSplitReportRow) {
+
+        writer.println("\t\t<Row ss:Hidden=\"1\" ss:StyleID=\"SplitRow\">");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                transactionSplitReportRow.getTransactionSplit().getAmount() + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"Date\"><Data ss:Type=\"DateTime\">" + Utility.calendarDateToStringTimeStamp(
+                transactionSplitReportRow.getTransaction().getPostDate()) + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" +
+                StringEscapeUtils.escapeXml11(transactionSplitReportRow.getMerchant().getName())
+                + "</Data></Cell>");
+        if (transactionSplitReportRow.getTransactionSplit().getMemo() != null) {
+            writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" +
+                    transactionSplitReportRow.getTransactionSplit().getMemo() + "</Data></Cell>");
+        }
+        writer.println("\t\t</Row>");
+    }
+
+    @Override
+    protected void renderBudgetSummaryReportSummary(BudgetTotalsReportRow budgetTotalsReportRow) {
         //logger.debug("Enter renderBudgetSummarySummaryRow()");
         String line;
+
+        // Summary header row:
         writer.println("\t<Row/>");
-        writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"Summary\">");
+        writer.println("\t<Row ss:Height=\"25\" ss:StyleID=\"Summary\">");
         writer.println("\t\t<Cell><Data ss:Type=\"String\">Summary Information:</Data></Cell>");
         writer.println("\t</Row>");
-        writer.println("\t<Row ss:StyleID=\"CategoryRow\">");
-        line = "Total budgeted spending:  " + Utility.formatDollarAmount(totalBudgetedSpending) + ", Actual spending:  " +
-                Utility.formatDollarAmount(totalActualSpending) + ", Over/Under:  " +
-                Utility.formatDollarAmount(totalActualSpending - totalBudgetedSpending);
-        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + line + "</Data></Cell>");
+
+        // Next 12 months header row:
+        writer.println("\t<Row ss:StyleID=\"SummaryRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Next 12 Months:</Data></Cell>");
         writer.println("\t</Row>");
-        writer.println("\t<Row ss:StyleID=\"CategoryRow\">");
-        line = "Total budgeted income:  " + Utility.formatDollarAmount(totalBudgetedIncome) + ", Actual income:  " +
-                Utility.formatDollarAmount(totalActualIncome) + ", Over/Under:  " +
-                Utility.formatDollarAmount(totalActualIncome - totalBudgetedIncome);
-        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + line + "</Data></Cell>");
+
+        /*
+         * Total Annual Income vs. Total Annual Spending (budget balance analysis)
+         */
+        // Total planned income row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Planned income:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                budgetTotalsReportRow.getTotalAverageAnnualIncome() + "</Data></Cell>");
         writer.println("\t</Row>");
+
+        // Total planned spending row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Planned Spending:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                -budgetTotalsReportRow.getTotalAverageAnnualSpending() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Horizontal rule:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">--------------</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Difference row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Planned Savings:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                (budgetTotalsReportRow.getTotalAverageAnnualIncome() +
+                        budgetTotalsReportRow.getTotalAverageAnnualSpending()) + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Blank row separator:
+        writer.println("\t<Row/>");
+
+        // Last 12 months header row:
+        writer.println("\t<Row ss:StyleID=\"SummaryRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Last 12 Months:</Data></Cell>");
+        writer.println("\t</Row>");
+
+        /*
+         * Actual Income vs. Actual Spending (actual savings analysis)
+         */
+        // Total actual income row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Actual Income:</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                budgetTotalsReportRow.getTotalActualIncomeInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Total actual spending row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Actual Spending:</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                -budgetTotalsReportRow.getTotalActualSpendingInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Horizontal rule:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">--------------</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Difference row (actual savings):
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Actual Savings:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"Amount\"><Data ss:Type=\"Number\">" +
+                (budgetTotalsReportRow.getTotalActualIncomeInPeriod() + budgetTotalsReportRow.getTotalActualSpendingInPeriod()) +
+                "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Blank row separator:
+        writer.println("\t<Row/>");
+
+        /*
+         * Planned spending vs. Actual Spending (overspending)
+         */
+        // Total actual spending row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Actual Spending:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                -budgetTotalsReportRow.getTotalActualSpendingInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Total planned spending row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Planned Spending:</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                -budgetTotalsReportRow.getTotalPlannedSpendingInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Horizontal rule:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">--------------</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Difference row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        double amount = budgetTotalsReportRow.getTotalPlannedSpendingInPeriod() -
+                budgetTotalsReportRow.getTotalActualSpendingInPeriod();
+        if (amount > 0) {
+            writer.println("\t\t<Cell><Data ss:Type=\"String\">Over Spending</Data></Cell>");
+        } else {
+            writer.println("\t\t<Cell><Data ss:Type=\"String\">Under Spending</Data></Cell>");
+        }
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" + amount + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Blank row separator:
+        writer.println("\t<Row/>");
+
+        /*
+         * Actual Income vs. Planned Income
+         */
+        // Total actual income row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Actual Income:</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                budgetTotalsReportRow.getTotalActualIncomeInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Total planned income row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">Planned income:</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" +
+                budgetTotalsReportRow.getTotalPlannedIncomeInPeriod() + "</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Horizontal rule:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t<Cell><Data ss:Type=\"String\">--------------</Data></Cell>");
+        writer.println("\t</Row>");
+
+        // Difference row:
+        writer.println("\t<Row ss:StyleID=\"BudgetItemRow\">");
+        amount = budgetTotalsReportRow.getTotalActualIncomeInPeriod() -
+                budgetTotalsReportRow.getTotalPlannedIncomeInPeriod();
+        if (amount > 0) {
+            writer.println("\t\t<Cell><Data ss:Type=\"String\">Over Earnings:</Data></Cell>");
+        } else {
+            writer.println("\t\t<Cell><Data ss:Type=\"String\">Under Earnings:</Data></Cell>");
+        }
+        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + " " + "</Data></Cell>");
+        writer.println("\t\t\t<Cell ss:StyleID=\"BoldAmount\"><Data ss:Type=\"Number\">" + amount + "</Data></Cell>");
+        writer.println("\t</Row>");
+
         //logger.debug("Exit renderBudgetSummarySummaryRow()");
     }
 }

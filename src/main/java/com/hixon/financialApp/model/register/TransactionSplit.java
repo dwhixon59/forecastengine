@@ -126,10 +126,10 @@ public class TransactionSplit extends DependentEntity {
 
          if (rs == null) throw new RegisterException("Result set passed into TransactionSplit constructor must not be " +
                  "null.");
-         this.amount = rs.getDouble("amount");
-         this.idBudgetItem = UUID.fromString(rs.getString("idBudgetItem"));
-         this.idTransaction = UUID.fromString(rs.getString("idTransaction"));
-         this.memo = rs.getString("memo");
+         this.amount = rs.getDouble("ts.amount");
+         this.idBudgetItem = UUID.fromString(rs.getString("ts.idBudgetItem"));
+         this.idTransaction = UUID.fromString(rs.getString("ts.idTransaction"));
+         this.memo = rs.getString("ts.memo");
          setDirty(false);
 
       } catch (SQLException e) {
@@ -144,15 +144,15 @@ public class TransactionSplit extends DependentEntity {
    /*
     * Load and save methods:
     */
-   private static final String selectColumns = "amount, bin_to_uuid(BudgetItem_idBudgetItem) as idBudgetItem, " +
-           "bin_to_uuid(Transaction_idTransaction) as idTransaction, memo ";
+   private static final String selectColumns = "ts.amount as 'ts.amount', bin_to_uuid(ts.BudgetItem_idBudgetItem) as " +
+           "'ts.idBudgetItem', bin_to_uuid(ts.Transaction_idTransaction) as 'ts.idTransaction', ts.memo as 'ts.memo' ";
 
    public static String getSelectColumns() {
       return selectColumns;
    }
 
    public static String getSelectQuery() {
-      return "select " + getSelectColumns() + "from transaction_split ";
+      return "select " + getSelectColumns() + "from transaction_split ts ";
    }
 
    private static final String insertQuery = "insert into transaction_split (amount, " +
@@ -236,7 +236,7 @@ public class TransactionSplit extends DependentEntity {
    public static List<TransactionSplit> getSplitsForTransaction(Transaction transaction) throws RegisterException {
 
       // Find out what budget items are associated with the transaction for this transaction:
-      String query = getSelectQuery() + "where Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
+      String query = getSelectQuery() + "where ts.Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
@@ -263,8 +263,8 @@ public class TransactionSplit extends DependentEntity {
    // Get the splits associated with a budget item in a period:
    public static ResultSet getSplitsForBudgetItemInPeriod(BudgetItem budgetItem, Calendar startDate, Calendar endDate)
            throws EntityException {
-      String selectQuery = "select ts.amount, bin_to_uuid(ts.BudgetItem_idBudgetItem) as idBudgetItem, " +
-              "bin_to_uuid(ts.Transaction_idTransaction) as idTransaction, ts.memo, ";
+      String selectQuery = "select ts.amount as 'ts.amount', bin_to_uuid(ts.BudgetItem_idBudgetItem) as 'ts.idBudgetItem', " +
+              "bin_to_uuid(ts.Transaction_idTransaction) as 'ts.idTransaction', ts.memo as 'ts.memo', ";
       String query = selectQuery + "t.authorizationDate as 'date' from transaction_split ts " +
               "inner join transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +

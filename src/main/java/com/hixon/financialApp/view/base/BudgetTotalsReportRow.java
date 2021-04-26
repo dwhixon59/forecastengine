@@ -2,52 +2,74 @@ package com.hixon.financialApp.view.base;
 
 public class BudgetTotalsReportRow {
 
-    double totalBudgetedSpending;
-    double totalActualSpending;
-    double totalBudgetedIncome;
-    double totalActualIncome;
+    double totalPlannedSpendingInPeriod;
+    double totalActualSpendingInPeriod;
+    double totalPlannedIncomeInPeriod;
+    double totalActualIncomeInPeriod;
+    double totalAverageAnnualSpending;
+    double totalAverageAnnualIncome;
+
 
     /*
      * Getters and setters:
      */
-
-    public double getTotalPlannedSpending() {
-        return totalBudgetedSpending;
+    public double getTotalPlannedSpendingInPeriod() {
+        return totalPlannedSpendingInPeriod;
     }
-    public void setTotalBudgetedSpending(double totalBudgetedSpending) {
-        this.totalBudgetedSpending = totalBudgetedSpending;
+    public void setTotalPlannedSpendingInPeriod(double totalPlannedSpendingInPeriod) {
+        this.totalPlannedSpendingInPeriod = totalPlannedSpendingInPeriod;
     }
-    public void incrementTotalBudgetedSpending(double totalBudgetedSpending) {
-        this.totalBudgetedSpending += totalBudgetedSpending;
-    }
-
-    public double getTotalActualSpending() {
-        return totalActualSpending;
-    }
-    public void setTotalActualSpending(double totalActualSpending) {
-        this.totalActualSpending = totalActualSpending;
-    }
-    public void incrementTotalActualSpending(double totalActualSpending) {
-        this.totalActualSpending += totalActualSpending;
+    public void incrementTotalPlannedSpending(double totalPlannedSpending) {
+        this.totalPlannedSpendingInPeriod += totalPlannedSpending;
     }
 
-    public double getTotalPlannedIncome() {
-        return totalBudgetedIncome;
+    public double getTotalActualSpendingInPeriod() {
+        return totalActualSpendingInPeriod;
     }
-    public void setTotalBudgetedIncome(double totalBudgetedIncome) {
-        this.totalBudgetedIncome = totalBudgetedIncome;
+    public void setTotalActualSpendingInPeriod(double totalActualSpendingInPeriod) {
+        this.totalActualSpendingInPeriod = totalActualSpendingInPeriod;
     }
-    public void incrementTotalBudgetedIncome(double totalBudgetedIncome) {
-        this.totalBudgetedIncome += totalBudgetedIncome;
+    public void incrementTotalActualSpending(double spending) {
+        this.totalActualSpendingInPeriod += spending;
     }
 
-    public double getTotalActualIncome() {
-        return totalActualIncome;
+    public double getTotalPlannedIncomeInPeriod() {
+        return totalPlannedIncomeInPeriod;
     }
-    public void setTotalActualIncome(double totalActualIncome) {
-        this.totalActualIncome = totalActualIncome;
+    public void setTotalPlannedIncomeInPeriod(double totalPlannedIncomeInPeriod) {
+        this.totalPlannedIncomeInPeriod = totalPlannedIncomeInPeriod;
     }
-    public void incrementTotalActualIncome(double totalActualIncome) {
-        this.totalActualIncome += totalActualIncome;
+    public void incrementTotalPlannedIncome(double totalPlannedIncome) {
+        this.totalPlannedIncomeInPeriod += totalPlannedIncome;
+    }
+
+    public double getTotalActualIncomeInPeriod() {
+        return totalActualIncomeInPeriod;
+    }
+    public void setTotalActualIncomeInPeriod(double totalActualIncomeInPeriod) {
+        this.totalActualIncomeInPeriod = totalActualIncomeInPeriod;
+    }
+    public void incrementTotalActualIncome(double income) {
+        this.totalActualIncomeInPeriod += income;
+    }
+
+    public double getTotalAverageAnnualSpending() {
+        return totalAverageAnnualSpending;
+    }
+    public void setTotalAverageAnnualSpending(double totalAverageAnnualSpending) {
+        this.totalAverageAnnualSpending = totalAverageAnnualSpending;
+    }
+    public void incrementTotalForecastSpending(double amount) {
+        this.totalAverageAnnualSpending += amount;
+    }
+
+    public double getTotalAverageAnnualIncome() {
+        return totalAverageAnnualIncome;
+    }
+    public void setTotalAverageAnnualIncome(double totalAverageAnnualIncome) {
+        this.totalAverageAnnualIncome = totalAverageAnnualIncome;
+    }
+    public void incrementTotalForecastIncome(double amount) {
+        this.totalAverageAnnualIncome += amount;
     }
 }

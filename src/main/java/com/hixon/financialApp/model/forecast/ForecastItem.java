@@ -292,18 +292,18 @@ public class ForecastItem extends Item {
         try {
             if (rs == null) throw new ForecastException("Result set to load from must not be null.");
 
-            category = rs.getString("category");
-            payee = rs.getString("payee");
-            period = parsePeriodType(rs.getString("period"));
-            amount = rs.getDouble("amount");
-            startDate = Utility.localDateToCalendarDate(rs.getObject("startDate", LocalDate.class));
-            endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
-            numberOfPayments = rs.getInt("numberOfPayments");
-            itemType = parseItemType(rs.getString("ItemType"));
-            howImportant = parseHowImportant(rs.getString("howImportant"));
-            howOccurs = parseHowOccurs(rs.getString("howOccurs"));
-            howPaid = parseHowPaid(rs.getString("howPaid"));
-            idBudgetItem = UUID.fromString(rs.getString(1));
+            category = rs.getString("bi.category");
+            payee = rs.getString("bi.payee");
+            period = parsePeriodType(rs.getString("bi.period"));
+            amount = rs.getDouble("bi.amount");
+            startDate = Utility.localDateToCalendarDate(rs.getObject("bi.startDate", LocalDate.class));
+            endDate = Utility.localDateToCalendarDate(rs.getObject("bi.endDate", LocalDate.class));
+            numberOfPayments = rs.getInt("bi.numberOfPayments");
+            itemType = parseItemType(rs.getString("bi.itemType"));
+            howImportant = parseHowImportant(rs.getString("bi.howImportant"));
+            howOccurs = parseHowOccurs(rs.getString("bi.howOccurs"));
+            howPaid = parseHowPaid(rs.getString("bi.howPaid"));
+            idBudgetItem = UUID.fromString(rs.getString("bi.idBudgetItem"));
 
         } catch (SQLException | BudgetException e) {
             System.out.println("Error reading in the Budget Item row.");
@@ -332,6 +332,12 @@ public class ForecastItem extends Item {
     @Override
     public String toString() {
         return "Forecast  " + super.toString() + ", \t\nBudgetItem ID = " + idBudgetItem;
+    }
+
+    // A convenience method to print out a ForecastItem object:
+    @Override
+    public String toStringShort() {
+        return "Forecast  " + super.toStringShort();
     }
 
     // Get the Budget Item associated wit this Forecast Item:

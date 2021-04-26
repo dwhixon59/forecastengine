@@ -1,5 +1,6 @@
 package com.hixon.financialApp.view.base;
 
+import com.hixon.financialApp.model.register.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionSplit;
 
@@ -13,8 +14,9 @@ public class TransactionSplitReportRow extends ReportRow {
     /*
      * Fields:
      */
-    private Transaction transaction;
-    private TransactionSplit transactionSplit;
+    private final Transaction transaction;
+    private final TransactionSplit transactionSplit;
+    private final Merchant merchant;
 
     /*
      * Getters and Setters:
@@ -23,16 +25,12 @@ public class TransactionSplitReportRow extends ReportRow {
         return transaction;
     }
 
-    public void setTransaction(Transaction transaction) {
-        this.transaction = transaction;
-    }
-
     public TransactionSplit getTransactionSplit() {
         return transactionSplit;
     }
 
-    public void setTransactionSplit(TransactionSplit transactionSplit) {
-        this.transactionSplit = transactionSplit;
+    public Merchant getMerchant() {
+        return merchant;
     }
 
 
@@ -41,12 +39,13 @@ public class TransactionSplitReportRow extends ReportRow {
      */
     /**
      * Create a TransactionSplitCategoryRow information object.
-     *
-     * @param transactionSplit A transaction split object.
+     *  @param transactionSplit A transaction split object.
      * @param transaction      A transaction object.
+     * @param merchant
      */
-    public TransactionSplitReportRow(TransactionSplit transactionSplit, Transaction transaction) {
+    public TransactionSplitReportRow(TransactionSplit transactionSplit, Transaction transaction, Merchant merchant) {
         this.transactionSplit = transactionSplit;
         this.transaction = transaction;
+        this.merchant = merchant;
     }
 }

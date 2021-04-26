@@ -34,11 +34,15 @@ public class BudgetItemMerchant extends DependentEntity {
    private static final String insertQuery = "insert into budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
 
-   private static final String selectItemsForMerchantQuery = "select bin_to_uuid(budget_item.idBudgetItem) as " +
-           "'idBudgetItem', category, payee, period, budget_item.amount, runningBalance, startDate, numberOfPayments, "
-           + "endDate, ItemType, howImportant, howOccurs, howPaid, bin_to_uuid(Budget_idBudget) as 'idBudget', " +
-           "budgetitem_merchant.amount as merchant_amount, budgetitem_merchant.percentage as merchant_percentage from " +
-           "budget_item inner join budgetitem_merchant on idBudgetItem = BudgetItem_idBudgetItem ";
+   private static final String selectItemsForMerchantQuery =
+           "select bin_to_uuid(bi.idBudgetItem) as 'bi.idBudgetItem', bi.category as 'bi.category', " +
+                   "bi.payee as 'bi.payee', bi.period as 'bi.period', bi.amount as 'bi.amount', " +
+                   "bi.runningBalance as 'bi.runningBalance', bi.startDate as 'bi.startDate', " +
+                   "bi.numberOfPayments as 'bi.numberOfPayments', bi.endDate as 'bi.endDate', bi.ItemType as 'bi.itemType', " +
+                   "bi.howImportant as 'bi.howImportant', bi.howOccurs as 'bi.howOccurs', bi.howPaid as 'bi.howPaid', " +
+                   "bin_to_uuid(bi.Budget_idBudget) as 'bi.idBudget', bm.amount as 'bm.amount', " +
+                   "bm.percentage as 'bm.percentage' " +
+           "from budget_item bi inner join budgetitem_merchant bm on bi.idBudgetItem = bm.BudgetItem_idBudgetItem ";
 
 
    /*
@@ -195,15 +199,15 @@ public class BudgetItemMerchant extends DependentEntity {
            ParseException, RegisterException, BudgetException {
 
       // Find out what budget items are associated with the merchant for this transaction:
-      String query = selectItemsForMerchantQuery + "where Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')"
+      String query = selectItemsForMerchantQuery + "where bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')"
               + " order by payee asc";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
          List<BudgetItemMerchant> budgetItems = new ArrayList<BudgetItemMerchant>();
          while (rs.next()) {
-            budgetItems.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("merchant_amount"),
-                    rs.getInt("merchant_percentage")));
+            budgetItems.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("bm.amount"),
+                    rs.getInt("bm.percentage")));
          }
          return budgetItems;
 
