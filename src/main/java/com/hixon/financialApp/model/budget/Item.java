@@ -1001,9 +1001,9 @@ public abstract class Item extends IndependentEntity {
                 while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 3);
 
                 // Decrement by quarters till the nextDate is less than 3 months ahead of the forecast start date:
-                Calendar nextQuarter = (Calendar) onOrAfterDate.clone();
-                nextQuarter.add(Calendar.MONTH, 3);
-                while (nextDate.compareTo(nextQuarter) >= 0) nextDate.add(Calendar.MONTH, -3);
+                Calendar threeMonthsAfterOnOrAfterDate = (Calendar) onOrAfterDate.clone();
+                threeMonthsAfterOnOrAfterDate.add(Calendar.MONTH, 3);
+                while (nextDate.compareTo(threeMonthsAfterOnOrAfterDate) >= 0) nextDate.add(Calendar.MONTH, -3);
                 break;
 
             case SEMIANNUALLY:
@@ -1015,8 +1015,9 @@ public abstract class Item extends IndependentEntity {
                 while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 6);
 
                 // Decrement by half-years till the nextDate is less than 6 months ahead of the forecast start date:
-                while (nextDate.get(Calendar.MONTH) >= onOrAfterDate.get(Calendar.MONTH) + 6)
-                    nextDate.add(Calendar.MONTH, -6);
+                Calendar sixMonthsAfterOnOrAfterDate = (Calendar) onOrAfterDate.clone();
+                sixMonthsAfterOnOrAfterDate.add(Calendar.MONTH, 6);
+                while (nextDate.compareTo(sixMonthsAfterOnOrAfterDate) >= 0) nextDate.add(Calendar.MONTH, -6);
                 break;
 
             case ANNUALLY:

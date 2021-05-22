@@ -22,9 +22,13 @@ public class ForecastTransactionSplit extends DependentEntity {
 
    // The select query:
    public static final String selectQuery = "select bin_to_uuid(ForecastTransaction_idForecastTransaction) as " +
-           "'idForecastTransaction', bin_to_uuid(Transaction_Split_idBudgetItem) as idBudgetItem, " +
-           "bin_to_uuid(Transaction_Split_idTransaction) as 'idTransaction', disposition from " +
-           "forecast_transaction_split ";
+           "'fts.idForecastTransaction', bin_to_uuid(Transaction_Split_idBudgetItem) as 'fts.idBudgetItem', " +
+           "bin_to_uuid(Transaction_Split_idTransaction) as 'fts.idTransaction', disposition as 'fts.disposition' " +
+           "from forecast_transaction_split fts";
+
+   public static String getSelectQuery() {
+      return selectQuery;
+   }
 
    // The insert query:
    public static final String insertQuery = "insert into forecast_transaction_split " +
@@ -107,10 +111,10 @@ public class ForecastTransactionSplit extends DependentEntity {
 
    public ForecastTransactionSplit(ResultSet rs) throws SQLException {
       super();
-      this.idForecastTransaction = UUID.fromString(rs.getString("idForecastTransaction"));
-      this.idBudgetItem = UUID.fromString(rs.getString("idBudgetItem"));
-      this.idTransaction = UUID.fromString(rs.getString("idTransaction"));
-      this.disposition = SplitDisposition.valueOf(rs.getString("disposition"));
+      this.idForecastTransaction = UUID.fromString(rs.getString("fts.idForecastTransaction"));
+      this.idBudgetItem = UUID.fromString(rs.getString("fts.idBudgetItem"));
+      this.idTransaction = UUID.fromString(rs.getString("fts.idTransaction"));
+      this.disposition = SplitDisposition.valueOf(rs.getString("fts.disposition"));
       setDirty(false);
    }
 
@@ -132,20 +136,23 @@ public class ForecastTransactionSplit extends DependentEntity {
          return (rs != null) ? new ForecastTransactionSplit(rs) : null;
    }
 
-   // Get the count of Forecast Transaction Splits within the current Forecast for a Transaction Split:
-   static int getForecastTransactionSplitsCount(TransactionSplit split, Forecast forecast) throws EntityException,
-           SQLException, ForecastException {
-      String query = "select count(*) from transaction_split a inner join forecast_transaction_split b on " +
-              "a.BudgetItem_idBudgetItem = b.Transaction_Split_idBudgetItem and a. Transaction_idTransaction = " +
-              "b.Transaction_Split_idTransaction inner join forecast_transaction c on " +
-              "b.ForecastTransaction_idForecastTransaction = c.idForecastTransaction where a.BudgetItem_idBudgetItem =" +
-              " uuid_to_bin('" + split.getIdBudgetItem() + "') and a.Transaction_idTransaction = uuid_to_bin('" +
-              split.getIdTransaction() + "')";
-      ResultSet rs = EntityInt.getSingletonRS(query, "trying to get the count of forecast transaction " +
-              "splits");
-      if (rs == null) throw new ForecastException("Null result on attempt to get count of forecast transaction splits");
-      int i = rs.getInt(1);
-      return rs.getInt(1);
+   // Get the Forecast Transaction Split for a Transaction Split within the specified Forecast:
+   public static ForecastTransactionSplit getForecastTransactionSplit(TransactionSplit split, Forecast forecast)
+           throws EntityException, SQLException {
+      String query = getSelectQuery() + " " +
+              "inner join forecast_transaction ft on fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction " +
+              "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+              "where " +
+                 "fts.Transaction_Split_idBudgetItem = uuid_to_bin('" + split.getIdBudgetItem() + "') and " +
+                 "fts.Transaction_Split_idTransaction = uuid_to_bin('" + split.getIdTransaction() + "') and " +
+                 "fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')";
+      ResultSet rs = EntityInt.getSingletonRS(query, "trying to get the forecast transaction split for a " +
+              "split");
+      ForecastTransactionSplit forecastTransactionSplit = null;
+      if (rs != null) {
+         forecastTransactionSplit = new ForecastTransactionSplit(rs);
+      }
+      return forecastTransactionSplit;
    }
 
 }

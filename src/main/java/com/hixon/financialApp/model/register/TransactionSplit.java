@@ -27,10 +27,10 @@ public class TransactionSplit extends DependentEntity {
     * Fields:
     */
 
-   protected double amount = 0;
-   UUID idBudgetItem = null;
+   protected double amount;
+   UUID idBudgetItem;
    BudgetItem budgetItem = null;
-   UUID idTransaction = null;
+   UUID idTransaction;
    Transaction transaction = null;
    String memo;
 
@@ -134,8 +134,7 @@ public class TransactionSplit extends DependentEntity {
 
       } catch (SQLException e) {
 
-         RegisterException re = new RegisterException("Error reading in the Merchant-Payee row for " + rs.toString());
-         re.initCause(e);
+         RegisterException re = new RegisterException("Error reading in the Merchant-Payee row.  ", e);
          throw (re);
       }
    }
@@ -220,8 +219,8 @@ public class TransactionSplit extends DependentEntity {
    public String toStringConcise() {
       String s = null;
       try {
-         String memoString = (memo != null) ? ".  Memo:  " + memo : "";
-         s = getBudgetItem().getPayee() + Utility.formatDollarAmount(amount) + memoString;
+         String memoString = (memo != null) ? ".  Memo:  " + memo : ".";
+         s = "Split:  " + getBudgetItem().getPayee() + ", " + Utility.formatDollarAmount(amount) + memoString;
       } catch (Exception | EntityException | BudgetException e) {
          e.printStackTrace();
       }
@@ -240,7 +239,7 @@ public class TransactionSplit extends DependentEntity {
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
-         List<TransactionSplit> transactionSplits = new ArrayList<TransactionSplit>();
+         List<TransactionSplit> transactionSplits = new ArrayList<>();
          while (rs.next()) {
             transactionSplits.add(new TransactionSplit(rs));
          }
@@ -248,8 +247,7 @@ public class TransactionSplit extends DependentEntity {
 
       } catch (SQLException e) {
          RegisterException re = new RegisterException("Database error occurred trying to get the transaction splits for " +
-                 "transaction " + transaction.getPayee() + " for $" + transaction.getAmount());
-         re.initCause(e);
+                 "transaction " + transaction.getPayee() + " for $" + transaction.getAmount(), e);
          throw re;
       }
    }
@@ -277,8 +275,7 @@ public class TransactionSplit extends DependentEntity {
               "t.authorizationDate is null and t.postDate >= " + Utility.calendarDateToSqlDateString(startDate) +
               " and t.postDate <= " + Utility.calendarDateToSqlDateString(endDate);
       query += " order by date asc";
-      ResultSet rs = EntityInt.getRS(query, "while trying to get the splits for a budget item");
-      return rs;
+      return EntityInt.getRS(query, "while trying to get the splits for a budget item");
    }
 
    // Get a list of splits for a budget item in a period:

@@ -167,7 +167,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         List<UserResource> reports = forecastView.renderItemsOfInterestReport();
         for (UserResource userResource : reports
         ) {
-            Utility.getResolver().say("Items of interest report for user " + userResource.getUser().getFirstName() +
+            Utility.getResolver().say("\nItems of interest report for user " + userResource.getUser().getFirstName() +
                     " written to the file " + userResource.getFile().getAbsolutePath());
         }
     }

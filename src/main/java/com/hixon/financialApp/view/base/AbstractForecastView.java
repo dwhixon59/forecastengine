@@ -1,7 +1,6 @@
 package com.hixon.financialApp.view.base;
 
 import com.hixon.financialApp.controller.ControllerException;
-import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.Entity;
@@ -41,7 +40,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     /*
      * Fields:
      */
-    protected Forecast forecast = null;
+    protected Forecast forecast;
 
 
     /*
@@ -131,7 +130,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     @Override
     public boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException,
-            QuitException, RegisterException {
+            RegisterException {
 
         this.forecast = forecast;
 
@@ -218,7 +217,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     /*
      * Update the forecast from a list of forecast transactions from some external source:
      */
-    public void updateFromExternalSource() throws ControllerException, ForecastException, EntityException, SQLException, ViewException, IOException {
+    public void updateFromExternalSource()
+            throws ControllerException, ForecastException, EntityException, SQLException, ViewException, IOException {
 
         // Keep a count of the forecast transactions from the external source for debugging purposes:
         int i = 0;
@@ -238,7 +238,6 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                     // Keep track of the list item number for debugging purposes:
                     i++;
-                    System.out.println("Current forecast transaction:  " + ssForecastTransaction.toStringShort());
 
                     // If the current spreadsheet forecast transaction has an ID (the update case):
                     if (ssForecastTransaction.getId() != null) {
@@ -253,20 +252,65 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                             dbForecastTransaction.setFound(true);
 
                             // then if the forecast planned date has been modified then update the database transaction:
+                            boolean overwrite;
                             if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
-                                System.out.println("Date modified for forecast transaction:  " + ssForecastTransaction);
-                                Utility.copyDate(ssForecastTransaction.getPlannedDate(), dbForecastTransaction.getPlannedDate());
+
+                                // If the database forecast transaction was updated after it was sent to the external
+                                // source:
+                                overwrite = true;
+                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
+
+                                    // Then ask the user if they want to over write the updated database value:
+                                    Utility.getResolver().say("\nThe date of an imported forecast transaction has " +
+                                            "changed, but the version of the imported forecast transaction is prior to" +
+                                            " the version in the database.");
+                                    Utility.getResolver().say("Imported " + ssForecastTransaction.toStringConcise());
+                                    Utility.getResolver().say("Database " + dbForecastTransaction.toStringConcise());
+                                    if (Utility.getResolver().selectFromFirstLetterList(
+                                            "Which date do you want to use? (i - imported, d - database)",
+                                            "i,d").equalsIgnoreCase("d")) {
+                                        overwrite = false;
+                                    }
+                                }
+
+                                // Overwrite the date in the database forecast transaction if appropriate:
+                                if (overwrite) {
+                                    Utility.getResolver().say("\nDate modified for " +
+                                            dbForecastTransaction.toStringConcise());
+                                    Utility.getResolver().say("New date is:  " +
+                                            Utility.calendarDateToStringDate(ssForecastTransaction.getPlannedDate()));
+                                    dbForecastTransaction.setPlannedDate(ssForecastTransaction.getPlannedDate());
+                                }
                             }
 
-                            // and if the remaining amount has been modified:
-                            if (ssForecastTransaction.getRemainingAmount() != dbForecastTransaction.getRemainingAmount()) {
+                            // and if the remaining amount has been modified and the difference is not just rounding
+                            // to the nearest dollar for display purposes::
+                            if (Math.abs(ssForecastTransaction.getRemainingAmount() -
+                                    dbForecastTransaction.getRemainingAmount()) > 0.50) {
 
-                                // and the difference is not just rounding to the nearest dollar for display purposes:
-                                if (Math.abs(ssForecastTransaction.getRemainingAmount() -
-                                        dbForecastTransaction.getRemainingAmount()) > 0.50) {
+                                overwrite = true;
+                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
+                                    // Then ask the user if they want to over write the updated database value:
+                                    Utility.getResolver().say("\nThe amount of an imported forecast transaction has " +
+                                            "changed, but the version of the imported forecast transaction is prior to" +
+                                            " the version in the database.");
+                                    Utility.getResolver().say("Imported " + ssForecastTransaction.toStringConcise());
+                                    Utility.getResolver().say("Database " + dbForecastTransaction.toStringConcise());
+                                    if (Utility.getResolver().selectFromFirstLetterList(
+                                            "Which amount do you want to use? (i - imported, d - database)",
+                                            "i,d").equalsIgnoreCase("d")) {
+                                        overwrite = false;
+                                    }
+                                }
+
+                                // Overwrite the amount in the database forecast transaction if appropriate:
+                                if (overwrite) {
 
                                     // then update the database transaction:
-                                    System.out.println("Amount modified for forecast transaction:  " + ssForecastTransaction);
+                                    Utility.getResolver().say("\nAmount modified for " +
+                                            dbForecastTransaction.toStringConcise());
+                                    Utility.getResolver().say("New amount is:  " +
+                                            Utility.formatDollarAmount(ssForecastTransaction.getRemainingAmount()));
                                     dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
                                 }
                             }
@@ -276,8 +320,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                         } else { // No matching transaction was found meaning that it has been deleted from the database:
                             getResolver().say("The following forecast transaction was updated, but it falls outside of " +
-                                    "your short term horizon and has been invalidated by the last forecast update.  You will have " +
-                                    "to remake this change" + "\n" + ssForecastTransaction);
+                                    "your short term horizon and has been invalidated by the last forecast update.  You " +
+                                    "will have to remake this change" + "\n" + ssForecastTransaction);
                         }
                     } else { // the forecast transaction does not have an ID (the create case), so create one:
 
@@ -322,9 +366,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Return the number of transactions updated:
         if (i > 0) {
-            getResolver().say("Successfully updated " + i + " forecast transactions in the forecast.");
+            getResolver().say("\nSuccessfully processed " + i + " forecast transactions from the external source.");
         } else {
-            getResolver().say("There were no forecast transactions in the external source to update from.");
+            getResolver().say("\nThere were no forecast transactions in the external source to update from.");
         }
 
     } // End updateFromExternalSource(Connection dbConnection).
@@ -396,10 +440,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         List<User> users = User.getAllUsers();
 
         // For each user:
-        for (int i = 0; i < users.size(); i++)
-        {
+        for (User user : users) {
             // Render an upcoming items report for the current user:
-            UserResource userResource = renderUpcomingItemsReport(forecast, users.get(i));
+            UserResource userResource = renderUpcomingItemsReport(forecast, user);
             reports.add(userResource);
         }
         return reports;
@@ -464,10 +507,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         List<User> users = User.getAllUsers();
 
         // For each user:
-        for (int i = 0; i < users.size(); i++)
-        {
+        for (User user : users) {
             // Render an items of interest report for the current user:
-            UserResource userResource = renderOverdueItemsReport(forecast, users.get(i));
+            UserResource userResource = renderOverdueItemsReport(forecast, user);
             reports.add(userResource);
         }
         return reports;

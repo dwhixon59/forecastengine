@@ -5,6 +5,7 @@ import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.register.Merchant;
@@ -28,14 +29,14 @@ public interface TransactionResolverInt {
     */
    void say();
 
-   public void say(String s);
+   void say(String s);
 
-   public Importer.TerminationCondition getTerminationCondition();
+   Importer.TerminationCondition getTerminationCondition();
 
-   public List<BudgetItemMerchant> assignBudgetItems(Merchant transaction)
+   List<BudgetItemMerchant> assignBudgetItems(Merchant transaction)
            throws BudgetException, ParseException, SQLException, ViewException, EntityException, RegisterException;
 
-   public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount) throws ViewException, RegisterException, EntityException;
+   Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount) throws ViewException, RegisterException, EntityException;
 
    String resolveUnmatchedAccount(String payee, double amount) throws RegisterException;
 
@@ -75,7 +76,7 @@ public interface TransactionResolverInt {
       return startDate;
    }
 
-   void beginImportItem();
+   void beginImportItem(Transaction transaction);
 
    /*
     * getSplits()
@@ -90,7 +91,7 @@ public interface TransactionResolverInt {
    boolean askRegenerateForecast();
 
    UserResponse transactionAmountDiscrepancy(Transaction transaction, TransactionSplit split,
-                                             ForecastTransaction forecastTransaction);
+                                             ForecastTransaction forecastTransaction) throws BudgetException, SQLException, EntityException, ForecastException;
 
    // Print a prompt, get a response, parse it based on commas and return it in a string array:
    String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue);
@@ -99,7 +100,7 @@ public interface TransactionResolverInt {
    void showAssignedBudgetItems(List<BudgetItemMerchant> budgetItems, double amount);
 
    // What to do if the split amount exceeds the budgeted amount:
-   ForecastTransactionSplit.SplitDisposition assignOverageAmount(double amount) throws IOException;
+   ForecastTransactionSplit.SplitDisposition assignOverageAmount(String prompt) throws IOException;
 
    // What to do if we're not sure which forecast transaction to assign a split to because the amount differs:
    UserResponse assignSplitAmountToForecastTransaction(TransactionSplit split, ForecastTransaction forecastTransaction);
@@ -111,18 +112,26 @@ public interface TransactionResolverInt {
    UserResponse getForecastStartDate() throws QuitException;
 
    // Get the start date for a spending report:
-   public Calendar getSpendingReportMonth() throws QuitException;
+   Calendar getSpendingReportMonth() throws QuitException;
 
    // Ask the user if they want to delete a provisional transction in the register because it appears to have fallen off:
    boolean askDeleteRegisterTransaction(Transaction transaction);
 
    // Send a notification consisting of the notification string to the user.
-   int selectFromList(String s, List<String> notificationMessage, Boolean allowNone) throws SQLException, EntityException;
+   int selectFromNumberedList(String s, List<String> notificationMessage, Boolean allowNone) throws SQLException, EntityException;
 
    // Have the user select a username from a list of usernames (taken from a list of users):
-   public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException;
+   User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException;
 
    // Ask the user to enter a dollar amount:
    double getDollarAmount();
+
+   /**
+    * This method takes a comma separated list of menu options and alows the user to select one of the options.
+    *
+    * @param menuOptionList A comma separated list of menu items.
+    * @return The selected menu item.
+    */
+    String selectFromFirstLetterList(String prompt, String menuOptionList);
 }
 

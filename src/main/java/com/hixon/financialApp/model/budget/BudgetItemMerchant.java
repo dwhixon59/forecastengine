@@ -11,7 +11,6 @@ import com.hixon.financialApp.utility.Utility;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,8 +27,8 @@ public class BudgetItemMerchant extends DependentEntity {
    BudgetItem budgetItem;
    UUID idMerchant;
 
-   private static final String selectQuery = "select amount, percentage, BudgetItem_idBudgetItem as idBudgetItem, " +
-           "Merchant_idMerchant as idMerchant from budgetitem_merchant ";
+   private static final String selectQuery = "select bim.amount, bim.percentage, bin_to_uuid(BudgetItem_idBudgetItem) " +
+           "as 'bim.idBudgetItem', bin_to_uuid(Merchant_idMerchant) as 'bim.idMerchant' from BudgetItem_Merchant bim ";
 
    private static final String insertQuery = "insert into budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
@@ -138,10 +137,10 @@ public class BudgetItemMerchant extends DependentEntity {
          throw new BudgetException("Result set must not be null when constructing a BudgetItemMerchant");
       }
 
-      this.amount = rs.getDouble("amount");
-      this.percentage = rs.getInt("percentage");
-      this.idBudgetItem = UUID.fromString(rs.getString("BudgetItem_idBudgetItem"));
-      this.idMerchant = UUID.fromString(rs.getString("BudgetItemMerchant_idMerchant"));
+      this.amount = rs.getDouble("bim.amount");
+      this.percentage = rs.getInt("bim.percentage");
+      this.idBudgetItem = UUID.fromString(rs.getString("bim.idBudgetItem"));
+      this.idMerchant = UUID.fromString(rs.getString("bim.idMerchant"));
       this.budgetItem = null;
 
       setDirty(false);
@@ -164,7 +163,11 @@ public class BudgetItemMerchant extends DependentEntity {
               "Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')";
       ResultSet rs = EntityInt.getRS(query, "Database error occurred retrieving BudgetItemMerchant for " +
               "budget item = " + budgetItem.getPayee() + " and merchant " + merchant.getName());
-      return new BudgetItemMerchant(rs);
+      BudgetItemMerchant budgetItemMerchant = null;
+      if (rs.next()) {
+         budgetItemMerchant = new BudgetItemMerchant(rs);
+      }
+      return budgetItemMerchant;
    }
 
    public void save() throws RegisterException, EntityException, BudgetException, SQLException {
@@ -195,16 +198,16 @@ public class BudgetItemMerchant extends DependentEntity {
     * Main methods for BudgetItemMerchant
     */
    // Get a list of budget items that go with a merchant:
-   public static List<BudgetItemMerchant> getAssignedBudgetItems(Merchant merchant) throws SQLException, BudgetException,
-           ParseException, RegisterException, BudgetException {
+   public static List<BudgetItemMerchant> getAssignedBudgetItems(Merchant merchant) throws
+           BudgetException {
 
       // Find out what budget items are associated with the merchant for this transaction:
       String query = selectItemsForMerchantQuery + "where bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')"
-              + " order by payee asc";
+              + " order by payee ";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
-         List<BudgetItemMerchant> budgetItems = new ArrayList<BudgetItemMerchant>();
+         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
          while (rs.next()) {
             budgetItems.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("bm.amount"),
                     rs.getInt("bm.percentage")));

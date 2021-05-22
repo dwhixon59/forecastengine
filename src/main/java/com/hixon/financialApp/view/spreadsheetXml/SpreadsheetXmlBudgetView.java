@@ -56,7 +56,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
     public SpreadsheetXmlBudgetView(Budget budget) {
         super(budget);
         this.spendingReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-                "SpendingReport.xml";
+                "SpendingReport_" + Utility.calendarDateToMonthYearDate(Calendar.getInstance()) + ".xml";
         this.budgetSummaryReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "BudgetSummaryReport.xml";
         this.encoding = "UTF-8";
@@ -73,6 +73,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
         while (!done) {
             done = true;
             try {
+                Utility.versionFile(spendingReportFilename);
                 writer = new PrintWriter(spendingReportFilename, encoding);
                 category = " ";
                 lastCategory = " ";

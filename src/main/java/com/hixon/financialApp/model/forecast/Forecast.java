@@ -546,8 +546,6 @@ public class Forecast extends IndependentEntity {
 
         // Get the current balance of the applicable register:
         double balance = forecast.getBudget().getRegisters().get(0).getBalance();
-        System.out.println("Register balance is :  " + Utility.formatDollarAmount(balance));
-        //logger.debug("Register balance is :  " + Utility.formatDollarAmount(balance));
 
         // Get a chronological list of the non-zero transactions in the forecast:
         ForecastTransactionIterator forecastTransactions = ForecastTransaction.getNonZeroForecastTransactions(forecast);
@@ -559,9 +557,8 @@ public class Forecast extends IndependentEntity {
             // Subtract of the remaining amount of the current forecast transaction:
             balance += forecastTransaction.remainingAmount;
 
+            // Save the date of the current forecast transaction:
             Calendar forecastTransactionDate = forecastTransaction.getPlannedDate();
-            System.out.println(forecastTransaction.toStringShort() + ", Running Balance = " + Utility.formatDollarAmount(balance));
-            //logger.debug(forecastTransaction.toStringShort() + "/n/tBalance = " + Utility.formatDollarAmount(balance));
 
             // Get the next forecast transaction in the list:
             forecastTransaction = forecastTransactions.getNext();
@@ -580,8 +577,6 @@ public class Forecast extends IndependentEntity {
                         for (int i = 0; i < daysBeteween; i++) {
                             DailyBalance dailyBalance = new DailyBalance(forecastTransactionDate, balance);
                             dailyBalances.add(dailyBalance);
-                            System.out.println(dailyBalance);
-                            //logger.debug(dailyBalance);
                         }
                     }
                 }

@@ -10,6 +10,7 @@ import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.*;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialAppException;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
@@ -30,6 +31,7 @@ public class Importer {
 
    public static final String PROVISIONAL_TRANSACTIONS_FILE_PATHNAME = "C:\\Users\\dwhix\\Downloads\\" +
            "ProvisionalTransactions.txt";
+   public static final String REGISTER_TRANSACTIONS_FILE = "Register transactions";
 
    // Fields:
    public enum TerminationCondition {RESET, RESTART, FOUND, SKIP, INQUIRE, QUIT}
@@ -55,9 +57,19 @@ public class Importer {
       return importRecordId;
    }
 
-   private void logImportEvent(Transaction transaction, Merchant merchant) {
-      String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
-      getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
+   public static void logImportEvent(Transaction transaction, Merchant merchant) {
+
+      String creditOrDebitString;
+      if (transaction.getPayee().contains("TRANSFER FROM")) {
+         creditOrDebitString = "transfer from ";
+      } else if (transaction.getPayee().contains("TRANSFER TO")) {
+         creditOrDebitString = "transfer to ";
+      } else if (transaction.getAmount() > 0) {
+         creditOrDebitString = "deposit from ";
+      } else {
+         creditOrDebitString = "debit to ";
+      }
+      getResolver().say("Imported a " + creditOrDebitString + merchant.getName() + " for " +
               formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
               ((transaction.getAuthorizationDate() != null) ?
                       calendarDateToStringDate(transaction.getAuthorizationDate()) :
@@ -71,60 +83,74 @@ public class Importer {
    // Import transactions from a bank in CSV format into the register:
    public boolean importCsvRegisterTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
                                                    Forecast forecast) throws ControllerException, ViewException,
-           EntityException, SQLException, BudgetException, RegisterException {
+           EntityException, SQLException, BudgetException, RegisterException, QuitException {
       return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILE_PATHNAME, financialInstitution, register,
               forecast);
    }
    public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt financialInstitution,
                                                    Register register, Forecast forecast)
-           throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException {
-      getResolver().say("Import new transactions from the file " + clearedTransactionsFilename + " into the register '"
-              + register.getRegisterName() + "'.");
+           throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException, QuitException {
 
-      int i = 0;
+      /*
+       * Import transactions from the CSV file:
+       */
+      int i,j = 0;
       try {
          Transaction transaction;
 
-         /*
-          * Import transactions from the CSV file:
-          */
          // Open the import file:
-         Reader in = new FileReader(clearedTransactionsFilename);
+         BufferedReader br = Utility.openBufferedFileReader(REGISTER_TRANSACTIONS_FILE, clearedTransactionsFilename);
 
          // Read the records in the file into a list so that we can process them in reverse order:
          List<CSVRecord> recordList = new ArrayList<>();
-         Iterable<CSVRecord> records = CSVFormat.RFC4180.withHeader(Transaction.Headers.class).parse(in);
+         Iterable<CSVRecord> records = CSVFormat.RFC4180.withHeader(Transaction.Headers.class).parse(br);
          for (CSVRecord record : records) {
             recordList.add(record);
          }
-         in.close();
+         br.close();
 
-         // For each row in the import file:
+         // For each transaction in the import file:
          HashMap<String, String> map = new HashMap<>();
          String importRecordId;
          Merchant merchant;
-         for (i = recordList.size() - 1; i > -1; i--) {
+         boolean firstTransaction = true;
+         for (i = recordList.size() - 1, j = 0; i > -1; i--, j++) {
             CSVRecord record = recordList.get(i);
-
-            // Let the resolver know we are beginning a new item:
-            resolver.beginImportItem();
 
             /*
              * Phase 1:  create or retrieve the transaction and the merchant associated with it:
              */
-
             // Construct an ID for this import record:
             importRecordId = financialInstitution.getRegisterImportRecordBaseName(record);
             importRecordId = getImportRecordId(map, importRecordId);
 
             // Get the transaction and merchant for this import record:
             transaction = Transaction.getByImportRecordId(importRecordId);
+
             if (transaction != null) {
                merchant = transaction.getMerchant();
             } else {
                transaction = financialInstitution.createFromCSVRecord(record, importRecordId);
                merchant = Merchant.getByPayee(transaction.getMerchantPayee());
             }
+
+            // It is expected that transactions will be downloaded almost daily, so if the first transaction is more
+            // than a week old, ask the user to verify that they indeed want to import these old transactions:
+            if (firstTransaction) {
+               Calendar oneWeekAgo = Calendar.getInstance();
+               oneWeekAgo.add(Calendar.DATE, -7);
+               if (transaction.getDate().before(oneWeekAgo)) {
+                  getResolver().say("\nThe earliest transaction in the import file seems old.");
+                  getResolver().say(transaction.toStringConcise());
+                  if (!getResolver().getYesOrNo("Are you sure you want to import it?")) {
+                     throw new FileNotFoundException("Specified import file contains old transactions.");
+                  };
+               }
+               firstTransaction = false;
+            }
+
+            // Let the resolver know we are beginning a new item:
+            resolver.beginImportItem(transaction);
 
             // If there wasn't a merchant associated with the transaction payee then assign or create one:
             if (merchant == null) {
@@ -187,7 +213,7 @@ public class Importer {
             logImportEvent(transaction, merchant);
 
             /*
-             * Phase 3:  Assign the splits to the transaction:
+             * Phase 3:  Get the assigned budget items for this merchant:
              */
 
             // Get the assigned budget items for the merchant:
@@ -285,35 +311,34 @@ public class Importer {
 
          // TODO: Save the import event:
 
-      } catch (
-              FileNotFoundException e) {
-         getResolver().say("Transactions file " + clearedTransactionsFilename + " not found.");
+      } catch (FileNotFoundException e) {
          if (!getResolver().getYesOrNo("Do you want to continue?")) {
-            ControllerException ce = new ControllerException("Transactions file " + clearedTransactionsFilename + " not found.");
-            ce.initCause(e);
-            throw (ce);
+            QuitException qe = new QuitException(REGISTER_TRANSACTIONS_FILE + " " +
+                    clearedTransactionsFilename + " is invalid or not found.");
+            qe.initCause(e);
+            throw (qe);
          }
-      } catch (
-              IOException e) {
+      } catch (IOException e) {
          ControllerException ce = new ControllerException("I/O error reading from the transactions file " +
-                 clearedTransactionsFilename + "on line " + i + ".");
+                 clearedTransactionsFilename + "on line " + j + ".");
          ce.initCause(e);
          throw (ce);
-      } catch (
-              Exception e) {
-         ControllerException ce = new ControllerException("Exception while processing the transactions file " +
-                 clearedTransactionsFilename + " on line " + i + ".");
-         ce.initCause(e);
-         throw ce;
       } catch (FinancialAppException e) {
          ControllerException ve =  new ControllerException("Error occured while creating a previous version of the " +
                  "forecast transaction import file.");
          ve.initCause(e);
          throw ve;
+      } catch (Exception e) {
+         ControllerException ce = new ControllerException("Exception while processing the transactions file " +
+                 clearedTransactionsFilename + " on line " + j + ".");
+         ce.initCause(e);
+         throw ce;
       }
 
       // Return the number of transactions imported:
-      getResolver().say("Successfully imported " + i + " transactions into the register.");
+      if (j > 0) {
+         getResolver().say("\nSuccessfully imported " + j + " transactions into the register.");
+      }
       return forecast.getInSync();
 
    } // End importCsvTransactionFile(Connection dbConnection).
@@ -343,8 +368,7 @@ public class Importer {
           * Create a list of new provisional register transactions in ascending payee + amount order from the import file:
           */
          // Open the import file:
-         File file = new File(filename);
-         BufferedReader br = new BufferedReader(new FileReader(file));
+         BufferedReader br = openBufferedFileReader("Provisional transactions", filename);
 
          // Read the records in the provisional transactions file into a list provisional register transactions:
          List<Transaction> provisionalTransactions = new ArrayList<>();
@@ -352,9 +376,6 @@ public class Importer {
          HashMap<String, String> map = new HashMap<>();
          while ((line = br.readLine()) != null) {
             try {
-               // Let the resolver know we are beginning a new item:
-               resolver.beginImportItem();
-
                // Load the transaction from the CSV line:
                transaction = financialInstitution.loadProvisionalTransactionFromCSV(line, register);
 
@@ -472,12 +493,8 @@ public class Importer {
                   }
 
                   // Tell the user about the bank transaction we are processing:
-                  String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
-                  getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
-                          formatDollarAmount(Math.abs(provisionalTransactions.get(provTrxIndex).getAmount())) + " on " +
-                          ((provisionalTransactions.get(provTrxIndex).getAuthorizationDate() != null) ?
-                                  calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getAuthorizationDate()) :
-                                  calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getPostDate())));
+                  getResolver().say();
+                  logImportEvent(provisionalTransactions.get(provTrxIndex), merchant);
 
                   // Get the splits for the transaction:
                   List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
@@ -562,14 +579,17 @@ public class Importer {
          } // End if there were any transactions in the provisional transactions file.
 
          // Save off the pending transactions file:
-         if (file.exists()) {
-            versionFileAndClear(filename);
-         }
+         versionFileAndClear(filename);
 
          // TODO: Save the import event:
 
       } catch (FileNotFoundException e) {
-         getResolver().say("Provisional transactions file " + filename + " not found.");
+         getResolver().say("\nProvisional transactions file " + filename + " not found.");
+         if (!getResolver().getYesOrNo("Do you want to continue?")) {
+            ControllerException ce = new ControllerException("Transactions file " + filename + " not found.");
+            ce.initCause(e);
+            throw (ce);
+         }
       } catch (IOException e) {
          ControllerException ce = new ControllerException("I/O error reading from the provisional transactions file " +
                  filename + "on line " + provTrxIndex + ".");
@@ -584,12 +604,9 @@ public class Importer {
 
       // Tell the user the number of transactions imported:
       if (provTrxIndex > 0) {
-         getResolver().say("Successfully imported " + provTrxIndex + " provisional transactions into the register:  " +
+         getResolver().say("\nSuccessfully imported " + provTrxIndex + " provisional transactions into the register:  " +
                  register + " from file " + filename + ".");
-      } else {
-         getResolver().say("The import file " + filename + " was empty or did not exist.  No provisional transactions " +
-                 "were imported");
-      }
+       }
       return forecast.getInSync();
 
    } // End importCsvProvisionalTransactionFile().

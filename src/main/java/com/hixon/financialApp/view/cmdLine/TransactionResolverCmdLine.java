@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.register.*;
@@ -99,13 +100,68 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     }
 
     @Override
+    /**
+     * {@inheritdoc}
+     */
+    public int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException {
+
+        // Ask which user to send the message to:
+        say(prompt + ":  ");
+        if (allowNone) say("\t0 - None");
+        int i = 1;
+        for (String user : items
+        ) {
+            say("\t" + i++ + " - " + user);
+        }
+        return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1) - 1;
+    }
+
+    @Override
+    /**
+     * {@inheritdoc}
+     */
+    public String selectFromFirstLetterList(String prompt, String menuOptionList) {
+
+        // Parse the menu options out of the menuOptionList:
+        String[] options = menuOptionList.split(",");
+
+        // Ask the user to enter one of the values:
+        ask(prompt);
+
+        // Until they enter a valid value:
+        String selected = null;
+        while (true) {
+
+            // Get the user selection:
+            String line = in.nextLine();
+
+            // See if the value entered matches any of the options:
+            for (String option : options
+            ) {
+                if (option.equalsIgnoreCase(line)) {
+                    selected = option;
+                    break;
+                }
+            }
+
+            // If the user didn't select one of the options, ask them to do it again:
+            if (selected == null) {
+                ask("\nPlease enter one of the following letters:  " + menuOptionList + ":  ");
+            } else {
+                break;
+            }
+        }
+        return selected;
+    }
+
+    @Override
     public double getDollarAmount() {
         return parseDouble("Please enter the dollar amount:", "Invalid dollar amount,");
     }
 
     protected double parseDouble(String prompt, String errorMessage) {
         if (prompt.length() > 0) {
-            say(prompt);
+            ask(prompt);
         }
         double doubleValue = 0;
         while (true) {
@@ -206,7 +262,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      * Main methods for TransactionResolverCmdLine:
      */
     @Override
-    public void beginImportItem() {
+    public void beginImportItem(Transaction transaction) {
         // Print a blank line to separate this item from the previous item visually:
         say();
     }
@@ -308,7 +364,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         }
 
         // Ask the user to select one of the users from the list of user first names:
-        int index = selectFromList(prompt, userFirstNames, true);
+        int index = selectFromNumberedList(prompt, userFirstNames, true);
         return (index > -1) ? users.get(index) : null;
     }
 
@@ -316,7 +372,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     @Override
     public String resolveUnmatchedAccount(String payee, double amount) throws RegisterException {
         String accountNumber = null;
-        say("There is no account number in the following transaction: " + payee + " for " +
+        say("\nThere is no account number in the following transaction: " + payee + " for " +
                 Utility.formatDollarAmount(amount) + ".");
 
         say("Select the account to assign this transaction to:  ");
@@ -341,7 +397,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
         assignMoreBudgetItems(merchant, budgetItems);
 
-        // A null value for budget items means to check the termination condition, so it the termination condition
+        // A null value for budget items means to check the termination condition, so if the termination condition
         // isn't "found", then null out the budget items list:
         if (terminationCondition != FOUND) {
             budgetItems = null;
@@ -406,7 +462,9 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         if (tokens.length > 1) amount = parseDouble(tokens[1], "Invalid amount");
                         if (tokens.length > 2) percentage = parseInt(tokens[2], "Invalid percentage");
                         BudgetItemMerchant budgetItemMerchant = merchant.addBudgetItem(budgetItem, amount, percentage);
-                        budgetItems.add(budgetItemMerchant);
+                        if (budgetItemMerchant != null) {
+                            budgetItems.add(budgetItemMerchant);
+                        }
                         terminationCondition = FOUND;
                         break;
 
@@ -490,9 +548,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                     }
                 }
                 splits.add(transactionSplit);
-                say("Assigned $" + Math.abs(transactionSplit.getAmount()) + " of it to the budget category " +
-                        BudgetItem.getPayeeById(transactionSplit.getIdBudgetItem()));
-            }
+             }
             if (transactionAmount != 0) {
                 say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
@@ -846,12 +902,10 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     // What to do if the split amount exceeds the budgeted amount:
     @Override
-    public ForecastTransactionSplit.SplitDisposition assignOverageAmount(double amount) {
+    public ForecastTransactionSplit.SplitDisposition assignOverageAmount(String prompt) {
         ForecastTransactionSplit.SplitDisposition disposition = null;
 
-        say("You exceeded the budgeted amount for this budget item by " +
-                Utility.formatDollarAmount(amount) + ".  What would you like to do (a-adjust,  d-dispute, i-ignore, " +
-                "r-roll)?  ");
+        ask(prompt + "What would you like to do (a-adjust, d-dispute, i-ignore, r-roll)?  ");
 
         boolean done = false;
         while (!done) {
@@ -875,7 +929,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                     break;
 
                 default:
-                    say("Please enter a, d, i or r.");
+                    ask("Please enter a, d, i or r.");
                     done = false;
             }
         }
@@ -888,10 +942,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             forecastTransaction) {
         UserResponse response = new UserResponse();
 
-        say("Is this split an instance of this forecast transaction?  What would you like to do (a-adjust,"
-                + " s-assign, d-dispute, i-ignore)?");
-        say(split.toString());
-        say(forecastTransaction.toString());
+        say("Applicable  " + forecastTransaction.toStringConcise());
+        ask("What would you like to do (a-adjust, s-assign, d-dispute, i-ignore)? ");
 
         boolean done = false;
         while (!done) {
@@ -930,10 +982,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             throws EntityException, SQLException {
         UserResponse response = new UserResponse();
 
-        say("Is this split an instance of this forecast transaction?  What would you like to do (a-adjust,"
-                + " s-assign, d-dispute, i-ignore)?");
-        say(split.toString());
-        say(forecastTransaction.toString());
+        say("Applicable " + forecastTransaction.toStringConcise());
+        ask("What would you like to do (a-adjust, s-assign, d-dispute, i-ignore)?");
 
         boolean done = false;
         while (!done) {
@@ -968,12 +1018,12 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     // What to do if there is a discrepancy between the planned and actual amounts of a transaction.
     @Override
     public UserResponse transactionAmountDiscrepancy(Transaction transaction, TransactionSplit split,
-                                                     ForecastTransaction forecastTransaction) {
+                                                     ForecastTransaction forecastTransaction) throws BudgetException, SQLException, EntityException, ForecastException {
         UserResponse response = new UserResponse();
 
-        say("There is a discrepancy between the planned and actual amounts.  The planned amount is " +
-                Utility.formatDollarAmount(-forecastTransaction.getRemainingAmount()));
-        say("What would you like to do (a-adjust, s-assign, d-dispute, i-ignore)?  ");
+        say("The amount of this split is significantly more than the planned amount for the current period (" +
+                Utility.formatDollarAmount(-forecastTransaction.getForecastItem().getAmount()) + ").");
+        ask("Would you like to adjust the amount for this budget item (a-adjust, s-assign, d-dispute, i-ignore)?  ");
 
         boolean done = false;
         while (!done) {
@@ -1116,24 +1166,10 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     @Override
     public boolean askDeleteRegisterTransaction(Transaction transaction) {
         say();
-        say(transaction.toStringSummary());
+        say(transaction.toStringConcise());
         return getYesOrNo("This provisional transaction has disappeared from the list of provisional " +
                 "transactions, but it does not appear as a cleared transaction.\nIt has likely been invalidated.  Do you "
                 + "want to remove it?");
-    }
-
-    @Override
-    public int selectFromList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException {
-
-        // Ask which user to send the message to:
-        say(prompt + ":  ");
-        if (allowNone) say("\t0 - None");
-        int i = 1;
-        for (String user : items
-        ) {
-            say("\t" + i++ + " - " + user);
-        }
-        return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1) - 1;
     }
 
 } // End class TransactionResolverCmdLine.

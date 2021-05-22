@@ -24,6 +24,7 @@ import java.util.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.*;
 import static com.hixon.financialApp.model.entity.EntityInt.executeUpdate;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static com.hixon.financialApp.utility.Utility.getResolver;
 
 /**
  * This the class that represents a single transaction in the forecast.
@@ -306,8 +307,30 @@ public class ForecastTransaction extends IndependentEntity {
      *  Main methods:
      */
     // Zero out the amounts for all the Forecast Transactions that are marked not found:
-    public static void zeroNotFound() throws EntityException, RegisterException {
-        executeUpdate(getUpdateQuery() + "remainingAmount = 0 where found = false", "to zero the " +
+    public static void zeroNotFound()
+            throws EntityException, RegisterException, SQLException, BudgetException, ForecastException {
+
+        // List the forecast transactions that are about to be zeroed out for the user:
+        ResultSet rs = EntityInt.getRS(getSelectQuery() + " " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
+                        "fi.idForecastItem " +
+                "where found = false and remainingAmount <> 0 " +
+                "order by ft.plannedDate desc, fi.category asc, fi.payee asc",
+                "Forecast Transactions that are marked not found."
+        );
+        boolean firstTime = true;
+        while (rs.next()) {
+            if (firstTime) {
+                getResolver().say("\nThe following transactions were was deleted from the spreadsheet and will be " +
+                        "zeroed out in the forecast:  ");
+                firstTime = false;
+            }
+            ForecastTransaction forecastTransaction = new ForecastTransaction(rs);
+            getResolver().say(forecastTransaction.toStringConcise() + " .");
+        }
+
+        // Zero out the forcast transactions that were deleted from the spreadsheet:
+        executeUpdate(getUpdateQuery() + "remainingAmount = 0 where found = false and remainingAmount <> 0", "to zero the " +
                 "Forecast Transactions that are marked not found.");
     }
 
@@ -555,17 +578,23 @@ public class ForecastTransaction extends IndependentEntity {
         return s;
     }
 
-    public String toStringShort() {
+    public String toStringConcise() {
         String s;
         try {
             s = "Forecast Transaction:  Planned Date = " + Utility.calendarDateToStringDate(this.getPlannedDate()) +
-                    ", Category = " + this.getForecastItem().getCategory() + ", Payee =  " + this.getForecastItem().getPayee() +
+                    ", Category = " + this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() +
                     ", Budgeted Amount = " + Utility.formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
                     Utility.formatDollarAmount(remainingAmount);
         } catch (Exception | EntityException | BudgetException e) {
             s = "Unable to print out the forecast transaction.";
         }
         return s;
+    }
+
+    public String toStringVeryConcise() throws BudgetException, SQLException, EntityException, ForecastException {
+        return "Forecast Transaction:  Planned date = " + Utility.calendarDateToStringDate(getPlannedDate()) +
+                ", Budgeted amount = " + Utility.formatDollarAmount(getForecastItem().getAmount()) +
+                ", Remaining amount = " + Utility.formatDollarAmount(getRemainingAmount());
     }
 
 
@@ -581,7 +610,8 @@ public class ForecastTransaction extends IndependentEntity {
         for (TransactionSplit split : splits
         ) {
             // If it hasn't already been reconciled:
-            if (ForecastTransactionSplit.getForecastTransactionSplitsCount(split, forecast) == 0) {
+            forecastTransactionSplit = ForecastTransactionSplit.getForecastTransactionSplit(split, forecast);
+            if (forecastTransactionSplit == null) {
 
                 // Find the forecast transaction in the list that this split applies to:
                 ForecastTransaction forecastTransaction = getMatchingForecastTransaction(forecast, transaction, resolver,
@@ -589,6 +619,7 @@ public class ForecastTransaction extends IndependentEntity {
 
                 // if we weren't able to match the split to a forecast transaction.
                 if (forecastTransaction == null) {
+
                     // Create a forecast transaction and forecast item (if it doesn't already exist) for it so we have
                     // something to link the forecast transaction split to:
                     ForecastItem forecastItem = ForecastItem.getByBudgetItemId(split.getIdBudgetItem());
@@ -601,6 +632,16 @@ public class ForecastTransaction extends IndependentEntity {
                     forecastTransaction.setRemainingAmount(0);
                     forecastTransaction.save(INSERT);
                     split.setDisposition(IGNORE);
+
+                    // Let the user know we created a dummy forecast transaction:
+                    getResolver().say("Created a new forecast transaction for this split as the applicable " +
+                            "forecast transaction was ignored.");
+
+                    // Let the user know about the new forecast transaction we created for the split:
+                    getResolver().say("New " + forecastTransaction.toStringConcise());
+                } else {
+                    // Let the user know what forecast transaction we matched up to the split:
+                    getResolver().say("Applicable " + forecastTransaction.toStringConcise());
                 }
 
                 // if this split is part of the forecast:
@@ -615,9 +656,12 @@ public class ForecastTransaction extends IndependentEntity {
                 forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
                 forecastTransactionSplit.save(INSERT);
 
-            } // End if it hasn't already reconciled.
+            } // End if it hasn't already been reconciled.
             else {
-                System.out.println("Already reconciled.  Skipping.");
+                // but if it has been reconciled show a summary of the reconciliation record to the user:
+                ForecastTransaction forecastTransaction =
+                        ForecastTransaction.getById(forecastTransactionSplit.getIdForecastTransaction());
+                getResolver().say("Already reconciled.  Applicable " + forecastTransaction.toStringVeryConcise());
             } // End if it has already been reconciled.
         } // End for each split assigned to this transaction.
     } // End ForecastTransaction.reconcile().
@@ -638,7 +682,6 @@ public class ForecastTransaction extends IndependentEntity {
         if (forecastTransaction != null) {
 
             Timing timing = forecastTransaction.fallsWithinWindow(transaction.getDate());
-            //logger.debug("Applicable transaction found is:  " + forecastTransaction.toStringShort());
             switch (timing) {
 
                 case PRIOR_TO:  // The split occurs before the period of this forecast transaction:
@@ -654,9 +697,9 @@ public class ForecastTransaction extends IndependentEntity {
                                 resolver.say("Split occurs before the first occurrence of the budget item " +
                                         split.getBudgetItem().getPayee() + " in the forecast.  Ignoring it.");
                             } else {
-                                resolver.say("The amount that was allocated for this budget item in the current period (" +
-                                        Utility.formatDollarAmount(split.getBudgetItem().getAmount()) + ") is exhausted.");
-                                split.setDisposition(resolver.assignOverageAmount(split.getAmount()));
+                                getResolver().say("Applicable " + forecastTransaction.toStringVeryConcise());
+                                split.setDisposition(resolver.assignOverageAmount(
+                                        "There is nothing left for this budget item in the current period. "));
                             }
                             switch (split.getDisposition()) {
                                 case ADJUST:
@@ -821,18 +864,33 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
 
-    // Deduct or zero the amount of the split from the forecast transaction or budget item as appropriate:
+    /**
+     * Deduct or zero the amount of the split from the forecast transaction or budget item as appropriate.
+     *
+     * @param forecast
+     * @param transaction
+     * @param resolver
+     * @param split
+     * @param forecastTransaction
+     * @return
+     * @throws EntityException
+     * @throws BudgetException
+     * @throws Exception
+     * @throws RegisterException
+     */
     public static ForecastTransaction deductSplitAmount(Forecast forecast, Transaction transaction,
                                                         TransactionResolverInt resolver, TransactionSplit split, ForecastTransaction forecastTransaction)
             throws EntityException, BudgetException, Exception, RegisterException {
 
         UserResponse resp;
         double remainingAmount = 0;
-        // If the amount is substantially different than the assigned budget items:
-        if (!split.getBudgetItem().isWithinNormalAmountVariance(forecastTransaction.getRemainingAmount(), split.getAmount())) {
+        // If the amount is substantially different than the amount in the associated budget item:
+        if (!split.getBudgetItem().isWithinNormalAmountVariance(split.getAmount())) {
 
             // Ask the user to determine if the split is an occurrence of the forecast transaction:
             resp = resolver.transactionAmountDiscrepancy(transaction, split, forecastTransaction);
+            getResolver().say("The amount of the split is different than the planned amount of the " +
+                    "forecast transaction.");
             split.setDisposition(resp.getDisposition());
             switch (split.getDisposition()) {
 
@@ -875,12 +933,14 @@ public class ForecastTransaction extends IndependentEntity {
                     // amount in the current period of the budgeted amount per period for this budget item:
                     if (split.getAmount() < forecastTransaction.getRemainingAmount()) {
 
-                        // Ask the user what they would like to do:
-                        resolver.say("The amount that was allocated for this budget item in the current period (" +
-                                Utility.formatDollarAmount(split.getBudgetItem().getAmount()) + ") is exhausted.");
-                        split.setDisposition(resolver.assignOverageAmount(split.getAmount()));
+                        // Then ask the user what they would like to do:
+                        getResolver().say("Applicable " + forecastTransaction.toStringVeryConcise());
+                        split.setDisposition(resolver.assignOverageAmount(
+                                "You exceeded the remaining amount for this budget item by " +
+                                        Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount() -
+                                                split.getAmount())) + ".  "));
 
-                        // Execute the user's request:
+                        // And Execute the user's request:
                         switch (split.getDisposition()) {
 
                             case ADJUST:  // The user would like to increase the budgeted amount to cover the overage:
@@ -954,14 +1014,8 @@ public class ForecastTransaction extends IndependentEntity {
                     break;
             }
 
-            resolver.say("Deduct split amount of " + Utility.formatDollarAmount(split.getAmount()) + " from forecast " +
-                    "transaction.  Date planned = " + Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate()) +
-                    ", Date authorized = " + Utility.calendarDateToStringDate(transaction.getAuthorizationDate()) +
-                    ", Date posted = " + Utility.calendarDateToStringDate(transaction.getPostDate()) + ", Category = " +
-                    forecastTransaction.getForecastItem().getCategory() + ", Payee = " +
-                    forecastTransaction.getForecastItem().getPayee() + ", Budgeted Amount = " +
-                    Utility.formatDollarAmount(forecastTransaction.getForecastItem().getAmount()) + ", Remaining amount = " +
-                    Utility.formatDollarAmount(remainingAmount) + ".");
+            resolver.say(Utility.formatDollarAmount(split.getAmount()) + " deducted from " +
+                    forecastTransaction.toStringConcise());
 
         } // End if the transaction isn't disputed or ignored.
 
@@ -1311,7 +1365,7 @@ public class ForecastTransaction extends IndependentEntity {
             // if they are required to reconcile transaction splits.  However if it isn't unplanned:
             if (forecastItem.getHowOccurs() != Item.HowOccurs.UNPLANNED) {
                 // Then this is an odd situation.  The item either expired, or the forecast ended:
-                Utility.getResolver().say("Warning:  There is no forecast transaction for forecast item " +
+                getResolver().say("Warning:  There is no forecast transaction for forecast item " +
                         forecastItem.getCategory() + ", " + forecastItem.getPayee() + " that occurs after today's date.");
             }
         }
@@ -1342,7 +1396,7 @@ public class ForecastTransaction extends IndependentEntity {
         ResultSet rsFI = ForecastItem.getAllUsableForecastItemsInForecast(forecast);
         Calendar today = Calendar.getInstance();
         if (rsFI != null) {
-            Utility.getResolver().say("\nCleaning up the forecast.");
+            getResolver().say("\nCleaning up the forecast.");
             while (rsFI.next()) {
 
                 // Get the first occurrence of a forecast transaction for the current forecast item:
@@ -1365,7 +1419,7 @@ public class ForecastTransaction extends IndependentEntity {
                 } else {
                     // It is unusual for usable forecast item not to occur in the forecast, so issue a warning:
                     ForecastItem forecastItem = new ForecastItem(rsFI);
-                    Utility.getResolver().say("\nWARNING:  This forecast item does not occur in the forecast:\n" +
+                    getResolver().say("\nWARNING:  This forecast item does not occur in the forecast:\n" +
                             forecastItem.toString());
                 }
             }

@@ -126,7 +126,7 @@ public class CsvForecastView extends AbstractForecastView {
 
       try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)))) {
 
-         getResolver().say("Update the forecast from the forecast transactions in the CSV file " + importForecastFilename);
+         getResolver().say("\nUpdate the forecast from the forecast transactions in the CSV file " + importForecastFilename);
 
          // Work on the most recent forecast:
          Forecast forecast = Forecast.getMostRecent();

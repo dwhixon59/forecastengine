@@ -22,8 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.hixon.financialApp.controller.Importer.logImportEvent;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
-import static com.hixon.financialApp.utility.Utility.*;
+import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.resolver;
 
 public class Register extends IndependentEntity {
 
@@ -39,7 +41,7 @@ public class Register extends IndependentEntity {
    private String accountNumber = null;
    private double balance = 0;
    private UUID idBudget = null;
-   private List<Transaction> significantEvents = new ArrayList<Transaction>();
+   private List<Transaction> significantEvents = new ArrayList<>();
 
 
     /*
@@ -165,7 +167,7 @@ public class Register extends IndependentEntity {
          }
       } catch (SQLException e) {
          System.out.println("[SEVERE]  SQL error encountered trying to create a register from a result set.");
-         if (rs != null) rs.close();
+         rs.close();
          throw e;
       }
    }
@@ -188,23 +190,20 @@ public class Register extends IndependentEntity {
       return new Register(rs);
    }
 
-   public static Register getByLastFourDigits(String lastFourDigits) throws SQLException, RegisterException {
+   public static Register getByLastFourDigits(String lastFourDigits) throws RegisterException {
 
       String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
          if (rs.next()) {
-            Register register = new Register(rs);
-            return register;
+            return new Register(rs);
          } else {
             return null;
          }
       } catch (SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to retrieve a register with the " +
-                 "sql statement " + query);
-         re.initCause(e);
-         throw re;
+         throw new RegisterException("Database error occurred trying to retrieve a register with the " +
+                 "sql statement " + query, e);
       }
    }
 
@@ -216,7 +215,7 @@ public class Register extends IndependentEntity {
       try {
          preparedStmt = Utility.getDbConnection().prepareStatement(query);
          rs = preparedStmt.executeQuery();
-         Register register = null;
+         Register register;
          if (rs != null && rs.next()) {
             register = new Register(rs);
          } else {
@@ -224,8 +223,7 @@ public class Register extends IndependentEntity {
          }
          return register;
       } catch (SQLException e) {
-         RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.");
-         re.initCause(e);
+         RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.", e);
          if (preparedStmt != null) preparedStmt.close();
          if (rs != null) rs.close();
          throw re;
@@ -261,9 +259,6 @@ public class Register extends IndependentEntity {
    public boolean processSkippedTransactions(Forecast forecast)
            throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
 
-      getResolver().say("Process any transactions that were previously skipped in register '" +
-              getRegisterName() + "' and/or forecast '" + forecast.getDescription() + "'");
-
       int i = 0;
       try {
          // Retrieve any transactions that were skipped.
@@ -277,8 +272,8 @@ public class Register extends IndependentEntity {
             // Get the transaction for this import record:
             transaction = new Transaction(rs);
 
-            // Let the resolver know we are beginning a new item:
-            resolver.say("Reprocess skipped " + transaction.toString());
+            // Let the user know we are beginning a new item:
+            resolver.beginImportItem(transaction);
 
             // Get the merchant for this transaction:
             merchant = transaction.getMerchant();
@@ -332,12 +327,7 @@ public class Register extends IndependentEntity {
             }
 
             // Tell the user about the bank transaction we are processing:
-            String creditOrDebitString = (transaction.getAmount() > 0) ? "CREDIT to " : "DEBIT to ";
-            getResolver().say("\nImported a " + creditOrDebitString + merchant.getName() + " for " +
-                    formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
-                    ((transaction.getAuthorizationDate() != null) ?
-                            calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                            calendarDateToStringDate(transaction.getPostDate())));
+            logImportEvent(transaction, merchant);
 
             // Get the splits for the transaction.  Create them if they don't already exist:
             List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
@@ -374,9 +364,9 @@ public class Register extends IndependentEntity {
 
       // Return the number of transactions imported:
       if (i > 0) {
-         Utility.getResolver().say("Successfully reprocessed " + i + " skipped transactions in the register.");
+         Utility.getResolver().say("\nSuccessfully reprocessed " + i + " skipped transactions in the register.");
       } else {
-         Utility.getResolver().say("There were no skipped transactions in the register '" + registerName + "'.");
+         Utility.getResolver().say("\nThere were no skipped transactions in the register '" + registerName + "'.");
       }
       return forecast.getInSync();
 

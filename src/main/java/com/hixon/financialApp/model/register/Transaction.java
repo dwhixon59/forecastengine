@@ -339,14 +339,29 @@ public class Transaction extends IndependentEntity {
         String authDate = (authorizationDate != null) ? "\n\tAuthorization date = " +
                 Utility.calendarDateToStringDate(authorizationDate) : "";
         String checkNumberString = (checkNumber != 0) ? "\n\tCheck number = " + checkNumber : "";
+        String merchantName = (merchant != null) ? merchant.getName() : "not assigned yet";
         String s = null;
         s = "\tPost date = " + Utility.calendarDateToStringDate(postDate) +
                 authDate +
-                "\n\tMerchant = " + merchant.getName() +
+                "\n\tMerchant = " + merchantName +
                 "\n\tamount = " + formatDollarAmount(amount) +
                 "\n\tCleared = " + cleared +
                 "\n\tOriginal Payee = " + payee +
                 checkNumberString;
+        return s;
+    }
+    public String toStringConcise() {
+        String checkNumberString = (checkNumber != 0) ? "Check number = " + checkNumber + ", " : "";
+        String authDate = (authorizationDate != null) ? ", Authorized = " +
+                Utility.calendarDateToStringDate(authorizationDate) : "";
+        String merchantName = (merchant != null) ? merchant.getName() : "not assigned yet";
+        String s = null;
+        s = checkNumberString +
+                "Posted = " + Utility.calendarDateToStringDate(postDate) +
+                authDate +
+                ", Merchant = " + merchantName +
+                ", Amount = " + formatDollarAmount(amount) +
+                ", Original Payee = " + payee;
         return s;
     }
 

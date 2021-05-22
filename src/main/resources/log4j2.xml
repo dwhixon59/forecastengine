@@ -18,6 +18,10 @@
     </Appenders>
     <Loggers>
         <!-- avoid duplicated logs with additivity=false -->
+        <Logger name="com.hixon.financialApp.controller.Controller" level="debug" additivity="false">
+            <AppenderRef ref="LogToRollingFile"/>
+            <AppenderRef ref="LogToConsole"/>
+        </Logger>
         <Logger name="com.hixon.financialApp.view.text.ItemsOfInterestReport" level="debug" additivity="false">
             <AppenderRef ref="LogToRollingFile"/>
         </Logger>

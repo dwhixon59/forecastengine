@@ -19,266 +19,281 @@ import java.util.UUID;
 
 public class Merchant extends IndependentEntity {
 
-   /*
-    * Fields in the Merchant class:
-    */
-   private static final String selectColumns = "bin_to_uuid(m.idMerchant) as 'm.idMerchant', m.name as 'm.name', " +
-           "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser'";
-   public static String getSelectColumns() {
-      return selectColumns;
-   }
-   private static final String selectQuery = "select " + getSelectColumns() + " from merchant m";
-   public static String getSelectQuery() {
-      return selectQuery;
-   }
+    /*
+     * Fields in the Merchant class:
+     */
+    private static final String selectColumns = "bin_to_uuid(m.idMerchant) as 'm.idMerchant', m.name as 'm.name', " +
+            "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser'";
 
-   private static final String selectJoinPayeeQuery = selectQuery + " inner join merchant_payee mp on " +
-           "m.idMerchant = mp.Merchant_idMerchant ";
+    public static String getSelectColumns() {
+        return selectColumns;
+    }
 
-   private static final String insertQuery = "insert into merchant (idMerchant, name, askAlways, " +
-           "User_idUser) values (";
+    private static final String selectQuery = "select " + getSelectColumns() + " from merchant m";
 
-   private String name = null;
-   boolean askAlways = false;
-   private UUID idUser;
-   private List<MerchantPayee> merchantPayees = new LinkedList<>();
+    public static String getSelectQuery() {
+        return selectQuery;
+    }
 
-   public static Merchant getById(UUID idMerchant) throws EntityException, RegisterException {
-      ResultSet rs = EntityInt.getRSById(selectQuery + " where m.idMerchant = ", idMerchant,
-              "trying to retrieve a Merchant by it's ID.");
-      return new Merchant(rs);
-   }
+    private static final String selectJoinPayeeQuery = selectQuery + " inner join merchant_payee mp on " +
+            "m.idMerchant = mp.Merchant_idMerchant ";
+
+    private static final String insertQuery = "insert into merchant (idMerchant, name, askAlways, " +
+            "User_idUser) values (";
+
+    private String name = null;
+    boolean askAlways = false;
+    private UUID idUser;
+    private List<MerchantPayee> merchantPayees = new LinkedList<>();
+
+    public static Merchant getById(UUID idMerchant) throws EntityException, RegisterException {
+        ResultSet rs = EntityInt.getRSById(selectQuery + " where m.idMerchant = ", idMerchant,
+                "trying to retrieve a Merchant by it's ID.");
+        return new Merchant(rs);
+    }
 
 
     /*
-    * Getters and setters:
-    */
-   public String getName() {
-      return name;
-   }
-   public void setName(String name) {
-     setDirty(true);
-      this.name = name;
-   }
+     * Getters and setters:
+     */
+    public String getName() {
+        return name;
+    }
 
-   public boolean isAskAlways() {
-      return askAlways;
-   }
-   public void setAskAlways(boolean askAlways) {
-      setDirty(true);
-      this.askAlways = askAlways;
-   }
+    public void setName(String name) {
+        setDirty(true);
+        this.name = name;
+    }
 
-   public UUID getIdUser() {
-      return idUser;
-   }
-   public void setIdUser(UUID idUser) {
-      setDirty(true);
-      this.idUser = idUser;
-   }
+    public boolean isAskAlways() {
+        return askAlways;
+    }
 
-   public List<MerchantPayee> getPayees() {
-      return merchantPayees;
-   }
+    public void setAskAlways(boolean askAlways) {
+        setDirty(true);
+        this.askAlways = askAlways;
+    }
 
-   @Override
-   public String getInsertQuery() throws BudgetException, ForecastException {
-      return null;
-   }
+    public UUID getIdUser() {
+        return idUser;
+    }
 
-   @Override
-   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
-      return null;
-   }
+    public void setIdUser(UUID idUser) {
+        setDirty(true);
+        this.idUser = idUser;
+    }
 
-   @Override
-   public String getUpdateByIdQuery() throws BudgetException {
-      return null;
-   }
+    public List<MerchantPayee> getPayees() {
+        return merchantPayees;
+    }
 
-   @Override
-   public String getDeleteByIdQuery() {
-      return null;
-   }
+    @Override
+    public String getInsertQuery() throws BudgetException, ForecastException {
+        return null;
+    }
 
-   @Override
-   public String getPrintableEntityTypeName() {
-      return null;
-   }
+    @Override
+    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+        return null;
+    }
 
+    @Override
+    public String getUpdateByIdQuery() throws BudgetException {
+        return null;
+    }
 
-   /*
-    * Constructors:
-    */
-   // Create a new merchant with the provided name:
-   public Merchant(String merchantName) {
-      super(true);
-      name = merchantName;
-   }
+    @Override
+    public String getDeleteByIdQuery() {
+        return null;
+    }
 
-   // Create and load an existing merchant from the database:
-   public Merchant(ResultSet rs) throws RegisterException {
-      super(false);
-      loadFromResultSet(rs);
-   }
+    @Override
+    public String getPrintableEntityTypeName() {
+        return null;
+    }
 
 
-   /*
-    * Load and save methods:
-    */
+    /*
+     * Constructors:
+     */
+    // Create a new merchant with the provided name:
+    public Merchant(String merchantName) {
+        super(true);
+        name = merchantName;
+    }
 
-   private void loadFromResultSet(ResultSet rs) throws RegisterException {
-      try {
-
-         if (rs == null) throw new RegisterException("Result set passed into loadFromResultSet from must not be null.");
-         this.id = UUID.fromString(rs.getString("m.idMerchant"));
-         this.name = rs.getString("m.name");
-         this.askAlways = rs.getBoolean("m.askAlways");
-         this.idUser = UUID.fromString(rs.getString("m.idUser"));
-         setDirty(false);
-
-      } catch (SQLException e) {
-
-         RegisterException re = new RegisterException("Error reading in the Merchant-Payee row for " + rs.toString());
-         re.initCause(e);
-         throw (re);
-      }
-   }  // End loadFromResultSet().
+    // Create and load an existing merchant from the database:
+    public Merchant(ResultSet rs) throws RegisterException {
+        super(false);
+        loadFromResultSet(rs);
+    }
 
 
-   public static Merchant loadFromCSV(String merchantName) throws RegisterException {
+    /*
+     * Load and save methods:
+     */
 
-      String[] values = merchantName.split(",");
-      if (values.length < 1) throw new RegisterException("Empty string passed into Merchant.loadFromCSV().");
-      Merchant merchant = new Merchant(merchantName);
-      if (values.length > 1) {
-        merchant.setAskAlways(values[1].equalsIgnoreCase("y"));
-      }
-      if (values.length > 2) {
-         merchant.setIdUser(UUID.fromString(values[2]));
-      }
-      System.out.println("Created new merchant " + merchantName);
-      return merchant;
-   }
+    private void loadFromResultSet(ResultSet rs) throws RegisterException {
+        try {
 
-   public static Merchant getByPayee(String payee) throws RegisterException {
+            if (rs == null)
+                throw new RegisterException("Result set passed into loadFromResultSet from must not be null.");
+            this.id = UUID.fromString(rs.getString("m.idMerchant"));
+            this.name = rs.getString("m.name");
+            this.askAlways = rs.getBoolean("m.askAlways");
+            this.idUser = UUID.fromString(rs.getString("m.idUser"));
+            setDirty(false);
 
-      // Find the ID of the merchant that uses the passed in payee:
-      String query = selectJoinPayeeQuery + "where mp.payee = \"" + payee + "\"";
-      try {
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(query);
-         if (rs.next()) {
-            Merchant merchant = new Merchant(rs);
-            return merchant;
-         } else {
-            return null;
-         }
-      } catch (SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
-                 "payee " + payee + "\nSQL statement was:  " + query);
-         re.initCause(e);
-         throw re;
-      }
-   }
+        } catch (SQLException e) {
 
-   public static Merchant getByName(String name) throws RegisterException {
+            RegisterException re = new RegisterException("Error reading in the Merchant-Payee row for " + rs, e);
+            throw (re);
+        }
+    }  // End loadFromResultSet().
 
-      // Find the ID of the merchant that uses the passed in name:
-      String query = selectQuery + " where m.name = \"" + name + "\"";
-      try {
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(query);
-         if (rs.next()) {
-            Merchant merchant = new Merchant(rs);
-            return merchant;
-         } else {
-            return null;
-         }
-      } catch (SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
-                 "name " + name);
-         re.initCause(e);
-         throw re;
-      }
-   }
 
-   public static Merchant getByNameLike(String name) throws RegisterException {
-      // Find the ID of the merchant that uses the passed in name:
-      String query = selectQuery + " where m.name like \"" + name + "%\"";
-      try {
-         ResultSet rs = EntityInt.getRS(query, "trying to get the Merchant with the name like " + name);
-         if (rs.next()) {
-            Merchant merchant = new Merchant(rs);
-            return merchant;
-         } else {
-            return null;
-         }
-      } catch (EntityException | SQLException e) {
-         RegisterException re = new RegisterException("Database error occurred.");
-         re.initCause(e);
-         throw re;
-      }
-   }
+    public static Merchant loadFromCSV(String merchantName) throws RegisterException {
 
-   // Get the name of a Merchant:
-   public static String getNameById(UUID idMerchant) throws EntityException, SQLException {
-      ResultSet rs = EntityInt.getRS(selectQuery + "where m.idMerchant = uuid_to_bin('" + idMerchant + "')",
-              "Database error occurred trying to get the merchant with id = " + idMerchant);
-      return rs.getString("m.name");
-   }
+        String[] values = merchantName.split(",");
+        if (values.length < 1) throw new RegisterException("Empty string passed into Merchant.loadFromCSV().");
+        Merchant merchant = new Merchant(merchantName);
+        if (values.length > 1) {
+            merchant.setAskAlways(values[1].equalsIgnoreCase("y"));
+        }
+        if (values.length > 2) {
+            merchant.setIdUser(UUID.fromString(values[2]));
+        }
+        System.out.println("Created new merchant " + merchantName);
+        return merchant;
+    }
 
-   // Create a new payee associated with this merchant:
-   public MerchantPayee addPayee(String payee) {
+    public static Merchant getByPayee(String payee) throws RegisterException {
 
-      MerchantPayee merchantPayee = new MerchantPayee(payee, id);
-      merchantPayees.add(merchantPayee);
-      return merchantPayee;
-   }
+        // Find the ID of the merchant that uses the passed in payee:
+        String query = selectJoinPayeeQuery + "where mp.payee = \"" + payee + "\"";
+        try {
+            Statement statement = Utility.getDbConnection().createStatement();
+            ResultSet rs = statement.executeQuery(query);
+            if (rs.next()) {
+                return new Merchant(rs);
+            } else {
+                return null;
+            }
+        } catch (SQLException e) {
+            RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
+                    "payee " + payee + "\nSQL statement was:  " + query, e);
+            throw re;
+        }
+    }
 
-   // Save this merchant if dirty, and any dirty merchant-payees:
-   public void save() throws RegisterException, EntityException {
+    public static Merchant getByName(String name) throws RegisterException {
 
-      // Save the merchant:
-      if (idUser != null) {
-         super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
-                         ", uuid_to_bin('" + idUser + "'))",
-                 "Problem with Insert of merchant.  Returned row count not equal to 1.");
-      } else {
-         super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
-                         ", null)", "Problem with Insert of merchant.  Returned row count not equal to 1.");
-      }
+        // Find the ID of the merchant that uses the passed in name:
+        String query = selectQuery + " where m.name = \"" + name + "\"";
+        try {
+            Statement statement = Utility.getDbConnection().createStatement();
+            ResultSet rs = statement.executeQuery(query);
+            if (rs.next()) {
+                return new Merchant(rs);
+            } else {
+                return null;
+            }
+        } catch (SQLException e) {
+            RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
+                    "name " + name, e);
+            throw re;
+        }
+    }
 
-      // Save the merchant payees:
-      for (MerchantPayee merchantPayee : merchantPayees) {
-         merchantPayee.save();
-      }
-   }
+    public static Merchant getByNameLike(String name) throws RegisterException {
+        // Find the ID of the merchant that uses the passed in name:
+        String query = selectQuery + " where m.name like \"" + name + "%\"";
+        try {
+            ResultSet rs = EntityInt.getRS(query, "trying to get the Merchant with the name like " + name);
+            if (rs.next()) {
+                return new Merchant(rs);
+            } else {
+                return null;
+            }
+        } catch (EntityException | SQLException e) {
+            RegisterException re = new RegisterException("Database error occurred.");
+            re.initCause(e);
+            throw re;
+        }
+    }
 
-   // Add a budget item to the merchant:
-   public BudgetItemMerchant addBudgetItem(BudgetItem budgetItem, double amount, int percentage) throws EntityException,
-           RegisterException, BudgetException, SQLException {
-      BudgetItemMerchant budgetItemMerchant = null;
-      try {
-         budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
-         budgetItemMerchant.save();
-      } catch (SQLIntegrityConstraintViolationException se) {
-         Utility.getResolver().say("That budget item is already associated with this merchant.");
-         budgetItemMerchant = BudgetItemMerchant.getByItemAndMerchant(budgetItem, this);
-      }
-      return budgetItemMerchant;
-   }
+    // Get the name of a Merchant:
+    public static String getNameById(UUID idMerchant) throws EntityException, SQLException {
+        ResultSet rs = EntityInt.getRS(selectQuery + "where m.idMerchant = uuid_to_bin('" + idMerchant + "')",
+                "Database error occurred trying to get the merchant with id = " + idMerchant);
+        return rs.getString("m.name");
+    }
 
-   // Nice "to String" function for debugging:
+    // Create a new payee associated with this merchant:
+    public MerchantPayee addPayee(String payee) {
 
-   @Override
-   public String toString() {
-      return "Merchant{" +
-              "name='" + name + '\'' +
-              ", askAlways=" + askAlways +
-              ", idUser=" + idUser +
-              ", merchantPayees=" + merchantPayees +
-              ", id=" + id +
-              '}';
-   }
+        MerchantPayee merchantPayee = new MerchantPayee(payee, id);
+        merchantPayees.add(merchantPayee);
+        return merchantPayee;
+    }
+
+    // Save this merchant if dirty, and any dirty merchant-payees:
+    public void save() throws RegisterException, EntityException {
+
+        // Save the merchant:
+        if (idUser != null) {
+            super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
+                            ", uuid_to_bin('" + idUser + "'))",
+                    "Problem with Insert of merchant.  Returned row count not equal to 1.");
+        } else {
+            super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
+                    ", null)", "Problem with Insert of merchant.  Returned row count not equal to 1.");
+        }
+
+        // Save the merchant payees:
+        for (MerchantPayee merchantPayee : merchantPayees) {
+            merchantPayee.save();
+        }
+    }
+
+    // Add a budget item to the merchant:
+    public BudgetItemMerchant addBudgetItem(BudgetItem budgetItem, double amount, int percentage) throws EntityException,
+            RegisterException, BudgetException, SQLException {
+        BudgetItemMerchant budgetItemMerchant = null;
+        try {
+            budgetItemMerchant = new BudgetItemMerchant(budgetItem, this, amount, percentage);
+            budgetItemMerchant.save();
+        } catch (BudgetException be) {
+            // If the budget item is already associated with the merchant, that is OK:
+            Throwable e = be.getCause();
+            boolean isSqlIntegrityException = false;
+            if (e != null) {
+                Throwable ec = e.getCause();
+                if (ec != null) {
+                    if (ec instanceof SQLIntegrityConstraintViolationException) {
+                        Utility.getResolver().say("That budget item is already associated with this merchant.");
+                        budgetItemMerchant = null;
+                        isSqlIntegrityException = true;
+                    }
+                }
+            }
+            if (!isSqlIntegrityException) {
+                throw be;
+            }
+        }
+        return budgetItemMerchant;
+    }
+
+    // Nice "to String" function for debugging:
+
+    @Override
+    public String toString() {
+        return "Merchant{" +
+                "name='" + name + '\'' +
+                ", askAlways=" + askAlways +
+                ", idUser=" + idUser +
+                ", merchantPayees=" + merchantPayees +
+                ", id=" + id +
+                '}';
+    }
 }
