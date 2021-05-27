@@ -2,6 +2,7 @@ package com.hixon.financialApp.view.cmdLine;
 
 import com.hixon.financialApp.controller.Importer.TerminationCondition;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -85,25 +86,60 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         }
     }
 
+    /**
+     * @inheritDoc
+     */
     @Override
-    public int getNumberBetween(String prompt, int min, int max) {
-        say(prompt + " (" + min + " to " + max + "): ");
+    public int getNumberBetween(String prompt, int min, int max) throws SkipException, QuitException {
+        return getNumberBetween(prompt, min, max, false, false );
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public int getNumberBetween(String prompt, int min, int max, boolean isSkipAllowed, boolean isQuitAllowed) throws SkipException, QuitException {
+        int result;
+
+        // Setup the skip and quit prompt strings if they are allowed.
+        String skipPrompt = (isSkipAllowed) ? "s - skip" : "";
+        String quitPrompt = (isQuitAllowed) ? "q - quit" : "";
+        String skipAndQuitPrompt = "";
+        if (isSkipAllowed || isQuitAllowed) {
+            skipAndQuitPrompt = ", or " + skipPrompt + ((isSkipAllowed && isQuitAllowed) ? ", " : "") + quitPrompt;
+        }
+
+        ask(prompt + " (" + min + " to " + max + skipAndQuitPrompt + "): ");
         while (true) {
             try {
-                int response = Integer.parseInt(in.nextLine());
-                if (response >= min && response <= max) return response;
-                ask("Please enter a number from " + min + " to " + max + ":");
+                String response = in.nextLine();
+                if (isSkipAllowed) {
+                    if (response.equalsIgnoreCase("s")) {
+                        throw new SkipException("User asked to skip this item.");
+                    }
+                }
+                if (isQuitAllowed) {
+                    if (response.equalsIgnoreCase("q")) {
+                        throw new QuitException("User asked to abort processing.");
+                    }
+                }
+                result = Integer.parseInt(response);
+                if (result >= min && result <= max) {
+                    break;
+                }
+                ask("Please enter a number from " + min + " to " + max + skipAndQuitPrompt + ":");
             } catch (NumberFormatException numberFormatException) {
-                say("Please enter a number from " + min + " to " + max + ":");
+                say("Please enter a number from " + min + " to " + max + skipAndQuitPrompt + ":");
             }
         }
+        return result;
     }
 
     @Override
     /**
      * {@inheritdoc}
      */
-    public int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException {
+    public int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException, SkipException, QuitException {
 
         // Ask which user to send the message to:
         say(prompt + ":  ");
@@ -113,7 +149,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         ) {
             say("\t" + i++ + " - " + user);
         }
-        return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1) - 1;
+        return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1, true, true) - 1;
     }
 
     @Override
@@ -126,7 +162,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         String[] options = menuOptionList.split(",");
 
         // Ask the user to enter one of the values:
-        ask(prompt);
+        ask(prompt + "  ");
 
         // Until they enter a valid value:
         String selected = null;
@@ -270,7 +306,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     // Find or create a merchant for a transaction:
     @Override
     public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount)
-            throws ViewException, RegisterException, EntityException {
+            throws ViewException, RegisterException, EntityException, QuitException {
         try {
             say("Failed to find a merchant for payee \"" + merchantPayeeString + "\" derived from transaction payee:  "
                     + transactionPayeeString + " for the amount of " + Utility.formatDollarAmount(transactionAmount));
@@ -345,6 +381,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             }
             return merchant;
 
+        } catch (QuitException e) {
+            throw e;
         } catch (Exception e) {
             ViewException ve = new ViewException("Exception occurred trying to assign a merchant for this transaction: " +
                     merchantPayeeString + ".");
@@ -354,7 +392,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     }
 
     @Override
-    public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException {
+    public User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException, SkipException, QuitException {
 
         // Get a list of all the users and create a list of user first names from it:
         List<String> userFirstNames = new ArrayList<>();
@@ -370,7 +408,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     // The account number was not in the payee string, so ask the user for help:
     @Override
-    public String resolveUnmatchedAccount(String payee, double amount) throws RegisterException {
+    public String resolveUnmatchedAccount(String payee, double amount) throws RegisterException, SkipException, QuitException {
         String accountNumber = null;
         say("\nThere is no account number in the following transaction: " + payee + " for " +
                 Utility.formatDollarAmount(amount) + ".");
@@ -384,7 +422,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         }
 
         int selection = Utility.getResolver().getNumberBetween("Enter the number of the selection", 1,
-                registers.size() + 1);
+                registers.size() + 1, true, true);
 
         return registers.get(selection - 1).getAccountNumber();
     }
@@ -608,7 +646,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         budgetItemsForMerchant.size(), true, true);
 
             } else { // the amounts are not pre-established, so ask the user to enter them:
-                amounts = getAndParseCsvLine("Enter the split amounts:",
+                amounts = getAndParseCsvLine("Enter the split amounts (or a - add, i - inquire, s - skip):  ",
                         0, false, true);
             }
 
@@ -857,13 +895,17 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         while (!done) {
             ask(prompt);
             String line = in.nextLine();
-            tokens = line.split(",");
             // if the user just hit enter and that's allowed:
-            if (line.length() == 0 && allowNullEntry) {
-                // then return an empty array:
-                done = true;
+            if (line.isEmpty()) {
+                if (allowNullEntry) {
+                    // then return an empty array:
+                    done = true;
+                } else {
+                    say("Please enter a value.");
+                }
                 continue;
             }
+            tokens = line.split(",");
 
             // If we are dealing with special values, and the user entered a single value then were done:
             if (allowSingleValue && (tokens.length == 1)) {

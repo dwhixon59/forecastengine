@@ -271,7 +271,8 @@ public class ForecastTransaction extends IndependentEntity {
     public String getupdateClause() {
         return "remainingAmount = " + remainingAmount + ", plannedDate = " + Utility.calendarDateToSqlDateString(plannedDate) +
                 ", runningBalance = " + runningBalance + ", firstOccurrence = " + firstOccurrence +
-                ", found = " + found + " where idForecastTransaction = uuid_to_bin('" + id + "')";
+                ", found = " + found + ", updatedTimeStamp = current_timestamp() where idForecastTransaction = " +
+                "uuid_to_bin('" + id + "')";
     }
 
     @Override
@@ -573,7 +574,7 @@ public class ForecastTransaction extends IndependentEntity {
                     + found + ", \n\tForecast transaction - ID = " + this.getId().toString() + ", \n\tNext significant event = " +
                     this.getNextSignificantEvent();
         } catch (Exception | EntityException | BudgetException e) {
-            s = "Unable to print out the forecast transaction.";
+            s = "\nUnable to print out the forecast transaction.";
         }
         return s;
     }
@@ -586,7 +587,7 @@ public class ForecastTransaction extends IndependentEntity {
                     ", Budgeted Amount = " + Utility.formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
                     Utility.formatDollarAmount(remainingAmount);
         } catch (Exception | EntityException | BudgetException e) {
-            s = "Unable to print out the forecast transaction.";
+            s = "\nUnable to print out the forecast transaction.";
         }
         return s;
     }
@@ -653,7 +654,14 @@ public class ForecastTransaction extends IndependentEntity {
                 } // End if this split is part of the forecast.
 
                 // And finally link the split to the forecast transaction for historical purposes:
-                forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
+                if (split.getDisposition() == ASSIGN) {
+                    ForecastTransaction currentForecastTransaction =
+                            getApplicableZeroOccurrence(forecastTransaction.getForecastItem(),
+                                    split.getTransaction().getDate());
+                    forecastTransactionSplit = new ForecastTransactionSplit(currentForecastTransaction, split);
+                } else {
+                    forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
+                }
                 forecastTransactionSplit.save(INSERT);
 
             } // End if it hasn't already been reconciled.
@@ -697,9 +705,10 @@ public class ForecastTransaction extends IndependentEntity {
                                 resolver.say("Split occurs before the first occurrence of the budget item " +
                                         split.getBudgetItem().getPayee() + " in the forecast.  Ignoring it.");
                             } else {
-                                getResolver().say("Applicable " + forecastTransaction.toStringVeryConcise());
+                                getResolver().say("There is nothing left for this budget item in the current period. ");
+                                getResolver().say("Next non-zero " + forecastTransaction.toStringVeryConcise());
                                 split.setDisposition(resolver.assignOverageAmount(
-                                        "There is nothing left for this budget item in the current period. "));
+                                        ""));
                             }
                             switch (split.getDisposition()) {
                                 case ADJUST:
@@ -1014,7 +1023,8 @@ public class ForecastTransaction extends IndependentEntity {
                     break;
             }
 
-            resolver.say(Utility.formatDollarAmount(split.getAmount()) + " deducted from " +
+            resolver.say(Utility.formatDollarAmount(split.getAmount()) +
+                    ((split.getAmount() < 0) ? " deducted from " : " added to ") +
                     forecastTransaction.toStringConcise());
 
         } // End if the transaction isn't disputed or ignored.
@@ -1205,7 +1215,7 @@ public class ForecastTransaction extends IndependentEntity {
      * transaction must apply (the applicability period is prior to the item) so return it (if there is one).
      *
      * @param forecastItem The forecast item for which to find applicable forecast transactions.
-     * @param date         The date on which the forecast transaction must be the applicable forecast transaction.
+     * @param date The date on which the forecast transaction must be the applicable forecast transaction.
      * @return The applicable forecast transaction.
      */
     private static ForecastTransaction getApplicableZeroOccurrence(ForecastItem forecastItem, Calendar date)
@@ -1218,8 +1228,6 @@ public class ForecastTransaction extends IndependentEntity {
                 "select fi.category as 'fi.category', fi.payee as 'fi.payee', " + ForecastTransaction.getSelectColumns() +
                         "from forecast_transaction ft " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
-                        "inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
-                        "inner join items_of_interest ii on bi.idBudgetItem = ii.BudgetItem_idBudgetItem " +
                         "where ft.plannedDate <= current_date() and fi.category = \"" + forecastItem.getCategory() + "\" and " +
                         "fi.payee = \"" + forecastItem.getPayee() + "\" " +
                         "order by ft.plannedDate desc " +
@@ -1250,9 +1258,9 @@ public class ForecastTransaction extends IndependentEntity {
                     break;
 
                 case AFTER:
-                    // The specified date occurs after the applicability window of the last transaction scheduled that
-                    // date.  By the "bracketing principle" if forecast transaction immediately prior to a date does
-                    // not apply to that date, then one immediately after must, so return that one:
+                    // The specified date occurs after the applicability window of the last transaction scheduled for
+                    // that date.  By the "bracketing principle" if forecast transaction immediately prior to a date
+                    // does not apply to that date, then one immediately after must, so return that one:
                     ForecastTransaction nextForecastTransaction = getNextOccurrence(forecastItem, date);
 
                     // Check to see if the returned forecast transaction is applicable to the specified date.  If not,

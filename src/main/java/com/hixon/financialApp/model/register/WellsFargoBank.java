@@ -1,5 +1,7 @@
 package com.hixon.financialApp.model.register;
 
+import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.utility.Utility;
 import org.apache.commons.csv.CSVRecord;
@@ -56,7 +58,7 @@ public class WellsFargoBank extends Bank {
    // Load up a Transaction from a Wells Fargo CSV transaction download file:
    @Override
    public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
-           SQLException {
+           SQLException, SkipException, QuitException {
 
       Transaction transaction = new Transaction(register);
       loadFromCsvRecord(record, importRecordId, transaction);
@@ -65,7 +67,7 @@ public class WellsFargoBank extends Bank {
 
    // Load a transaction from a posted transaction CSV record:
    public void loadFromCsvRecord(CSVRecord record, String importRecordId, Transaction transaction) throws ParseException,
-           RegisterException, SQLException {
+           RegisterException, SQLException, SkipException, QuitException {
 
       // Set the fields of the transaction from the tokens in the record:
       Calendar postDate = Calendar.getInstance();
@@ -113,7 +115,7 @@ public class WellsFargoBank extends Bank {
    // Load a transaction from a CSV provisional transaction record:
    @Override
    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException,
-           SQLException, RegisterException {
+           SQLException, RegisterException, SkipException, QuitException {
       String[] tokens;
 
       // If the user didn't pick up the tab character when they copied the list, add one:
@@ -156,7 +158,8 @@ public class WellsFargoBank extends Bank {
    }
 
    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-   public String parseMerchantPayee(String payee, double amount) throws RegisterException, SQLException {
+   public String parseMerchantPayee(String payee, double amount)
+           throws RegisterException, SkipException, QuitException {
 
       // Construct the merchant payee string from portions of the bank payee string:
       String merchantPayee;

@@ -797,7 +797,7 @@ public class Utility {
                         done = true;
                         result = true;
                     } else {
-                        getResolver().say("Unable to rename the file " + currentFilename + " to " + saveFileName);
+                        getResolver().say("\nUnable to rename the file " + currentFilename + " to " + saveFileName);
                         done = !getResolver().getYesOrNo("Would you like to try again?");
                         if (done) {
                             getResolver().say("Failed to rename the file " + currentFilename + " to " +

@@ -2,6 +2,7 @@ package com.hixon.financialApp.view.base;
 
 import com.hixon.financialApp.controller.Importer;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -36,9 +37,9 @@ public interface TransactionResolverInt {
    List<BudgetItemMerchant> assignBudgetItems(Merchant transaction)
            throws BudgetException, ParseException, SQLException, ViewException, EntityException, RegisterException;
 
-   Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount) throws ViewException, RegisterException, EntityException;
+   Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount) throws ViewException, RegisterException, EntityException, QuitException;
 
-   String resolveUnmatchedAccount(String payee, double amount) throws RegisterException;
+   String resolveUnmatchedAccount(String payee, double amount) throws RegisterException, SkipException, QuitException;
 
    // Assign new budget items to an existing list of budget items:
    Importer.TerminationCondition assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
@@ -52,7 +53,30 @@ public interface TransactionResolverInt {
 
    boolean getYesOrNo(String question);
 
-   int getNumberBetween(String prompt, int min, int max);
+   /**
+    * This method gets an integer from the user in the specified range.  The purpose of this routine is to get the
+    * number of an item in a list of items, presumably a menu.
+    *
+    * @param prompt The prompt to give to the user before asking them to enter an integer in a range.
+    * @param min The smallest integer allowed, usually 1.
+    * @param max The greatest integer allowed, usually the number of items in a list displayed to the user.
+    * @return The number entered by the user.
+    */
+   int getNumberBetween(String prompt, int min, int max) throws SkipException, QuitException;
+
+   /**
+    * This method gets an integer from the user in the specified range.  If allowed, the user may also specify skip
+    * or quit.  The purpose of this routine is to get the number of an item in a list of items, presumably a menu.  It
+    * skip or quit is allowed, then the SkipException or QuitException is thrown.
+    *
+    * @param prompt The prompt to give to the user before asking them to enter an integer in a range.
+    * @param min The smallest integer allowed, usually 1.
+    * @param max The greatest integer allowed, usually the number of items in a list displayed to the user.
+    * @param isSkipAllowed Is the user allowed to skip this item and not enter an iteger.
+    * @param isQuitAllowed Is the user allowed to quit the process and terminate the program here.
+    * @return The number entered by the user.
+    */
+   int getNumberBetween(String prompt, int min, int max, boolean isSkipAllowed, boolean isQuitAllowed) throws SkipException, QuitException;
 
    static Calendar getStartDate() throws QuitException {
       Calendar startDate = null;
@@ -118,10 +142,10 @@ public interface TransactionResolverInt {
    boolean askDeleteRegisterTransaction(Transaction transaction);
 
    // Send a notification consisting of the notification string to the user.
-   int selectFromNumberedList(String s, List<String> notificationMessage, Boolean allowNone) throws SQLException, EntityException;
+   int selectFromNumberedList(String s, List<String> notificationMessage, Boolean allowNone) throws SQLException, EntityException, SkipException, QuitException;
 
    // Have the user select a username from a list of usernames (taken from a list of users):
-   User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException;
+   User getUser(String prompt, List<User> users, Boolean allowNull) throws SQLException, EntityException, SkipException, QuitException;
 
    // Ask the user to enter a dollar amount:
    double getDollarAmount();

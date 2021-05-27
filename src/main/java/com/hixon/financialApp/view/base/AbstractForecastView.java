@@ -297,7 +297,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     Utility.getResolver().say("Imported " + ssForecastTransaction.toStringConcise());
                                     Utility.getResolver().say("Database " + dbForecastTransaction.toStringConcise());
                                     if (Utility.getResolver().selectFromFirstLetterList(
-                                            "Which amount do you want to use? (i - imported, d - database)",
+                                            "Which amount do you want to use (i - imported, d - database)?",
                                             "i,d").equalsIgnoreCase("d")) {
                                         overwrite = false;
                                     }

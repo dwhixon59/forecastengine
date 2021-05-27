@@ -454,11 +454,11 @@ public class Transaction extends IndependentEntity {
      */
     public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
         Calendar startDate = forecast.getStartDate();
-        Calendar threeMonthsAgo = Calendar.getInstance();
-        threeMonthsAgo.add(Calendar.MONTH, -3);
-        if (threeMonthsAgo.after(startDate)) startDate = threeMonthsAgo;
+        Calendar fourMonthsAgo = Calendar.getInstance();
+        fourMonthsAgo.add(Calendar.MONTH, -4);
+        if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
         String query = getSelectQuery() + " " +
-                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(threeMonthsAgo) + " and " +
+                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
                 "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +
