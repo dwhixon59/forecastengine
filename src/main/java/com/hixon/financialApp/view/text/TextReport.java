@@ -40,7 +40,6 @@ public class TextReport extends AbstractReport {
     public TextReport(List<Entity> items, File file) throws FileNotFoundException {
         super(items);
         this.reportFile = file;
-        pw = new PrintWriter(file);
     }
 
     /*

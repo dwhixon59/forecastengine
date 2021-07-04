@@ -1,6 +1,6 @@
 package com.hixon.financialApp.view.base;
 
-public class BudgetTotalsReportRow {
+public class BudgetTotalsReportRow extends ReportRow {
 
     double totalPlannedSpendingInPeriod;
     double totalActualSpendingInPeriod;

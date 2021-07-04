@@ -13,8 +13,9 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
 import java.io.File;
@@ -25,6 +26,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
+import static com.hixon.financialApp.utility.Utility.daysBeteween;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 
 /**
@@ -83,7 +85,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException, BudgetException;
 
-    protected abstract ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File reportFile) throws FileNotFoundException;
+    protected abstract TrackingItemsOfInterestReport getTrackingItemsOfInterestReport(User user, List<Entity> items,
+                                                                                      File reportFile) throws FileNotFoundException;
+
+    protected abstract UpcomingItemsOfInterestReport getUpcomingItemsOfInterestReport(User user, List<Entity> items,
+                                                                                      File reportFile) throws FileNotFoundException;
 
     protected abstract OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException;
 
@@ -139,7 +145,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Get the starting balance.  Take if from the first register associated with the budget for now:
         List<Register> registers = forecast.getBudget().getRegisters();
-        double runningBalance = registers.get(0).getBalance();
+        double startingBalance = registers.get(0).getBalance();
+        double runningBalance = startingBalance;
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();
@@ -152,6 +159,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         ForecastTransactionIterator forecastTransactions =
                 ForecastTransaction.getForecastTransactionsStartingOn(this.forecast, startDate);
         ForecastTransaction forecastTransaction = forecastTransactions.getNext();
+        ForecastTransaction firstForecastTransaction = forecastTransaction;
+        ForecastTransaction lastForecastTransaction = null;
         int currentMonth = -1;
         while (forecastTransaction != null) {
 
@@ -179,6 +188,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             renderForecastTransaction(forecastTransaction, credit, debit);
 
             // Move to the next transaction:
+            lastForecastTransaction = forecastTransaction;
             forecastTransaction = forecastTransactions.getNext();
         }
 
@@ -205,10 +215,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 */
 
         // Print out the starting and ending balances:
-        System.out.println("The starting balance is: " + Utility.formatDollarAmount(this.forecast.getStartingBalance()));
-        System.out.println("The ending balance is:   " + Utility.formatDollarAmount(this.forecast.getEndingBalance()));
-        System.out.println("The savings rate is:   " + Utility.formatDollarAmount(this.forecast.getEndingBalance() /
-                this.forecast.getNumberOfMonths()) + " per month.");
+        getResolver().say("The starting balance is: " + Utility.formatDollarAmount(startingBalance));
+        getResolver().say("The ending balance is: " + Utility.formatDollarAmount(runningBalance));
+        double numberOfMonthsInForecast =
+            daysBeteween(firstForecastTransaction.getPlannedDate(), lastForecastTransaction.getPlannedDate()) / 365.0 * 12.0;
+        getResolver().say("The savings rate is: " +
+                Utility.formatDollarAmount((runningBalance - startingBalance) / numberOfMonthsInForecast));
 
         return true;
     }
@@ -251,6 +263,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                             // then mark the transaction as found:
                             dbForecastTransaction.setFound(true);
 
+                            // and since the spreadsheet does not contain the budgeted amount we can add that now:
+                            ssForecastTransaction.getForecastItem().setAmount(dbForecastTransaction.getForecastItem().getAmount());
+
                             // then if the forecast planned date has been modified then update the database transaction:
                             boolean overwrite;
                             if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
@@ -258,7 +273,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                 // If the database forecast transaction was updated after it was sent to the external
                                 // source:
                                 overwrite = true;
-                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
+                                if (Utility.dateOnlyCompare(ssForecastTransaction.getVersion(),
+                                        dbForecastTransaction.getVersion()) < 0) {
 
                                     // Then ask the user if they want to over write the updated database value:
                                     Utility.getResolver().say("\nThe date of an imported forecast transaction has " +
@@ -275,7 +291,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                                 // Overwrite the date in the database forecast transaction if appropriate:
                                 if (overwrite) {
-                                    Utility.getResolver().say("\nDate modified for " +
+                                    Utility.getResolver().say("Date modified for " +
                                             dbForecastTransaction.toStringConcise());
                                     Utility.getResolver().say("New date is:  " +
                                             Utility.calendarDateToStringDate(ssForecastTransaction.getPlannedDate()));
@@ -307,7 +323,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                 if (overwrite) {
 
                                     // then update the database transaction:
-                                    Utility.getResolver().say("\nAmount modified for " +
+                                    Utility.getResolver().say("Amount modified for " +
                                             dbForecastTransaction.toStringConcise());
                                     Utility.getResolver().say("New amount is:  " +
                                             Utility.formatDollarAmount(ssForecastTransaction.getRemainingAmount()));
@@ -343,6 +359,10 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         ssForecastTransaction.setId(UUID.randomUUID());
                         ssForecastTransaction.setFound(true);
                         ssForecastTransaction.insert();
+
+                        // Let the user know what we did:
+                        getResolver().say("The following forecast transaction was not in the forecast so it has been" +
+                                "added to the forecast:  \n" + ssForecastTransaction.toStringConcise());
 
                     } // End else the forecast transaction does not have an ID.
                 } // End for each forecast transaction in the external source.
@@ -416,15 +436,31 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             ViewException, RegisterException {
 
         // Get a set of the items of interest of the current user:
-        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getForecastTransactionsOfInterest(user));
+        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getTrackingForecastTransactionsOfInterest(user));
 
         // Render an items of interest report for those items:
         boolean result = false;
         if (items.size() > 0) {
-            ItemsOfInterestReport report = getItemsOfInterestReport(user, items, file);
-            Renderer<ItemsOfInterestReport> renderer = new Renderer<>(report);
+            TrackingItemsOfInterestReport trackingReport = getTrackingItemsOfInterestReport(user, items, file);
+            Renderer<TrackingItemsOfInterestReport> renderer = new Renderer<>(trackingReport);
             renderer.renderReport();
             result = true;
+        }
+
+        if (result) {
+            result = false;
+
+            // Get a set of the items of interest of the current user:
+            items = Collections.unmodifiableList(ForecastTransaction.getUpcomingForecastTransactionsOfInterest(user));
+
+            // Render an items of interest report for those items:
+            result = false;
+            if (items.size() > 0) {
+                UpcomingItemsOfInterestReport upcomingReport = getUpcomingItemsOfInterestReport(user, items, file);
+                Renderer<UpcomingItemsOfInterestReport> renderer = new Renderer<>(upcomingReport);
+                renderer.renderReport();
+                result = true;
+            }
         }
         return result;
     }

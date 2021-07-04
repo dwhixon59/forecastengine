@@ -52,6 +52,9 @@ public interface EntityInt {
       try {
          statement = Utility.getDbConnection().createStatement();
          rowCount = statement.executeUpdate(query);
+         if (rowCount == 0) {
+            Utility.getResolver().say("\n----------\nNo rows affected the statement:  " + query);
+         }
       } catch (SQLException e) {
          try {
             if (statement != null) statement.close();

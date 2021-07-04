@@ -4,6 +4,9 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
@@ -19,6 +22,8 @@ import static com.hixon.financialApp.model.budget.Item.HowPaid.*;
 import static com.hixon.financialApp.model.budget.Item.ItemType.CREDIT_CARD;
 import static com.hixon.financialApp.model.budget.Item.ItemType.*;
 import static com.hixon.financialApp.model.budget.Item.PeriodType.*;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
+import static com.hixon.financialApp.utility.Utility.getResolver;
 import static java.lang.Math.abs;
 
 // This class represents an expense item.  It is used in budgets and forecasts.
@@ -149,11 +154,78 @@ public abstract class Item extends IndependentEntity {
         return name.equalsIgnoreCase(Item.INCOME_CATEGORY_NAME);
     }
 
+    /**
+     * Update the amount of an envelope if the planned date of the forecast transaction is on or before today.
+     *
+     * @param forecastTransaction
+     * @throws BudgetException
+     * @throws SQLException
+     * @throws EntityException
+     * @throws RegisterException
+     * @throws ForecastException
+     */
+    public static void updateEnvelopeAmount(ForecastTransaction forecastTransaction)
+            throws BudgetException, SQLException, EntityException, RegisterException, ForecastException {
+
+        // If the planned date of the forecast transaction has passed:
+        if (Utility.dateOnlyCompare(forecastTransaction.getPlannedDate(), Calendar.getInstance()) <= 0) {
+
+            // then credit the remaining amount of the forecast transaction to the envelope:
+            BudgetItem budgetItem = forecastTransaction.getForecastItem().getBudgetItem();
+            budgetItem.setRunningBalance(budgetItem.getRunningBalance() + forecastTransaction.getRemainingAmount());
+            budgetItem.save(UPDATE);
+
+            // and let the user know what we just did:
+            getResolver().say(Utility.formatDollarAmount(forecastTransaction.getRemainingAmount()) +
+                    ((forecastTransaction.getRemainingAmount() < 0) ? " deducted from " : " added to ") +
+                    forecastTransaction.toStringVeryConcise() + " envelope.  New balance is " +
+                    Utility.formatDollarAmount(budgetItem.getAmount()));
+
+            // and then zero out the forecast transaction because it has been credited to the envelope:
+            forecastTransaction.setRemainingAmount(0);
+            forecastTransaction.save(UPDATE);
+        }
+    }
+
+    /**
+     * Update the amount in an envelope from a transaction split.  This means that the user has spent money that was
+     * saved in the envelope.  The amount in the envelope will be reduced by the amount of the split if there is enough
+     * money in the envelope to cover it.  Otherwise it will be zeroed out because envelopes don't store negative
+     * amounts of money.
+     *
+     * @param split
+     * @throws BudgetException
+     * @throws SQLException
+     * @throws EntityException
+     */
+    public static void updateEnvelopeAmount(TransactionSplit split)
+            throws BudgetException, SQLException, EntityException {
+
+        // If the amount of the split is less than what is available in the envelope (since envelopes and splits are
+        // really different "accounts", the debit from one is a credit to the other and vice versa):
+        BudgetItem budgetItem = split.getBudgetItem();
+        if (budgetItem.getAmount() >= -split.getAmount()) {
+
+            // then deduct split amount from the envelope amount:
+            budgetItem.setAmount(budgetItem.getAmount() + split.getAmount());
+
+        } else { // but if the user has overspent:
+
+            // then zero out the envelope because envelopes cannot hold negative amounts:
+            budgetItem.setAmount(0);
+        }
+        budgetItem.update();
+
+        // let the user know what we did:
+        getResolver().say(Utility.formatDollarAmount(split.getAmount()) +
+                ((split.getAmount() < 0) ? " deducted from " : " added to ") +
+                " envelope for " + budgetItem.toStringVeryConcise());
+    }
+
 
     /*
      *  Getter and setter methods:
      */
-
     public String getCategory() {
         return category;
     }
@@ -1297,8 +1369,7 @@ public abstract class Item extends IndependentEntity {
         } else {
             endDate = "null";
         }
-        String line = "Item: Category = " + category + ", Payee = " + payee + ", Amount = " + amount + ", Start Date = " +
-                Utility.calendarDateToStringDate(startDate) + ".";
+        String line = "Item: Category = " + category + ", Payee = " + payee + ", Amount = " + amount;
         return line;
     }
 }

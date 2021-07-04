@@ -2,6 +2,7 @@ package com.hixon.financialApp.model.register;
 
 import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.entity.EntityInt;
 
 import java.util.UUID;
 
@@ -15,7 +16,7 @@ public class MerchantPayee extends DependentEntity {
    private UUID idMerchant;
    private String payee = null;
 
-   /*
+    /*
     * Getters and setters for MerchantPayee:
     */
    public UUID getIdMerchant() {
@@ -55,7 +56,7 @@ public class MerchantPayee extends DependentEntity {
    /*
     * Constructors for MerchantPayee:
     */
-   MerchantPayee(String payee, UUID idMerchant) {
+   public MerchantPayee(String payee, UUID idMerchant) {
       super();
       this.idMerchant = idMerchant;
       this.payee = payee;
@@ -69,6 +70,11 @@ public class MerchantPayee extends DependentEntity {
    public void save() throws RegisterException, EntityException {
       super.executeQueryForThis(insertQuery + "uuid_to_bin('" + idMerchant + "'), \"" + payee + "\")",
               "Databsae error occurred inserting MerchantPayee into the database.");
+   }
+
+   public static void deleteByName(String merchantPayeeString) throws EntityException, RegisterException {
+      EntityInt.executeUpdate("delete from merchant_payee where payee = " + merchantPayeeString,
+              "deleting a merchant payee from the database.");
    }
 
 

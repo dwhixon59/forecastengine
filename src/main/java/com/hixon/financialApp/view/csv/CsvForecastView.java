@@ -13,8 +13,9 @@ import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
-import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -238,7 +239,13 @@ public class CsvForecastView extends AbstractForecastView {
    }
 
    @Override
-   protected ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File file) {
+   protected TrackingItemsOfInterestReport getTrackingItemsOfInterestReport(User user, List<Entity> items, File file) {
+      return null;
+   }
+
+   @Override
+   protected UpcomingItemsOfInterestReport getUpcomingItemsOfInterestReport(User user, List<Entity> items, File reportFile)
+           throws FileNotFoundException {
       return null;
    }
 

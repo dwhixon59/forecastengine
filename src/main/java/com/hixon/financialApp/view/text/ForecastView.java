@@ -77,9 +77,15 @@ public class ForecastView extends AbstractForecastView {
     }
 
     @Override
-    protected ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File reportFile)
+    protected TrackingItemsOfInterestReport getTrackingItemsOfInterestReport(User user, List<Entity> items, File reportFile)
             throws FileNotFoundException {
-        return new com.hixon.financialApp.view.text.ItemsOfInterestReport(forecast, user, items, reportFile);
+        return new TrackingItemsOfInterestReport(forecast, user, items, reportFile);
+    }
+
+    @Override
+    protected UpcomingItemsOfInterestReport getUpcomingItemsOfInterestReport(User user, List<Entity> items, File reportFile)
+            throws FileNotFoundException {
+        return new UpcomingItemsOfInterestReport(forecast, user, items, reportFile);
     }
 
     @Override

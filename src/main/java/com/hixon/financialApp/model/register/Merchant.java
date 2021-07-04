@@ -22,6 +22,9 @@ public class Merchant extends IndependentEntity {
     /*
      * Fields in the Merchant class:
      */
+    // The merchant is currently unknown because the user skipped assignment of the merchant:
+    public static final String UNKNOWN = "Unknown";
+
     private static final String selectColumns = "bin_to_uuid(m.idMerchant) as 'm.idMerchant', m.name as 'm.name', " +
             "m.askAlways as 'm.askAlways', bin_to_uuid(m.User_idUser) as 'm.idUser'";
 
@@ -141,7 +144,8 @@ public class Merchant extends IndependentEntity {
             this.id = UUID.fromString(rs.getString("m.idMerchant"));
             this.name = rs.getString("m.name");
             this.askAlways = rs.getBoolean("m.askAlways");
-            this.idUser = UUID.fromString(rs.getString("m.idUser"));
+            String user = rs.getString("m.idUser");
+            this.idUser = (user != null) ? UUID.fromString(user) : null;
             setDirty(false);
 
         } catch (SQLException e) {

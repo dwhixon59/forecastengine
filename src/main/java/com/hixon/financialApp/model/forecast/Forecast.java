@@ -390,7 +390,7 @@ public class Forecast extends IndependentEntity {
         }
 
         // We don't have to delete any forecast items generated from budget items that no longer exist, because they are
-        // presumably the basis of some forecast transactions that may still be in the forecast.  However we ned to expire
+        // presumably the basis of some forecast transactions that may still be in the forecast.  However we need to expire
         // them so they no longer generate new forecast transactions.
         ForecastItem.expireOldForecastItems();
 

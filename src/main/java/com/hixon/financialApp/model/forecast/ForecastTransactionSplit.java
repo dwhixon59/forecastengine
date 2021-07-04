@@ -137,7 +137,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    }
 
    // Get the Forecast Transaction Split for a Transaction Split within the specified Forecast:
-   public static ForecastTransactionSplit getForecastTransactionSplit(TransactionSplit split, Forecast forecast)
+   public static ForecastTransactionSplit getForecastTransactionSplit(Forecast forecast, TransactionSplit split)
            throws EntityException, SQLException {
       String query = getSelectQuery() + " " +
               "inner join forecast_transaction ft on fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction " +

@@ -1,7 +1,9 @@
 package com.hixon.financialApp.model.register;
 
 import com.hixon.financialApp.controller.ControllerException;
+import com.hixon.financialApp.controller.ImportLog;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.Entity;
@@ -22,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static com.hixon.financialApp.controller.Importer.logImportEvent;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 import static com.hixon.financialApp.utility.Utility.resolver;
@@ -121,8 +122,8 @@ public class Register extends IndependentEntity {
    }
 
    public String getupdateClause() {
-      return "name = '" + registerName + "', account_type = '" + accountType + "', account_number = '" + accountNumber + "', " +
-              "balance = " + balance +  ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+      return "name = '" + registerName + "', account_type = '" + accountType + "', account_number = '" + accountNumber +
+              "', balance = " + balance +  ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
               "where idRegister = uuid_to_bin('" + id + "')";
    }
 
@@ -178,6 +179,11 @@ public class Register extends IndependentEntity {
     */
    public void addSignificantEvent(Transaction transaction) {
       significantEvents.add(transaction);
+   }
+
+   public void update() throws BudgetException, SQLException, EntityException, RegisterException {
+      getResolver().say("Update Register call.  New balance = " + Utility.formatDollarAmount(getBalance()));
+      super.update();
    }
 
 
@@ -256,8 +262,10 @@ public class Register extends IndependentEntity {
     * Main methods:
     */
    // Reprocess any transactions that were previously skipped:
-   public boolean processSkippedTransactions(Forecast forecast)
+   public boolean processSkippedTransactions(FinancialInstitutionInt financialInstitution, Register register, Forecast forecast)
            throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
+
+      ImportLog importLog = new ImportLog();
 
       int i = 0;
       try {
@@ -277,6 +285,28 @@ public class Register extends IndependentEntity {
 
             // Get the merchant for this transaction:
             merchant = transaction.getMerchant();
+
+            // If the merchant is the unknown merchant, which means that the user skipped out of the merchant assignment
+            // process then do it now:
+            if ( merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+
+               try {
+                  transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getPayee(),
+                          transaction.getAmount()));
+               } catch (SkipException se) {
+
+                  // Once again the user skipped out of the merchant payee parsing process, so skip this transaction:
+                  continue;
+               }
+
+               // Detach the merchant payee from the "unknown" merchant:
+               MerchantPayee.deleteByName(transaction.getMerchantPayee());
+
+               // And null out the merchant so we will go through the normal merchant assignment process:
+               merchant = null;
+            }
+
+            // If a merchant hasn't been assigned yet, assign one now:
             if (merchant == null) {
                merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                if (merchant == null) {
@@ -327,7 +357,7 @@ public class Register extends IndependentEntity {
             }
 
             // Tell the user about the bank transaction we are processing:
-            logImportEvent(transaction, merchant);
+            importLog.logImportEvent(transaction);
 
             // Get the splits for the transaction.  Create them if they don't already exist:
             List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
@@ -343,12 +373,11 @@ public class Register extends IndependentEntity {
             transaction.save(INSERT_ON_DUPLICATE_UPDATE);
             if (splits != null) {
                for (TransactionSplit split : splits) {
-                  getResolver().say(split.toString());
                   split.save();
                }
 
                // Reconcile this transaction with the forecast:
-               ForecastTransaction.reconcile(forecast, transaction, splits, resolver);
+               ForecastTransaction.reconcile(forecast, transaction, splits);
             }
 
             i++;

@@ -192,7 +192,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     @Override
     public double getDollarAmount() {
-        return parseDouble("Please enter the dollar amount:", "Invalid dollar amount,");
+        return parseDouble("Please enter the dollar amount:  ", "Invalid dollar amount,");
     }
 
     protected double parseDouble(String prompt, String errorMessage) {
@@ -299,19 +299,18 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      */
     @Override
     public void beginImportItem(Transaction transaction) {
-        // Print a blank line to separate this item from the previous item visually:
-        say();
+        // Nothing to do for this type of command line resolver.
     }
 
     // Find or create a merchant for a transaction:
     @Override
     public Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount)
-            throws ViewException, RegisterException, EntityException, QuitException {
+            throws ViewException, RegisterException, EntityException, QuitException, BudgetException {
         try {
-            say("Failed to find a merchant for payee \"" + merchantPayeeString + "\" derived from transaction payee:  "
+            say("\nFailed to find a merchant for payee \"" + merchantPayeeString + "\" derived from transaction payee:  "
                     + transactionPayeeString + " for the amount of " + Utility.formatDollarAmount(transactionAmount));
             boolean stop = false;
-            Merchant merchant = null;
+            Merchant merchant = Merchant.getByPayee(merchantPayeeString);
             MerchantPayee merchantPayee;
             while (!stop) {
                 ask("Enter the merchant name (or 'skip' or 'quit'): ");
@@ -330,16 +329,20 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         continue;
 
                     case "skip":
+                        merchant = Merchant.getByName(Merchant.UNKNOWN);
+                        merchantPayee = merchant.addPayee(merchantPayeeString);
+                        merchantPayee.save(EntityInt.SaveMethod.INSERT_ON_DUPLICATE_SKIP);
                         stop = true;
                         terminationCondition = SKIP;
                         break;
 
                     case "quit":
-                        stop = true;
-                        terminationCondition = QUIT;
-                        break;
+                        throw new QuitException("User requested quit during merchant assignment process.");
 
                     default:
+                        if (merchant != null && merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+                            MerchantPayee.deleteByName(merchantPayeeString);
+                        }
                         merchant = Merchant.getByNameLike(line);
                         if (merchant != null) {
                             if (!merchantPayeeString.equalsIgnoreCase("Check")) {
@@ -431,7 +434,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     public List<BudgetItemMerchant> assignBudgetItems(Merchant merchant)
             throws BudgetException, ViewException, EntityException, RegisterException {
 
-        say("Failed to find any budget items for merchant " + merchant.getName());
+        say("\nFailed to find any budget items for merchant " + merchant.getName());
         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
         assignMoreBudgetItems(merchant, budgetItems);
 

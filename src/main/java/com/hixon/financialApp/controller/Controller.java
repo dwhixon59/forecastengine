@@ -70,7 +70,7 @@ public class Controller {
                     case "processSkippedTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("REPROCESS SKIPPED TRANSACTIONS");
-                        inSync = register.processSkippedTransactions(forecast);
+                        inSync = register.processSkippedTransactions(financialInstitution, register, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -92,9 +92,10 @@ public class Controller {
 
                     case "importProvisionalRegisterTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
+                        Utility.getResolver().say("IMPORT PROVISIONAL TRANSACTIONS\n");
                         inSync = importer.importCsvProvisionalTransactionFile(financialInstitution,
                                 register, forecast);
-                        Utility.getResolver().say("The provisional transactions were successfully imported.");
+                        Utility.getResolver().say("\nThe provisional transactions were successfully imported.");
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -106,7 +107,7 @@ public class Controller {
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Verify register balance and update if necessary.");
                         if (!Utility.getRegisterView().verifyRegisterBalance(register)) {
-                            Utility.getResolver().say("The balance ot the register " + register.getRegisterName() + " was " +
+                            Utility.getResolver().say("The balance of the register " + register.getRegisterName() + " was " +
                                     "successfully updated.");
                         }
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -214,7 +215,7 @@ public class Controller {
 
                     case "renderItemsOfInterestReport":
                         Utility.getResolver().say("\n\n========================================================================");
-                        Utility.getResolver().say("Rendering the Items of Interest Report.");
+                        Utility.getResolver().say("Rendering the Items of Interest Report.\n");
                         Utility.getNotificationService().sendItemsOfInterestReport(forecast);
                         Utility.getResolver().say("Successfully rendered the Items of Interest Report.");
                         Utility.getResolver().say("------------------------------------------------------------------------");

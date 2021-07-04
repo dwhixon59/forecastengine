@@ -26,7 +26,7 @@ public class Utility {
 
     // Threshold for comparing currency amounts using doubles or floats.  Consider equal if the difference is less than
     // 1/2 of a cent:
-    private static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
+    public static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
 
     // Common database connection for the App:
     private static Connection dbConnection;
@@ -126,6 +126,22 @@ public class Utility {
             dateFormatted = "null";
         }
         return dateFormatted;
+    }
+
+    /**
+     * A date only comparison for two Calendar objects.  It compares the date portion of two {@link Calendar} objects
+     * and ignores the time portion completely.
+     *
+     * @param c1 The first date.  Returned value is relative to this date
+     * @param c2 The date to compare to c1.
+     * @return <0 if c1 is before c2, 0 if c1 and c2 are the same date and > 0 if c1 is after c2
+     */
+    public static int dateOnlyCompare(Calendar c1, Calendar c2) {
+        if (c1.get(Calendar.YEAR) != c2.get(Calendar.YEAR))
+            return c1.get(Calendar.YEAR) - c2.get(Calendar.YEAR);
+        if (c1.get(Calendar.MONTH) != c2.get(Calendar.MONTH))
+            return c1.get(Calendar.MONTH) - c2.get(Calendar.MONTH);
+        return c1.get(Calendar.DAY_OF_MONTH) - c2.get(Calendar.DAY_OF_MONTH);
     }
 
     // Print out a date in human readable format with slashes:
@@ -464,7 +480,8 @@ public class Utility {
 
     /**
      * This function rationalizes the concept of difference between two amounts to always return a positive value if
-     * the difference
+     * the magnitude of amount1 is greater than the magnitude of amount2.  So the difference between -10 and -5 is 5,
+     * and the difference between 10 and 5 is also 5.
      *
      * @param amount1
      * @param amount2
@@ -654,7 +671,7 @@ public class Utility {
     }
 
     /*
-     *  US Bank holidays for 2020:
+     *  US Bank holidays for 2021:
      * New Year's Day - Wednesday, January 1
      * Martin Luther King, Jr. Day - Monday, January 20
      * Presidents' Day - Monday, February 17
@@ -666,8 +683,8 @@ public class Utility {
      * Christmas Day Friday, December 25
      */
     public static boolean isaBankHoliday(String date) {
-        String holidays[] = {"01-01-2020", "01-20-2020", "02-17-2020", "05-25-2020", "07-04-2020", "09-07-2020",
-                "11-11-2020", "11-26-2020", "12-25-2020"};
+        String holidays[] = {"01-01-2021", "01-18-2021", "02-15-2021", "04-02-2021", "05-31-2021", "07-05-2021", "09-06-2021",
+                "11-11-2021", "11-25-2021", "12-24-2021", "12-31-2021"};
         for (int i = 0; i < holidays.length; i++) {
             if (date.equalsIgnoreCase(holidays[i])) {
                 return true;

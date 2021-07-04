@@ -22,7 +22,7 @@
             <AppenderRef ref="LogToRollingFile"/>
             <AppenderRef ref="LogToConsole"/>
         </Logger>
-        <Logger name="com.hixon.financialApp.view.text.ItemsOfInterestReport" level="debug" additivity="false">
+        <Logger name="com.hixon.financialApp.view.text.TrackingItemsOfInterestReport" level="debug" additivity="false">
             <AppenderRef ref="LogToRollingFile"/>
         </Logger>
         <Root level="error">

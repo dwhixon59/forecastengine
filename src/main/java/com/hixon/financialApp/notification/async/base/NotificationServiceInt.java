@@ -32,7 +32,7 @@ public interface NotificationServiceInt {
 
    // Create an items of interest report and send it to a user:
    void sendItemsOfInterestReport(Forecast forecast) throws Exception, EntityException, BudgetException, ViewException,
-           RegisterException;
+           RegisterException, NotificationServiceException;
 
    // Create an Overdue and Upcoming Report and send it to a user:"
    void sendOverdueAndUpcomingItemsReport(Forecast forecast) throws Exception, ViewException,

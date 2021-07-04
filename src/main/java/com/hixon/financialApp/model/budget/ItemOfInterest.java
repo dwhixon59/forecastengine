@@ -102,10 +102,20 @@ public class ItemOfInterest extends DependentEntity {
     /*
      *  Main methods:
      */
-    public static ResultSet getItemsOfInterestForUser(User user) throws EntityException {
-        String query = getSelectColumns();
-        ResultSet rs = EntityInt.getRS(getSelectQuery() + " where ii.User_idUser = uuid_to_bin('" + user.getId() + "')",
-                "get a list of items of interest for the user " + user + ".");
+    public static ResultSet getTrackingItemsOfInterestForUser(User user) throws EntityException {
+        String query = "select" + getSelectColumns() + "," + BudgetItem.getSelectColumns() +
+                "from items_of_interest ii inner join budget_item bi on ii.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                "where ii.User_idUser = uuid_to_bin('" + user.getId() + "') and " +
+                    "bi.howOccurs = 'C'";
+        ResultSet rs = EntityInt.getRS(query, "get a list of items of interest for the user " + user + ".");
+        return rs;
+    }
+
+    public static ResultSet getUpcomingItemsOfInterestForUser(User user) throws EntityException {
+        String query = "select" + getSelectColumns() + "," + BudgetItem.getSelectColumns() +
+                "from items_of_interest ii inner join budget_item bi on ii.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                "where ii.User_idUser = uuid_to_bin('" + user.getId() + "')";
+        ResultSet rs = EntityInt.getRS(query, "get a list of items of interest for the user " + user + ".");
         return rs;
     }
 }

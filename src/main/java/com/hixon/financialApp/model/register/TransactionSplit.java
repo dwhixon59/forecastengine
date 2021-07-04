@@ -7,7 +7,6 @@ import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition;
+import static com.hixon.financialApp.utility.Utility.*;
 import static java.util.Calendar.DATE;
 
 public class TransactionSplit extends DependentEntity {
@@ -205,9 +205,10 @@ public class TransactionSplit extends DependentEntity {
    public String toString() {
       String s = null;
       try {
+         String fromOrTo = (amount < 0) ? " to " : " from ";
          String memoString = (memo != null) ? ".  Memo:  " + memo : "";
-         s = "Split: amount of " + Utility.formatDollarAmount(amount) + " on " +
-                 Utility.calendarDateToStringDate(getTransaction().getDate()) + " to " +
+         s = "Split: amount of " + formatDollarAmount(amount) + " on " +
+                 calendarDateToStringDate(getTransaction().getDate()) + fromOrTo +
                  getTransaction().getMerchant().getName() + " applied to budget item " + getBudgetItem().getPayee() +
                  memoString;
       } catch (Exception | EntityException | BudgetException | RegisterException e) {
@@ -220,7 +221,7 @@ public class TransactionSplit extends DependentEntity {
       String s = null;
       try {
          String memoString = (memo != null) ? ".  Memo:  " + memo : ".";
-         s = "Split:  " + getBudgetItem().getPayee() + ", " + Utility.formatDollarAmount(amount) + memoString;
+         s = "Split:  " + getBudgetItem().getPayee() + ", " + formatDollarAmount(amount) + memoString;
       } catch (Exception | EntityException | BudgetException e) {
          e.printStackTrace();
       }
@@ -237,7 +238,7 @@ public class TransactionSplit extends DependentEntity {
       // Find out what budget items are associated with the transaction for this transaction:
       String query = getSelectQuery() + "where ts.Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
       try {
-         Statement statement = Utility.getDbConnection().createStatement();
+         Statement statement = getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
          List<TransactionSplit> transactionSplits = new ArrayList<>();
          while (rs.next()) {
@@ -266,14 +267,14 @@ public class TransactionSplit extends DependentEntity {
       String query = selectQuery + "t.authorizationDate as 'date' from transaction_split ts " +
               "inner join transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +
-              "t.authorizationDate is not null and t.authorizationDate >= " + Utility.calendarDateToSqlDateString(startDate) +
-              " and t.authorizationDate <= " + Utility.calendarDateToSqlDateString(endDate);
+              "t.authorizationDate is not null and t.authorizationDate >= " + calendarDateToSqlDateString(startDate) +
+              " and t.authorizationDate <= " + calendarDateToSqlDateString(endDate);
       query += " union ";
       query += selectQuery + " t.postDate as 'date' from transaction_split ts inner join " +
               "transaction t on ts.Transaction_idTransaction = " +
               "t.idTransaction where ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() +"') and " +
-              "t.authorizationDate is null and t.postDate >= " + Utility.calendarDateToSqlDateString(startDate) +
-              " and t.postDate <= " + Utility.calendarDateToSqlDateString(endDate);
+              "t.authorizationDate is null and t.postDate >= " + calendarDateToSqlDateString(startDate) +
+              " and t.postDate <= " + calendarDateToSqlDateString(endDate);
       query += " order by date asc";
       return EntityInt.getRS(query, "while trying to get the splits for a budget item");
    }
@@ -294,8 +295,12 @@ public class TransactionSplit extends DependentEntity {
            RegisterException, EntityException {
       Calendar startDate = Calendar.getInstance();
       startDate.set(DATE, 1);
-      startDate.add(DATE, -3);
+      setToLastBusinessDayBefore(startDate);
       Calendar endDate = Calendar.getInstance();
+      endDate.set(DATE, 1);
+      endDate.add(Calendar.MONTH, 1);
+      setToLastBusinessDayBefore(endDate);
+
       return getSplitsListForBudgetItemInPeriod(budgetItem, startDate, endDate);
    }
 

@@ -39,6 +39,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
     private static final String ENCODING = "UTF-8";
     public static final String OVERDUE_AND_UPCOMING_ITEMS_REPORT = "OverdueAndUpcomingItemsReport.txt";
     public static final String NEW_TRANSACTION_SUMMARY_REPORT = "NewTransactionSummaryReport.txt";
+    public static final String ITEMS_OF_INTEREST_REPORT = "ItemsOfInterestReport.txt";
 
 
     /*
@@ -160,16 +161,27 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         }
     }
 
+    /**
+     * Generate an Items of Interest Report or each registered user of this account and "send" it by copying it to each
+     * user's personal file system.
+     *
+     * @param forecast The forecast from which to gather the items of interest.
+     * @throws Exception
+     * @throws EntityException
+     * @throws BudgetException
+     * @throws ViewException
+     * @throws RegisterException
+     * @throws NotificationServiceException
+     */
     @Override
     public void sendItemsOfInterestReport(Forecast forecast) throws Exception, EntityException,
-            BudgetException, ViewException, RegisterException {
+            BudgetException, ViewException, RegisterException, NotificationServiceException {
         ForecastView forecastView = new ForecastView(forecast);
         List<UserResource> reports = forecastView.renderItemsOfInterestReport();
         for (UserResource userResource : reports
         ) {
-            Utility.getResolver().say("\nItems of interest report for user " + userResource.getUser().getFirstName() +
-                    " written to the file " + userResource.getFile().getAbsolutePath());
-        }
+            sendFileToUser(userResource.getUser(), userResource.getFile(), ITEMS_OF_INTEREST_REPORT);
+         }
     }
 
     /**

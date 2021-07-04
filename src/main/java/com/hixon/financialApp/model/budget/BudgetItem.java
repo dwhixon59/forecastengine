@@ -63,7 +63,7 @@ public class BudgetItem extends Item {
    // Budget that this BudgetItem belongs to:
    protected UUID idBudget = null;
 
-    // Column headers in an import file:
+   // Column headers in an import file:
    public enum Headers {
       ID_BUDGET_ITEM, CATEGORY, PAYEE, PERIOD, AMOUNT, RUNNING_BALANCE, START_DATE, NUMBER_OF_PAYMENTS, END_DATE,
       ITEM_TYPE, HOW_IMPORTANT, HOW_OCCURS, HOW_PAID, ID_BUDGET
@@ -130,6 +130,14 @@ public class BudgetItem extends Item {
       super(false);
       loadFromResultSet(rs);
       setDirty(false);
+   }
+
+
+   /*
+    * Helper methods:
+    */
+   public String toStringVeryConcise() {
+      return "Budget " + super.toStringShort();
    }
 
 
@@ -303,14 +311,12 @@ public class BudgetItem extends Item {
    public void update() throws BudgetException, SQLException {
 
       String query = updateQuery + "category = '" + category + "', payee = \"" + payee + "\", period = '" +
-              generatePeriodType(period) + "', amount = " + amount + "', runningBalance = " + runningBalance +
+              generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
               ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
               numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" +
-              generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + " howOccurs = '"
-              + generateHowOccurs(howOccurs) + " howPaid = '" + generateHowPaid(howPaid) + ", Budget_idbudget = " +
+              generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '"
+              + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idbudget = " +
               "uuid_to_bin('" + idBudget + "') where idBudgetItem = uuid_to_bin('" + id + "')";
-
-      System.out.println(query);
 
       Statement statement = null;
       try {

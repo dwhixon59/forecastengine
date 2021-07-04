@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -45,6 +46,7 @@ public class UpcomingItemsReport extends ForecastReport {
         // Round off the amounts to save space by not displaying the cents:
         String amount = Utility.formatRoundedDollarAmount(Math.abs(forecastTransaction.getRemainingAmount()));
         String runningBalance = Utility.formatRoundedDollarAmount(forecastTransaction.getRunningBalance());
+        runningBalance = StringUtils.leftPad(runningBalance, 6);
 
         // Seems like we have about another 25 characters before text wrap on the iPhone 11, so get as much of the payee
         // as possible based on the length of the amount:
@@ -52,9 +54,11 @@ public class UpcomingItemsReport extends ForecastReport {
         int truncatedPayeeLength = 25 - amount.length();
         if (payee.length() > truncatedPayeeLength) {
             payee = payee.substring(0, truncatedPayeeLength);
+        } else {
+            payee = StringUtils.rightPad(payee, truncatedPayeeLength);
         }
 
         // Output the forecast transaction line:
-        pw.println(date + SPACE + payee + SPACE + amount + COMMA + SPACE + runningBalance);
+        pw.println(date + SPACE + payee + TAB + amount + TAB + runningBalance);
     }
 }

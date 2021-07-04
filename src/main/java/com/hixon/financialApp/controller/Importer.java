@@ -6,7 +6,9 @@ import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.register.*;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialAppException;
@@ -21,8 +23,7 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.*;
 
-import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT;
-import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.*;
 import static com.hixon.financialApp.utility.Utility.*;
 
 public class Importer {
@@ -33,8 +34,13 @@ public class Importer {
             "ProvisionalTransactions.txt";
     public static final String REGISTER_TRANSACTIONS_FILE = "Register transactions";
 
+    private ImportLog importLog = new ImportLog();
+
+
     // Fields:
     public enum TerminationCondition {RESET, RESTART, FOUND, SKIP, INQUIRE, QUIT}
+
+    public List<Transaction> importedTransactions = new ArrayList<>();
 
 
     // Constructors:
@@ -67,23 +73,28 @@ public class Importer {
         return importRecordId;
     }
 
-    public static void logImportEvent(Transaction transaction, Merchant merchant) {
+    /**
+     * Given a transaction, this method logs the splits associated with the transaction and the reconciled forecast
+     * transaction for each of the splits.
+     *
+     * @param splits The splits to be logged wit their associated forecast transaction.
+     */
+    private void logSplitsAndReconciliation(Forecast forecast, List<TransactionSplit> splits)
+            throws SQLException, EntityException, ForecastException {
 
-        String creditOrDebitString;
-        if (transaction.getPayee().contains("TRANSFER FROM")) {
-            creditOrDebitString = "transfer from ";
-        } else if (transaction.getPayee().contains("TRANSFER TO")) {
-            creditOrDebitString = "transfer to ";
-        } else if (transaction.getAmount() > 0) {
-            creditOrDebitString = "deposit from ";
-        } else {
-            creditOrDebitString = "debit to ";
+        // Log each transaction split one at a time with its reconciled forecast transactions:
+        for (TransactionSplit split: splits
+             ) {
+            getResolver().say(split.toString());
+            ForecastTransactionSplit forecastTransactionSplit =
+                    ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
+            if (forecastTransactionSplit != null) {
+                ForecastTransaction forecastTransaction =
+                        ForecastTransaction.getById(forecastTransactionSplit.getIdForecastTransaction());
+                getResolver().say(forecastTransaction.toStringConcise());
+            }
         }
-        getResolver().say("Imported a " + creditOrDebitString + merchant.getName() + " for " +
-                formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
-                ((transaction.getAuthorizationDate() != null) ?
-                        calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                        calendarDateToStringDate(transaction.getPostDate())));
+
     }
 
 
@@ -101,6 +112,8 @@ public class Importer {
     public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt financialInstitution,
                                                     Register register, Forecast forecast)
             throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException, QuitException {
+
+        resolver.say("Beginning register balance:  " + formatDollarAmount(register.getBalance()));
 
         /*
          * Import transactions from the CSV file:
@@ -134,15 +147,27 @@ public class Importer {
                 // Construct an ID for this import record from the import record base name:
                 importRecordId = constructImportRecordId(map, financialInstitution.getRegisterImportRecordBaseName(record));
 
-                // Get the transaction and merchant for this import record:
+                // Get the transaction for this import record ID:
                 transaction = Transaction.getByImportRecordId(importRecordId);
 
+                List<TransactionSplit> splits = null;
+                // Get the merchant and splits for this transaction if we found one:
                 if (transaction != null) {
                     merchant = transaction.getMerchant();
+
+                    // Get the splits for the transaction if they already exist:
+                    splits = TransactionSplit.getSplitsForTransaction(transaction);
                 } else {
                     try {
                         transaction = financialInstitution.createFromCSVRecord(record, importRecordId);
                     } catch (SkipException se) {
+                        merchant = Merchant.getByName(Merchant.UNKNOWN);
+                        MerchantPayee merchantPayee = new MerchantPayee(transaction.getPayee(), merchant.getId());
+                        merchantPayee.save(INSERT_ON_DUPLICATE_SKIP);
+                        transaction.setMerchant(merchant);
+                        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                        register.setBalance(register.getBalance() + transaction.getAmount());
+                        register.update();
                         continue;
                     }
                     merchant = Merchant.getByPayee(transaction.getMerchantPayee());
@@ -167,138 +192,155 @@ public class Importer {
                 // Let the resolver know we are beginning a new item:
                 resolver.beginImportItem(transaction);
 
-                // If there wasn't a merchant associated with the transaction payee then assign or create one:
-                if (merchant == null) {
-                    merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
+                // If we haven't already assigned the splits to this transaction in a previous run:
+                if (splits == null) {
 
-                    // If the user aborted the merchant assignment process then figure out what to do:
+                    // If there wasn't a merchant associated with the transaction payee then assign or create one:
                     if (merchant == null) {
-                        switch (resolver.getTerminationCondition()) {
-                            case SKIP:
-                                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                                continue;
+                        merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
 
-                            case INQUIRE:
-                                List<User> users = User.getAllUsers();
-                                User user = getResolver().getUser("Select the user to send the notification to",
-                                        users, true);
-                                if (user != null) {
-                                    getNotificationService().requestIdentifyMerchant(user, transaction);
-                                }
-                                continue;
+                        // If the user aborted the merchant assignment process then figure out what to do:
+                        if (merchant == null) {
+                            switch (resolver.getTerminationCondition()) {
+                                case SKIP:
+                                    merchant = Merchant.getByName(Merchant.UNKNOWN);
+                                    MerchantPayee merchantPayee = new MerchantPayee(transaction.getMerchantPayee(), merchant.getId());
+                                    merchantPayee.save(INSERT_ON_DUPLICATE_SKIP);
+                                    transaction.setMerchant(merchant);
+                                    transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                                    register.setBalance(register.getBalance() + transaction.getAmount());
+                                    register.update();
+                                    continue;
 
-                            case QUIT:
-                                break;
+                                case INQUIRE:
+                                    List<User> users = User.getAllUsers();
+                                    User user = getResolver().getUser("Select the user to send the notification to",
+                                            users, true);
+                                    if (user != null) {
+                                        getNotificationService().requestIdentifyMerchant(user, transaction);
+                                    }
+                                    continue;
 
-                            default:
-                                throw new ControllerException("Invalid termination condition " +
-                                        resolver.getTerminationCondition() + " during transaction import");
-                        }
-                    }
-                }
+                                case QUIT:
+                                    break;
 
-                // then update the transaction merchant info from the merchant that we just assigned or created:
-                transaction.setMerchant(merchant);
-                transaction.setIdMerchant(merchant.getId());
-
-                /*
-                 * Phase 2:  Reconcile the transaction with any existing provisional transactions
-                 */
-
-                // If there is a provisional transaction for this transaction, then use the same ID.  Also, if there is a
-                // provisional transaction, then the amount of this transaction has already been deducted from the register
-                // balance, so no need to do that:
-                Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(record,
-                        merchant);
-                if (provisionalTransaction != null) {
-                    transaction.setId(provisionalTransaction.getId());
-                    transaction.setIsImproper(provisionalTransaction.getIsImproper());
-                    transaction.setIsNew(provisionalTransaction.getIsNew());
-                } else {
-                    // Since there is no provisional transaction, the amount has not yet been deducted from the register
-                    // balance, so deduct it now:
-                    register.setBalance(register.getBalance() + transaction.getAmount());
-                }
-
-                // At this point the transaction is complete, so save it off:
-                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                register.update();
-
-                // Tell the user what we just did:
-                logImportEvent(transaction, merchant);
-
-                /*
-                 * Phase 3:  Get the assigned budget items for this merchant:
-                 */
-
-                // Get the assigned budget items for the merchant:
-                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
-
-                // If we couldn't find any matching items, get some help from the user:
-                if (budgetItems.size() < 1) {
-                    budgetItems = resolver.assignBudgetItems(merchant);
-                    if (budgetItems == null) {
-                        switch (resolver.getTerminationCondition()) {
-                            case SKIP:
-                                continue;
-
-                            case INQUIRE:
-                                List<User> users = User.getAllUsers();
-                                User user = getResolver().getUser("Select the user to send the notification to",
-                                        users, true);
-                                if (user != null) {
-                                    getNotificationService().requestAssignBudgetItems(user, merchant);
-                                }
-                                continue;
-
-                            case QUIT:
-                                break;
-
-                            default:
-                                throw new ControllerException("Invalid termination condition " +
-                                        resolver.getTerminationCondition() + " during transaction import");
-                        }
-                    }
-                }
-
-                /*
-                 * Phase 4:  Assign the splits to the transaction:
-                 */
-
-                // Get the splits for the transaction.  Create them if they don't already exist:
-                List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
-                if (splits == null) {
-                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
-                }
-
-                // If the user aborted the split assignment process, then figure out what to do:
-                if (splits == null) {
-                    switch (resolver.getTerminationCondition()) {
-                        case SKIP:
-                            continue;
-
-                        case INQUIRE:
-                            List<User> users = User.getAllUsers();
-                            User user = getResolver().getUser("Select the user to send the notification to",
-                                    users, true);
-                            if (user != null) {
-                                getNotificationService().requestAssignSplits(user, transaction);
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during transaction import");
                             }
-                            continue;
-
-                        case QUIT:
-                            break;
-
-                        default:
-                            throw new ControllerException("Invalid termination condition " +
-                                    resolver.getTerminationCondition() + " during split assignment.");
+                        }
                     }
-                }
 
-                // The splits are now complete so save them off:
-                for (TransactionSplit split : splits) {
-                    System.out.println(split.toString());
-                    split.save();
+                    // then update the transaction merchant info from the merchant that we just assigned or created:
+                    transaction.setMerchant(merchant);
+                    transaction.setIdMerchant(merchant.getId());
+
+                    /*
+                     * Phase 2:  Reconcile the transaction with any existing provisional transactions
+                     */
+                    // If there is a provisional transaction for this transaction, then use the same ID.  Also, if there is a
+                    // provisional transaction, then the amount of this transaction has already been deducted from the register
+                    // balance, so no need to do that:
+                    Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(record,
+                            merchant);
+                    if (provisionalTransaction != null) {
+                        transaction.setId(provisionalTransaction.getId());
+                        transaction.setIsImproper(provisionalTransaction.getIsImproper());
+                        transaction.setIsNew(provisionalTransaction.getIsNew());
+
+                        // and get the splits if there are any for the provisional transaction:
+                        splits = TransactionSplit.getSplitsForTransaction(transaction);
+                    } else {
+                        // Since there is no provisional transaction, the amount has not yet been deducted from the register
+                        // balance, so deduct it now:
+                        register.setBalance(register.getBalance() + transaction.getAmount());
+                        register.update();
+                    }
+
+                    // At this point the transaction is complete, so save it off:
+                    transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                    // Tell the user what we just did:
+                    importLog.logImportEvent(transaction);
+
+                    // If there was a provisional transaction with assigned splits, then the splits are already assigned.
+                    // If that is not the case then we need to assign the splits now.
+                    if (splits == null) {
+
+                        /*
+                         * Phase 3:  Get the assigned budget items for this merchant:
+                         */
+                        // Get the assigned budget items for the merchant:
+                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+
+                        // If we couldn't find any matching items, get some help from the user:
+                        if (budgetItems.size() < 1) {
+                            budgetItems = resolver.assignBudgetItems(merchant);
+                            if (budgetItems == null) {
+                                switch (resolver.getTerminationCondition()) {
+                                    case SKIP:
+                                        continue;
+
+                                    case INQUIRE:
+                                        List<User> users = User.getAllUsers();
+                                        User user = getResolver().getUser("Select the user to send the notification to",
+                                                users, true);
+                                        if (user != null) {
+                                            getNotificationService().requestAssignBudgetItems(user, merchant);
+                                        }
+                                        continue;
+
+                                    case QUIT:
+                                        break;
+
+                                    default:
+                                        throw new ControllerException("Invalid termination condition " +
+                                                resolver.getTerminationCondition() + " during transaction import");
+                                }
+                            }
+                        }
+
+                        /*
+                         * Phase 4:  Assign the splits to the transaction:
+                         */
+                        // Get the splits for the transaction.  Create them if they don't already exist:
+                        splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+
+                        // If the user aborted the split assignment process, then figure out what to do:
+                        if (splits == null) {
+                            switch (resolver.getTerminationCondition()) {
+                                case SKIP:
+                                    continue;
+
+                                case INQUIRE:
+                                    List<User> users = User.getAllUsers();
+                                    User user = getResolver().getUser("Select the user to send the notification to",
+                                            users, true);
+                                    if (user != null) {
+                                        getNotificationService().requestAssignSplits(user, transaction);
+                                    }
+                                    continue;
+
+                                case QUIT:
+                                    break;
+
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during split assignment.");
+                            }
+                        }
+
+                        // The splits are now complete so save them off:
+                        for (TransactionSplit split : splits) {
+                            split.save();
+                        }
+                    } else {
+                        getResolver().say("Already assigned splits.");
+                    }
+                } else {
+
+                    // Tell the user what we just did:
+                    importLog.logImportEvent(transaction);
                 }
 
                 /*
@@ -306,7 +348,7 @@ public class Importer {
                  */
 
                 // Reconcile this transaction with the forecast:
-                ForecastTransaction.reconcile(forecast, transaction, splits, resolver);
+                ForecastTransaction.reconcile(forecast, transaction, splits);
 
                 // We don't need to figure out what to do if the user aborted the reconciliation process
                 // because there is nothing left to do with this transaction.
@@ -352,7 +394,8 @@ public class Importer {
 
         // Return the number of transactions imported:
         if (j > 0) {
-            getResolver().say("\nSuccessfully imported " + j + " transactions into the register.");
+            getResolver().say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
+                    register.getRegisterName() + " from file " + clearedTransactionsFilename + ".");
         }
         return forecast.getInSync();
 
@@ -380,10 +423,13 @@ public class Importer {
             Transaction transaction = null;
 
             /*
-             * Create a list of new provisional register transactions in ascending payee + amount order from the import file:
+             * Create a list of provisional register transactions in ascending payee + amount order from the import file:
              */
             // Open the import file:
             BufferedReader br = openBufferedFileReader("Provisional transactions", filename);
+
+            // Let the user know what we are doing:
+            getResolver().say("\n----------\nRead in the provisional transactions, and assign merchants to them.");
 
             // Read the records in the provisional transactions file into a list of provisional register transactions:
             List<Transaction> provisionalTransactions = new ArrayList<>();
@@ -409,23 +455,9 @@ public class Importer {
 
                     // If we couldn't find a merchant for the transaction, get some help from the user to create one:
                     if (merchant == null) {
-                        merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
-                        if (merchant == null) {
-                            switch (resolver.getTerminationCondition()) {
-                                case SKIP:
-                                    continue;
-
-                                case QUIT:
-                                    break;
-
-                                default:
-                                    throw new ControllerException("Invalid termination condition " +
-                                            resolver.getTerminationCondition() + " during provisional transaction import");
-
-                            }
-                        }
-                    }
-                    if (merchant == null) break;
+                        merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(),
+                                transaction.getAmount());
+                     }
                     transaction.setMerchant(merchant);
 
                     // Add the transaction to the array of provisional transactions:
@@ -467,8 +499,11 @@ public class Importer {
                  * Merge the two lists of transactions updating the database as we go:
                  *
                  */
+                // Let the user know what we are doing:
+                getResolver().say("\n----------\nCategorize the provisional transactions.");
                 provTrxIndex = 0;
                 int regTrxIndex = 0;
+                List<TransactionSplit> splits;
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
                     // Compare the current provisional transaction to the current register transaction:
@@ -479,6 +514,24 @@ public class Importer {
                         comparison = 1;
                     } else {
                         comparison = -1;
+                    }
+
+                    // If the transaction was previously imported, but either the split assignment or reconciliation
+                    // was skipped, then treat it as if it were a new transaction:
+                    if (comparison == 0) {
+
+                        // Get the splits for the transaction:
+                        splits = TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex));
+                        if (splits != null) {
+                            for (TransactionSplit split: splits
+                                 ) {
+                                if (ForecastTransactionSplit.getForecastTransactionSplit(forecast, split) == null) {
+                                    comparison = -1;
+                                }
+                            }
+                        } else {
+                            comparison = -1;
+                        }
                     }
 
                     // If the key to the provisional transaction is less than the key to the register transaction:
@@ -497,7 +550,7 @@ public class Importer {
                             if (budgetItems == null) {
                                 switch (getResolver().getTerminationCondition()) {
                                     case SKIP:
-                                        // Move to the next provisional transaction:
+                                         // Move to the next provisional transaction:
                                         provTrxIndex++;
                                         continue;
 
@@ -512,11 +565,10 @@ public class Importer {
                         }
 
                         // Tell the user about the bank transaction we are processing:
-                        getResolver().say();
-                        logImportEvent(provisionalTransactions.get(provTrxIndex), merchant);
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
                         // Get the splits for the transaction:
-                        List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
+                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (splits == null) {
@@ -551,43 +603,49 @@ public class Importer {
                             }
                         }
 
-                        // Save the transaction and associated items:
-                        provisionalTransactions.get(provTrxIndex).save(INSERT);
-
                         // Update the balance in the register and save it:
-                        register.setBalance(register.getBalance() + transaction.getAmount());
+                        register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
                         register.update();
 
+                        // Save the transaction and associated splits:
+                        provisionalTransactions.get(provTrxIndex).save(INSERT);
                         for (TransactionSplit split : splits != null ? splits : null) {
-                            System.out.println(split.toString());
                             split.save();
                         }
 
                         // Reconcile this transaction with the forecast:
-                        ForecastTransaction.reconcile(forecast, transaction, splits, getResolver());
+                        ForecastTransaction.reconcile(forecast, provisionalTransactions.get(provTrxIndex), splits);
 
                         // Move to the next provisional transaction:
                         provTrxIndex++;
 
-                    } else if (comparison == 0) {  // else, if key to provision transaction is equal to key of register transaction:
+                    } else if (comparison == 0) {  // else, if the transaction was previously imported:
+
+                        // Tell the user what we did:
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
+                        getResolver().say("Transaction wws previously imported.");
+                        logSplitsAndReconciliation(forecast,
+                                TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex)));
 
                         // then the transaction has already been entered, so move to the next one on both lists:
                         provTrxIndex++;
                         regTrxIndex++;
 
-                    } else {  // else the key to imported transaction is greater than the key to existing transaction
+                    } else {  // else the The provisional transaction from the database has fallen off.
 
-                        // The provisional transaction from the database has fallen off.  If the register transaction is more
-                        // than one business day old, then it has likely been withdrawn:
+                        //  If the register transaction is more than one business day old, then it has likely been
+                        // withdrawn:
                         if (businessDaysBeteween(Calendar.getInstance(), registerTransactions.get(regTrxIndex).getDate()) > 1) {
 
                             // Confirm that with the user and remove if they agree:
                             if (getResolver().askDeleteRegisterTransaction(registerTransactions.get(regTrxIndex))) {
-                                registerTransactions.get(regTrxIndex).delete();
 
-                                // Update the balance in the register to put back the amount previously deducted and save it:
-                                register.setBalance(register.getBalance() - transaction.getAmount());
+                                // Add back the amount previously deducted from the register and save it:
+                                register.setBalance(register.getBalance() - registerTransactions.get(regTrxIndex).getAmount());
                                 register.update();
+
+                                // And delete the transaction that has fallen off:
+                                registerTransactions.get(regTrxIndex).delete();
                             }
 
                             // Move to the next register transaction:
@@ -624,7 +682,7 @@ public class Importer {
         // Tell the user the number of transactions imported:
         if (provTrxIndex > 0) {
             getResolver().say("\nSuccessfully imported " + provTrxIndex + " provisional transactions into the register:  " +
-                    register + " from file " + filename + ".");
+                    register.getRegisterName() + " from file " + filename + ".");
         }
         return forecast.getInSync();
 

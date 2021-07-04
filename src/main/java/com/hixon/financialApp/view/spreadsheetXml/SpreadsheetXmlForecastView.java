@@ -14,8 +14,9 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
-import com.hixon.financialApp.view.text.ItemsOfInterestReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
 import java.io.*;
@@ -70,7 +71,13 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    }
 
    @Override
-   protected ItemsOfInterestReport getItemsOfInterestReport(User user, List<Entity> items, File file) {
+   protected TrackingItemsOfInterestReport getTrackingItemsOfInterestReport(User user, List<Entity> items, File file) {
+      return null;
+   }
+
+   @Override
+   protected UpcomingItemsOfInterestReport getUpcomingItemsOfInterestReport(User user, List<Entity> items, File reportFile)
+           throws FileNotFoundException {
       return null;
    }
 
