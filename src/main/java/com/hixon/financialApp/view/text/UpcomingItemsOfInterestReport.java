@@ -57,6 +57,7 @@ public class UpcomingItemsOfInterestReport extends ForecastReport {
     public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException,
             RegisterException {
         ForecastTransaction forecastTransaction = (ForecastTransaction) item;
+        String line = forecastTransaction.toStringCompact();
         pw.println(forecastTransaction.toStringCompact());
     }
 

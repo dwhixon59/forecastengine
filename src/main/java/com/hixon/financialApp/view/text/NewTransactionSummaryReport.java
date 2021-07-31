@@ -126,7 +126,7 @@ public class NewTransactionSummaryReport extends RegisterReport {
 
                 // Print as much of the split payee that will fit with the amount on an iPhone 11:
                 String splitPayee = split.getBudgetItem().getPayee();
-                int truncatedPayeeLength = MAX_PAYEE_LENGTH - splitAmount.length();
+                int truncatedPayeeLength = 30 - splitAmount.length();
                 if (splitPayee.length() > truncatedPayeeLength) {
                     splitPayee = splitPayee.substring(0, truncatedPayeeLength);
                 }

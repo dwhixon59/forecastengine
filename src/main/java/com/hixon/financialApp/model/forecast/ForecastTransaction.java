@@ -882,11 +882,11 @@ public class ForecastTransaction extends IndependentEntity {
      * Deduct the split amount from collection type items because they ore a collection of smaller transactions that are
      * add up to the budgeted (and spent) amount.  In addition, any remaining amounts at the end of the period are
      * carried over to the next period so we must keep track of the remaining amount.
-     *
+     * <p>
      * For periodic and unplanned type items, zero out the remaining amount because they occur as a single payment each
      * period and do not carry over to subsequent periods.  If they are over or under what was expected, that may have
      * triggered an adjustment to the item planned amount, or it may have been ignored, but that does not matter here.
-     *
+     * <p>
      * Finally, for envelope type items, deduct from the budget item rather than the forecast item because that is where
      * envelope amounts are stored.  As far as the remaining amount in the forecast transaction, if today is on or after
      * the planned date, then credit the amount to the envelope and zero out the remaining amount in the forecast
@@ -985,8 +985,8 @@ public class ForecastTransaction extends IndependentEntity {
                                         // then let the user know what we are doing:
                                         double amount =
                                                 (currencyDifference(nextNonZeroForecastTransaction.getRemainingAmount(),
-                                                remainingAmount) >= 0)  ?
-                                                remainingAmount : nextNonZeroForecastTransaction.getRemainingAmount();
+                                                        remainingAmount) >= 0) ?
+                                                        remainingAmount : nextNonZeroForecastTransaction.getRemainingAmount();
 
                                         // and zero out and save off the current forecast transaction:
                                         getResolver().say(Utility.formatDollarAmount(amount) +
@@ -1016,7 +1016,7 @@ public class ForecastTransaction extends IndependentEntity {
                             break;
                     }
                 } else { // But if the user did not overspend on this item, e.g. the amount of the split is less than the
-                         // remaining amount in the current period:
+                    // remaining amount in the current period:
 
                     // then if this might be an overspend reimbursement to an expense category that has already been
                     // zeroed out:
@@ -1362,35 +1362,38 @@ public class ForecastTransaction extends IndependentEntity {
                     // does not apply to that date, then one immediately after must, so return that one:
                     ForecastTransaction nextForecastTransaction = getNextOccurrence(forecastItem, date);
 
-                    // Check to see if the returned forecast transaction is applicable to the specified date.  If not,
-                    // then the specified date is in a hole between the applicability windows of the forecast transaction
-                    // preceding the specified date and the forecast transaction immediately following that date.  This
-                    // can occur if the user manually adjusts the planned dates of forecast transactions creating holes
-                    // between them.
-                    timing = nextForecastTransaction.fallsWithinWindow(date);
-                    switch (timing) {
+                    // If there is a next forecast transaction:
+                    if (nextForecastTransaction != null) {
 
-                        case PRIOR_TO:
-                            // The specified date is prior to the applicability window of this forecast transaction, which
-                            // means we are in a hole between the applicability windows of the preceding and succeeding
-                            // forecast transactions.  In this case return the preceding forecast transaction:
-                            // not possible given that this transaction occurs before that date.
-                            break;
+                        // Check to see if the returned forecast transaction is applicable to the specified date.  If not,
+                        // then the specified date is in a hole between the applicability windows of the forecast transaction
+                        // preceding the specified date and the forecast transaction immediately following that date.  This
+                        // can occur if the user manually adjusts the planned dates of forecast transactions creating holes
+                        // between them.
+                        timing = nextForecastTransaction.fallsWithinWindow(date);
+                        switch (timing) {
 
-                        case WITHIN:
-                            // The specified date falls within the applicability window of this forecast transaction so this is
-                            // the one we are looking for:
-                            break;
+                            case PRIOR_TO:
+                                // The specified date is prior to the applicability window of this forecast transaction, which
+                                // means we are in a hole between the applicability windows of the preceding and succeeding
+                                // forecast transactions.  In this case return the preceding forecast transaction:
+                                // not possible given that this transaction occurs before that date.
+                                break;
 
-                        case AFTER:
-                            // The specified date occurs after the applicability window of the next forecast transaction
-                            // planned, which is a violation of the "bracketing principle":
-                            throw new ForecastException("The next forecast transaction \n" + nextForecastTransaction +
-                                    "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayStringDate(date) +
-                                    " is \n" + forecastTransaction + "\nwhich is also prior to the specified date, which " +
-                                    "should not occur.");
+                            case WITHIN:
+                                // The specified date falls within the applicability window of this forecast transaction so this is
+                                // the one we are looking for:
+                                break;
+
+                            case AFTER:
+                                // The specified date occurs after the applicability window of the next forecast transaction
+                                // planned, which is a violation of the "bracketing principle":
+                                throw new ForecastException("The next forecast transaction \n" + nextForecastTransaction +
+                                        "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayStringDate(date) +
+                                        " is \n" + forecastTransaction + "\nwhich is also prior to the specified date, which " +
+                                        "should not occur.");
+                        }
                     }
-
                     break;
 
             }
@@ -1519,7 +1522,7 @@ public class ForecastTransaction extends IndependentEntity {
             if (forecastItem.getHowOccurs() != Item.HowOccurs.UNPLANNED) {
                 // Then this is an odd situation.  The item either expired, or the forecast ended:
                 getResolver().say("Warning:  There is no next non-zero forecast transaction for forecast item " +
-                        forecastItem.getCategory() + ", " + forecastItem.getPayee() + ").");
+                        forecastItem.getCategory() + ", " + forecastItem.getPayee() + ".");
             }
         }
 

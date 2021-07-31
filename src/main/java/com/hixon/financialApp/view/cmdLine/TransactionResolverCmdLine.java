@@ -1028,7 +1028,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         UserResponse response = new UserResponse();
 
         say("Applicable " + forecastTransaction.toStringConcise());
-        ask("What would you like to do (a-adjust, s-assign, d-dispute, i-ignore)?");
+        ask("What would you like to do (a-adjust, s-assign, d-dispute, i-ignore)? ");
 
         boolean done = false;
         while (!done) {
@@ -1068,7 +1068,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
         say("The amount of this split is significantly more than the planned amount for the current period (" +
                 Utility.formatDollarAmount(-forecastTransaction.getForecastItem().getAmount()) + ").");
-        ask("Would you like to adjust the amount for this budget item (a-adjust, s-assign, d-dispute, i-ignore)?  ");
+        ask("Would you like to adjust the amount for this budget item (a-adjust, s-assign, d-dispute, i-ignore)? ");
 
         boolean done = false;
         while (!done) {

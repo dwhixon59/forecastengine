@@ -8,7 +8,6 @@ import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -32,6 +31,22 @@ public class UpcomingItemsReport extends ForecastReport {
     public void renderReportFrontMatter() {
         pw.println("UPCOMING ITEMS:");
         pw.println("--------------");
+//        pw.println(TAB + "|" + TAB + "|" + TAB + "|" + TAB + "|" + TAB + "|" + TAB + "|" + TAB + "|" + TAB +
+//                    "|" + TAB + "|" + TAB + "|");
+//        for (int i = 0; i < fontCounts.length; i++) {
+//            if (fontCounts[i] > 0) {
+//                pw.println(TAB + TAB + TAB + TAB + TAB + TAB + TAB + TAB + TAB + TAB + "|");
+//                pw.print("\t\t|");
+//                for (int j = 0; j < Math.round(fontCounts[i]); j++) {
+//                    pw.print(Character.toString((char) i));
+//                }
+//                if (i == 32) {
+//                    pw.println("|");
+//                } else {
+//                    pw.println("     " + i + ", " + Math.round(fontCounts[i]));
+//                }
+//            }
+//        }
     }
 
     @Override
@@ -43,22 +58,19 @@ public class UpcomingItemsReport extends ForecastReport {
         // Use a short version of the date to take less space:
         String date = Utility.calendarDateToMonthDayStringDate(forecastTransaction.getPlannedDate());
 
-        // Round off the amounts to save space by not displaying the cents:
-        String amount = Utility.formatRoundedDollarAmount(Math.abs(forecastTransaction.getRemainingAmount()));
-        String runningBalance = Utility.formatRoundedDollarAmount(forecastTransaction.getRunningBalance());
-        runningBalance = StringUtils.leftPad(runningBalance, 6);
-
-        // Seems like we have about another 25 characters before text wrap on the iPhone 11, so get as much of the payee
-        // as possible based on the length of the amount:
+        // Format the payee field:
         String payee = forecastTransaction.getForecastItem().getPayee();
-        int truncatedPayeeLength = 25 - amount.length();
-        if (payee.length() > truncatedPayeeLength) {
-            payee = payee.substring(0, truncatedPayeeLength);
-        } else {
-            payee = StringUtils.rightPad(payee, truncatedPayeeLength);
-        }
+        payee = padStringWithTabs(payee, 8, iPhone11FontSizes);
+
+        // Format the amount field:
+        String amountString = formatRoundedDollarAmountField(forecastTransaction.getRemainingAmount(),
+                2, iPhone11FontSizes);
+
+        // Format the running balance field:
+        String runningBalanceString = formatRoundedDollarAmountField(forecastTransaction.getRunningBalance(),
+                2, iPhone11FontSizes);
 
         // Output the forecast transaction line:
-        pw.println(date + SPACE + payee + TAB + amount + TAB + runningBalance);
+        pw.println(date + TAB + payee + amountString + TAB + runningBalanceString);
     }
 }

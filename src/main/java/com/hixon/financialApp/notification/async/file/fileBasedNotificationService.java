@@ -33,8 +33,6 @@ public class fileBasedNotificationService implements NotificationServiceInt {
     /*
      * Fields:
      */
-    private static final String NOTIFICATION_FILE_PREFIX = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business" +
-            "\\Finances\\Expenses\\";
     public static final String NOTIFICATION_FILE_POSTFIX = "_Notifications.txt";
     private static final String ENCODING = "UTF-8";
     public static final String OVERDUE_AND_UPCOMING_ITEMS_REPORT = "OverdueAndUpcomingItemsReport.txt";
@@ -46,7 +44,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
      * Getters and setters:
      */
     private String getNotificationFilename(User user) {
-        return NOTIFICATION_FILE_PREFIX + user.getFirstName() + NOTIFICATION_FILE_POSTFIX;
+        return user.getPersonalFileSystem() + "\\" + user.getFirstName() + NOTIFICATION_FILE_POSTFIX;
     }
 
     /*
