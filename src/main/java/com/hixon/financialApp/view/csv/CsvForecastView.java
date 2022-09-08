@@ -117,7 +117,7 @@ public class CsvForecastView extends AbstractForecastView {
 
    // Forecast transaction headers in a CSV file:
    public enum ForecastTransactionHeaders {
-      DATE, CATEGORY, PAYEE, CREDIT, DEBIT, BALANCE, BLANK, IMPORTANCE, HOW_OCCURS, TRANSACTION_ID, VERSION, AMOUNT
+      DATE, CATEGORY, PAYEE, MEMO, CREDIT, DEBIT, BALANCE, BLANK, IMPORTANCE, HOW_OCCURS, TRANSACTION_ID, VERSION, AMOUNT
    }
 
    @Override
@@ -147,7 +147,7 @@ public class CsvForecastView extends AbstractForecastView {
             String dateColumn = record.get(ForecastTransactionHeaders.DATE);
             if (!dateColumn.isEmpty()) {
 
-               // If the current record is a month header then update the month and year portion of the planned date:
+               // then if the current record is a month header, update the month and year portion of the planned date:
                try {
                   plannedDate = MonthYearLongDateToCalendarDate(dateColumn);
                   continue;
@@ -158,12 +158,14 @@ public class CsvForecastView extends AbstractForecastView {
                      int length = (dateColumn.length() - 2);
                      plannedDate.set(Calendar.DATE, Integer.parseInt(dateColumn.substring(0, length)));
                   } else {
-                     // This is neither a header row, or a forecast transaction row, so skip it:
+                     // This is neither a header row, nor a forecast transaction row, so skip it:
                      continue;
                   }
                }
-            } else if (record.get(ForecastTransactionHeaders.PAYEE).isEmpty()) {
-               // The first and second columns are blank, so this is not a forecast transaction row; skip it:
+            }
+            // Nothing in the date column.  If there is nothing in the payee column either, then this is not a forecast
+            // transaction row; skip it:
+            else if (record.get(ForecastTransactionHeaders.PAYEE).isEmpty()) {
                continue;
             }
 
@@ -174,6 +176,7 @@ public class CsvForecastView extends AbstractForecastView {
             forecastTransactionView.setDate((Calendar) plannedDate.clone());
             forecastTransactionView.setCategory(record.get(ForecastTransactionHeaders.CATEGORY));
             forecastTransactionView.setPayee(record.get(ForecastTransactionHeaders.PAYEE));
+            forecastTransactionView.setMemo(record.get(ForecastTransactionHeaders.MEMO));
             forecastTransactionView.setCredit(parseDollarAmount(record.get(ForecastTransactionHeaders.CREDIT)));
             forecastTransactionView.setDebit(parseDollarAmount(record.get(ForecastTransactionHeaders.DEBIT)));
             forecastTransactionView.setRunningBalance(parseDollarAmount(record.get(ForecastTransactionHeaders.BALANCE)));

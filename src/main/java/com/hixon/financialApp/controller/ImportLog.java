@@ -36,7 +36,7 @@ public class ImportLog {
 
     public void logImportEvent(Transaction transaction) throws EntityException, RegisterException {
 
-        // Save the transaction in case the user wants to recategorize the transaction later:
+        // Save the transaction in case the user wants to change the assigned category of the transaction later:
         importedTransactions.add(transaction);
 
         String creditOrDebitString;

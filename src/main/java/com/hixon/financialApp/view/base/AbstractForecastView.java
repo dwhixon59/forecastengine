@@ -255,7 +255,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     if (ssForecastTransaction.getId() != null) {
 
                         // then get the matching forecast transaction from the database:
-                        ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(ssForecastTransaction.getId());
+                        ForecastTransaction dbForecastTransaction =
+                                ForecastTransaction.getById(ssForecastTransaction.getId());
 
                         // and if a matching forecast transaction was found in the database:
                         if (dbForecastTransaction != null) {
@@ -264,12 +265,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                             dbForecastTransaction.setFound(true);
 
                             // and since the spreadsheet does not contain the budgeted amount we can add that now:
-                            ssForecastTransaction.getForecastItem().setAmount(dbForecastTransaction.getForecastItem().getAmount());
+                            ssForecastTransaction.getForecastItem().setAmount(
+                                    dbForecastTransaction.getForecastItem().getAmount()
+                            );
 
                             // then if the forecast planned date has been modified then update the database transaction:
                             boolean overwrite;
-                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
-
+                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0)
+                            {
                                 // If the database forecast transaction was updated after it was sent to the external
                                 // source:
                                 overwrite = true;
@@ -296,6 +299,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     Utility.getResolver().say("New date is:  " +
                                             Utility.calendarDateToStringDate(ssForecastTransaction.getPlannedDate()));
                                     dbForecastTransaction.setPlannedDate(ssForecastTransaction.getPlannedDate());
+                                    // TODO:  Set the "override" flag on the forecast transaction to prevent it from
+                                    // being deleted during the forecast update process:
                                 }
                             }
 
@@ -305,8 +310,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     dbForecastTransaction.getRemainingAmount()) > 0.50) {
 
                                 overwrite = true;
-                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
-                                    // Then ask the user if they want to over write the updated database value:
+                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0)
+                                {
+                                    // Then ask the user if they want to overwrite the updated database value:
                                     Utility.getResolver().say("\nThe amount of an imported forecast transaction has " +
                                             "changed, but the version of the imported forecast transaction is prior to" +
                                             " the version in the database.");
@@ -328,6 +334,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     Utility.getResolver().say("New amount is:  " +
                                             Utility.formatDollarAmount(ssForecastTransaction.getRemainingAmount()));
                                     dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
+                                    // TODO:  Set the "override" flag on the forecast transaction to prevent it from
+                                    // being deleted during the forecast update process:
                                 }
                             }
 
@@ -339,16 +347,21 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     "your short term horizon and has been invalidated by the last forecast update.  You " +
                                     "will have to remake this change" + "\n" + ssForecastTransaction);
                         }
-                    } else { // the forecast transaction does not have an ID (the create case), so create one:
+                    } else { // the forecast transaction does not have an ID (the creation case), so create one:
 
                         // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
                         ForecastItem forecastItem = ForecastItem.getByName(ssForecastTransaction.getForecastItem().getForecast().getId(),
                                 ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
                         if (forecastItem == null) {
 
-                            // then create a forecast item so we have something to link the forecast transaction to:
+                            // then create a forecast item, so we have something to link the forecast transaction to:
                             BudgetItem budgetItem = BudgetItem.getByPayee(ssForecastTransaction.getForecastItem().getPayee());
+
                             // TODO:  Handle if the budget item isn't found.
+                            // If the budget item isn't found:
+
+                               // then get the budget item from the user (adding a new one if required):
+
                             ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
                             ssForecastTransaction.getForecastItem().insert();
                         } else {
@@ -358,10 +371,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         // Create the forecast transaction:
                         ssForecastTransaction.setId(UUID.randomUUID());
                         ssForecastTransaction.setFound(true);
+                        ssForecastTransaction.setOverridden(true);
                         ssForecastTransaction.insert();
 
                         // Let the user know what we did:
-                        getResolver().say("The following forecast transaction was not in the forecast so it has been" +
+                        getResolver().say("The following forecast transaction was not in the forecast so it has been " +
                                 "added to the forecast:  \n" + ssForecastTransaction.toStringConcise());
 
                     } // End else the forecast transaction does not have an ID.

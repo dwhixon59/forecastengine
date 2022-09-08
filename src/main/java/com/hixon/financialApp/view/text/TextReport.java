@@ -174,8 +174,8 @@ public class TextReport extends AbstractReport {
         for (int i = 0; i < string.length(); i++) {
             widthInInches += fontInfo[string.charAt(i)];
             if (widthInInches > maxWidthInInches) {
-                string = string.substring(0, i - 1);
                 widthInInches -= fontInfo[string.charAt(i)];
+                string = string.substring(0, i - 1);
                 break;
             }
         }

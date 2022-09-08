@@ -426,9 +426,14 @@ public class Utility {
 
     // Parse a dollar AMOUNT from a string:
     public static Double parseDollarAmount(String stringAmount) {
-        stringAmount = stringAmount.replace("$", "");
-        stringAmount = stringAmount.replace(",", "");
-        return Double.parseDouble(stringAmount);
+        if (stringAmount.length() > 0) {
+            stringAmount = stringAmount.replace("$", "");
+            stringAmount = stringAmount.replace(",", "");
+            return Double.parseDouble(stringAmount);
+        }
+        else {
+            return new Double(0);
+        }
     }
 
     // Print out a dollar AMOUNT in human readable format:
@@ -506,7 +511,7 @@ public class Utility {
     }
 
     /**
-     * Copy a file to the using the specified filename to the users personal file system.
+     * Copy a file to the user's personal file system.
      *
      * @param user                The user who's personal file system is the target path of the copy operation.
      * @param sourceFilePath      Path of the source file.

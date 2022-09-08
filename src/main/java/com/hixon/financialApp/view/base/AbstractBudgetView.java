@@ -97,7 +97,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         // Set the start and end dates to be the last business days of the previous month and the day before the last day
         // of the requested month since that is when I get paid:
         startDate.set(Calendar.DATE, 1);
-        Calendar endDate = (Calendar) month.clone();
+        Calendar endDate = (Calendar) startDate.clone();
         endDate.add(Calendar.MONTH, 1);
         setToLastBusinessDayBefore(startDate);
         setToLastBusinessDayBefore(endDate);

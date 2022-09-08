@@ -67,8 +67,8 @@ public interface TransactionResolverInt {
 
    /**
     * This method gets an integer from the user in the specified range.  If allowed, the user may also specify skip
-    * or quit.  The purpose of this routine is to get the number of an item in a list of items, presumably a menu.  It
-    * skip or quit is allowed, then the SkipException or QuitException is thrown.
+    * or quit.  The purpose of this routine is to get the number of an item in a list of items, presumably a menu.  If
+    * skip or quit is allowed, then the SkipException or QuitException may be thrown.
     *
     * @param prompt The prompt to give to the user before asking them to enter an integer in a range.
     * @param min The smallest integer allowed, usually 1.
@@ -152,7 +152,7 @@ public interface TransactionResolverInt {
    double getDollarAmount();
 
    /**
-    * This method takes a comma separated list of menu options and alows the user to select one of the options.
+    * This method takes a comma separated list of menu options and allows the user to select one of the options.
     *
     * @param menuOptionList A comma separated list of menu items.
     * @return The selected menu item.

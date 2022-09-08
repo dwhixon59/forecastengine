@@ -14,6 +14,7 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import com.hixon.financialApp.view.base.TransactionHistory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
 
@@ -191,6 +192,7 @@ public class Importer {
 
                 // Let the resolver know we are beginning a new item:
                 resolver.beginImportItem(transaction);
+                //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
 
                 // If we haven't already assigned the splits to this transaction in a previous run:
                 if (splits == null) {
@@ -462,11 +464,13 @@ public class Importer {
 
                     // Add the transaction to the array of provisional transactions:
                     provisionalTransactions.add(transaction);
+                    //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
 
                 } catch (ParseException ignored) {
                 }
             }
             br.close();
+
 
             // If we found any provisional transactions, then process them:
             if (provisionalTransactions.size() > 0) {
@@ -509,7 +513,8 @@ public class Importer {
                     // Compare the current provisional transaction to the current register transaction:
                     int comparison;
                     if (provTrxIndex < provisionalTransactions.size() && regTrxIndex < registerTransactions.size()) {
-                        comparison = comparator.compare(provisionalTransactions.get(provTrxIndex), registerTransactions.get(regTrxIndex));
+                        comparison = comparator.compare(provisionalTransactions.get(provTrxIndex),
+                                registerTransactions.get(regTrxIndex));
                     } else if (provTrxIndex == provisionalTransactions.size()) {
                         comparison = 1;
                     } else {

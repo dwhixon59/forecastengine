@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Daily Update 1" type="Application" factoryName="Application">
+    <option name="ALTERNATIVE_JRE_PATH" value="1.8" />
+    <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
+    <module name="ForecastEngine" />
+    <option name="PROGRAM_PARAMETERS" value="updateFromExternalSource processSkippedTransactions importRegisterTransactions importProvisionalRegisterTransactions verifyRegisterBalance renderLongTermForecast renderSpendingReport renderItemsOfInterestReport renderOverdueAndUpcomingItemsReport renderNewTransactionSummaryReport" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

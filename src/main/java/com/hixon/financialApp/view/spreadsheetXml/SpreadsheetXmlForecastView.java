@@ -262,32 +262,35 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
       // The payee column:
       writer.println("\t\t<Column ss:Index=\"3\" ss:AutoFitWidth=\"0\" ss:Width=\"135\"/>");
 
-      // The credit (income) column:
-      writer.println("\t\t<Column ss:Index=\"4\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+      // The memo column:
+      writer.println("\t\t<Column ss:Index=\"4\" ss:AutoFitWidth=\"0\" ss:Width=\"100\"/>");
 
-      // The debit (expense) column:
+      // The credit (income) column:
       writer.println("\t\t<Column ss:Index=\"5\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
+      // The debit (expense) column:
+      writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+
       // The running balance column:
-      writer.println("\t\t<Column ss:Index=\"6\" ss:StyleID=\"Balance\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
+      writer.println("\t\t<Column ss:Index=\"7\" ss:StyleID=\"Balance\" ss:AutoFitWidth=\"0\" ss:Width=\"55\"/>");
 
       // A blank column for spacing between a right justified column followed by a left justified column:
-      writer.println("\t\t<Column ss:Index=\"7\" ss:AutoFitWidth=\"0\" ss:Width=\"20\"/>");
+      writer.println("\t\t<Column ss:Index=\"8\" ss:AutoFitWidth=\"0\" ss:Width=\"20\"/>");
 
       // The "how important" (discretionary/essential) column:
-      writer.println("\t\t<Column ss:Index=\"8\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
-
-      // The "how occurs" (discretionary/essential) column:
       writer.println("\t\t<Column ss:Index=\"9\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
 
+      // The "how occurs" (discretionary/essential) column:
+      writer.println("\t\t<Column ss:Index=\"10\" ss:AutoFitWidth=\"0\" ss:Width=\"30\"/>");
+
       // The transaction ID column:
-      writer.println("\t\t<Column ss:Index=\"10\" ss:AutoFitWidth=\"0\" ss:Width=\"200\"/>");
+      writer.println("\t\t<Column ss:Index=\"11\" ss:AutoFitWidth=\"0\" ss:Width=\"200\"/>");
 
       // The version column:
-      writer.println("\t\t<Column ss:Index=\"11\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"100\"/>");
+      writer.println("\t\t<Column ss:Index=\"12\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"100\"/>");
 
       // The amount column for short form reporting:
-      writer.println("\t\t<Column ss:Index=\"12\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"40\"/>");
+      writer.println("\t\t<Column ss:Index=\"13\" ss:StyleID=\"Amount\" ss:AutoFitWidth=\"0\" ss:Width=\"40\"/>");
    }
 
    @Override
@@ -296,7 +299,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
       writer.println("\t\t<Row ss:Height=\"25\" ss:StyleID=\"MonthRow\">");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + Utility.calendarDateToMonthYearLongDate(plannedDate) +
               "</Data></Cell>");
-      writer.println("\t\t\t<Cell/><Cell/><Cell/><Cell/>");
+      writer.println("\t\t\t<Cell/><Cell/><Cell/><Cell/><Cell/>");
       if (firstItem) {
          writer.println("\t\t\t<Cell ss:StyleID=\"HeaderBalance\"><Data ss:Type=\"Number\">" + runningBalance + "</Data></Cell>");
       } else {
@@ -309,6 +312,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Date</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Category</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Payee</Data></Cell>");
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Memo</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Credit</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Debit</Data></Cell>");
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">Balance</Data></Cell>");
@@ -353,6 +357,12 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
 
       // The payee for this forecast transaction:
       writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + forecastTransaction.getForecastItem().getPayee() +
+              "</Data></Cell>");
+
+      // The description for this forecast transaction:
+      String memo = forecastTransaction.getMemo();
+      if (memo == null) { memo = ""; }
+      writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" + memo +
               "</Data></Cell>");
 
       // The amount for an income item (credit):

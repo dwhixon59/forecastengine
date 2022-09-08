@@ -4,6 +4,7 @@ import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.base.TransactionHistory;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
@@ -62,6 +63,7 @@ public class WellsFargoBank extends Bank {
 
       Transaction transaction = new Transaction(register);
       loadFromCsvRecord(record, importRecordId, transaction);
+      TransactionHistory.getInstance().add(transaction);
       return transaction;
    }
 

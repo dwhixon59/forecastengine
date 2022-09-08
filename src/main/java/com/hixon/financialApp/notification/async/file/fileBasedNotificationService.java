@@ -65,7 +65,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         // Either the file to be sent, or target filename must not be null:
         if (file != null || targetFilename != null) {
 
-            // If the caller provided a new name for the file, then use that while copying it.  Otherwise use the current
+            // If the caller provided a new name for the file, then use that while copying it.  Otherwise, use the current
             // filename:
             String filename;
             if (targetFilename != null) {

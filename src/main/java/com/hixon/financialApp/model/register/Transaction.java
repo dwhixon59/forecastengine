@@ -5,6 +5,7 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.base.TransactionHistory;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -112,7 +113,8 @@ public class Transaction extends IndependentEntity {
     /*
      * Getters and setters:
      */
-    public void setidTransaction(UUID idTransaction) {
+    public void setIdTransaction(UUID idTransaction) {
+
         this.id = idTransaction;
     }
 
@@ -265,6 +267,9 @@ public class Transaction extends IndependentEntity {
     public Transaction(ResultSet rs) throws SQLException {
         super(false);
         loadFromResultSet(rs);
+
+        // Add this transaction to the history list:
+        TransactionHistory.getInstance().add(this);
     }
 
     // Constructor for importing a provisional transaction:
@@ -292,6 +297,9 @@ public class Transaction extends IndependentEntity {
         merchant = null;
         idMerchant = null;
         this.merchantPayee = merchantPayee;
+
+        // Add this transaction to the history list:
+        TransactionHistory.getInstance().add(this);
     }
 
 

@@ -30,7 +30,8 @@ public class Controller {
 
     //private static final Logger LOGGER = LogManager.getLogger(Controller.class);
 
-    public static void main(String[] args) throws Exception, BudgetException, ControllerException, RegisterException, ViewException, EntityException {
+    public static void main(String[] args) throws Exception, BudgetException, ControllerException, RegisterException,
+            ViewException, EntityException {
 
         //LOGGER.debug("Enter method Main().");
 
@@ -122,7 +123,7 @@ public class Controller {
                         Utility.getResolver().say("------------------------------------------------------------------------");
                         break;
 
-                    case "renderBudgetSummaryReport":
+                    case "l":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the Budget Summary Report.");
                         Utility.getBudgetView().renderBudgetSummaryReport();

@@ -390,13 +390,13 @@ public class Forecast extends IndependentEntity {
         }
 
         // We don't have to delete any forecast items generated from budget items that no longer exist, because they are
-        // presumably the basis of some forecast transactions that may still be in the forecast.  However we need to expire
+        // presumably the basis of some forecast transactions that may still be in the forecast.  However, we need to expire
         // them so they no longer generate new forecast transactions.
         ForecastItem.expireOldForecastItems();
 
-        // Delete all of the forecast transactions that occur after the update start date:
+        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones:
         query = ForecastTransaction.getDeleteQuery() + "where plannedDate >= " +
-                Utility.calendarDateToSqlDateString(updateStartDate);
+                Utility.calendarDateToSqlDateString(updateStartDate) + " and not overridden";
         executeUpdate(query, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
 
