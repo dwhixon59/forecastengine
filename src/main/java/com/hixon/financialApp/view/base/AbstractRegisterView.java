@@ -48,12 +48,12 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
         Register dbRegister = Register.getById(register.getId());
 
         if (!Utility.isEqualCurrency(register.getBalance(), dbRegister.getBalance())) {
-            Utility.getResolver().say("\nThe in memory register balance is " + Utility.formatDollarAmount(
+            Utility.getResolver().say("The in memory register balance is " + Utility.formatDollarAmount(
                     register.getBalance()) + " but the register balance in the database is " + Utility.formatDollarAmount(
                     register.getBalance()) + ".  You should update it.");
         }
 
-        if (Utility.getResolver().getYesOrNo("The current balance of the " +
+        if (Utility.getResolver().getYesOrNo("\nThe current balance of the " +
                 register.getRegisterName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
                 "  Do you want to update it?")) {
             double balance = Utility.getResolver().getDollarAmount();

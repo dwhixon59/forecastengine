@@ -249,6 +249,16 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
 
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
+
+
     /*
      *  CRUD methods:
      */
@@ -591,7 +601,7 @@ public class ForecastTransaction extends IndependentEntity {
                     Utility.formatDollarAmount(remainingAmount) + ", \n\tFirst occurrence = " + firstOccurrence + ", \n\tfound = "
                     + found + ", \n\tForecast transaction - ID = " + this.getId().toString() + ", \n\tNext significant event = " +
                     this.getNextSignificantEvent();
-        } catch (Exception | EntityException | BudgetException e) {
+        } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
@@ -604,7 +614,7 @@ public class ForecastTransaction extends IndependentEntity {
                     ", Category = " + this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() +
                     ", Budgeted Amount = " + Utility.formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
                     Utility.formatDollarAmount(remainingAmount);
-        } catch (Exception | EntityException | BudgetException e) {
+        } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
@@ -621,7 +631,7 @@ public class ForecastTransaction extends IndependentEntity {
         try {
             s = Utility.calendarDateToMonthDayStringDate(this.getPlannedDate()) + ", " + this.getForecastItem().getPayee() +
                     ", " + Utility.formatDollarAmount(remainingAmount);
-        } catch (Exception | EntityException | BudgetException e) {
+        } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
@@ -632,7 +642,8 @@ public class ForecastTransaction extends IndependentEntity {
      *  Main methods:
      */
     // Reconcile a register transaction with a forecast transaction:
-    public static void reconcile(Forecast forecast, Transaction transaction, List<TransactionSplit> splits) throws Exception, RegisterException, EntityException, BudgetException {
+    public static void reconcile(Forecast forecast, Transaction transaction, List<TransactionSplit> splits)
+            throws Exception {
 
         // For each split assigned to this transaction:
         ForecastTransactionSplit forecastTransactionSplit;

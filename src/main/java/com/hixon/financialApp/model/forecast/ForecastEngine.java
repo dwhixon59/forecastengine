@@ -113,19 +113,22 @@ public class ForecastEngine {
             forecast.createTransactionsArray();
             while (rs.next()) {
 
-                forecastItem = new ForecastItem(rs);
-
                 // If this is an on-demand (unscheduled) item, then skip it:
-                if (rs.getString("fi.period").equalsIgnoreCase("On-Demand"))
+                if (rs.getString("fi.period").equalsIgnoreCase("On-Demand")) {
                     continue;
+                }
 
                 // If this forecast item expires before the beginning of the forecast window then skip it:
-                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("fi.endDate",
+                Calendar forecastItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("fi.endDate",
                         LocalDate.class));
-                if (budgetItemEndDateDb != null) {
-                    if (budgetItemEndDateDb.compareTo(forecast.getStartDate()) < 0)
+                if (forecastItemEndDateDb != null) {
+                    if (forecastItemEndDateDb.compareTo(startDate) < 0) {
                         continue;
+                    }
                 }
+
+                // This item will be in the forecast, so create a forecast item object for it:
+                forecastItem = new ForecastItem(rs);
 
                 // Set the current date to the first date after the start date of the forecast window:
                 nextDate = forecastItem.getFirstDateOnOrAfter(startDate);

@@ -128,4 +128,12 @@ public abstract class Entity implements EntityInt {
       }
    }
 
+   /**
+    * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+    * the entity.
+    *
+    * @return true if the object is valid
+    */
+   public abstract boolean isValid();
+
 } // End class FinancialAppEntity.

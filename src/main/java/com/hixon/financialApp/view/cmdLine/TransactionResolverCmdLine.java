@@ -1,6 +1,7 @@
 package com.hixon.financialApp.view.cmdLine;
 
 import com.hixon.financialApp.controller.Importer.TerminationCondition;
+import com.hixon.financialApp.controller.InvalidEntryException;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
@@ -18,6 +19,9 @@ import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import com.hixon.financialApp.view.base.UserResponse;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -86,12 +90,23 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         }
     }
 
+    @Override
+    public boolean askContinue(String prompt) {
+        ask(prompt + "  Do you want to continue?  " + "(y/n): ");
+        while (true) {
+            String line = in.nextLine();
+            if (line.equalsIgnoreCase("y")) return true;
+            if (line.equalsIgnoreCase("n")) return false;
+            ask("\nPlease enter 'y' or 'n': ");
+        }
+    }
+
     /**
      * @inheritDoc
      */
     @Override
     public int getNumberBetween(String prompt, int min, int max) throws SkipException, QuitException {
-        return getNumberBetween(prompt, min, max, false, false );
+        return getNumberBetween(prompt, min, max, false, false);
     }
 
     /**
@@ -188,6 +203,16 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             }
         }
         return selected;
+    }
+
+    @Override
+    public BudgetItem getBudgetItemFromUser() throws BudgetException, SQLException, EntityException, ParseException {
+        // read in a new budget item for this:
+        say("Enter the budget item in this order: category, payee, period type, amount, " +
+                "running balance, start date, number of payments, end date, item type, how important, " +
+                "how occurs, how paid, budget name:");
+        BudgetItem budgetItem = BudgetItem.loadFromUserCSV(in.nextLine());
+        return budgetItem;
     }
 
     @Override
@@ -291,6 +316,70 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             }
         }
         return date;
+    }
+
+    /**
+     * This method checks if a file exists on the file with the name matching the passed in filename.  If the file is
+     * not found, then it will ask the user if they want to try again allowing them to create, find, etc. the file.
+     *
+     * @param fileType A description of the file to be used when interacting with the user if not found.
+     * @param fileName The name of the file to check for existence.
+     * @return True if the file exists.  Otherwise, false.
+     */
+    public boolean existsFileWithRetry(String fileType, String fileName) throws QuitException {
+
+        boolean found = false;
+        boolean done = false;
+        while (!done) {
+            try {
+                Path path = Paths.get(fileName);
+                if (Files.exists(path) && !Files.isDirectory(path) && Files.size(path) > 0) {
+                    done = true;
+                    found = true;
+                } else {
+                    say("\n" + fileType + " file " + fileName + " does not exist or is empty.");
+                    if (!getYesOrNo("Do you want to try again?")) {
+                        done = true;
+                    }
+                }
+            } catch (Exception e) {
+                say("\n" + "Exception occurred trying to access " + fileType + " file " + fileName);
+                say("\n" + "Exception was:  " + e);
+                if (!askRetryContinueQuit()) {
+                    found = false;
+                }
+            }
+        }
+        return found;
+    }
+
+    public boolean askRetryContinueQuit() throws QuitException {
+
+        // Until the user makes a valid selection:
+        boolean choice = false;
+        try {
+            // Ask the use if they would like to retry the operation, continue without retrying, or quit:
+            Utility.getResolver().say();
+            String prompt = "What would you like to do:  retry, continue without retrying, or quit?";
+            String option = Utility.getResolver().selectFromFirstLetterList(prompt, "r,c,q");
+
+            // Invoke a function to execute the user's request:
+            switch (option) {
+                case "r":
+                    choice = true;
+                    break;
+
+                case "c":
+                    choice = false;
+                    break;
+
+                case "q":
+                    throw new QuitException("Operation aborted at user request.");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return choice;
     }
 
 
@@ -488,11 +577,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         // If the budget item doesn't exist, then create it:
                         if (budgetItem == null) {
                             if (getYesOrNo("Specified budget item not found.  Create as a new budget item")) {
-                                // read in a new budget item for this:
-                                say("Enter the budget item in this order: category, payee, period type, amount, " +
-                                        "running balance, start date, number of payments, end date, item type, how important, " +
-                                        "how occurs, how paid, budget name:");
-                                budgetItem = BudgetItem.loadFromUserCSV(in.nextLine());
+                                budgetItem = getBudgetItemFromUser();
                                 budgetItem.save(EntityInt.SaveMethod.INSERT);
                             } else {
                                 continue;
@@ -589,7 +674,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                     }
                 }
                 splits.add(transactionSplit);
-             }
+            }
             if (transactionAmount != 0) {
                 say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());

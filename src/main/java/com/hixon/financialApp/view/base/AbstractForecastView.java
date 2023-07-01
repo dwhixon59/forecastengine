@@ -368,7 +368,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                             ssForecastTransaction.setForecastItem(forecastItem);
                         }
 
-                        // Create the forecast transaction:
+                        // Fill out the forecast transaction:
                         ssForecastTransaction.setId(UUID.randomUUID());
                         ssForecastTransaction.setFound(true);
                         ssForecastTransaction.setOverridden(true);
@@ -402,7 +402,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         if (i > 0) {
             getResolver().say("\nSuccessfully processed " + i + " forecast transactions from the external source.");
         } else {
-            getResolver().say("\nThere were no forecast transactions in the external source to update from.");
+            getResolver().say("\nThere are no forecast transactions in the external source to update from.");
         }
 
     } // End updateFromExternalSource(Connection dbConnection).

@@ -1,6 +1,8 @@
 package com.hixon.financialApp.model.entity;
 
-public class EntityException extends Throwable {
+import com.hixon.financialApp.utility.FinancialAppException;
+
+public class EntityException extends FinancialAppException {
    public EntityException(String exceptionMessage) {
       super(exceptionMessage);
    }

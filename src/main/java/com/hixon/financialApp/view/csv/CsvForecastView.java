@@ -227,13 +227,13 @@ public class CsvForecastView extends AbstractForecastView {
                  importForecastFilename + "on line " + i + ".");
          ce.initCause(e);
          throw (ce);
+      } catch (EntityException e) {
+         ControllerException ce = new ControllerException("Exception while loading the most recent forecast.");
+         ce.initCause(e);
+         throw ce;
       } catch (Exception e) {
          ControllerException ce = new ControllerException("Exception while processing the transactions file " +
                  importForecastFilename + " on line " + i + ".");
-         ce.initCause(e);
-         throw ce;
-      } catch (EntityException e) {
-         ControllerException ce = new ControllerException("Exception while loading the most recent forecast.");
          ce.initCause(e);
          throw ce;
       }

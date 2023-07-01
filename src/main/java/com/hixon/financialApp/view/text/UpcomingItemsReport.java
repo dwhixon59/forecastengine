@@ -60,7 +60,7 @@ public class UpcomingItemsReport extends ForecastReport {
 
         // Format the payee field:
         String payee = forecastTransaction.getForecastItem().getPayee();
-        payee = padStringWithTabs(payee, 8, iPhone11FontSizes);
+        payee = padStringWithTabs(payee, 7, iPhone11FontSizes);
 
         // Format the amount field:
         String amountString = formatRoundedDollarAmountField(forecastTransaction.getRemainingAmount(),

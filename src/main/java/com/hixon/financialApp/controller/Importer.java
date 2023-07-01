@@ -14,7 +14,6 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.TransactionHistory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
 
@@ -29,11 +28,22 @@ import static com.hixon.financialApp.utility.Utility.*;
 
 public class Importer {
 
-    public static final String CLEARED_TRANSACTIONS_FILE_PATHNAME = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
+    // The file containing forecast transactions to import.  For example, in the case of using the CSV interface,
+    // this is a CSV file of transactions edited in a spreadsheet or something:
+    public static final String FORECAST_TRANSACTIONS_FILE = "Forecast transactions";
+    public static final String FORECAST_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal " +
+            "Business\\Finances\\Expenses\\Expenses.csv";
 
-    public static final String PROVISIONAL_TRANSACTIONS_FILE_PATHNAME = "C:\\Users\\dwhix\\Downloads\\" +
+    // The file containing the cleared transactions, typically downloaded from a bank, credit card, or other type of
+    // financial institution:
+    public static final String CLEARED_TRANSACTIONS_FILE = "Cleared transactions";
+    public static final String CLEARED_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
+
+    // The file containing the provisional (uncleared) transactions, typically from a bank, credit card, or other type
+    // of financial institution:
+    public static final String PROVISIONAL_TRANSACTIONS_FILE = "Provisional transactions";
+    public static final String PROVISIONAL_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Downloads\\" +
             "ProvisionalTransactions.txt";
-    public static final String REGISTER_TRANSACTIONS_FILE = "Register transactions";
 
     private ImportLog importLog = new ImportLog();
 
@@ -57,7 +67,7 @@ public class Importer {
      * exist in the map, the base name is inserted in the map and the first instance.  If it does already exist in the
      * map it is inserted as the n + 1 instance, where n is the highest number instance already in the map.
      *
-     * @param map The map containing the record id's.
+     * @param map                  The map containing the record id's.
      * @param importRecordBaseName The base record id (no instance number).
      * @return The full import record id.
      */
@@ -84,8 +94,8 @@ public class Importer {
             throws SQLException, EntityException, ForecastException {
 
         // Log each transaction split one at a time with its reconciled forecast transactions:
-        for (TransactionSplit split: splits
-             ) {
+        for (TransactionSplit split : splits
+        ) {
             getResolver().say(split.toString());
             ForecastTransactionSplit forecastTransactionSplit =
                     ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
@@ -106,13 +116,14 @@ public class Importer {
     public boolean importCsvRegisterTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
                                                     Forecast forecast) throws ControllerException, ViewException,
             EntityException, SQLException, BudgetException, RegisterException, QuitException {
-        return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILE_PATHNAME, financialInstitution, register,
+        return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILENAME, financialInstitution, register,
                 forecast);
     }
 
-    public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt financialInstitution,
-                                                    Register register, Forecast forecast)
-            throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException, QuitException {
+    public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt
+            financialInstitution, Register register, Forecast forecast)
+            throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException,
+            QuitException {
 
         resolver.say("Beginning register balance:  " + formatDollarAmount(register.getBalance()));
 
@@ -124,7 +135,7 @@ public class Importer {
             Transaction transaction;
 
             // Open the import file:
-            BufferedReader br = Utility.openBufferedFileReader(REGISTER_TRANSACTIONS_FILE, clearedTransactionsFilename);
+            BufferedReader br = Utility.openBufferedFileReader(CLEARED_TRANSACTIONS_FILE, clearedTransactionsFilename);
 
             // Read the records in the file into a list so that we can process them in reverse order:
             List<CSVRecord> recordList = new ArrayList<>();
@@ -358,7 +369,7 @@ public class Importer {
             } // End for each record in the transactions file.
 
             /*
-             * Phase 6:  Performa any tasks that are necessitated by the results of the update:
+             * Phase 6:  Perform any tasks that are necessitated by the results of the update:
              */
             // TODO: Process any significant events that occurred during reconciliation:
 
@@ -372,7 +383,7 @@ public class Importer {
 
         } catch (FileNotFoundException e) {
             if (!getResolver().getYesOrNo("Do you want to continue?")) {
-                QuitException qe = new QuitException(REGISTER_TRANSACTIONS_FILE + " " +
+                QuitException qe = new QuitException(CLEARED_TRANSACTIONS_FILE + " " +
                         clearedTransactionsFilename + " is invalid or not found.");
                 qe.initCause(e);
                 throw (qe);
@@ -408,8 +419,9 @@ public class Importer {
      *  Import the provisional transactions from the import file:
      */
     public boolean importCsvProvisionalTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
-                                                       Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException, FinancialAppException {
-        return importCsvProvisionalTransactionFile(PROVISIONAL_TRANSACTIONS_FILE_PATHNAME, financialInstitution,
+                                                       Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException,
+            FinancialAppException {
+        return importCsvProvisionalTransactionFile(PROVISIONAL_TRANSACTIONS_FILENAME, financialInstitution,
                 register, forecast);
     }
 
@@ -459,7 +471,7 @@ public class Importer {
                     if (merchant == null) {
                         merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(),
                                 transaction.getAmount());
-                     }
+                    }
                     transaction.setMerchant(merchant);
 
                     // Add the transaction to the array of provisional transactions:
@@ -528,8 +540,8 @@ public class Importer {
                         // Get the splits for the transaction:
                         splits = TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex));
                         if (splits != null) {
-                            for (TransactionSplit split: splits
-                                 ) {
+                            for (TransactionSplit split : splits
+                            ) {
                                 if (ForecastTransactionSplit.getForecastTransactionSplit(forecast, split) == null) {
                                     comparison = -1;
                                 }
@@ -555,7 +567,7 @@ public class Importer {
                             if (budgetItems == null) {
                                 switch (getResolver().getTerminationCondition()) {
                                     case SKIP:
-                                         // Move to the next provisional transaction:
+                                        // Move to the next provisional transaction:
                                         provTrxIndex++;
                                         continue;
 
@@ -636,7 +648,7 @@ public class Importer {
                         provTrxIndex++;
                         regTrxIndex++;
 
-                    } else {  // else the The provisional transaction from the database has fallen off.
+                    } else {  // else the provisional transaction from the database has fallen off.
 
                         //  If the register transaction is more than one business day old, then it has likely been
                         // withdrawn:
@@ -652,10 +664,9 @@ public class Importer {
                                 // And delete the transaction that has fallen off:
                                 registerTransactions.get(regTrxIndex).delete();
                             }
-
-                            // Move to the next register transaction:
-                            regTrxIndex++;
                         }
+                        // Move to the next register transaction:
+                        regTrxIndex++;
                     } // End else the key to the imported transaction is greater than the key to existing transaction.
                 } // End while there are provisional or register transactions left to process.
             } // End if there were any transactions in the provisional transactions file.

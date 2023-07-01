@@ -1,6 +1,6 @@
 package com.hixon.financialApp.utility;
 
-public class FinancialAppException extends Throwable {
+public class FinancialAppException extends Exception {
     public FinancialAppException(String s) {
         super(s);
     }

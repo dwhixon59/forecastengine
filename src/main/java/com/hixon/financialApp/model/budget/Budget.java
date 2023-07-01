@@ -106,6 +106,17 @@ public class Budget extends IndependentEntity {
     /*
      * Helper methods:
      */
+
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
+    
+
     public List<Register> getRegisters() throws BudgetException, SQLException, RegisterException, EntityException {
         ResultSet rs = EntityInt.getRS(Register.getSelectQuery() + " where Budget_idBudget = uuid_to_bin('" +
                         id + "')", "get the Registers associated with the budget " + this);

@@ -140,6 +140,11 @@ public class BudgetItem extends Item {
       return "Budget " + super.toStringShort();
    }
 
+   @Override
+   public boolean isValid() {
+      return true;
+   }
+
 
    /*
     *  Load and save methods:
@@ -200,7 +205,7 @@ public class BudgetItem extends Item {
       }
    }
 
-   // Get the payee for a budget item using it's arbitrary ID:
+   // Get the payee for a budget item using its arbitrary ID:
    public static String getPayeeById(UUID idBudgetItem) throws BudgetException {
 
       if (idBudgetItem == null) {
@@ -334,6 +339,7 @@ public class BudgetItem extends Item {
          throw be;
       }
    }
+
 
    /*
     * Main methods:

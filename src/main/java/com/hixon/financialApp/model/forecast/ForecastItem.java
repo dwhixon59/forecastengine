@@ -146,6 +146,16 @@ public class ForecastItem extends Item {
         setDirty(true);
     }
 
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
+
+
     public static ForecastItem getById(UUID idForecastItem) throws EntityException, SQLException, BudgetException,
             ForecastException {
         ResultSet rs = EntityInt.getRSById(selectQuery + " where idForecastItem = ", idForecastItem,
@@ -248,7 +258,7 @@ public class ForecastItem extends Item {
                 idBudgetItem + "') where idForecastItem = uuid_to_bin('" + id + "')";
     }
 
-    private static final String deleteQuery = "delete from forecast_item where ";
+    private static final String deleteQuery = "delete from forecast_item fi where ";
     public static final String getDeleteQuery() { return deleteQuery; }
 
     @Override
@@ -381,8 +391,8 @@ public class ForecastItem extends Item {
         yesterday.add(Calendar.DATE, -1);
         String expireOldForecastItemsSqlString =
                 getUpdateQuery() + "endDate = " + Utility.calendarDateToSqlDateString(yesterday) + " " +
-                        "where BudgetItem_idBudgetItem = null and " +
-                        "(endDate = null or endDate >= " + Utility.calendarDateToSqlDateString(today) + ")";
+                        "where BudgetItem_idBudgetItem is null and " +
+                        "(endDate is null or endDate >= " + Utility.calendarDateToSqlDateString(today) + ")";
         EntityInt.executeUpdate(expireOldForecastItemsSqlString, "to expire old forecast items.");
     }
 
@@ -398,11 +408,12 @@ public class ForecastItem extends Item {
         Calendar yesterday = Calendar.getInstance();
         yesterday.add(Calendar.DATE, -1);
         String deleteExpiredUnusedForecastItemsSqlString = getDeleteQuery() +
-                "where " +
-                    "endDate <= " + Utility.calendarDateToSqlDateString(yesterday) + " and " +
-                    "BudgetItem_idBudgetItem = null and " +
-                    "(select count (*) from forecast_item fi inner join forecast_transaction ft " +
-                        "on fi.idForecastItem = ft.ForecastItem_idForecastItem) = 0";
+                "endDate <= " + Utility.calendarDateToSqlDateString(yesterday) + " and " +
+                "BudgetItem_idBudgetItem = null and " +
+                "(select count(*) " +
+                    "from forecast_transaction ft " +
+                    "where fi.idForecastItem = ft.ForecastItem_idForecastItem" +
+                ") = 0";
         EntityInt.executeUpdate(deleteExpiredUnusedForecastItemsSqlString, "to delete expired, unused " +
                 "forecast items.");
     }

@@ -1,6 +1,8 @@
 package com.hixon.financialApp.controller;
 
-public class ControllerException extends Throwable {
+import com.hixon.financialApp.utility.FinancialAppException;
+
+public class ControllerException extends FinancialAppException {
     public ControllerException(String s) {
         super(s);
     }

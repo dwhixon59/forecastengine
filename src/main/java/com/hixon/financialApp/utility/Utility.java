@@ -8,6 +8,10 @@ import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -430,8 +434,7 @@ public class Utility {
             stringAmount = stringAmount.replace("$", "");
             stringAmount = stringAmount.replace(",", "");
             return Double.parseDouble(stringAmount);
-        }
-        else {
+        } else {
             return new Double(0);
         }
     }
@@ -580,7 +583,6 @@ public class Utility {
         }
         return bufferedReader;
     }
-
 
     public enum StartDateType {
         FIRST_OF_LAST_MONTH, FIRST_OF_THIS_MONTH, TODAY, FIRST_OF_NEXT_MONTH, ONE_MONTH_FROM_TODAY,
@@ -788,14 +790,37 @@ public class Utility {
         // Delete the previous save file:
         String saveFileName = appendToFilename(currentFilename, oldFilenameExtension);
         File saveFile = new File(saveFileName);
-        if (saveFile.exists()) {
+        if (!saveFile.exists()) {
+            getResolver().say("Old file " + saveFileName + " was not deleted because it does not exist.");
+        }
+
+        // Rename the current file to the save file name:
+        File currentFile = new File(currentFilename);
+        if (currentFile.exists()) {
             done = false;
             while (!done) {
-                done = true;
-                if (saveFile.delete()) {
+                try {
+                    // If the save file already exists, delete it:
+                    if (Files.exists(saveFile.toPath())) {
+                        Files.delete(saveFile.toPath());
+
+                        // Wait for the file to be deleted:
+                        while (Files.exists(saveFile.toPath())) {
+                            getResolver().say("Waiting for " + saveFileName + " to be deleted...");
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                            }
+                        }
+                    }
+                    // Rename the current file to the save file name:
+                    Files.move(currentFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE);
+                    done = true;
                     result = true;
-                } else {
-                    getResolver().say("Error occured attempting to delete the file " + saveFileName);
+                } catch (IOException e) {
+                    getResolver().say("\nUnable to rename the file " + currentFilename + " to " + saveFileName);
+                    getResolver().say("Error message: " + e.getMessage());
                     done = !getResolver().getYesOrNo("Would you like to try again?");
                     if (done) {
                         getResolver().say("Failed to rename the file " + currentFilename + " to " +
@@ -805,38 +830,11 @@ public class Utility {
                 }
             }
         } else {
-            getResolver().say("Old file " + saveFileName + " was not deleted because it does not exist.");
-            result = true;
+            getResolver().say("Current file " + currentFilename + " was not renamed because it does not exist.");
+            result = false;
         }
 
-        // Rename the current file to the save file name:
-        if (result) {
-            File currentFile = new File(currentFilename);
-            if (currentFile.exists()) {
-                done = false;
-                while (!done) {
-                    if (currentFile.renameTo(saveFile)) {
-                        done = true;
-                        result = true;
-                    } else {
-                        getResolver().say("\nUnable to rename the file " + currentFilename + " to " + saveFileName);
-                        done = !getResolver().getYesOrNo("Would you like to try again?");
-                        if (done) {
-                            getResolver().say("Failed to rename the file " + currentFilename + " to " +
-                                    saveFileName);
-                            result = false;
-                        }
-                    }
-                }
-            } else {
-                getResolver().say("Current file " + currentFilename + " was not renamed because it does not exist.");
-                result = false;
-            }
-        } else {
-            getResolver().say("New file " + currentFilename + " was not renamed because delete of " + saveFileName +
-                    " failed.");
-        }
         return result;
-    }
+}
 
 }

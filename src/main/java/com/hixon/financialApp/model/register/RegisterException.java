@@ -1,6 +1,8 @@
 package com.hixon.financialApp.model.register;
 
-public class RegisterException extends Throwable {
+import com.hixon.financialApp.utility.FinancialAppException;
+
+public class RegisterException extends FinancialAppException {
     public RegisterException(String s) {
         super(s);
     }

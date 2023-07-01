@@ -4,6 +4,7 @@ import com.hixon.financialApp.controller.Importer;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -53,6 +54,14 @@ public interface TransactionResolverInt {
    void ask(String s);
 
    boolean getYesOrNo(String question);
+
+   /**
+    * Ask the user if they want to continue.  Usually this is asked after a recoverable error has occurred.
+    *
+    * @param prompt What happened?
+    * @return true if the user wants to continue.  Otherwise false.
+    */
+   boolean askContinue(String prompt);
 
    /**
     * This method gets an integer from the user in the specified range.  The purpose of this routine is to get the
@@ -158,5 +167,32 @@ public interface TransactionResolverInt {
     * @return The selected menu item.
     */
     String selectFromFirstLetterList(String prompt, String menuOptionList);
-}
 
+   /**
+    *  This method gets a new budget item from the user.
+    *
+    * @return A budget item.
+    */
+   BudgetItem getBudgetItemFromUser() throws BudgetException, SQLException, EntityException, ParseException;
+
+   /**
+    * This method checks to see if a file exists, is not a directory and is not empty.  If any of the previous are true,
+    * then this method asks the user if they want to fix the problem and retry.
+    *
+    * @param fileContent Description of the content of the file.
+    * @param filename The filename, optionally prefaced by the path.
+    * @return True if file exists, is not a directory and not empty.
+    */
+    boolean existsFileWithRetry(String fileContent, String filename) throws QuitException;
+
+   /**
+    * This method asks the user if they want to retry a failed operation, continue without retrying the operation, or
+    * quit whatever procedure they are currently running (like the daily update).
+    *
+    * @return True if they want to retry the failed operation, false if they want to continue without retrying.
+    * @throws QuitException if the user wants to quit the current process.
+    * @throws RuntimeException if any exception occurs.  The encountered exception is the cause.
+    */
+   boolean askRetryContinueQuit() throws QuitException, RuntimeException;
+
+}

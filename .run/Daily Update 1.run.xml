@@ -3,7 +3,7 @@
     <option name="ALTERNATIVE_JRE_PATH" value="1.8" />
     <option name="MAIN_CLASS_NAME" value="com.hixon.financialApp.controller.Controller" />
     <module name="ForecastEngine" />
-    <option name="PROGRAM_PARAMETERS" value="updateFromExternalSource processSkippedTransactions importRegisterTransactions importProvisionalRegisterTransactions verifyRegisterBalance renderLongTermForecast renderSpendingReport renderItemsOfInterestReport renderOverdueAndUpcomingItemsReport renderNewTransactionSummaryReport" />
+    <option name="PROGRAM_PARAMETERS" value="dailyUpdate" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

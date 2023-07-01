@@ -136,6 +136,15 @@ public class Merchant extends IndependentEntity {
      * Load and save methods:
      */
 
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
+
     private void loadFromResultSet(ResultSet rs) throws RegisterException {
         try {
 

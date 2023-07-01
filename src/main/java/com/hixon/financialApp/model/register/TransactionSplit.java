@@ -201,6 +201,15 @@ public class TransactionSplit extends DependentEntity {
    /*
     * Helper methods:
     */
+   /**
+    * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+    * the entity.
+    *
+    * @return true if the object is valid
+    */
+   @Override
+   public boolean isValid() { return true; }
+
    @Override
    public String toString() {
       String s = null;
@@ -211,7 +220,7 @@ public class TransactionSplit extends DependentEntity {
                  calendarDateToStringDate(getTransaction().getDate()) + fromOrTo +
                  getTransaction().getMerchant().getName() + " applied to budget item " + getBudgetItem().getPayee() +
                  memoString;
-      } catch (Exception | EntityException | BudgetException | RegisterException e) {
+      } catch (Exception e) {
          e.printStackTrace();
       }
       return s;
@@ -222,7 +231,7 @@ public class TransactionSplit extends DependentEntity {
       try {
          String memoString = (memo != null) ? ".  Memo:  " + memo : ".";
          s = "Split:  " + getBudgetItem().getPayee() + ", " + formatDollarAmount(amount) + memoString;
-      } catch (Exception | EntityException | BudgetException e) {
+      } catch (Exception e) {
          e.printStackTrace();
       }
       return s;

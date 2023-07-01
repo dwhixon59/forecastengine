@@ -61,6 +61,11 @@ public class Transaction extends IndependentEntity {
         return selectQuery;
     }
 
+    private static final String countQuery = "select count(*) from transaction tr";
+    public static String getCountQuery() {
+        return countQuery;
+    }
+
     private static final String insertQuery = "insert into transaction (idTransaction, " +
             "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
             "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
@@ -91,6 +96,16 @@ public class Transaction extends IndependentEntity {
     public static String getUpdateIsNewQuery() {
         return "update transaction set isNew = false ";
     }
+
+
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
 
     @Override
     public String getUpdateByIdQuery() {
@@ -258,12 +273,33 @@ public class Transaction extends IndependentEntity {
     /*
      * Constructors:
      */
-
-    public Transaction(Register register) {
+    // Constructor for creating a new transaction from a register transaction CSV record:
+    public Transaction(Register register, Calendar postDate, String payee, double amount, boolean cleared,
+                       int checkNumber, String importRecordId) {
         super(true);
+        setDirty(true);
+
+        this.postDate = postDate;
+        this.authorizationDate = postDate;
+        this.cleared = cleared;
+        this.checkNumber = checkNumber;
+        this.payee = payee;
+        this.amount = amount;
+        this.balance = 0;
+        this.idRegister = register.getId();
         this.register = register;
+        this.idMerchant = null;
+        this.merchantPayee = null;
+        this.isImproper = false;
+        this.isNew = true;
+        this.importRecordId = importRecordId;
+        this.merchant = null;
+
+        // Add this transaction to the history list:
+        TransactionHistory.getInstance().add(this);
     }
 
+    // Constructor for creating a transaction from a ResultSet record:
     public Transaction(ResultSet rs) throws SQLException {
         super(false);
         loadFromResultSet(rs);
@@ -272,8 +308,8 @@ public class Transaction extends IndependentEntity {
         TransactionHistory.getInstance().add(this);
     }
 
-    // Constructor for importing a provisional transaction:
-    public Transaction(Register register, String postDate, String payee, String credit, String debit, String merchantPayee)
+    // Constructor for importing a provisional transaction from a CSV record:
+    public Transaction(Register register, String postDate, String payee, double amount, String merchantPayee)
             throws ParseException {
 
         super(true);
@@ -283,11 +319,7 @@ public class Transaction extends IndependentEntity {
         cleared = false;
         checkNumber = 0;
         this.payee = payee;
-        if (!credit.trim().isEmpty()) {
-            this.amount = parseDollarAmount(credit);
-        } else {
-            this.amount = -parseDollarAmount(debit);
-        }
+        this.amount = amount;
         balance = 0;
         isImproper = false;
         isNew = true;
@@ -306,7 +338,6 @@ public class Transaction extends IndependentEntity {
     /*
      * Load and save methods:
      */
-
     public static Transaction getById(UUID idTransaction) throws EntityException, SQLException {
         return new Transaction(getRSById(getSelectQuery() + " where tr.idTransaction =", idTransaction,
                 "Database error encountered trying to retrieve a transaction."));
@@ -445,11 +476,42 @@ public class Transaction extends IndependentEntity {
 
     // Get a list of transactions that have not been previously reported on:
     public static ResultSet getNewTransactions(Register register) throws EntityException {
-        String query = getSelectQuery() + " where tr.isNew = true order by tr.postDate asc";
-        return getRS(query, "attempting to retieve a list of transactions that were previously " +
-                "skipped during the import process.");
+        String query = getSelectQuery() + " where tr.isNew = true order by tr.authorizationDate asc";
+        return getRS(query, "attempting to retrieve a list of transactions that were not " +
+                "reported on in a previous new transactions report.");
     }
 
+    /**
+     * Find out if there are transactions that were skipped with respect to a particular forecast during the
+     * importRegisterTransactions() process.  We know they were skipped because the transactions have not been
+     * reconciled to the specified forecast.
+     *
+     * @param forecast The forecast that the transactions were skipped in.
+     * @return
+     * @throws EntityException
+     * @throws SQLException
+     */
+    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, SQLException {
+        Calendar startDate = forecast.getStartDate();
+        Calendar fourMonthsAgo = Calendar.getInstance();
+        fourMonthsAgo.add(Calendar.MONTH, -4);
+        if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
+        String query = getCountQuery() + " " +
+                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
+                "tr.idTransaction not in " +
+                "(select idTransaction from transaction " +
+                "inner join transaction_split on idTransaction = Transaction_idTransaction " +
+                "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
+                "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
+                ") " +
+                "order by postDate asc";
+
+        ResultSet rs = getRS(query, "attempting to retrieve a count of the transactions that were previously " +
+                "skipped during the import process.");
+        rs.next();
+        int count = rs.getInt(1);
+        return (count > 0) ? true : false;
+    }
 
     /**
      * Get a list of transactions that were skipped with respect to a particular forecast during the
@@ -471,9 +533,9 @@ public class Transaction extends IndependentEntity {
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +
                 "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
-                    "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
+                "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
                 ") " +
-                "order by postDate asc";
+                "order by authorizationDate asc";
         return getRS(query, "attempting to retrieve a list of transactions that were previously " +
                 "skipped during the import process.");
     }

@@ -11,7 +11,6 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.WellsFargoBank;
 import com.hixon.financialApp.notification.async.file.fileBasedNotificationService;
-import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
@@ -41,8 +40,9 @@ public class Controller {
         // Use the file based notification service:
         Utility.setNotificationService(new fileBasedNotificationService());
 
-        // Create the Importer:
+        // Create the various sub controllers:
         Importer importer = new Importer();
+        BudgetItemManager budgetItemManager = new BudgetItemManager();
 
         try {
             // Use a MySQL database for persistence:
@@ -63,15 +63,26 @@ public class Controller {
             boolean inSync = true;
             Register register = Register.getByName("Bill Pay Account");
             FinancialInstitutionInt financialInstitution = new WellsFargoBank(register);
-            ;
+
             Budget budget = Budget.getByName("Bill Pay Account");
             Forecast forecast = Forecast.getMostRecent();
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
-                    case "processSkippedTransactions":
+                    case "processUncategorizedTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
-                        Utility.getResolver().say("REPROCESS SKIPPED TRANSACTIONS");
-                        inSync = register.processSkippedTransactions(financialInstitution, register, forecast);
+                        Utility.getResolver().say("REPROCESS UNCATEGORIZED TRANSACTIONS");
+                        inSync = register.processUncategorizedTransactions(financialInstitution, register, forecast);
+                        if (!inSync) {
+                            forecast.updateForecast();
+                            Utility.getResolver().say("\nThe long term forecast was successfully updated.");
+                        }
+                        Utility.getResolver().say("------------------------------------------------------------------------");
+                        break;
+
+                    case "processUnreconciledTransactions":
+                        Utility.getResolver().say("\n\n========================================================================");
+                        Utility.getResolver().say("REPROCESS UNRECONCILED TRANSACTIONS");
+                        inSync = register.processUnreconciledTransactions(financialInstitution, register, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -93,13 +104,13 @@ public class Controller {
 
                     case "importProvisionalRegisterTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
-                        Utility.getResolver().say("IMPORT PROVISIONAL TRANSACTIONS\n");
+                        Utility.getResolver().say("IMPORT PROVISIONAL TRANSACTIONS");
                         inSync = importer.importCsvProvisionalTransactionFile(financialInstitution,
                                 register, forecast);
-                        Utility.getResolver().say("\nThe provisional transactions were successfully imported.");
+                        Utility.getResolver().say("The provisional transactions were successfully imported.");
                         if (!inSync) {
                             forecast.updateForecast();
-                            Utility.getResolver().say("\nThe long term forecast was successfully updated.");
+                            Utility.getResolver().say("The long term forecast was successfully updated.");
                         }
                         Utility.getResolver().say("------------------------------------------------------------------------");
                         break;
@@ -123,7 +134,14 @@ public class Controller {
                         Utility.getResolver().say("------------------------------------------------------------------------");
                         break;
 
-                    case "l":
+                    case "manageBudgetItems":
+                        Utility.getResolver().say("\n\n========================================================================");
+                        budgetItemManager.manageBudgetItems(forecast);
+                        Utility.getResolver().say("Manage budget items complete.");
+                        Utility.getResolver().say("------------------------------------------------------------------------");
+                        break;
+
+                    case "renderBudgetSummaryReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the Budget Summary Report.");
                         Utility.getBudgetView().renderBudgetSummaryReport();
@@ -238,6 +256,19 @@ public class Controller {
                         Utility.getResolver().say("------------------------------------------------------------------------");
                         break;
 
+                    case "dailyUpdate":
+                        Utility.getResolver().say("\n\n========================================================================");
+                        Utility.getResolver().say("PERFORM THE DAILY UPDATE");
+                        DailyUpdate dailyUpdate = new DailyUpdate(register, financialInstitution, budget, forecast);
+                        if(dailyUpdate.run()) {
+                            Utility.getResolver().say("The daily update succeeded.");
+                        }
+                        else {
+                            Utility.getResolver().say("The daily update failed.");
+                        }
+                        Utility.getResolver().say("------------------------------------------------------------------------");
+                        break;
+
                     default:
                         throw new ControllerException("Unrecognized goal '" + args[i] + "' (parameter " + i + ") in Controller.");
                 }
@@ -248,9 +279,12 @@ public class Controller {
             Utility.getDbConnection().close();
 
         } catch (QuitException qe) {
+            if (Utility.getDbConnection() != null) {
+                Utility.getDbConnection().close();
+            }
             Utility.getResolver().say("\nProcessing aborted at user's request.");
 
-        } catch (Exception | FinancialAppException e) {
+        } catch (Exception e) {
             if (Utility.getDbConnection() != null) {
                 Utility.getDbConnection().close();
             }

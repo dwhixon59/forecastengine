@@ -78,8 +78,8 @@ public abstract class Item extends IndependentEntity {
      */
     // How frequently this forecast item is expected to occur:
     public enum PeriodType {
-        ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, SEMIMONTHLY, SCHOOLYEARSEMIMONTHLY, MONTHLY, SIXWEEKS, BIMONTHLY, QUARTERLY, SEMIANNUALLY,
-        ANNUALLY;
+        ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, THREE_WEEKS, FOUR_WEEKS, SEMIMONTHLY, SCHOOL_YEAR_SEMIMONTHLY, MONTHLY,
+        SIX_WEEKS, BIMONTHLY, QUARTERLY, SEMIANNUALLY, ANNUALLY;
     }
 
     public boolean isExpired(Calendar nextDate) {
@@ -369,13 +369,19 @@ public abstract class Item extends IndependentEntity {
             case SEMIMONTHLY:
                 monthlyAmount = amount * 24.0;
                 break;
-            case SCHOOLYEARSEMIMONTHLY:
+            case SCHOOL_YEAR_SEMIMONTHLY:
                 monthlyAmount = amount * 9.0;
+                break;
+            case THREE_WEEKS:
+                monthlyAmount = amount / 21.0 * 365.0;
+                break;
+            case FOUR_WEEKS:
+                monthlyAmount = amount / 28.0 * 365.0;
                 break;
             case MONTHLY:
                 monthlyAmount = amount * 12.0;
                 break;
-            case SIXWEEKS:
+            case SIX_WEEKS:
                 monthlyAmount = amount / 42.0 * 365.0;
                 break;
             case BIMONTHLY:
@@ -423,13 +429,19 @@ public abstract class Item extends IndependentEntity {
                 period = SEMIMONTHLY;
                 break;
             case "School-Year-Semi-Monthly":
-                period = SCHOOLYEARSEMIMONTHLY;
+                period = SCHOOL_YEAR_SEMIMONTHLY;
+                break;
+            case "Three-Weeks":
+                period = THREE_WEEKS;
+                break;
+            case "Four-Weeks":
+                period = FOUR_WEEKS;
                 break;
             case "Monthly":
                 period = MONTHLY;
                 break;
             case "Six-Weeks":
-                period = SIXWEEKS;
+                period = SIX_WEEKS;
                 break;
             case "Bi-Monthly":
                 period = BIMONTHLY;
@@ -467,13 +479,19 @@ public abstract class Item extends IndependentEntity {
             case SEMIMONTHLY:
                 dbPeriodType = "Semi-Monthly";
                 break;
-            case SCHOOLYEARSEMIMONTHLY:
+            case SCHOOL_YEAR_SEMIMONTHLY:
                 dbPeriodType = "School-Year-Semi-Monthly";
+                break;
+            case THREE_WEEKS:
+                dbPeriodType = "Three-Weeks";
+                break;
+            case FOUR_WEEKS:
+                dbPeriodType = "Four-Weeks";
                 break;
             case MONTHLY:
                 dbPeriodType = "Monthly";
                 break;
-            case SIXWEEKS:
+            case SIX_WEEKS:
                 dbPeriodType = "Six-Weeks";
                 break;
             case BIMONTHLY:
@@ -839,9 +857,11 @@ public abstract class Item extends IndependentEntity {
                     isOk = variance > -3 && variance < 3;
                     break;
                 case SEMIMONTHLY:
-                case SCHOOLYEARSEMIMONTHLY:
+                case SCHOOL_YEAR_SEMIMONTHLY:
+                case THREE_WEEKS:
+                case FOUR_WEEKS:
                 case MONTHLY:
-                case SIXWEEKS:
+                case SIX_WEEKS:
                     isOk = variance > -4 && variance < 4;
                     break;
                 case BIMONTHLY:
@@ -949,6 +969,9 @@ public abstract class Item extends IndependentEntity {
         // Get the day of the week of the forecast start date:
         int forecastStartDayOfWeek = onOrAfterDate.get(Calendar.DAY_OF_WEEK);
 
+        // Placeholder for the days till the next occurrence:
+        int daysTillNextOccurrence;
+
         // Set nextDate to the first occurrence of the budget item on or after the forecast date:
         switch (period) {
 
@@ -970,7 +993,7 @@ public abstract class Item extends IndependentEntity {
                 // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
                 // a 14 day period that the on-or-after-date falls.  So take 14 - the remainder, which is the part of a
                 // 14 days period that remains till the next date of this item, and add it to the on-or-after-date.
-                int daysTillNextOccurrence = 14 - (Utility.daysBeteween(startDate, onOrAfterDate) % 14);
+                daysTillNextOccurrence = 14 - (Utility.daysBeteween(startDate, onOrAfterDate) % 14);
                 Utility.copyDate(onOrAfterDate, nextDate);
                 if (daysTillNextOccurrence != 14) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);
@@ -989,7 +1012,7 @@ public abstract class Item extends IndependentEntity {
                 }
                 break;
 
-            case SCHOOLYEARSEMIMONTHLY:
+            case SCHOOL_YEAR_SEMIMONTHLY:
                 // At the moment semi-monthly means the 1st or the 15th, so pick the first one to occur on or after the
                 // forecast start date:
                 if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
@@ -1000,6 +1023,30 @@ public abstract class Item extends IndependentEntity {
                 int month = nextDate.get(Calendar.MONTH);
                 if (month >= 6 && month <= 8) {
                     nextDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
+                }
+                break;
+
+            case THREE_WEEKS:
+                // The algorithm is to calculate the number of 21-day periods between the start date of this item and
+                // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
+                // a 21-day period that the on-or-after-date falls.  So take 21 - the remainder, which is the part of a
+                // 21-day period that remains till the next date of this item, and add it to the on-or-after-date.
+                daysTillNextOccurrence = 21 - (Utility.daysBeteween(startDate, onOrAfterDate) % 21);
+                Utility.copyDate(onOrAfterDate, nextDate);
+                if (daysTillNextOccurrence != 21) {
+                    nextDate.add(Calendar.DATE, daysTillNextOccurrence);
+                }
+                break;
+
+            case FOUR_WEEKS:
+                // The algorithm is to calculate the number of 28-day periods between the start date of this item and
+                // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
+                // a 28-day period that the on-or-after-date falls.  So take 28 - the remainder, which is the part of a
+                // 28-day period that remains till the next date of this item, and add it to the on-or-after-date.
+                daysTillNextOccurrence = 28 - (Utility.daysBeteween(startDate, onOrAfterDate) % 28);
+                Utility.copyDate(onOrAfterDate, nextDate);
+                if (daysTillNextOccurrence != 28) {
+                    nextDate.add(Calendar.DATE, daysTillNextOccurrence);
                 }
                 break;
 
@@ -1027,9 +1074,9 @@ public abstract class Item extends IndependentEntity {
                 }
                 break;
 
-            case SIXWEEKS:
-                // Compute the number of six-week increments occur between the item start date and the forecast start
-                // date.
+            case SIX_WEEKS:
+                // Compute the number of six-week increments that occur between the item start date and the forecast
+                // start date.
                 long sixWeekUnits = abs(ChronoUnit.DAYS.between(startDate.toInstant(), onOrAfterDate.toInstant()) / (7 * 6));
 
                 // Set next date to the item start data + that many six-week increments:
@@ -1167,7 +1214,7 @@ public abstract class Item extends IndependentEntity {
                     }
                     break;
 
-                case SCHOOLYEARSEMIMONTHLY:
+                case SCHOOL_YEAR_SEMIMONTHLY:
                     // For now, semi-monthly items always occur on the 1st and the 15th:
                     if (nextDate.get(Calendar.DATE) == 1) {
                         nextDate.set(Calendar.DATE, 15);
@@ -1181,12 +1228,22 @@ public abstract class Item extends IndependentEntity {
                     }
                     break;
 
+                case THREE_WEEKS:
+                    // Increment the date by the length of two weeks, e.g. 21 days:
+                    nextDate.add(Calendar.DATE, 21);
+                    break;
+
+                case FOUR_WEEKS:
+                    // Increment the date by the length of two weeks, e.g. 28 days:
+                    nextDate.add(Calendar.DATE, 28);
+                    break;
+
                 case MONTHLY:
                     // Increment the date by one month:
                     nextDate.add(Calendar.MONTH, 1);
                     break;
 
-                case SIXWEEKS:
+                case SIX_WEEKS:
                     // Increment the date by the length of six weeks, e.g. 42 days:
                     nextDate.add(Calendar.DATE, 42);
                     break;
@@ -1273,7 +1330,7 @@ public abstract class Item extends IndependentEntity {
                     }
                     break;
 
-                case SCHOOLYEARSEMIMONTHLY:
+                case SCHOOL_YEAR_SEMIMONTHLY:
                     // For now, semi-monthly items always occur on the 1st and the 15th:
                     if (previousDateOfItemOccurrence.get(Calendar.DATE) == 1) {
                         previousDateOfItemOccurrence.add(Calendar.MONTH, -1);
@@ -1287,12 +1344,22 @@ public abstract class Item extends IndependentEntity {
                     }
                     break;
 
+                case THREE_WEEKS:
+                    // Decrement the date by the length of three weeks, e.g. 21 days:
+                    previousDateOfItemOccurrence.add(Calendar.DATE, -21);
+                    break;
+
+                case FOUR_WEEKS:
+                    // Decrement the date by the length of four weeks, e.g. 28 days:
+                    previousDateOfItemOccurrence.add(Calendar.DATE, -28);
+                    break;
+
                 case MONTHLY:
                     // Decrement the date by one month:
                     previousDateOfItemOccurrence.add(Calendar.MONTH, -1);
                     break;
 
-                case SIXWEEKS:
+                case SIX_WEEKS:
                     // Decrement the date by the length of six weeks, e.g. 42 days:
                     previousDateOfItemOccurrence.add(Calendar.DATE, -42);
                     break;

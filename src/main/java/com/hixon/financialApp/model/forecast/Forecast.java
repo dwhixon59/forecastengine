@@ -66,7 +66,6 @@ public class Forecast extends IndependentEntity {
                 "Database error encountered trying to retrieve a forecast."));
     }
 
-
     // The types of significant events that can be generated:
     public enum SignificantEvents {daysBelowMinimumBalance}
 
@@ -118,6 +117,16 @@ public class Forecast extends IndependentEntity {
         this.inSync = inSync;
         setDirty(true);
     }
+
+
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() { return true; }
 
     @Override
     public String getInsertQuery() {
@@ -389,10 +398,12 @@ public class Forecast extends IndependentEntity {
             forecastItem.save(INSERT);
         }
 
-        // We don't have to delete any forecast items generated from budget items that no longer exist, because they are
-        // presumably the basis of some forecast transactions that may still be in the forecast.  However, we need to expire
-        // them so they no longer generate new forecast transactions.
+        // Expire any forecast items generated from budget items that no longer exist so they no longer generate new
+        // forecast transactions:
         ForecastItem.expireOldForecastItems();
+
+        // Delete any expired forecast items that have no linked forecast transactions:
+        ForecastItem.deleteExpiredUnusedForecastItems();
 
         // Delete all the forecast transactions that occur after the update start date, except for the overridden ones:
         query = ForecastTransaction.getDeleteQuery() + "where plannedDate >= " +
