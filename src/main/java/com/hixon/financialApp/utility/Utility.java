@@ -9,8 +9,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.Date;
@@ -161,7 +159,7 @@ public class Utility {
         return dateFormatted;
     }
 
-    // Print out a date in human readable format:
+    // Print out a date in human-readable format:
     public static String calendarDateToLongStringDate(Calendar calendar) {
         String dateFormatted;
         if (calendar != null) {

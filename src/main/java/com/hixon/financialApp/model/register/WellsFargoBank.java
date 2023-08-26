@@ -129,17 +129,29 @@ public class WellsFargoBank extends Bank {
             throw new ParseException("Too few tokens in the line.", 0);
         }
 
+        // There are two formats for the CSV list that it could be.  The first one starts with a date (short version).
+        // The second one start with some useless text (long version).  To figure out which format it is, test if we
+        // can convert the first column to a date:
+        int iOffset;
+        Calendar postDate = Calendar.getInstance();
+        try {
+            postDate.setTime(sdf.parse(tokens[0]));
+            iOffset = 0;
+        } catch (ParseException e) {
+            iOffset = 1;
+        }
+
         // Determine the amount of the credit and debit:
         double amount = 0;
-        if (tokens.length >= 4 && tokens[3].length() > 0) {
+        if (tokens.length >= (3 + iOffset) && tokens[2 + iOffset].length() > 0) {
             try {
-                amount = Utility.parseDollarAmount(tokens[3]);
+                amount = Utility.parseDollarAmount(tokens[2 + iOffset]);
             } catch (NumberFormatException e) {
             }
         } else {
-            if (tokens.length >= 5 && tokens[4].length() > 0) {
+            if (tokens.length >= (4 + iOffset) && tokens[3 + iOffset].length() > 0) {
                 try {
-                    amount = -Utility.parseDollarAmount(tokens[4]);
+                    amount = -Utility.parseDollarAmount(tokens[3 + iOffset]);
                 } catch (NumberFormatException e) {
                 }
             }
@@ -149,10 +161,10 @@ public class WellsFargoBank extends Bank {
         }
 
         // Figure out which merchant the transaction is associated with:
-        String merchantPayee = parseMerchantPayee(tokens[2], amount);
+        String merchantPayee = parseMerchantPayee(tokens[1 + iOffset], amount);
 
         // Create a transaction based on the provisional record:
-        return new Transaction(register, tokens[1], tokens[2], amount, merchantPayee);
+        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
     }
 
     // Parse out the merchant name from a Wells Fargo CSV transaction download file:
