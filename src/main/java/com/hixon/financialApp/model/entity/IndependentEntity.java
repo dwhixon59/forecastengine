@@ -27,10 +27,33 @@ public abstract class IndependentEntity extends Entity implements IndependentEnt
       return null;
    }
 
+   /*
+   public static <T extends IndependentEntity> T getById(UUID uuid) throws Exception {
+
+      try (Statement statement = Utility.getDbConnection().createStatement()) {
+
+         ResultSet rs;
+         rs = statement.executeQuery(T.getSelectQuery() + " where id" + T.getEntityTypeName() + " = uuid_to_bin('" +
+                 uuid.toString() + "')");
+         rs.next();
+         T item = mapper.apply(rs);
+         return item;
+
+      } catch (SQLException e) {
+         Exception ex = new Exception("Database error occurred trying to retrieve an item with the " +
+                 "sql statement " + selectQuery);
+         ex.initCause(e);
+         throw ex;
+      }
+   }
+ */
+
    public IndependentEntity(boolean createId) {
       if (createId) {
          id = UUID.randomUUID();
          setDirty(true);
       }
    }
+
+
 }

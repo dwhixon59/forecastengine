@@ -1,7 +1,6 @@
 package com.hixon.financialApp.view.cmdLine;
 
 import com.hixon.financialApp.controller.Importer.TerminationCondition;
-import com.hixon.financialApp.controller.InvalidEntryException;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.BudgetException;
@@ -9,6 +8,7 @@ import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
@@ -154,7 +154,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     /**
      * {@inheritdoc}
      */
-    public int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone) throws SQLException, EntityException, SkipException, QuitException {
+    public int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone)
+            throws SQLException, EntityException, SkipException, QuitException {
 
         // Ask which user to send the message to:
         say(prompt + ":  ");
@@ -164,7 +165,31 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         ) {
             say("\t" + i++ + " - " + user);
         }
-        return getNumberBetween("Enter the number corresponding to the user:", (allowNone) ? 0 : 1, i - 1, true, true) - 1;
+        return getNumberBetween("Enter the number corresponding to the item:", (allowNone) ? 0 : 1, i - 1,
+                true, true) - 1;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    @Override
+    public <T extends IndependentEntityInt> T selectByNameFromNumberedList(String prompt, List<T> list, Boolean allowNone)
+            throws SQLException, EntityException, SkipException, QuitException {
+
+        // A list to store the names
+        List<String> names = new ArrayList<>();
+
+        // Iterate over the list of objects and add the name of each object to the list of names:
+        for (T entity : list) {
+            // Execute the method String getName() for each object and add the name to the list
+            names.add(entity.getName());
+        }
+
+        // Ask the user to select one of the names from the list:
+        int index = selectFromNumberedList(prompt, names, allowNone);
+
+        // Return the object corresponding to the selected name, or null if none was selected:
+        return index == -1 ? null : list.get(index);
     }
 
     @Override
@@ -296,9 +321,9 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     private Calendar parseCalendarDate(String prompt, Calendar defaultDate) {
         ask(prompt);
         if (defaultDate == null) {
-            say(" (mm/dd/yy)");
+            say(" (MM-DD-YYYY)");
         } else {
-            say(" (mm/dd/yy) or just hit enter to accept the date " + Utility.calendarDateToStringDate(defaultDate));
+            say(" (MM-DD-YYYY) or just hit enter to accept the date " + Utility.calendarDateToStringDate(defaultDate));
         }
         String line = in.nextLine();
         boolean done = false;
@@ -397,7 +422,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             throws ViewException, RegisterException, EntityException, QuitException, BudgetException {
         try {
             say("\nFailed to find a merchant for payee \"" + merchantPayeeString + "\" derived from transaction payee:  "
-                    + transactionPayeeString + " for the amount of " + Utility.formatDollarAmount(transactionAmount));
+                    + "\n\t" + transactionPayeeString + " for the amount of " + Utility.formatDollarAmount(transactionAmount));
             boolean stop = false;
             Merchant merchant = Merchant.getByPayee(merchantPayeeString);
             MerchantPayee merchantPayee;
@@ -500,23 +525,24 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     // The account number was not in the payee string, so ask the user for help:
     @Override
-    public String resolveUnmatchedAccount(String payee, double amount) throws RegisterException, SkipException, QuitException {
+    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException,
+            SkipException, QuitException {
         String accountNumber = null;
-        say("\nThere is no account number in the following transaction: " + payee + " for " +
-                Utility.formatDollarAmount(amount) + ".");
+        say("\nThere is no account number in the following transaction: " +
+                Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
 
         say("Select the account to assign this transaction to:  ");
         List<Register> registers = Register.getListOf();
         for (int i = 1; i <= registers.size(); i++) {
             Register register = registers.get(i - 1);
-            say("   " + i + ".  " + register.getRegisterName() + ", " + register.getAccountType() + ", " +
+            say("   " + i + ".  " + register.getName() + ", " + register.getAccountType() + ", " +
                     register.getAccountNumber());
         }
 
         int selection = Utility.getResolver().getNumberBetween("Enter the number of the selection", 1,
-                registers.size() + 1, true, true);
+                registers.size(), true, true);
 
-        return registers.get(selection - 1).getAccountNumber();
+        return registers.get(selection - 1);
     }
 
     // Assign budget items to a new list of budget items:

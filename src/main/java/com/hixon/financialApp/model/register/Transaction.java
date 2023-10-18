@@ -16,10 +16,19 @@ import java.util.UUID;
 
 import static com.hixon.financialApp.model.entity.EntityInt.getRS;
 import static com.hixon.financialApp.model.entity.EntityInt.getRSById;
-import static com.hixon.financialApp.utility.Utility.*;
+import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
+import static com.hixon.financialApp.utility.Utility.stringDateSlashToCalendarDate;
 
 
 public class Transaction extends IndependentEntity {
+
+    /*
+     * Statics and Constants:
+     */
+    public static final String CLEARED_TRANSACTIONS_FILE = "cleared transactions";
+
+    public static final String PROVISIONAL_TRANSACTIONS_FILE = "provisional transactions";
+
 
     /*
      * Fields of the Transaction class:
@@ -415,14 +424,14 @@ public class Transaction extends IndependentEntity {
             }
             String registerName;
             if (register != null) {
-                registerName = register.getRegisterName();
+                registerName = register.getName();
             } else {
                 registerName = "null";
             }
             s = "Transaction:  Post date = " + Utility.calendarDateToStringDate(postDate) + ", Authorization date = " +
                     Utility.calendarDateToStringDate(authorizationDate) + ", Cleared = " + cleared + ", Check number = " +
                     checkNumber + ", Merchant = " + merchantName + ", amount = " + formatDollarAmount(amount) +
-                    ",\n\tPayee = " + payee + ", Balance = " + balance + ", Register = " + getRegister().getRegisterName()
+                    ",\n\tPayee = " + payee + ", Balance = " + balance + ", Register = " + getRegister().getName()
                     + ", Merchant payee = " + merchantPayee + ", Disputed = " + isImproper + ", isNew = " + isNew;
         } catch (EntityException | SQLException | RegisterException e) {
             e.printStackTrace();
@@ -440,7 +449,7 @@ public class Transaction extends IndependentEntity {
             String amountString = "\tAmount = " + formatDollarAmount(amount) + "\n";
             String balanceString = (balance > 0.0) ? "\t" + formatDollarAmount(balance) + "\n" : "";
             Register register = getRegister();
-            String registerNameString = (register != null) ? "\tRegister name = " + register.getRegisterName() + "\n" : "";
+            String registerNameString = (register != null) ? "\tRegister name = " + register.getName() + "\n" : "";
             String merchantPayeeString = (merchantPayee != null) ? "\tMerchant payee = " + merchantPayee + "\n" : "";
             String disputedString = (isImproper) ? "\tDisputed transaction.\n" : "";
             String isNewString = (isNew) ? "\tNew Transaction.\n" : "";

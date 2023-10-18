@@ -30,7 +30,7 @@ public interface EntityInt {
    void save(SaveMethod method) throws EntityException, RegisterException, BudgetException, SQLException,
            ForecastException;
 
-   // The inser operation:
+   // The insert operation:
    void insert() throws ForecastException, BudgetException, EntityException, RegisterException, SQLException;
 
    // The update operation:
@@ -39,11 +39,11 @@ public interface EntityInt {
    // The delete operation:
    void delete() throws EntityException, RegisterException;
 
-   // Execute a query using the SQL call executeUpdate ovserving the dirty flag:
+   // Execute a query using the SQL call executeUpdate observing the dirty flag:
    void executeQueryForThis(String query, String exceptionMessage) throws RegisterException, EntityException;
 
    // Execute a query using the SQL call executeUpdate():
-   static int executeUpdate(String query, String exceptionMessage) throws RegisterException, EntityException {
+   static int executeUpdate(String query, String exceptionMessage) throws EntityException {
 
       Statement statement = null;
       ResultSet rs = null;
@@ -60,7 +60,7 @@ public interface EntityInt {
             if (statement != null) statement.close();
             if (rs != null) rs.close();
          } finally {
-            EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
+            EntityException ee = new EntityException("Database error occurred " + exceptionMessage + ".  \nSQL " +
                     "statement was " + query);
             ee.initCause(e);
             throw ee;
@@ -84,7 +84,7 @@ public interface EntityInt {
             if (statement != null) statement.close();
             if (rs != null) rs.close();
          } finally {
-            EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
+            EntityException ee = new EntityException("Database error occurred " + exceptionMessage + ".  \nSQL " +
                     "statement was " + selectQuery);
             ee.initCause(e);
             throw ee;
@@ -103,7 +103,7 @@ public interface EntityInt {
          try {
             if (rs != null) rs.close();
          } finally {
-            EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
+            EntityException ee = new EntityException("Database error occurred " + exceptionMessage + ".  \nSQL " +
                     "statement was " + selectQuery);
             ee.initCause(e);
             throw ee;
@@ -129,7 +129,7 @@ public interface EntityInt {
          try {
             if (statement != null) statement.close();
          } finally {
-            EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
+            EntityException ee = new EntityException("Database error occurred " + exceptionMessage + ".  \nSQL " +
                     "statement was " + deleteQuery);
             ee.initCause(e);
             throw ee;

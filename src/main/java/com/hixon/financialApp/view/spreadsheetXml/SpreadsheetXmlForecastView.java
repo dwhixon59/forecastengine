@@ -14,8 +14,8 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
-import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
@@ -128,9 +128,9 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    public SpreadsheetXmlForecastView() throws EntityException, SQLException {
       super(Forecast.getMostRecent());
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              "ShortTermForecast.xml";
+              "ShortTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xml";
       longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              "LongTermForecast.xml";
+              "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xml";
       encoding = "UTF-8";
       csvForecastView = new CsvForecastView(forecast);
    }
@@ -139,9 +139,9 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
    public SpreadsheetXmlForecastView(Forecast forecast) throws EntityException, SQLException {
       super(forecast);
       shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              "ShortTermForecast.xml";
+              "ShortTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xml";
       longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              "LongTermForecast.xml";
+              "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xml";
       encoding = "UTF-8";
       csvForecastView = new CsvForecastView(forecast);
    }

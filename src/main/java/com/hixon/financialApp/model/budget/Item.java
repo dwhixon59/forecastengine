@@ -700,7 +700,7 @@ public abstract class Item extends IndependentEntity {
                 howOccurs = VARIABLE_PERIODIC;
                 break;
             default:
-                throw new BudgetException("Invalid item howPaid:  " + dbHowOccurs + ".");
+                throw new BudgetException("Invalid item how:  " + dbHowOccurs + ".");
         }
         return howOccurs;
     }

@@ -8,6 +8,7 @@ import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.util.Calendar;
 
 public interface FinancialInstitutionInt {
 
@@ -19,7 +20,7 @@ public interface FinancialInstitutionInt {
             ViewException, SQLException, SkipException, QuitException;
 
     // Parse a payee string from a particular bank into a Merchant payee:
-    String parseMerchantPayee(String payee, double amount) throws ParseException, RegisterException, SQLException, SkipException, QuitException;
+    String parseMerchantPayee(Calendar date, double amount, String payee) throws ParseException, RegisterException, SQLException, SkipException, QuitException;
 
     // Create a transaction and load it from a provisional CSV record:
     Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException, RegisterException, SkipException, QuitException;

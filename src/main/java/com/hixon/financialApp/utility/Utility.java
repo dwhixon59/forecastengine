@@ -31,6 +31,9 @@ public class Utility {
     public static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
 
     // Common database connection for the App:
+    private static User user;
+
+    // Common database connection for the App:
     private static Connection dbConnection;
 
     // The configured transaction resolver:
@@ -46,6 +49,13 @@ public class Utility {
     /*
      * Getters and setters:
      */
+    public static User getUser() {
+        return user;
+    }
+    public static void setUser(User user) {
+        Utility.user = user;
+    }
+
     public static Connection getDbConnection() {
         return dbConnection;
     }
@@ -561,6 +571,7 @@ public class Utility {
      * not found, then it will ask the user if they want to try again and if so it will try again.
      *
      * @param fileName The name of the file to be opened.
+     * @param fileType A description of the file to be opened that is appropriate for error messages.
      * @return A {@link FileReader} object on the specified file
      * @throws FileNotFoundException Thrown if the file does not exist.
      */
@@ -580,6 +591,16 @@ public class Utility {
             }
         }
         return bufferedReader;
+    }
+
+    /**
+     * This method doubles the backslashes in a string.  This is necessary when passing a string to a database query.
+     *
+     * @param string The string to be modified.
+     * @return The modified string.
+     */
+    public static String doubleBackSlashes(String string) {
+        return string.replace("\\", "\\\\");
     }
 
     public enum StartDateType {

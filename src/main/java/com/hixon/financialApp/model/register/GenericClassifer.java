@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
+import java.util.Calendar;
 
 public class GenericClassifer implements FinancialInstitutionInt {
 
@@ -105,7 +106,7 @@ public class GenericClassifer implements FinancialInstitutionInt {
     }
 
     @Override
-    public String parseMerchantPayee(String payee, double amount) throws ParseException, RegisterException, SQLException {
+    public String parseMerchantPayee(Calendar date, double amount, String payee) throws ParseException, RegisterException, SQLException {
         return null;
     }
 

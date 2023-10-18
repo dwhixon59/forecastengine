@@ -384,14 +384,15 @@ public class ForecastItem extends Item {
     /**
      * Expire any forecast items that refer to budget items that no longer exist and are not already expired.
      */
-    public static void expireOldForecastItems() throws EntityException, RegisterException {
+    public static void expireOldForecastItems(Forecast forecast) throws EntityException, RegisterException {
 
         Calendar today = Calendar.getInstance();
         Calendar yesterday = Calendar.getInstance();
         yesterday.add(Calendar.DATE, -1);
         String expireOldForecastItemsSqlString =
                 getUpdateQuery() + "endDate = " + Utility.calendarDateToSqlDateString(yesterday) + " " +
-                        "where BudgetItem_idBudgetItem is null and " +
+                        "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
+                        "BudgetItem_idBudgetItem is null and " +
                         "(endDate is null or endDate >= " + Utility.calendarDateToSqlDateString(today) + ")";
         EntityInt.executeUpdate(expireOldForecastItemsSqlString, "to expire old forecast items.");
     }
@@ -402,12 +403,13 @@ public class ForecastItem extends Item {
      * transactions.  These transactions will never generate any new forecast transactions, and they aren't linked to
      * any old forecast transactions so these zombie items are just cluttering up the list of forecast items.
      */
-    public static void deleteExpiredUnusedForecastItems() throws EntityException, RegisterException {
+    public static void deleteExpiredUnusedForecastItems(Forecast forecast) throws EntityException, RegisterException {
 
         Calendar today = Calendar.getInstance();
         Calendar yesterday = Calendar.getInstance();
         yesterday.add(Calendar.DATE, -1);
         String deleteExpiredUnusedForecastItemsSqlString = getDeleteQuery() +
+                "Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') and " +
                 "endDate <= " + Utility.calendarDateToSqlDateString(yesterday) + " and " +
                 "BudgetItem_idBudgetItem = null and " +
                 "(select count(*) " +

@@ -1,9 +1,9 @@
 package com.hixon.financialApp.model.entity;
 
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.utility.Utility;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.sql.ResultSet;
@@ -46,6 +46,28 @@ public abstract class Entity implements EntityInt {
    // The generic load() method is two or three constructors.  One from a result set, one from a CSV line and a default
    // or default-like constructor;
 
+    // The generic get-a-list-of method:
+ /* public static <T extends EntityInt> List<T> getListOf() throws Exception {
+
+      try (Statement statement = Utility.getDbConnection().createStatement()) {
+
+         ResultSet rs;
+         rs = statement.executeQuery(T.getSelectQuery());
+         List<T> items = new ArrayList<>();
+         while (rs.next()) {
+            T item = mapper.apply(rs);
+            items.add(item);
+         }
+         return items;
+
+      } catch (SQLException e) {
+         Exception ex = new Exception("Database error occurred trying to retrieve an item with the " +
+                 "sql statement " + selectQuery);
+         ex.initCause(e);
+         throw ex;
+      }
+   }
+*/
    // The generic save operation:
    @Override
    public void save(SaveMethod method) throws EntityException, RegisterException, BudgetException, SQLException, ForecastException {

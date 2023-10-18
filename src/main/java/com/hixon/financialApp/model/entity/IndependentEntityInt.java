@@ -8,4 +8,7 @@ public interface IndependentEntityInt extends EntityInt {
 
    void setId(UUID id);
 
+   default String getName() throws EntityException {
+      throw new EntityException("Default implementation not supported.");
+   }
 }

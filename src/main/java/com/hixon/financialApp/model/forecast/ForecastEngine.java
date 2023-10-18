@@ -44,8 +44,9 @@ public class ForecastEngine {
              in the forecast window, add a forecast item for it to the forecast.
             */
             // Retrieve a handle to the list of items in the budget:
-            ResultSet rs = EntityInt.getRS(BudgetItem.getSelectQuery(), "Database error attempting to" +
-                    " retrieve a list of items in the budget.");
+            String query = BudgetItem.getSelectQuery() + " where bi.idBudgetItem = uuid_to_bin('" +
+                    forecast.getBudget().getId() + "')";
+            ResultSet rs = EntityInt.getRS(query, "Database error attempting to retrieve a list of items in the budget.");
 
             // Setup the start, next and end dates for the forecast:
             Calendar nextDate = new GregorianCalendar();
@@ -61,11 +62,11 @@ public class ForecastEngine {
             while (rs.next()) {
 
                 // If this is an on-demand (unscheduled) item, then skip it:
-                if (rs.getString("Period").equalsIgnoreCase("On-Demand"))
+                if (rs.getString("bi.period").equalsIgnoreCase("On-Demand"))
                     continue;
 
                 // If this budget item expires before the beginning of the forecast window then skip it:
-                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("endDate",
+                Calendar budgetItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("bi.endDate",
                         LocalDate.class));
                 if (budgetItemEndDateDb != null) {
                     if (budgetItemEndDateDb.compareTo(forecast.getStartDate()) < 0)
@@ -83,7 +84,7 @@ public class ForecastEngine {
             fe.initCause(se);
             throw fe;
         }
-        return true;
+        return (forecast.getFirstForecastItem() != null) ? true : false;
     }
 
     // Generate the forecast transactions for the forecast items in a forecast starting at the specified start date:

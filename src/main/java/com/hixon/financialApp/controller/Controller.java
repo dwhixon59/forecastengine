@@ -2,23 +2,23 @@ package com.hixon.financialApp.controller;
 
 
 import com.hixon.financialApp.model.budget.Budget;
-import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastEngine;
 import com.hixon.financialApp.model.register.FinancialInstitutionInt;
 import com.hixon.financialApp.model.register.Register;
-import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.WellsFargoBank;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.file.fileBasedNotificationService;
+import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.cmdLine.TransactionResolverCmdLine;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
 
-import java.sql.DriverManager;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Calendar;
 
 
@@ -26,51 +26,103 @@ import java.util.Calendar;
  * Main controller for the command line version of the product:
  */
 public class Controller {
-
+    /*
+     * Statics and constants:
+     */
     //private static final Logger LOGGER = LogManager.getLogger(Controller.class);
 
-    public static void main(String[] args) throws Exception, BudgetException, ControllerException, RegisterException,
-            ViewException, EntityException {
 
-        //LOGGER.debug("Enter method Main().");
+    /*
+     * Member variables:
+     */
+    private Register register = null;
+    private Budget budget = null;
+    private Forecast forecast = null;
+    private FinancialInstitutionInt financialInstitution = null;
 
-        // Interact with the user via the command line for server operations:
-        Utility.setResolver(new TransactionResolverCmdLine());
 
-        // Use the file based notification service:
-        Utility.setNotificationService(new fileBasedNotificationService());
+    /*
+     * Constructors:
+     */
+    public Controller(String username, Connection dbConnection, TransactionResolverCmdLine transactionResolverCmdLine,
+                      fileBasedNotificationService fileBasedNotificationService) throws SQLException, EntityException {
+        Utility.setDbConnection(dbConnection);
+        Utility.setUser(User.getByName(username));
+        Utility.setResolver(transactionResolverCmdLine);
+        Utility.setNotificationService(fileBasedNotificationService);
+    }
 
-        // Create the various sub controllers:
-        Importer importer = new Importer();
-        BudgetItemManager budgetItemManager = new BudgetItemManager();
 
+    /*
+     * Helper methods:
+     */
+    /**
+     * Get the register, budget, and forecast associated with the selected register that the user wants to work with:
+     *
+     * @throws FinancialAppException Throws any of the app exceptions that can be thrown by the methods called by this.
+     * @throws Exception May throw various low level exceptions like SQLException, etc.
+     */
+    private void getRegisterBudgetForecast() throws FinancialAppException, Exception {
+
+        // If a register has not been selected:
+        if (register == null) {
+
+            // then get the register associated with the selected register that the user wants to work with:
+            register = Register.selectRegister();
+            Utility.setRegisterView(new SpreadsheetXmlRegisterView(register));
+
+            // and set the financial institution associated with the selected register
+            financialInstitution = new WellsFargoBank(register);
+
+            // and get the budget associated with the selected register that the user wants to work with:
+            budget = Budget.getById(register.getBudgetID());
+            Utility.setBudgetView(new SpreadsheetXmlBudgetView(budget));
+
+            // and get the forecast associated with the selected register that the user wants to work with:
+            forecast = Forecast.selectForecast(budget);
+            Utility.setForecastView(new SpreadsheetXmlForecastView(forecast));
+        }
+        else {
+            // If the budget is null, then get the budget associated with the selected register the user wants to work
+            // with:
+            if (budget == null) {
+                budget = Budget.getById(register.getBudgetID());
+                Utility.setBudgetView(new SpreadsheetXmlBudgetView(budget));
+            }
+
+            // If the forecast is null, then get the forecast associated with the selected register that the user wants
+            // to work with:
+            if (forecast == null) {
+                forecast = Forecast.selectForecast(budget);
+                Utility.setForecastView(new SpreadsheetXmlForecastView(forecast));
+            }
+        }
+    }
+
+
+    /**
+     * Run the app with the given user, database connection, resolver, notification service and goals:
+     */
+    public void run(String[] args) throws SQLException {
         try {
-            // Use a MySQL database for persistence:
-            com.hixon.financialApp.utility.Utility.setDbConnection(DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***"));
-//         com.hixon.financialApp.utility.Utility.setDbConnection(DriverManager.getConnection(
-//                 "jdbc:mysql://financialappinstance1.ctgwj8jkemeb.us-east-1.rds.amazonaws.com:3306/forecastdatabase",
-//                 "admin", "***REMOVED-CREDENTIAL***59"));
-
-            // Use Spreadsheet XML as the view for the application:
-            Utility.setRegisterView(new SpreadsheetXmlRegisterView(Register.getByName("Bill Pay Account")));
-            Utility.setBudgetView(new SpreadsheetXmlBudgetView(Budget.getByName("Bill Pay Account")));
-            Utility.setForecastView(new SpreadsheetXmlForecastView(Forecast.getMostRecent()));
+             // Create the various sub controllers:
+            Importer importer = new Importer();
+            BudgetItemManager budgetItemManager = new BudgetItemManager();
 
             // Process the goals:
             Calendar startDate;
             String filename = null;
             boolean inSync = true;
-            Register register = Register.getByName("Bill Pay Account");
-            FinancialInstitutionInt financialInstitution = new WellsFargoBank(register);
-
-            Budget budget = Budget.getByName("Bill Pay Account");
-            Forecast forecast = Forecast.getMostRecent();
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "processUncategorizedTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("REPROCESS UNCATEGORIZED TRANSACTIONS");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Process the uncategorized transactions:
                         inSync = register.processUncategorizedTransactions(financialInstitution, register, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
@@ -82,6 +134,11 @@ public class Controller {
                     case "processUnreconciledTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("REPROCESS UNRECONCILED TRANSACTIONS");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Process the unreconciled transactions:
                         inSync = register.processUnreconciledTransactions(financialInstitution, register, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
@@ -93,6 +150,11 @@ public class Controller {
                     case "importRegisterTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("IMPORT REGISTER TRANSACTIONS");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Import the register transactions:
                         inSync = importer.importCsvRegisterTransactionFile(financialInstitution,
                                 register, forecast);
                         if (!inSync) {
@@ -105,6 +167,11 @@ public class Controller {
                     case "importProvisionalRegisterTransactions":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("IMPORT PROVISIONAL TRANSACTIONS");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Import the provisional transactions:
                         inSync = importer.importCsvProvisionalTransactionFile(financialInstitution,
                                 register, forecast);
                         Utility.getResolver().say("The provisional transactions were successfully imported.");
@@ -118,8 +185,13 @@ public class Controller {
                     case "verifyRegisterBalance":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Verify register balance and update if necessary.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Verify the register balance:
                         if (!Utility.getRegisterView().verifyRegisterBalance(register)) {
-                            Utility.getResolver().say("The balance of the register " + register.getRegisterName() + " was " +
+                            Utility.getResolver().say("The balance of the register " + register.getName() + " was " +
                                     "successfully updated.");
                         }
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -128,6 +200,11 @@ public class Controller {
                     case "importBudgetItems":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Importing the budget items.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Import the budget items:
                         importer.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
                                 "Finances\\Expenses\\BudgetItems.csv");
                         Utility.getResolver().say("The budget items were successfully imported.");
@@ -136,6 +213,11 @@ public class Controller {
 
                     case "manageBudgetItems":
                         Utility.getResolver().say("\n\n========================================================================");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Manage the budget items:
                         budgetItemManager.manageBudgetItems(forecast);
                         Utility.getResolver().say("Manage budget items complete.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -144,6 +226,11 @@ public class Controller {
                     case "renderBudgetSummaryReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the Budget Summary Report.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the budget summary report:
                         Utility.getBudgetView().renderBudgetSummaryReport();
                         Utility.getResolver().say("Successfully rendered the New Budget Summary Report.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -152,6 +239,11 @@ public class Controller {
                     case "renderRegister":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the register.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the register:
                         startDate = Utility.askStartDate();
                         Utility.getRegisterView().renderTransactionReport(startDate);
                         Utility.getResolver().say("The register was successfully rendered");
@@ -161,6 +253,11 @@ public class Controller {
                     case "renderSpendingReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the spending report.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the spending report:
                         Utility.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance());
                         Utility.getResolver().say("The spending report was successfully rendered");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -169,6 +266,11 @@ public class Controller {
                     case "renderSpendingReportForMonth":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the spending report.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the spending report for the specified month
                         Calendar month = Utility.getResolver().getSpendingReportMonth();
                         Utility.getBudgetView().renderSpendingReportForMonth(month);
                         Utility.getResolver().say("The spending report was successfully rendered");
@@ -178,6 +280,11 @@ public class Controller {
                     case "createForecast":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Create the forecast.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Create the forecast:
                         ForecastEngine forecastEngine = new ForecastEngine();
                         startDate = Utility.askStartDate();
                         double startingBalance = 0;
@@ -192,6 +299,11 @@ public class Controller {
                     case "updateFromExternalSource":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Update the forecast from an external source:
                         if (forecast != null) {
                             Utility.getForecastView().updateFromExternalSource();
                         } else {
@@ -203,6 +315,11 @@ public class Controller {
                     case "saveForecast":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Saving the forecast.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Save the forecast:
                         forecast.saveAll();
                         Utility.getResolver().say("The forecast was successfully saved to the database.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -211,6 +328,11 @@ public class Controller {
                     case "updateForecast":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Updating the forecast.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Update the forecast:
                         forecast.updateForecast();
                         Utility.getResolver().say("\nThe forecast was successfully updated.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -219,6 +341,11 @@ public class Controller {
                     case "renderShortTermForecast":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the short term forecast.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the short term forecast:
                         Utility.getForecastView().renderShortTermForecast(forecast);
                         Utility.getResolver().say("Successfully rendered the short term forecast.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -227,6 +354,11 @@ public class Controller {
                     case "renderLongTermForecast":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the long term forecast.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the long term forecast:
                         Utility.getForecastView().renderLongTermForecast(forecast);
                         Utility.getResolver().say("Successfully rendered the long term forecast.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -235,6 +367,11 @@ public class Controller {
                     case "renderItemsOfInterestReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the Items of Interest Report.\n");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the items of interest report:
                         Utility.getNotificationService().sendItemsOfInterestReport(forecast);
                         Utility.getResolver().say("Successfully rendered the Items of Interest Report.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -243,6 +380,11 @@ public class Controller {
                     case "renderOverdueAndUpcomingItemsReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the Overdue and Upcoming Items Report.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the overdue and upcoming items report:
                         Utility.getNotificationService().sendOverdueAndUpcomingItemsReport(forecast);
                         Utility.getResolver().say("Successfully rendered the Overdue and Upcoming Items Report.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -251,6 +393,11 @@ public class Controller {
                     case "renderNewTransactionSummaryReport":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("Rendering the New Transaction Summary Report.");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the new transaction summary report:
                         Utility.getNotificationService().sendNewTransactionSummaryReport(register);
                         Utility.getResolver().say("Successfully rendered the New Transaction Summary Report.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
@@ -259,11 +406,15 @@ public class Controller {
                     case "dailyUpdate":
                         Utility.getResolver().say("\n\n========================================================================");
                         Utility.getResolver().say("PERFORM THE DAILY UPDATE");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Perform the daily update:
                         DailyUpdate dailyUpdate = new DailyUpdate(register, financialInstitution, budget, forecast);
-                        if(dailyUpdate.run()) {
+                        if (dailyUpdate.run()) {
                             Utility.getResolver().say("The daily update succeeded.");
-                        }
-                        else {
+                        } else {
                             Utility.getResolver().say("The daily update failed.");
                         }
                         Utility.getResolver().say("------------------------------------------------------------------------");

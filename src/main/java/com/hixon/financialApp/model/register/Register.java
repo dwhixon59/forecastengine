@@ -15,6 +15,8 @@ import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import com.hixon.financialApp.view.base.TransactionResolverInt;
+import lombok.Getter;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,565 +31,683 @@ import static com.hixon.financialApp.utility.Utility.getResolver;
 import static com.hixon.financialApp.utility.Utility.resolver;
 
 public class Register extends IndependentEntity {
-
-   /*
-    * Fields in the Register class:
-    */
-   private static final String selectQuery = "select bin_to_uuid(r.idRegister) as 'r.idRegister', r.name as 'r.name', " +
-           "r.account_type as 'r.account_type', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
-           "bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' from register r";
-
-   private String registerName = null;
-   private String accountType = null;
-   private String accountNumber = null;
-   private double balance = 0;
-   private UUID idBudget = null;
-   private List<Transaction> significantEvents = new ArrayList<>();
+    /*
+     * Statics and constants:
+     */
 
 
     /*
-    * Getters and setters:
-    */
-   public UUID getId() {
-      return id;
-   }
-
-   public String getRegisterName() {
-      return registerName;
-   }
-
-   public void setRegisterName(String registerName) {
-      this.registerName = registerName;
-   }
-
-   public String getAccountType() {
-      return accountType;
-   }
-
-   public void setAccountType(String accountType) {
-      this.accountType = accountType;
-   }
-
-   public String getAccountNumber() {
-      return accountNumber;
-   }
-
-   public void setAccountNumber(String accountNumber) {
-      this.accountNumber = accountNumber;
-   }
-
-   public double getBalance() {
-      return balance;
-   }
-
-   public void setBalance(double balance) {
-      this.balance = balance;
-   }
-
-   public UUID getIdBudget() {
-      return idBudget;
-   }
-
-   public void setIdBudget(UUID idBudget) {
-      this.idBudget = idBudget;
-   }
-
-   public void setSignificantEvents(List<Transaction> significantEvents) {
-      this.significantEvents = significantEvents;
-   }
-
-   public List<Transaction> getSignificantEvents() {
-      return significantEvents;
-   }
-
-   public static String getSelectQuery() {
-      return selectQuery;
-   }
-
-   @Override
-   public String getInsertQuery() throws BudgetException, ForecastException {
-      return null;
-   }
-
-   @Override
-   public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
-      return null;
-   }
-
-   // The update query:
-   public static final String updateQuery = "update register set ";
-
-   public static String getUpdateQuery() {
-      return updateQuery;
-   }
-
-   public String getupdateClause() {
-      return "name = '" + registerName + "', account_type = '" + accountType + "', account_number = '" + accountNumber +
-              "', balance = " + balance +  ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
-              "where idRegister = uuid_to_bin('" + id + "')";
-   }
+     * Fields in the Register class:
+     */
+    private String name = null;
+    private String accountType = null;
+    private String accountNumber = null;
+    private double balance = 0;
+    @Getter
+    private double skippedAmount = 0;
+    @Getter
+    private String financialInstitution = null;
+    @Getter
+    private String trxImportFileName = null;
+    @Getter
+    private String trxImportFileDirectory = null;
+    @Getter
+    private String provisionalTrxFileName = null;
+    @Getter
+    private String provisionalTrxFileDirectory = null;
+    private UUID idBudget = null;
+    private List<Transaction> significantEvents = new ArrayList<>();
 
 
-   @Override
-   public String getUpdateByIdQuery() throws BudgetException {
-      return getUpdateQuery() + getupdateClause();
-   }
+    /*
+     * Getters and setters:
+     */
+    public UUID getId() {
+        return id;
+    }
 
-   @Override
-   public String getDeleteByIdQuery() {
-      return null;
-   }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-   @Override
-   public String getPrintableEntityTypeName() {
-      return "register";
-   }
+    public String getAccountType() {
+        return accountType;
+    }
+    public void setAccountType(String accountType) {
+        this.accountType = accountType;
+    }
 
+    public String getAccountNumber() {
+        return accountNumber;
+    }
+    public void setAccountNumber(String accountNumber) {
+        this.accountNumber = accountNumber;
+    }
 
-   /*
-    * Constructors:
-    */
-   public Register() {
-      super(true);
-   }
+    public double getBalance() {
+        return balance;
+    }
+    public void setBalance(double balance) {
+        this.balance = balance;
+    }
 
-   public Register(ResultSet rs) throws RegisterException, SQLException {
-      super(false);
-      try {
-         if (rs != null) {
+    public double getSkippedAmount() {
+        return skippedAmount;
+    }
+     public void setSkippedAmount(double skippedAmount) {
+        this.skippedAmount = skippedAmount;
+    }
 
-            this.id = UUID.fromString(rs.getString("r.idRegister"));
-            this.registerName = rs.getString("r.name");
-            this.accountType = rs.getString("r.account_type");
-            this.accountNumber = rs.getString("r.account_number");
-            this.balance = rs.getDouble("r.balance");
-            this.idBudget = UUID.fromString(rs.getString("r.idBudget"));
+    public String getFinancialInstitution() {
+        return financialInstitution;
+    }
+    public void setFinancialInstitution(String financialInstitution) {
+        this.financialInstitution = financialInstitution;
+    }
 
-         } else {
-            throw new RegisterException("Result set passed into Register(rs) is empty or null.");
-         }
-      } catch (SQLException e) {
-         System.out.println("[SEVERE]  SQL error encountered trying to create a register from a result set.");
-         rs.close();
-         throw e;
-      }
-   }
+    public String getTrxImportFileName() {
+        return trxImportFileName;
+    }
+    public void setTrxImportFileName(String trxImportFileName) {
+        this.trxImportFileName = trxImportFileName;
+    }
 
+    public String getTrxImportFileDirectory() {
+        return trxImportFileDirectory;
+    }
+    public void setTrxImportFileDirectory(String trxImportFileDirectory) {
+        this.trxImportFileDirectory = trxImportFileDirectory;
+    }
+    public String getTrxImportFilePath() {
+        return getTrxImportFileDirectory() + "\\" + getTrxImportFileName();
+    }
 
-   /*
-    * Helper methods:
-    */
-   public void addSignificantEvent(Transaction transaction) {
-      significantEvents.add(transaction);
-   }
+    public String getProvisionalTrxFileName() {
+        return provisionalTrxFileName;
+    }
 
-   public void update() throws BudgetException, SQLException, EntityException, RegisterException {
-      getResolver().say("Update Register call.  New balance = " + Utility.formatDollarAmount(getBalance()));
-      super.update();
-   }
+    public void setProvisionalTrxFileName(String provisionalTrxFileName) {
+        this.provisionalTrxFileName = provisionalTrxFileName;
+    }
 
-   /**
-    * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
-    * the entity.
-    *
-    * @return true if the object is valid
-    */
-   @Override
-   public boolean isValid() {
-      return true;
-   }
+    public String getProvisionalTrxFileDirectory() {
+        return provisionalTrxFileDirectory;
+    }
+    public void setProvisionalTrxFileDirectory(String provisionalTrxFileDirectory) {
+        this.provisionalTrxFileDirectory = provisionalTrxFileDirectory;
+    }
 
+    public String getProvisionalTrxFilePath() {
+        return getProvisionalTrxFileDirectory() + "\\" + getProvisionalTrxFileName();
+    }
 
-   /*
-    * Load and save methods:
-    */
-   public static Register getById(UUID idRegister) throws EntityException, SQLException, RegisterException {
-      ResultSet rs = EntityInt.getRSById(selectQuery + " where r.idRegister = ", idRegister,
-              "Database error encountered trying to retrieve register with id = " + idRegister);
-      return new Register(rs);
-   }
+    public UUID getBudgetID() {
+        return idBudget;
+    }
 
-   public static Register getByLastFourDigits(String lastFourDigits) throws RegisterException {
+    public void setIdBudget(UUID idBudget) {
+        this.idBudget = idBudget;
+    }
 
-      String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
-      try {
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(query);
-         if (rs.next()) {
-            return new Register(rs);
-         } else {
-            return null;
-         }
-      } catch (SQLException e) {
-         throw new RegisterException("Database error occurred trying to retrieve a register with the " +
-                 "sql statement " + query, e);
-      }
-   }
+    public void setSignificantEvents(List<Transaction> significantEvents) {
+        this.significantEvents = significantEvents;
+    }
 
-   public static Register getByName(String registerName) throws RegisterException, SQLException {
-      // Find the ID of the named budget:
-      PreparedStatement preparedStmt = null;
-      ResultSet rs = null;
-      String query = selectQuery + " where r.name = '" + registerName + "'";
-      try {
-         preparedStmt = Utility.getDbConnection().prepareStatement(query);
-         rs = preparedStmt.executeQuery();
-         Register register;
-         if (rs != null && rs.next()) {
-            register = new Register(rs);
-         } else {
-            throw new RegisterException("Register named " + registerName + " not found in the database.");
-         }
-         return register;
-      } catch (SQLException e) {
-         RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.", e);
-         if (preparedStmt != null) preparedStmt.close();
-         if (rs != null) rs.close();
-         throw re;
-      }
-   }
-
-   public static List<Register> getListOf() throws RegisterException {
-
-      try {
-
-         Statement statement = Utility.getDbConnection().createStatement();
-         ResultSet rs = statement.executeQuery(selectQuery);
-         List<Register> registers = new ArrayList<>();
-         while (rs.next()) {
-            Register register = new Register(rs);
-            registers.add(register);
-         }
-         return registers;
-
-      } catch (SQLException | RegisterException e) {
-         RegisterException re = new RegisterException("Database error occurred trying to retrieve a register with the " +
-                 "sql statement " + selectQuery);
-         re.initCause(e);
-         throw re;
-      }
-   }
+    public List<Transaction> getSignificantEvents() {
+        return significantEvents;
+    }
 
 
-   /*
-    * Main methods:
-    */
-   // Reprocess any transactions that are not categorized in the database:
-   public boolean processUncategorizedTransactions(FinancialInstitutionInt financialInstitution, Register register,
-                                                   Forecast forecast) throws RegisterException {
-      ImportLog importLog = new ImportLog();
+    /*
+     * Database CRUD methods:
+     */
+    private static final String selectQuery = "select bin_to_uuid(r.idRegister) as 'r.idRegister', r.name as 'r.name', " +
+            "r.account_type as 'r.account_type', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
+            "r.skippedAmount as 'r.skippedAmount', r.financialInstitution as 'r.financialInstitution', " +
+            "r.trxImportFileName as 'r.trxImportFileName', r.trxImportFileDirectory as 'r.trxImportFileDirectory', " +
+            "r.provisionalTrxFileName as 'r.provisionalTrxFileName', r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', " +
+            "bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' from register r";
 
-      int i = 0;
-      try {
-         // Retrieve any transactions that were skipped.
-         ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+    public static String getSelectQuery() {
+        return selectQuery;
+    }
 
-         // For each transaction in the result set:
-         Transaction transaction;
-         Merchant merchant;
-         while(rs.next()) {
+    @Override
+    public String getInsertQuery() throws BudgetException, ForecastException {
+        return null;
+    }
 
-            // Get the transaction for this import record:
-            transaction = new Transaction(rs);
+    @Override
+    public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+        return null;
+    }
 
-            // Let the user know we are beginning a new item:
-            resolver.beginImportItem(transaction);
+    // The update query:
+    public static final String updateQuery = "update register set ";
 
-            // Get the merchant for this transaction:
-            merchant = transaction.getMerchant();
+    public static String getUpdateQuery() {
+        return updateQuery;
+    }
 
-            // If the merchant is the unknown merchant, which means that the user skipped out of the merchant assignment
-            // process then do it now:
-            if ( merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+    public String getUpdateClause() {
+        return "name = '" + name + "', account_type = '" + accountType + "', account_number = '" + accountNumber +
+                "', balance = " + balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" +
+                financialInstitution + "', trxImportFileName = '"  + trxImportFileName + "', trxImportFileDirectory = '" +
+                Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
+                provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
+                Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget
+                + "') where idRegister = uuid_to_bin('" + id + "')";
+    }
 
-               try {
-                  transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getPayee(),
-                          transaction.getAmount()));
-               } catch (SkipException se) {
+    @Override
+    public String getUpdateByIdQuery() throws BudgetException {
+        return getUpdateQuery() + getUpdateClause();
+    }
 
-                  // Once again the user skipped out of the merchant payee parsing process, so skip this transaction:
-                  continue;
-               }
+    @Override
+    public String getDeleteByIdQuery() {
+        return null;
+    }
 
-               // Detach the merchant payee from the "unknown" merchant:
-               MerchantPayee.deleteByName(transaction.getMerchantPayee());
+    @Override
+    public String getPrintableEntityTypeName() {
+        return "register";
+    }
 
-               // And null out the merchant so we will go through the normal merchant assignment process:
-               merchant = null;
+
+    /*
+     * Constructors:
+     */
+    public Register() {
+        super(true);
+    }
+
+    public Register(ResultSet rs) throws RegisterException, SQLException {
+        super(false);
+        try {
+            if (rs != null) {
+
+                this.id = UUID.fromString(rs.getString("r.idRegister"));
+                this.name = rs.getString("r.name");
+                this.accountType = rs.getString("r.account_type");
+                this.accountNumber = rs.getString("r.account_number");
+                this.balance = rs.getDouble("r.balance");
+                this.skippedAmount = rs.getDouble("r.skippedAmount");
+                this.financialInstitution = rs.getString("r.financialInstitution");
+                this.trxImportFileName = rs.getString("r.trxImportFileName");
+                this.trxImportFileDirectory = rs.getString("r.trxImportFileDirectory");
+                this.provisionalTrxFileName = rs.getString("r.provisionalTrxFileName");
+                this.provisionalTrxFileDirectory = rs.getString("r.provisionalTrxFileDirectory");
+                this.idBudget = UUID.fromString(rs.getString("r.idBudget"));
+
+            } else {
+                throw new RegisterException("Result set passed into Register(rs) is empty or null.");
             }
+        } catch (SQLException e) {
+            System.out.println("[SEVERE]  SQL error encountered trying to create a register from a result set.");
+            rs.close();
+            throw e;
+        }
+    }
 
-            // If a merchant hasn't been assigned yet, assign one now:
-            if (merchant == null) {
-               merchant = Merchant.getByPayee(transaction.getMerchantPayee());
-               if (merchant == null) {
-                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
-                  if (merchant == null) {
-                     switch (resolver.getTerminationCondition()) {
-                        case SKIP:
-                           continue;
 
-                        case QUIT:
-                           throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+    /*
+     * Helper methods:
+     */
+    public void addSignificantEvent(Transaction transaction) {
+        significantEvents.add(transaction);
+    }
 
-                        default:
-                           throw new ControllerException("Invalid termination condition " +
-                                   resolver.getTerminationCondition() + " during transaction import");
-                     }
-                  }
-               }
+    public void update() throws BudgetException, SQLException, EntityException, RegisterException {
+        getResolver().say("Update Register call.  New balance = " + Utility.formatDollarAmount(getBalance()));
+        super.update();
+    }
 
-               // then update the transaction merchant info from the merchant that we just found or created:
-               transaction.setMerchant(merchant);
-               transaction.setIdMerchant(merchant.getId());
+    /**
+     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
+     * the entity.
+     *
+     * @return true if the object is valid
+     */
+    @Override
+    public boolean isValid() {
+        return true;
+    }
+
+
+    /*
+     * Load and save methods:
+     */
+    public static Register getById(UUID idRegister) throws EntityException, SQLException, RegisterException {
+        ResultSet rs = EntityInt.getRSById(selectQuery + " where r.idRegister = ", idRegister,
+                "Database error encountered trying to retrieve register with id = " + idRegister);
+        return new Register(rs);
+    }
+
+    /**
+     * Select a register by name from a list of all the registers in the database.
+     *
+     * @return Register The register that was selected.
+     * @throws RegisterException If there are no registers in the database or if no register was selected.
+     * @throws SQLException      If there is a database error.
+     * @throws EntityException   If there is an error non-database error.
+     * @throws SkipException
+     * @throws QuitException
+     */
+    public static Register selectRegister() throws RegisterException, SQLException, EntityException, SkipException,
+            QuitException {
+
+        // Get a list of all the registers:
+        List<Register> registers = Register.getListOf();
+
+        // If there are no registers, throw an exception:
+        if (registers.size() == 0) {
+            throw new RegisterException("There are no registers in the database.");
+        }
+
+        // If there is only one register, return it:
+        if (registers.size() == 1) {
+            return registers.get(0);
+        }
+
+        // Otherwise, let the user select a register:
+        Register register = Utility.getResolver().selectByNameFromNumberedList("Select a register:", registers,
+                TransactionResolverInt.DO_NOT_ALLOW_NONE);
+
+        // If a register was selected, return it, else throw an exception:
+        if (register != null) {
+            return register;
+        } else {
+            throw new RegisterException("No register was selected.");
+        }
+    }
+
+    public static Register getByLastFourDigits(String lastFourDigits) throws RegisterException {
+
+        String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
+        try {
+            Statement statement = Utility.getDbConnection().createStatement();
+            ResultSet rs = statement.executeQuery(query);
+            if (rs.next()) {
+                return new Register(rs);
+            } else {
+                return null;
             }
+        } catch (SQLException e) {
+            throw new RegisterException("Database error occurred trying to retrieve a register with the " +
+                    "sql statement " + query, e);
+        }
+    }
 
-            // If there is a provisional transaction for this transaction, then use the same ID:
-            transaction.reconcileWithProvisional();
+    public static Register getByName(String registerName) throws RegisterException, SQLException {
+        // Find the ID of the named budget:
+        PreparedStatement preparedStmt = null;
+        ResultSet rs = null;
+        String query = selectQuery + " where r.name = '" + registerName + "'";
+        try {
+            preparedStmt = Utility.getDbConnection().prepareStatement(query);
+            rs = preparedStmt.executeQuery();
+            Register register;
+            if (rs != null && rs.next()) {
+                register = new Register(rs);
+            } else {
+                throw new RegisterException("Register named " + registerName + " not found in the database.");
+            }
+            return register;
+        } catch (SQLException e) {
+            RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.", e);
+            if (preparedStmt != null) preparedStmt.close();
+            if (rs != null) rs.close();
+            throw re;
+        }
+    }
 
-            // Get the assigned budget items for the merchant:
-            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+    public static List<Register> getListOf() throws RegisterException {
 
-            // If we couldn't find any matching items, get some help from the user:
-            if (budgetItems.size() < 1) {
-               budgetItems = resolver.assignBudgetItems(merchant);
-               if (budgetItems == null) {
-                  switch (resolver.getTerminationCondition()) {
-                     case SKIP:
-                        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+        try (Statement statement = Utility.getDbConnection().createStatement()) {
+
+            ResultSet rs;
+            rs = statement.executeQuery(selectQuery + " order by r.name");
+            List<Register> registers = new ArrayList<>();
+            while (rs.next()) {
+                Register register = new Register(rs);
+                registers.add(register);
+            }
+            return registers;
+
+        } catch (SQLException | RegisterException e) {
+            RegisterException re = new RegisterException("Database error occurred trying to retrieve a register with the " +
+                    "sql statement " + selectQuery);
+            re.initCause(e);
+            throw re;
+        }
+    }
+
+
+    /*
+     * Main methods:
+     */
+    // Reprocess any transactions that are not categorized in the database:
+    public boolean processUncategorizedTransactions(FinancialInstitutionInt financialInstitution, Register register,
+                                                    Forecast forecast) throws RegisterException {
+        ImportLog importLog = new ImportLog();
+
+        int i = 0;
+        try {
+            // Retrieve any transactions that were skipped.
+            ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+
+            // For each transaction in the result set:
+            Transaction transaction;
+            Merchant merchant;
+            while (rs.next()) {
+
+                // Get the transaction for this import record:
+                transaction = new Transaction(rs);
+
+                // Let the user know we are beginning a new item:
+                resolver.beginImportItem(transaction);
+
+                // Get the merchant for this transaction:
+                merchant = transaction.getMerchant();
+
+                // If the merchant is the unknown merchant, which means that the user skipped out of the merchant assignment
+                // process then do it now:
+                if (merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+
+                    try {
+                        transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getDate(),
+                                transaction.getAmount(), transaction.getPayee()));
+                    } catch (SkipException se) {
+
+                        // Once again the user skipped out of the merchant payee parsing process, so skip this transaction:
                         continue;
+                    }
 
-                     case QUIT:
-                        throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+                    // Detach the merchant payee from the "unknown" merchant:
+                    // TODO: 2023-10-07  This call seems conceptually wrong.  It should delete the payee for a the
+                    //  unknown merchant, but it is only specifying the payee.  It doesn't work anyway.
+                    MerchantPayee.deleteByName(transaction.getMerchantPayee());
 
-                     default:
-                        throw new ControllerException("Invalid termination condition " +
-                                resolver.getTerminationCondition() + " during transaction import");
-                  }
-               }
-            }
+                    // And null out the merchant, so we will go through the normal merchant assignment process:
+                    merchant = null;
+                }
 
-            // Tell the user about the bank transaction we are processing:
-            importLog.logImportEvent(transaction);
+                // If a merchant hasn't been assigned yet, assign one now:
+                if (merchant == null) {
+                    merchant = Merchant.getByPayee(transaction.getMerchantPayee());
+                    if (merchant == null) {
+                        merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
+                        if (merchant == null) {
+                            switch (resolver.getTerminationCondition()) {
+                                case SKIP:
+                                    continue;
 
-            // Get the splits for the transaction.  Create them if they don't already exist:
-            List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
-            if (splits == null) {
-               splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
-            }
+                                case QUIT:
+                                    throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
 
-            // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
-            // transaction report with the new data:
-            transaction.setIsNew(true);
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during transaction import");
+                            }
+                        }
+                    }
 
-            // Save the transaction and associated items:
-            transaction.save(INSERT_ON_DUPLICATE_UPDATE);
-            if (splits != null) {
-               for (TransactionSplit split : splits) {
-                  split.save();
-               }
+                    // then update the transaction merchant info from the merchant that we just found or created:
+                    transaction.setMerchant(merchant);
+                    transaction.setIdMerchant(merchant.getId());
+                }
 
-               // Reconcile this transaction with the forecast:
-               ForecastTransaction.reconcile(forecast, transaction, splits);
-            }
+                // If there is a provisional transaction for this transaction, then use the same ID:
+                transaction.reconcileWithProvisional();
 
-            i++;
-         } // End for each record in the transactions file.
+                // Get the assigned budget items for the merchant:
+                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
 
-         // TODO: Process any significant events that occurred during reconciliation:
+                // If we couldn't find any matching items, get some help from the user:
+                if (budgetItems.size() < 1) {
+                    budgetItems = resolver.assignBudgetItems(merchant);
+                    if (budgetItems == null) {
+                        switch (resolver.getTerminationCondition()) {
+                            case SKIP:
+                                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                                continue;
 
-         // TODO: Save the import event:
+                            case QUIT:
+                                throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
 
-      } catch (Exception e) {
-         throw new RegisterException("Exception occurred while processing skipped transactions", e);
-      }
+                            default:
+                                throw new ControllerException("Invalid termination condition " +
+                                        resolver.getTerminationCondition() + " during transaction import");
+                        }
+                    }
+                }
 
-      // Return the number of transactions imported:
-      if (i > 0) {
-         Utility.getResolver().say("\nSuccessfully reprocessed " + i + " skipped transactions in the register.");
-      } else {
-         Utility.getResolver().say("\nThere were no skipped transactions in the register '" + registerName + "'.");
-      }
-      return forecast.getInSync();
-   }
+                // Tell the user about the bank transaction we are processing:
+                importLog.logImportEvent(transaction);
 
-   // Reprocess any transactions that were previously skipped:
-   public boolean processUnreconciledTransactions(FinancialInstitutionInt financialInstitution, Register register, Forecast forecast)
-           throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
+                // Get the splits for the transaction.  Create them if they don't already exist:
+                List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
+                if (splits == null) {
+                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+                }
 
-      ImportLog importLog = new ImportLog();
+                // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
+                // transaction report with the new data:
+                transaction.setIsNew(true);
 
-      int i = 0;
-      try {
-         // Retrieve any transactions that were skipped.
-         ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+                // Save the transaction and associated items:
+                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                if (splits != null) {
+                    for (TransactionSplit split : splits) {
+                        split.save();
+                    }
 
-         // For each transaction in the result set:
-         Transaction transaction;
-         Merchant merchant;
-         while(rs.next()) {
+                    // Reconcile this transaction with the forecast:
+                    ForecastTransaction.reconcile(forecast, transaction, splits);
+                }
 
-            // Get the transaction for this import record:
-            transaction = new Transaction(rs);
+                i++;
+            } // End for each record in the transactions file.
 
-            // Let the user know we are beginning a new item:
-            resolver.beginImportItem(transaction);
+            // TODO: Process any significant events that occurred during reconciliation:
 
-            // Get the merchant for this transaction:
-            merchant = transaction.getMerchant();
+            // TODO: Save the import event:
 
-            // If the merchant is the unknown merchant, which means that the user skipped out of the merchant assignment
-            // process then do it now:
-            if ( merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+        } catch (Exception e) {
+            throw new RegisterException("Exception occurred while processing skipped transactions", e);
+        }
 
-               try {
-                  transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getPayee(),
-                          transaction.getAmount()));
-               } catch (SkipException se) {
+        // Return the number of transactions imported:
+        if (i > 0) {
+            Utility.getResolver().say("\nSuccessfully reprocessed " + i + " skipped transactions in the register.");
+        } else {
+            Utility.getResolver().say("\nThere were no skipped transactions in the register '" + name + "'.");
+        }
+        return forecast.getInSync();
+    }
 
-                  // Once again the user skipped out of the merchant payee parsing process, so skip this transaction:
-                  continue;
-               }
+    // Reprocess any transactions that were previously skipped:
+    public boolean processUnreconciledTransactions(FinancialInstitutionInt financialInstitution, Register register, Forecast forecast)
+            throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
 
-               // Detach the merchant payee from the "unknown" merchant:
-               MerchantPayee.deleteByName(transaction.getMerchantPayee());
+        ImportLog importLog = new ImportLog();
 
-               // And null out the merchant so we will go through the normal merchant assignment process:
-               merchant = null;
-            }
+        int i = 0;
+        try {
+            // Retrieve any transactions that were skipped.
+            ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
 
-            // If a merchant hasn't been assigned yet, assign one now:
-            if (merchant == null) {
-               merchant = Merchant.getByPayee(transaction.getMerchantPayee());
-               if (merchant == null) {
-                  merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
-                  if (merchant == null) {
-                     switch (resolver.getTerminationCondition()) {
-                        case SKIP:
-                           continue;
+            // For each transaction in the result set:
+            Transaction transaction;
+            Merchant merchant;
+            while (rs.next()) {
 
-                        case QUIT:
-                           throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+                // Get the transaction for this import record:
+                transaction = new Transaction(rs);
 
-                        default:
-                           throw new ControllerException("Invalid termination condition " +
-                                   resolver.getTerminationCondition() + " during transaction import");
-                     }
-                  }
-               }
+                // Let the user know we are beginning a new item:
+                resolver.beginImportItem(transaction);
 
-               // then update the transaction merchant info from the merchant that we just found or created:
-               transaction.setMerchant(merchant);
-               transaction.setIdMerchant(merchant.getId());
-            }
+                // Get the merchant for this transaction:
+                merchant = transaction.getMerchant();
 
-            // If there is a provisional transaction for this transaction, then use the same ID:
-            transaction.reconcileWithProvisional();
+                // If the merchant is the unknown merchant, which means that the user skipped out of the merchant assignment
+                // process then do it now:
+                if (merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
 
-            // Get the assigned budget items for the merchant:
-            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+                    try {
+                        transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getDate(),
+                                transaction.getAmount(), transaction.getPayee()));
+                    } catch (SkipException se) {
 
-            // If we couldn't find any matching items, get some help from the user:
-            if (budgetItems.size() < 1) {
-               budgetItems = resolver.assignBudgetItems(merchant);
-               if (budgetItems == null) {
-                  switch (resolver.getTerminationCondition()) {
-                     case SKIP:
-                        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                        // Once again the user skipped out of the merchant payee parsing process, so skip this transaction:
                         continue;
+                    }
 
-                     case QUIT:
-                        throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+                    // Detach the merchant payee from the "unknown" merchant:
+                    MerchantPayee.deleteByName(transaction.getMerchantPayee());
 
-                     default:
-                        throw new ControllerException("Invalid termination condition " +
-                                resolver.getTerminationCondition() + " during transaction import");
-                  }
-               }
-            }
+                    // And null out the merchant so we will go through the normal merchant assignment process:
+                    merchant = null;
+                }
 
-            // Tell the user about the bank transaction we are processing:
-            importLog.logImportEvent(transaction);
+                // If a merchant hasn't been assigned yet, assign one now:
+                if (merchant == null) {
+                    merchant = Merchant.getByPayee(transaction.getMerchantPayee());
+                    if (merchant == null) {
+                        merchant = resolver.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(), transaction.getAmount());
+                        if (merchant == null) {
+                            switch (resolver.getTerminationCondition()) {
+                                case SKIP:
+                                    continue;
 
-            // Get the splits for the transaction.  Create them if they don't already exist:
-            List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
-            if (splits == null) {
-               splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
-            }
+                                case QUIT:
+                                    throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
 
-            // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
-            // transaction report with the new data:
-            transaction.setIsNew(true);
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during transaction import");
+                            }
+                        }
+                    }
 
-            // Save the transaction and associated items:
-            transaction.save(INSERT_ON_DUPLICATE_UPDATE);
-            if (splits != null) {
-               for (TransactionSplit split : splits) {
-                  split.save();
-               }
+                    // then update the transaction merchant info from the merchant that we just found or created:
+                    transaction.setMerchant(merchant);
+                    transaction.setIdMerchant(merchant.getId());
+                }
 
-               // Reconcile this transaction with the forecast:
-               ForecastTransaction.reconcile(forecast, transaction, splits);
-            }
+                // If there is a provisional transaction for this transaction, then use the same ID:
+                transaction.reconcileWithProvisional();
 
-            i++;
-         } // End for each record in the transactions file.
+                // Get the assigned budget items for the merchant:
+                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
 
-         // TODO: Process any significant events that occurred during reconciliation:
+                // If we couldn't find any matching items, get some help from the user:
+                if (budgetItems.size() < 1) {
+                    budgetItems = resolver.assignBudgetItems(merchant);
+                    if (budgetItems == null) {
+                        switch (resolver.getTerminationCondition()) {
+                            case SKIP:
+                                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                                continue;
 
-         // TODO: Save the import event:
+                            case QUIT:
+                                throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
 
-      } catch (Exception e) {
-         throw new RegisterException("Exception occurred while processing skipped transactions", e);
-      }
+                            default:
+                                throw new ControllerException("Invalid termination condition " +
+                                        resolver.getTerminationCondition() + " during transaction import");
+                        }
+                    }
+                }
 
-      // Return the number of transactions imported:
-      if (i > 0) {
-         Utility.getResolver().say("\nSuccessfully reprocessed " + i + " skipped transactions in the register.");
-      } else {
-         Utility.getResolver().say("\nThere were no skipped transactions in the register '" + registerName + "'.");
-      }
-      return forecast.getInSync();
+                // Tell the user about the bank transaction we are processing:
+                importLog.logImportEvent(transaction);
 
-   } // End processSkippedTransactions().
+                // Get the splits for the transaction.  Create them if they don't already exist:
+                List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
+                if (splits == null) {
+                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+                }
+
+                // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
+                // transaction report with the new data:
+                transaction.setIsNew(true);
+
+                // Save the transaction and associated items:
+                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                if (splits != null) {
+                    for (TransactionSplit split : splits) {
+                        split.save();
+                    }
+
+                    // Reconcile this transaction with the forecast:
+                    ForecastTransaction.reconcile(forecast, transaction, splits);
+                }
+
+                i++;
+            } // End for each record in the transactions file.
+
+            // TODO: Process any significant events that occurred during reconciliation:
+
+            // TODO: Save the import event:
+
+        } catch (Exception e) {
+            throw new RegisterException("Exception occurred while processing skipped transactions", e);
+        }
+
+        // Return the number of transactions imported:
+        if (i > 0) {
+            Utility.getResolver().say("\nSuccessfully reprocessed " + i + " skipped transactions in the register.");
+        } else {
+            Utility.getResolver().say("\nThere were no skipped transactions in the register '" + name + "'.");
+        }
+        return forecast.getInSync();
+
+    } // End processSkippedTransactions().
 
 
-   /**
-    * Get a list of transactions that haven't been reported on before:
-    *
-    * @return List<Entity>  A list of transactions.
-    */
-   public static List<Entity> getNewTransactions(Register register) throws SQLException, EntityException {
+    /**
+     * Get a list of transactions that haven't been reported on before:
+     *
+     * @return List<Entity>  A list of transactions.
+     */
+    public static List<Entity> getNewTransactions(Register register) throws SQLException, EntityException {
 
-      final List<Entity> items = new ArrayList<>();
+        final List<Entity> items = new ArrayList<>();
 
-      // Get a results set of the transactions that haven't been reported on before:
-      ResultSet rs = Transaction.getNewTransactions(register);
+        // Get a results set of the transactions that haven't been reported on before:
+        ResultSet rs = Transaction.getNewTransactions(register);
 
-      // Then for each transactions in the result set:
-      while (rs.next()) {
+        // Then for each transactions in the result set:
+        while (rs.next()) {
 
             // add it to the list of new transactions:
             items.add(new Transaction(rs));
-      }
+        }
 
-      return items;
-   }
+        return items;
+    }
 
-   /**
-    * Set the isNew flag for transactions in this register to false to reflect that the transactions have all been
-    * reported on already.
-    */
-   public void setTransactionsToNotNew() throws EntityException, RegisterException {
-      EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery(), "updated the transactions in Register " +
-              registerName + " to not new.");
-   }
+    /**
+     * Set the isNew flag for transactions in this register to false to reflect that the transactions have all been
+     * reported on already.
+     */
+    public void setTransactionsToNotNew() throws EntityException, RegisterException {
+        EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery(), "updated the transactions in Register " +
+                name + " to not new.");
+    }
 
-   /**
-    * Check to see if there are skipped transactions in this register from previous update runs:
-    *
-    * @return True if there are skipped transactions.  Otherwise, false.
-    */
+    /**
+     * Check to see if there are skipped transactions in this register from previous update runs:
+     *
+     * @return True if there are skipped transactions.  Otherwise, false.
+     */
     public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException {
-       return Transaction.isSkippedTransactionsWrtForecast(forecast);
+        return Transaction.isSkippedTransactionsWrtForecast(forecast);
     }
 }

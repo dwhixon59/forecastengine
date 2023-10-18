@@ -123,7 +123,7 @@ public class User extends IndependentEntity {
    // Constructor from a ResultSet:
    public User(ResultSet rs) throws SQLException {
       super(false);
-      this.id = UUID.fromString(rs.getString("u.id"));
+      this.id = UUID.fromString(rs.getString("u.idUser"));
       this.userName = rs.getString("u.userName");
       this.password = rs.getString("u.password");
       this.firstName = rs.getString("u.firstName");
@@ -167,7 +167,7 @@ public class User extends IndependentEntity {
     * CRUD methods:
     */
    // The select query:
-   public static final String selectColumns = " bin_to_uuid(u.idUser) as 'u.id', u.userName as 'u.userName', u.password " +
+   public static final String selectColumns = " bin_to_uuid(u.idUser) as 'u.idUser', u.userName as 'u.userName', u.password " +
            "as 'u.password', u.firstName as 'u.firstName', u.lastName as 'u.lastName', u.email as 'u.email', " +
            "u.phoneNumber as 'u.phoneNumber', u.personalFileSystem, u.updatedTimeStamp as 'u.updatedTimeStamp'";
    public static String getSelectColumns() {
@@ -223,6 +223,13 @@ public class User extends IndependentEntity {
    /*
     * Main methods:
     */
+   // Get a user by name:
+   public static User getByName(String userName) throws EntityException, SQLException {
+      ResultSet rs = EntityInt.getSingletonRS(User.getSelectQuery()  + " where username = '" + userName + "'",
+              "attempting to retrieve a user by name");
+      return new User(rs);
+   }
+
    // Get a list of the users:
    public static List<User> getAllUsers() throws EntityException, SQLException {
 

@@ -100,7 +100,8 @@ public class WellsFargoBank extends Bank {
         }
 
         // Parse out the merchant name:
-        transaction.setMerchantPayee(parseMerchantPayee(transaction.getPayee(), transaction.getAmount()));
+        transaction.setMerchantPayee(parseMerchantPayee(transaction.getDate(), transaction.getAmount(),
+                transaction.getPayee()));
 
         // Make sure that we update the database:
         transaction.setDirty(true);
@@ -161,14 +162,14 @@ public class WellsFargoBank extends Bank {
         }
 
         // Figure out which merchant the transaction is associated with:
-        String merchantPayee = parseMerchantPayee(tokens[1 + iOffset], amount);
+        String merchantPayee = parseMerchantPayee(postDate, amount, tokens[1 + iOffset]);
 
         // Create a transaction based on the provisional record:
         return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
     }
 
     // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-    public String parseMerchantPayee(String payee, double amount)
+    public String parseMerchantPayee(Calendar date, double amount, String payee)
             throws RegisterException, SkipException, QuitException {
 
         // Construct the merchant payee string from portions of the bank payee string:
@@ -220,30 +221,41 @@ public class WellsFargoBank extends Bank {
             case "ATM TRANSFER AUTHORIZED":
             case "Transfer in Branch/Store":
 
-                // Find the account number:
-                //noinspection StatementWithEmptyBody
+                // Find the register by the last four digits of the account number, or if the account number is not
+                // present, then have the user tell us which register it came from. The reason we only use the last four
+                // digits is that only the last four digits of the account number are provided by Wells Fargo in the
+                // payee string.
                 for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
-                String accountNumber;
+                Register transferRegister = null;
+                String accountNumber = null;
                 if (i == payeeTokens.length) {
-                    accountNumber = resolver.resolveUnmatchedAccount(payee, amount);
-                } else {
+
+                    // The account number isn't in the payee string, so ask the user which register it came from:
+                    transferRegister = resolver.resolveUnmatchedAccount(date, amount, payee);
+                    accountNumber = transferRegister.getAccountNumber();
+                }
+                else {
+                    // The account number is in the payee string, so use it to find the register:
                     accountNumber = payeeTokens[i];
+                    String lastFourDigits = accountNumber.substring(accountNumber.length() - 4);
+                    transferRegister = Register.getByLastFourDigits(lastFourDigits);
                 }
 
-                // then if the transfer is to a register that is part of the forecast then the action is transparent
-                // to the budget:
-                String lastFourDigits = accountNumber.substring(accountNumber.length() - 4);
-                Register register = Register.getByLastFourDigits(lastFourDigits);
-                String toFrom;
+                // Construct a string that describes the transfer for the user
+                String toFrom1, toFrom2;
                 if (payeeTokens[0].equalsIgnoreCase("ATM")) {
-                    toFrom = (payeeTokens[5].equalsIgnoreCase("TO")) ? "to" : "from";
+                    toFrom1 = (payeeTokens[5].equalsIgnoreCase("TO")) ? "to" : "from";
+                    toFrom2 = (payeeTokens[5].equalsIgnoreCase("TO")) ? "from" : "to";
                 } else {
-                    toFrom = (payeeTokens[2].equalsIgnoreCase("TO")) ? "to" : "from";
+                    toFrom1 = (payeeTokens[2].equalsIgnoreCase("TO")) ? "to" : "from";
+                    toFrom2 = (payeeTokens[2].equalsIgnoreCase("TO")) ? "from" : "to";
                 }
-                if (register != null) {
-                    merchantPayee = "Transfer " + toFrom + " account " + register.getRegisterName();
+                if (transferRegister != null) {
+                    merchantPayee = "Transfer " + toFrom1 + " " + transferRegister.getName() + " " + toFrom2 + " " +
+                            register.getName();
                 } else {
-                    merchantPayee = "Transfer " + toFrom + " account " + accountNumber;
+                    merchantPayee = "Transfer " + toFrom1 + " " + accountNumber + " " + toFrom2 + " " +
+                            register.getName();
                 }
                 break;
 

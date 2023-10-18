@@ -28,23 +28,7 @@ import static com.hixon.financialApp.utility.Utility.*;
 
 public class Importer {
 
-    // The file containing forecast transactions to import.  For example, in the case of using the CSV interface,
-    // this is a CSV file of transactions edited in a spreadsheet or something:
-    public static final String FORECAST_TRANSACTIONS_FILE = "Forecast transactions";
-    public static final String FORECAST_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal " +
-            "Business\\Finances\\Expenses\\Expenses.csv";
-
-    // The file containing the cleared transactions, typically downloaded from a bank, credit card, or other type of
-    // financial institution:
-    public static final String CLEARED_TRANSACTIONS_FILE = "Cleared transactions";
-    public static final String CLEARED_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Downloads\\Checking2.csv";
-
-    // The file containing the provisional (uncleared) transactions, typically from a bank, credit card, or other type
-    // of financial institution:
-    public static final String PROVISIONAL_TRANSACTIONS_FILE = "Provisional transactions";
-    public static final String PROVISIONAL_TRANSACTIONS_FILENAME = "C:\\Users\\dwhix\\Downloads\\" +
-            "ProvisionalTransactions.txt";
-
+    // Logger:
     private ImportLog importLog = new ImportLog();
 
 
@@ -116,8 +100,7 @@ public class Importer {
     public boolean importCsvRegisterTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
                                                     Forecast forecast) throws ControllerException, ViewException,
             EntityException, SQLException, BudgetException, RegisterException, QuitException {
-        return importCsvRegisterTransactionFile(CLEARED_TRANSACTIONS_FILENAME, financialInstitution, register,
-                forecast);
+        return importCsvRegisterTransactionFile(register.getTrxImportFilePath(), financialInstitution, register, forecast);
     }
 
     public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt
@@ -135,7 +118,8 @@ public class Importer {
             Transaction transaction;
 
             // Open the import file:
-            BufferedReader br = Utility.openBufferedFileReader(CLEARED_TRANSACTIONS_FILE, clearedTransactionsFilename);
+            BufferedReader br = Utility.openBufferedFileReader(Transaction.CLEARED_TRANSACTIONS_FILE,
+                    clearedTransactionsFilename);
 
             // Read the records in the file into a list so that we can process them in reverse order:
             List<CSVRecord> recordList = new ArrayList<>();
@@ -383,7 +367,7 @@ public class Importer {
 
         } catch (FileNotFoundException e) {
             if (!getResolver().getYesOrNo("Do you want to continue?")) {
-                QuitException qe = new QuitException(CLEARED_TRANSACTIONS_FILE + " " +
+                QuitException qe = new QuitException(Transaction.CLEARED_TRANSACTIONS_FILE + " " +
                         clearedTransactionsFilename + " is invalid or not found.");
                 qe.initCause(e);
                 throw (qe);
@@ -408,7 +392,7 @@ public class Importer {
         // Return the number of transactions imported:
         if (j > 0) {
             getResolver().say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
-                    register.getRegisterName() + " from file " + clearedTransactionsFilename + ".");
+                    register.getName() + " from file " + clearedTransactionsFilename + ".");
         }
         return forecast.getInSync();
 
@@ -421,8 +405,8 @@ public class Importer {
     public boolean importCsvProvisionalTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
                                                        Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException,
             FinancialAppException {
-        return importCsvProvisionalTransactionFile(PROVISIONAL_TRANSACTIONS_FILENAME, financialInstitution,
-                register, forecast);
+        return importCsvProvisionalTransactionFile(register.getProvisionalTrxFileDirectory() + "\\" +
+                        register.getProvisionalTrxFileName(), financialInstitution, register, forecast);
     }
 
     public boolean importCsvProvisionalTransactionFile(String filename, FinancialInstitutionInt financialInstitution,
@@ -430,7 +414,7 @@ public class Importer {
             ControllerException, EntityException, BudgetException, FinancialAppException {
 
         getResolver().say("Import provisional transactions from the file " + filename + " into the register '" +
-                register.getRegisterName() + "'.");
+                register.getName() + "'.");
 
         int provTrxIndex = 0;
         try {
@@ -698,7 +682,7 @@ public class Importer {
         // Tell the user the number of transactions imported:
         if (provTrxIndex > 0) {
             getResolver().say("\nSuccessfully imported " + provTrxIndex + " provisional transactions into the register:  " +
-                    register.getRegisterName() + " from file " + filename + ".");
+                    register.getName() + " from file " + filename + ".");
         }
         return forecast.getInSync();
 

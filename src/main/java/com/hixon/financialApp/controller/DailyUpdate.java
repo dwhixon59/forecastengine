@@ -4,12 +4,12 @@ import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.FinancialInstitutionInt;
 import com.hixon.financialApp.model.register.Register;
+import com.hixon.financialApp.model.register.Transaction;
 
 import java.security.InvalidParameterException;
 import java.sql.SQLException;
 import java.util.Calendar;
 
-import static com.hixon.financialApp.controller.Importer.*;
 import static com.hixon.financialApp.utility.Utility.*;
 
 
@@ -85,25 +85,6 @@ public class DailyUpdate {
             Importer importer = new Importer();
             boolean inSync = true;
 
-            // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
-            getResolver().say("\n\n========================================================================");
-            getResolver().say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
-            try {
-                if (getResolver().existsFileWithRetry(FORECAST_TRANSACTIONS_FILE, FORECAST_TRANSACTIONS_FILENAME)) {
-                    getForecastView().updateFromExternalSource();
-                } else {
-                    getResolver().say("Update of the forecast from an external source skipped at user's request.");
-                }
-            } catch (QuitException qe) {
-                throw qe;
-            } catch (Exception e) {
-                if (!getResolver().askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
-                        "an external source.")) {
-                    throw e;
-                }
-            }
-            getResolver().say("------------------------------------------------------------------------");
-
             // Process any transactions skipped in previous update runs:
             getResolver().say("\n\n===============================================================" +
                     "=========");
@@ -142,10 +123,13 @@ public class DailyUpdate {
                 getResolver().say("\n\n========================================================================");
                 getResolver().say("IMPORT CLEARED TRANSACTIONS");
 
-                if (getResolver().existsFileWithRetry(CLEARED_TRANSACTIONS_FILE, CLEARED_TRANSACTIONS_FILENAME)) {
+                if (getResolver().existsFileWithRetry(Transaction.CLEARED_TRANSACTIONS_FILE,
+                        register.getTrxImportFilePath()))
+                {
                     inSync = importer.importCsvRegisterTransactionFile(financialInstitution,
                             register, forecast);
-                } else {
+                } else
+                {
                     getResolver().say("Import of cleared transactions skipped at user's request.");
                 }
                 getResolver().say("------------------------------------------------------------------------");
@@ -163,8 +147,9 @@ public class DailyUpdate {
                     "=====");
             getResolver().say("IMPORT PROVISIONAL TRANSACTIONS");
             try {
-                if (getResolver().existsFileWithRetry(PROVISIONAL_TRANSACTIONS_FILE, PROVISIONAL_TRANSACTIONS_FILENAME)) {
-
+                if (getResolver().existsFileWithRetry(Transaction.PROVISIONAL_TRANSACTIONS_FILE,
+                        register.getProvisionalTrxFileDirectory() + "\\" + register.getProvisionalTrxFileName()))
+                {
                     // Then import them:
                     boolean inSyncProv = importer.importCsvProvisionalTransactionFile(financialInstitution,
                             register, forecast);
@@ -185,12 +170,31 @@ public class DailyUpdate {
                 }
             }
 
+            // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
+            getResolver().say("\n\n========================================================================");
+            getResolver().say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
+            try {
+                if (getResolver().existsFileWithRetry(Forecast.FORECAST_TRANSACTIONS_FILE, Forecast.FORECAST_TRANSACTIONS_FILENAME)) {
+                    getForecastView().updateFromExternalSource();
+                } else {
+                    getResolver().say("Update of the forecast from an external source skipped at user's request.");
+                }
+            } catch (QuitException qe) {
+                throw qe;
+            } catch (Exception e) {
+                if (!getResolver().askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
+                        "an external source.")) {
+                    throw e;
+                }
+            }
+            getResolver().say("------------------------------------------------------------------------");
+
             // Verify the register balance:
             getResolver().say("\n\n========================================================================");
             getResolver().say("VERIFY REGISTER BALANCE\n");
             try {
                 if (!getRegisterView().verifyRegisterBalance(register)) {
-                    getResolver().say("The balance of the register " + register.getRegisterName() + " was " +
+                    getResolver().say("The balance of the register " + register.getName() + " was " +
                             "successfully updated.");
                 }
             } catch (Exception e) {
@@ -256,7 +260,7 @@ public class DailyUpdate {
             try {
                 getResolver().say("\n\n========================================================================");
                 getResolver().say("RENDERING THE ITEMS OF INTEREST REPORT\n");
-                getNotificationService().sendItemsOfInterestReport(forecast);
+                //getNotificationService().sendItemsOfInterestReport(forecast);
                 getResolver().say("Successfully rendered the Items of Interest Report.");
                 getResolver().say("------------------------------------------------------------------------");
              } catch (Exception e) {

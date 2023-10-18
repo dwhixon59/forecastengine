@@ -54,7 +54,7 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
         }
 
         if (Utility.getResolver().getYesOrNo("\nThe current balance of the " +
-                register.getRegisterName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
+                register.getName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
                 "  Do you want to update it?")) {
             double balance = Utility.getResolver().getDollarAmount();
             register.setBalance(balance);
