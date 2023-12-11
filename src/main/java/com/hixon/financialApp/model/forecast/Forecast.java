@@ -218,7 +218,7 @@ public class Forecast extends IndependentEntity {
         this.id = UUID.fromString(rs.getString("idForecast"));
         this.description = rs.getString("description");
         this.dateGenerated = Utility.localDateToCalendarDate(rs.getObject("dateGenerated", LocalDate.class));
-        this.startDate = Utility.localDateToCalendarDate(rs.getObject("dateGenerated", LocalDate.class));
+        this.startDate = Utility.SqlDateToCalendarDate(rs.getDate("startDate"));
         this.startingBalance = rs.getDouble("startingBalance");
         this.endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
         this.endingBalance = rs.getDouble("endingBalance");
@@ -297,6 +297,29 @@ public class Forecast extends IndependentEntity {
                     "sql statement " + selectQuery);
             fe.initCause(e);
             throw fe;
+        }
+    }
+
+    /**
+     * Get the date of the first forecast transaction in the forecast that is not a placeholder and has a non-zero
+     * remaining amount (which means it is a real transaction).  This is the date that the forecast starts on.  If there
+     * are no forecast transactions, then return today's date.
+     *
+     * @return The date that the forecast is considered to start on.
+     * @throws SQLException      If there is a database error.
+     * @throws EntityException   If there is an error non-database error.
+     */
+    public static Calendar getForecastStartDate(Forecast forecast) throws EntityException, SQLException {
+        String query =
+                "select MIN(plannedDate) as 'ft.plannedDate' " +
+                 "from forecast_transaction ft inner join forecast_item on ForecastItem_idForecastItem = idForecastItem " +
+                 "where remainingAmount <>0 and amount <>0";
+        ResultSet rs = EntityInt.getSingletonRS(query, "Database error encountered trying to retrieve the " +
+                "forecast start date.");
+        if (rs != null) {
+            return Utility.SqlDateToCalendarDate(rs.getDate("ft.plannedDate"));
+        } else {
+            return Calendar.getInstance();
         }
     }
 
@@ -401,8 +424,8 @@ public class Forecast extends IndependentEntity {
             // Insert the forecast transaction tuples:
             errorMessage = "SQL error attempting to insert a forecast transaction into the database.";
             String query = "insert into forecast_transaction (idForecastTransaction, remainingAmount, " +
-                    "plannedDate, runningBalance, firstOccurrence, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), " +
-                    "?, ?, ?, ?, UUID_TO_BIN(?))";
+                    "plannedDate, runningBalance, firstOccurrence, memo, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), " +
+                    "?, ?, ?, ?, ?, UUID_TO_BIN(?))";
             preparedStmt = dbConnection.prepareStatement(query);
             for (ForecastTransaction transaction : this.transactions) {
                 if (transaction != null) {
@@ -414,7 +437,8 @@ public class Forecast extends IndependentEntity {
                         preparedStmt.setDate(3, new java.sql.Date(forecastTransaction.getPlannedDate().getTimeInMillis()));
                         preparedStmt.setDouble(4, forecastTransaction.getRunningBalance());
                         preparedStmt.setBoolean(5, forecastTransaction.isFirstOccurrence());
-                        preparedStmt.setString(6, forecastTransaction.getForecastItem().getId().toString());
+                        preparedStmt.setString(6, forecastTransaction.getMemo());
+                        preparedStmt.setString(7, forecastTransaction.getForecastItem().getId().toString());
                         preparedStmt.execute();
                         forecastTransaction = forecastTransaction.getNextTransaction();
                     }
@@ -467,20 +491,13 @@ public class Forecast extends IndependentEntity {
         endDate.add(MONTH, numberOfMonths);
 
         // Update all the forecast items in the forecast from the current budget items:
-        String query =
-                "update forecast_item fi " +
-                        "inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
-                        "set fi.category = bi.category, fi.payee = bi.payee, fi.period = bi.period, fi.amount = bi.amount, " +
-                        "fi.startDate = bi.startDate, fi.numberOfPayments = bi.numberOfPayments, fi.endDate = bi.endDate, " +
-                        "fi.itemType = bi.itemType, fi.howImportant = bi.howImportant, fi.howOccurs = bi.howOccurs, " +
-                        "fi.howPaid = bi.howPaid " +
-                        "where fi.Forecast_idForecast = uuid_to_bin('" + getId() + "')";
-        executeUpdate(query, "updating the forecast items from the budget items");
+        ForecastItem.updateForecastItemsFromBudgetItems(this);
 
         // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
         // was created:
-        query = BudgetItem.getSelectQuery() + " " +
+        String query = BudgetItem.getSelectQuery() + " " +
                 "LEFT JOIN forecast_item fi ON bi.idBudgetItem = fi.BudgetItem_idBudgetItem " +
+                "AND fi.Forecast_idForecast = uuid_to_bin('" + getId() + "') " +
                 "WHERE bi.Budget_idBudget = uuid_to_bin('" + getBudget().getId() + "') " +
                 "and fi.idForecastItem is null";
         ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
@@ -502,11 +519,11 @@ public class Forecast extends IndependentEntity {
         // Delete all the forecast transactions that occur after the update start date, except for the overridden ones:
         query = ForecastTransaction.getDeleteQuery() +
                 "where ForecastItem_idForecastItem " +
-                    "in (" +
-                        "select idForecastItem " +
-                        "from forecast_item " +
-                        "where Forecast_idForecast = uuid_to_bin('" + getId() + "')" +
-                    ") " +
+                "in (" +
+                "select idForecastItem " +
+                "from forecast_item " +
+                "where Forecast_idForecast = uuid_to_bin('" + getId() + "')" +
+                ") " +
                 "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
                 "and not overridden";
         executeUpdate(query, "deleting all the forecast transactions after " +
@@ -526,6 +543,9 @@ public class Forecast extends IndependentEntity {
 
         // Mark the forecast as insync now:
         inSync = true;
+
+        // Get the start date of the forecast:
+        startDate = Forecast.getForecastStartDate(this);
 
         // Update the forecast object in the database with the new start and end dates:
         save();

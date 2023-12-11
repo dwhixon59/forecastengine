@@ -97,10 +97,8 @@ public class Transaction extends IndependentEntity {
                 "uuid_to_bin('" + getIdMerchant() + "')";
     }
 
-    private static final String updateQuery = "update transaction set idTransaction = ?, " +
-            "set postdate = ?, set authorizationDate = ?, set amount = ?, set cleared = ?, set checkNumber = ?, " +
-            "set payee = ?, set balance = ?, set isImproper = ?, set isNew = ?, set importRecordId = ?, " +
-            "set Register_idRegister = ?, set Merchant_idMerchant = ? where ";
+    private static final String updateQuery =
+            "update transaction set ";
 
     public static String getUpdateIsNewQuery() {
         return "update transaction set isNew = false ";
@@ -118,7 +116,13 @@ public class Transaction extends IndependentEntity {
 
     @Override
     public String getUpdateByIdQuery() {
-        return updateQuery;
+        return updateQuery + "postdate = " + Utility.calendarDateToSqlDateString(postDate) + ", authorizationDate = " +
+                Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount + ", cleared = " +
+                cleared + ", checkNumber = " + checkNumber + ", payee = '" + payee + "', balance = " + balance +
+                ", isImproper = " + isImproper + ", isNew = " + isNew + ", importRecordId = '" + importRecordId +
+                "', Register_idRegister = uuid_to_bin('" + idRegister + "'), Merchant_idMerchant = uuid_to_bin('" +
+                idMerchant + "') " +
+                "where idTransaction = uuid_to_bin('" + id + "')";
     }
 
     private static final String deleteQuery = "delete from transaction where ";
@@ -500,13 +504,15 @@ public class Transaction extends IndependentEntity {
      * @throws EntityException
      * @throws SQLException
      */
-    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, SQLException {
+    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, SQLException,
+            BudgetException, RegisterException {
         Calendar startDate = forecast.getStartDate();
         Calendar fourMonthsAgo = Calendar.getInstance();
         fourMonthsAgo.add(Calendar.MONTH, -4);
         if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
         String query = getCountQuery() + " " +
                 "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
+                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
                 "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +
@@ -531,13 +537,15 @@ public class Transaction extends IndependentEntity {
      * @return
      * @throws EntityException
      */
-    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException {
+    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, BudgetException,
+            SQLException, RegisterException {
         Calendar startDate = forecast.getStartDate();
         Calendar fourMonthsAgo = Calendar.getInstance();
         fourMonthsAgo.add(Calendar.MONTH, -4);
         if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
         String query = getSelectQuery() + " " +
                 "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
+                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
                 "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +

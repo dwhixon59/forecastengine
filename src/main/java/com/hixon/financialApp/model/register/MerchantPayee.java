@@ -81,9 +81,9 @@ public class MerchantPayee extends DependentEntity {
               "Databsae error occurred inserting MerchantPayee into the database.");
    }
 
-   public static void deleteByName(String merchantPayeeString) throws EntityException, RegisterException {
-      EntityInt.executeUpdate("delete from merchant_payee where payee = " + merchantPayeeString,
-              "deleting a merchant payee from the database.");
+   public static void deleteByMerchantAndPayee(Merchant merchant, String merchantPayeeString) throws EntityException, RegisterException {
+      EntityInt.executeUpdate("delete from merchant_payee where Merchant_idMerchant = uuid_to_bin('" + merchant.getId() +
+              "') and payee = '" + merchantPayeeString + "', ", "deleting a merchant payee from the database.");
    }
 
 

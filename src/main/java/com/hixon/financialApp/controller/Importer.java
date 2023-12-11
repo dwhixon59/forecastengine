@@ -1,5 +1,6 @@
 package com.hixon.financialApp.controller;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -23,7 +24,8 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.*;
 
-import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.*;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_SKIP;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.utility.Utility.*;
 
 public class Importer {
@@ -98,13 +100,14 @@ public class Importer {
      */
     // Import transactions from a bank in CSV format into the register:
     public boolean importCsvRegisterTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
-                                                    Forecast forecast) throws ControllerException, ViewException,
+                                                    Budget budget, Forecast forecast) throws ControllerException, ViewException,
             EntityException, SQLException, BudgetException, RegisterException, QuitException {
-        return importCsvRegisterTransactionFile(register.getTrxImportFilePath(), financialInstitution, register, forecast);
+        return importCsvRegisterTransactionFile(register.getTrxImportFilePath(), financialInstitution, register, budget,
+                forecast);
     }
 
     public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename, FinancialInstitutionInt
-            financialInstitution, Register register, Forecast forecast)
+            financialInstitution, Register register, Budget budget, Forecast forecast)
             throws SQLException, BudgetException, ControllerException, ViewException, RegisterException, EntityException,
             QuitException {
 
@@ -268,11 +271,11 @@ public class Importer {
                          * Phase 3:  Get the assigned budget items for this merchant:
                          */
                         // Get the assigned budget items for the merchant:
-                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItems.size() < 1) {
-                            budgetItems = resolver.assignBudgetItems(merchant);
+                            budgetItems = resolver.assignBudgetItems(budget, merchant);
                             if (budgetItems == null) {
                                 switch (resolver.getTerminationCondition()) {
                                     case SKIP:
@@ -301,7 +304,7 @@ public class Importer {
                          * Phase 4:  Assign the splits to the transaction:
                          */
                         // Get the splits for the transaction.  Create them if they don't already exist:
-                        splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+                        splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItems);
 
                         // If the user aborted the split assignment process, then figure out what to do:
                         if (splits == null) {
@@ -314,7 +317,7 @@ public class Importer {
                                     User user = getResolver().getUser("Select the user to send the notification to",
                                             users, true);
                                     if (user != null) {
-                                        getNotificationService().requestAssignSplits(user, transaction);
+                                        getNotificationService().requestAssignSplits(user, transaction, budget);
                                     }
                                     continue;
 
@@ -403,14 +406,13 @@ public class Importer {
      *  Import the provisional transactions from the import file:
      */
     public boolean importCsvProvisionalTransactionFile(FinancialInstitutionInt financialInstitution, Register register,
-                                                       Forecast forecast) throws RegisterException, ControllerException, EntityException, BudgetException,
-            FinancialAppException {
+       Budget budget, Forecast forecast) throws FinancialAppException {
         return importCsvProvisionalTransactionFile(register.getProvisionalTrxFileDirectory() + "\\" +
-                        register.getProvisionalTrxFileName(), financialInstitution, register, forecast);
+                        register.getProvisionalTrxFileName(), financialInstitution, register, budget, forecast);
     }
 
     public boolean importCsvProvisionalTransactionFile(String filename, FinancialInstitutionInt financialInstitution,
-                                                       Register register, Forecast forecast) throws RegisterException,
+                                                       Register register, Budget budget, Forecast forecast) throws RegisterException,
             ControllerException, EntityException, BudgetException, FinancialAppException {
 
         getResolver().say("Import provisional transactions from the file " + filename + " into the register '" +
@@ -444,8 +446,8 @@ public class Importer {
 
                     // Construct an ID for this import record and store it in the transaction:
                     String importRecordBaseName = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
-                            formatDollarAmount(transaction.getAmount()).substring(1) + "\t" + transaction.isCleared()
-                            + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
+                            formatDollarAmount(transaction.getAmount()).substring(1) + "\t" +
+                            transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
                     transaction.setImportRecordId(constructImportRecordId(map, importRecordBaseName));
 
                     // Get the merchant for this transaction:
@@ -474,8 +476,8 @@ public class Importer {
                 //  Sort the list in ascending order by merchant + amount:
                 Comparator<Transaction> comparator = (t1, t2) -> {
                     try {
-                        String t1Key = t1.getMerchant().getName() + t1.getAmount();
-                        String t2Key = t2.getMerchant().getName() + t2.getAmount();
+                        String t1Key = t1.getMerchant().getName() + t1.getAmount() + t1.getPayee();
+                        String t2Key = t2.getMerchant().getName() + t2.getAmount() + t2.getPayee();
                         return t1Key.compareTo(t2Key);
                     } catch (EntityException | RegisterException e) {
                         throw new ClassCastException(e.getMessage());
@@ -533,6 +535,13 @@ public class Importer {
                         } else {
                             comparison = -1;
                         }
+
+                        // If the transaction was previously imported, but either the split assignment or reconciliation
+                        // was skipped, then copy the register transaction on to the provisional transaction so that we
+                        // don't try to insert the provisional transaction into the database:
+                        if (comparison == -1) {
+                            provisionalTransactions.set(provTrxIndex, registerTransactions.get(regTrxIndex));
+                        }
                     }
 
                     // If the key to the provisional transaction is less than the key to the register transaction:
@@ -543,11 +552,11 @@ public class Importer {
                          */
                         // Get the assigned budget items for the merchant:
                         Merchant merchant = provisionalTransactions.get(provTrxIndex).getMerchant();
-                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItems.size() < 1) {
-                            budgetItems = getResolver().assignBudgetItems(merchant);
+                            budgetItems = getResolver().assignBudgetItems(budget, merchant);
                             if (budgetItems == null) {
                                 switch (getResolver().getTerminationCondition()) {
                                     case SKIP:
@@ -573,8 +582,8 @@ public class Importer {
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (splits == null) {
-                            splits = getResolver().assignAmountsToBudgetItems(provisionalTransactions.get(provTrxIndex), merchant,
-                                    budgetItems);
+                            splits = getResolver().assignAmountsToBudgetItems(provisionalTransactions.get(provTrxIndex),
+                                    merchant, budget, budgetItems);
 
                             if (splits == null || splits.isEmpty()) {
                                 switch (getResolver().getTerminationCondition()) {
@@ -583,7 +592,8 @@ public class Importer {
                                         User user = getResolver().getUser("Select the user to send the notification to",
                                                 users, true);
                                         if (user != null) {
-                                            getNotificationService().requestAssignSplits(user, provisionalTransactions.get(provTrxIndex));
+                                            getNotificationService().requestAssignSplits(user,
+                                                    provisionalTransactions.get(provTrxIndex), budget);
                                         }
                                         // Move to the next provisional transaction:
                                         provTrxIndex++;
@@ -609,7 +619,7 @@ public class Importer {
                         register.update();
 
                         // Save the transaction and associated splits:
-                        provisionalTransactions.get(provTrxIndex).save(INSERT);
+                        provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
                         for (TransactionSplit split : splits != null ? splits : null) {
                             split.save();
                         }

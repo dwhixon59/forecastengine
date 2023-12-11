@@ -123,7 +123,8 @@ public class Controller {
                         getRegisterBudgetForecast();
 
                         // Process the uncategorized transactions:
-                        inSync = register.processUncategorizedTransactions(financialInstitution, register, forecast);
+                        inSync = register.processUncategorizedTransactions(financialInstitution, register, budget,
+                                forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -139,7 +140,7 @@ public class Controller {
                         getRegisterBudgetForecast();
 
                         // Process the unreconciled transactions:
-                        inSync = register.processUnreconciledTransactions(financialInstitution, register, forecast);
+                        inSync = register.processUnreconciledTransactions(financialInstitution, register, budget, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -156,7 +157,7 @@ public class Controller {
 
                         // Import the register transactions:
                         inSync = importer.importCsvRegisterTransactionFile(financialInstitution,
-                                register, forecast);
+                                register, budget, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                             Utility.getResolver().say("\nThe long term forecast was successfully updated.");
@@ -173,7 +174,7 @@ public class Controller {
 
                         // Import the provisional transactions:
                         inSync = importer.importCsvProvisionalTransactionFile(financialInstitution,
-                                register, forecast);
+                                register, budget, forecast);
                         Utility.getResolver().say("The provisional transactions were successfully imported.");
                         if (!inSync) {
                             forecast.updateForecast();

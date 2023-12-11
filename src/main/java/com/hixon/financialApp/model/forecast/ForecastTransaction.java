@@ -209,14 +209,15 @@ public class ForecastTransaction extends IndependentEntity {
         super(true);
     }
 
-    public ForecastTransaction(ForecastItem item, Calendar nextDate, boolean firstOccurrence) throws Exception {
+    public ForecastTransaction(ForecastItem forecastItem, Calendar nextDate, boolean firstOccurrence) throws Exception {
         super(true);
-        if (item == null || nextDate == null) throw new Exception("ForecastItem seeds cannot be null.");
-        remainingAmount = item.getAmount();
+        if (forecastItem == null || nextDate == null) throw new Exception("ForecastItem seeds cannot be null.");
+        this.forecastItem = forecastItem;
+        idForecastItem = forecastItem.getId();
+        remainingAmount = forecastItem.getAmount();
         plannedDate = (Calendar) nextDate.clone();
+        memo = forecastItem.getMemo();
         this.firstOccurrence = firstOccurrence;
-        idForecastItem = item.getId();
-        forecastItem = item;
     }
 
     public ForecastTransaction(ResultSet rs) throws SQLException {
@@ -287,7 +288,7 @@ public class ForecastTransaction extends IndependentEntity {
     @Override
     public String getInsertQuery() throws EntityException, SQLException, ForecastException, BudgetException {
         return insertQuery + "uuid_to_bin('" + getId() + "'), " + remainingAmount + ", " +
-                Utility.calendarDateToSqlDateString(plannedDate)  + ", '" + memo + "', " + runningBalance + ", " +
+                Utility.calendarDateToSqlDateString(plannedDate)  + ", \"" + memo + "\", " + runningBalance + ", " +
                 overridden + ", " + firstOccurrence + ", " + found + ", uuid_to_bin('" + getIdForecastItem() + "'))";
     }
 
@@ -307,7 +308,7 @@ public class ForecastTransaction extends IndependentEntity {
 
     public String getUpdateClause() {
         return "remainingAmount = " + remainingAmount + ", plannedDate = " + Utility.calendarDateToSqlDateString(plannedDate) +
-                ", memo = '" + memo + "', runningBalance = " + runningBalance +  ", overridden = " +
+                ", memo = \"" + memo + "\", runningBalance = " + runningBalance +  ", overridden = " +
                 overridden + ", firstOccurrence = " + firstOccurrence + ", found = " + found +
                 ", updatedTimeStamp = current_timestamp() where idForecastTransaction = uuid_to_bin('" + id + "')";
     }
@@ -427,7 +428,7 @@ public class ForecastTransaction extends IndependentEntity {
     /**
      * Create and return an iterator that will traverse a chronological list of forecast transactions in the specified
      * forecast that have non-zero remaining amounts.  This means the same thing as all the forecast transactions that
-     * that are forecast to occur.
+     * are forecast to occur.
      *
      * @return Always returns an iterator, though there may be no transactions in the iterator.
      */
@@ -436,7 +437,7 @@ public class ForecastTransaction extends IndependentEntity {
                 "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
                 "where ft.remainingAmount <> 0 and ft.ForecastItem_idForecastItem = fi.idForecastItem and " +
                     "fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
-                "order by ft.plannedDate asc ";
+                "order by ft.plannedDate asc, fi.amount desc";
 
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
                 "get a list of non-zero Forecast Transactions for forecast " + forecast.getDescription());

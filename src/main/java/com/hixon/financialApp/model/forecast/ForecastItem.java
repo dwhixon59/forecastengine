@@ -96,15 +96,17 @@ public class ForecastItem extends Item {
     }
 
     // Constructor that builds a forecast item from a passed in values:
-    public ForecastItem(Forecast forecast, UUID idBudgetItem, String category, String payee, PeriodType period,
-                        double amount, double runningBalance, Calendar startDate, int numberOfPayments, Calendar endDate,
-                        ItemType itemType, HowImportant howImportant, HowOccurs howOccurs, HowPaid howPaid) {
+    public ForecastItem(Forecast forecast, UUID idBudgetItem, String category, String payee, String memo,
+                        PeriodType period, double amount, double runningBalance, Calendar startDate, int numberOfPayments,
+                        Calendar endDate, ItemType itemType, HowImportant howImportant, HowOccurs howOccurs,
+                        HowPaid howPaid) {
         super(true);
         this.forecast = forecast;
         this.idForecast = forecast.getId();
         this.idBudgetItem = idBudgetItem;
         this.category = category;
         this.payee = payee;
+        this.memo = (Utility.isNotNullOrEmpty(memo)) ? memo : "";
         this.period = period;
         this.amount = amount;
         this.startDate = startDate;
@@ -126,14 +128,15 @@ public class ForecastItem extends Item {
         loadFromBudgetItem(budgetItemRS);
     }
 
-    // Constructor that builds a forecast item fram a budget item:
+    // Constructor that builds a forecast item from a budget item:
     public ForecastItem(Forecast forecast, BudgetItem budgetItem) {
         super(true);
         this.forecast = forecast;
         idForecast = forecast.getId();
         idBudgetItem = budgetItem.getId();
         category = budgetItem.getCategory();
-        payee = budgetItem.getCategory();
+        payee = budgetItem.getPayee();
+        memo = budgetItem.getMemo();
         period = budgetItem.getPeriod();
         amount = budgetItem.getAmount();
         startDate = budgetItem.getStartDate();
@@ -197,11 +200,12 @@ public class ForecastItem extends Item {
      */
 
     private static final String selectColumns = " bin_to_uuid(fi.idForecastItem) as 'fi.idForecastItem', fi.category as " +
-            "'fi.category', fi.payee as 'fi.payee', fi.period as 'fi.period', fi.amount as'fi.amount', fi.startDate " +
-            "as' fi.startDate', fi.numberOfPayments as 'fi.numberOfPayments', fi.endDate as 'fi.endDate', fi.ItemType " +
-            "as 'fi.ItemType', fi.howImportant as 'fi.howImportant', fi.howOccurs as 'fi.howOccurs', fi.howPaid as " +
-            "'fi.howPaid', bin_to_uuid(fi.Forecast_idForecast) as 'fi.idForecast', bin_to_uuid(fi.BudgetItem_idBudgetItem) " +
-            "as 'fi.idBudgetItem' ";
+            "'fi.category', fi.payee as 'fi.payee', fi.memo as 'fi.memo', fi.period as 'fi.period', " +
+            "fi.amount as 'fi.amount', fi.startDate as' fi.startDate', fi.numberOfPayments as 'fi.numberOfPayments', " +
+            "fi.endDate as 'fi.endDate', fi.ItemType as 'fi.ItemType', fi.howImportant as 'fi.howImportant', " +
+            "fi.howOccurs as 'fi.howOccurs', fi.howPaid as 'fi.howPaid'," +
+            " bin_to_uuid(fi.Forecast_idForecast) as 'fi.idForecast', " +
+            "bin_to_uuid(fi.BudgetItem_idBudgetItem) as 'fi.idBudgetItem' ";
 
     public static String getSelectColumns() {
         return selectColumns;
@@ -214,7 +218,7 @@ public class ForecastItem extends Item {
     }
 
     private static final String insertQuery = "insert into forecast_item (idForecastItem, category," +
-            " payee, period, amount, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
+            " payee, memo, period, amount, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
             "howPaid, Forecast_idForecast";
 
     @Override
@@ -224,7 +228,7 @@ public class ForecastItem extends Item {
             query += ", BudgetItem_idBudgetItem";
         }
         query += ") values (";
-        query += "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", '" +
+        query += "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
                 Item.generatePeriodType(period) + "', " + amount + ", " + Utility.calendarDateToSqlDateString(startDate) +
                 ", " + numberOfPayments + ", " + Utility.calendarDateToSqlDateString(endDate) + ", '" +
                 Item.generateItemType(itemType) + "', '" + Item.generateHowImportant(howImportant) + "', '" +
@@ -248,8 +252,8 @@ public class ForecastItem extends Item {
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return updateQuery + " category = \"" + category + "\", payee = \"" +
-                payee + "\", period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", startDate = "
+        return updateQuery + " category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo + "\", " +
+                "period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", startDate = "
                 + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments + ", " +
                 "endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemtype = '" +
                 Item.generateItemType(itemType) + "', howImportant = '" + Item.generateHowImportant(howImportant) +
@@ -277,6 +281,7 @@ public class ForecastItem extends Item {
             id = UUID.fromString(rs.getString("fi.idForecastItem"));
             category = rs.getString("fi.category");
             payee = rs.getString("fi.payee");
+            memo = Utility.emptyStringIfNull(rs.getString("fi.memo"));
             period = Item.parsePeriodType(rs.getString("fi.period"));
             amount = rs.getDouble("fi.amount");
             startDate = Utility.localDateToCalendarDate(rs.getObject("fi.startDate", LocalDate.class));
@@ -304,6 +309,7 @@ public class ForecastItem extends Item {
 
             category = rs.getString("bi.category");
             payee = rs.getString("bi.payee");
+            memo = rs.getString("bi.memo");
             period = parsePeriodType(rs.getString("bi.period"));
             amount = rs.getDouble("bi.amount");
             startDate = Utility.localDateToCalendarDate(rs.getObject("bi.startDate", LocalDate.class));
@@ -321,6 +327,18 @@ public class ForecastItem extends Item {
             throw e;
         }
     }  // End loadFromBudgetItem().
+
+    // Update all the forecast items in the forecast from the current budget items:
+    public static void updateForecastItemsFromBudgetItems(Forecast forecast) throws Exception {
+        String query =
+                "update forecast_item fi inner join budget_item bi on fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                "set fi.category = bi.category, fi.payee = bi.payee, fi.memo = bi.memo, fi.period = bi.period, " +
+                        "fi.amount = bi.amount, fi.startDate = bi.startDate, fi.numberOfPayments = bi.numberOfPayments, " +
+                        "fi.endDate = bi.endDate, fi.itemType = bi.itemType, fi.howImportant = bi.howImportant, " +
+                        "fi.howOccurs = bi.howOccurs, fi.howPaid = bi.howPaid " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')";
+        EntityInt.executeUpdate(query, "updating the forecast items from the budget items");
+    }
 
     public static ForecastItem getByName(UUID idForecast, String category, String payee) throws EntityException,
             BudgetException, SQLException, ForecastException {

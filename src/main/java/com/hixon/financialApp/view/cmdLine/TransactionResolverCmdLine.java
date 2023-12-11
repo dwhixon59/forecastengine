@@ -3,6 +3,7 @@ package com.hixon.financialApp.view.cmdLine;
 import com.hixon.financialApp.controller.Importer.TerminationCondition;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -233,7 +234,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     @Override
     public BudgetItem getBudgetItemFromUser() throws BudgetException, SQLException, EntityException, ParseException {
         // read in a new budget item for this:
-        say("Enter the budget item in this order: category, payee, period type, amount, " +
+        say("Enter the budget item in this order: category, payee, memo, period type, amount, " +
                 "running balance, start date, number of payments, end date, item type, how important, " +
                 "how occurs, how paid, budget name:");
         BudgetItem budgetItem = BudgetItem.loadFromUserCSV(in.nextLine());
@@ -455,7 +456,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
                     default:
                         if (merchant != null && merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
-                            MerchantPayee.deleteByName(merchantPayeeString);
+                            MerchantPayee.deleteByMerchantAndPayee(merchant, merchantPayeeString);
                         }
                         merchant = Merchant.getByNameLike(line);
                         if (merchant != null) {
@@ -546,12 +547,13 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     }
 
     // Assign budget items to a new list of budget items:
-    public List<BudgetItemMerchant> assignBudgetItems(Merchant merchant)
+    @Override
+    public List<BudgetItemMerchant> assignBudgetItems(Budget budget, Merchant merchant)
             throws BudgetException, ViewException, EntityException, RegisterException {
 
         say("\nFailed to find any budget items for merchant " + merchant.getName());
         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
-        assignMoreBudgetItems(merchant, budgetItems);
+        assignMoreBudgetItems(budget, merchant, budgetItems);
 
         // A null value for budget items means to check the termination condition, so if the termination condition
         // isn't "found", then null out the budget items list:
@@ -564,8 +566,8 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
 
     // Assign new budget items to an existing list of budget items:
     @Override
-    public TerminationCondition assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
-            throws BudgetException, ViewException, EntityException, RegisterException {
+    public TerminationCondition assignMoreBudgetItems(Budget budget, Merchant merchant, List<BudgetItemMerchant>
+            budgetItems) throws BudgetException, ViewException, EntityException, RegisterException {
 
         try {
             boolean done = false;
@@ -598,7 +600,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         String[] tokens = line.split(",");
                         double amount = 0;
                         int percentage = 0;
-                        BudgetItem budgetItem = BudgetItem.getByPayee(tokens[0]);
+                        BudgetItem budgetItem = BudgetItem.getByPayee(budget, tokens[0]);
 
                         // If the budget item doesn't exist, then create it:
                         if (budgetItem == null) {
@@ -644,6 +646,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      *
      * @param transaction
      * @param merchant
+     * @param budget
      * @param budgetItemMerchants
      * @return
      * @throws EntityException
@@ -652,8 +655,9 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      * @throws BudgetException
      */
     @Override
-    public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, List<BudgetItemMerchant>
-            budgetItemMerchants) throws EntityException, RegisterException, ViewException, BudgetException {
+    public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget budget,
+         List<BudgetItemMerchant> budgetItemMerchants) throws EntityException, RegisterException, ViewException,
+            BudgetException {
 
         // If we need to ask the user to enter the splits:
         List<TransactionSplit> splits = new ArrayList<>();
@@ -667,7 +671,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         )
         ) {
             // Ask the user to enter the splits:
-            getSplits(transaction, splits, merchant, budgetItemMerchants, true, true);
+            getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
         } else {
             // Track the total of the splits so that we can ensure they splits balance in the end:
             double transactionAmount = transaction.getAmount();
@@ -704,7 +708,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             if (transactionAmount != 0) {
                 say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
-                getSplits(transaction, splits, merchant, budgetItemMerchants, true, true);
+                getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
             }
         }
         return (splits.isEmpty()) ? null : splits;
@@ -727,7 +731,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      * @throws RegisterException
      */
     @Override
-    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
+    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget budget,
                           List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
             throws ViewException, EntityException, BudgetException, RegisterException {
 
@@ -767,7 +771,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
             // Add a new budget item to current Merchant:
             if (amounts[0].equalsIgnoreCase("a")) {
-                assignMoreBudgetItems(merchant, budgetItemsForMerchant);
+                assignMoreBudgetItems(budget, merchant, budgetItemsForMerchant);
                 done = false;
 
                 // Delete one of the displayed budget items from the merchant for this transaction:

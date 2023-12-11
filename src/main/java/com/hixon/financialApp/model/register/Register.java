@@ -4,6 +4,7 @@ import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.controller.ImportLog;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.Entity;
@@ -14,7 +15,6 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.TransactionResolverInt;
 import lombok.Getter;
 
@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.utility.Utility.getResolver;
 import static com.hixon.financialApp.utility.Utility.resolver;
 
@@ -392,7 +393,7 @@ public class Register extends IndependentEntity {
      */
     // Reprocess any transactions that are not categorized in the database:
     public boolean processUncategorizedTransactions(FinancialInstitutionInt financialInstitution, Register register,
-                                                    Forecast forecast) throws RegisterException {
+                                                    Budget budget, Forecast forecast) throws RegisterException {
         ImportLog importLog = new ImportLog();
 
         int i = 0;
@@ -405,7 +406,7 @@ public class Register extends IndependentEntity {
             Merchant merchant;
             while (rs.next()) {
 
-                // Get the transaction for this import record:
+                // Create a transaction object from the result set:
                 transaction = new Transaction(rs);
 
                 // Let the user know we are beginning a new item:
@@ -418,6 +419,7 @@ public class Register extends IndependentEntity {
                 // process then do it now:
                 if (merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
 
+                    Merchant unknownMerchant = merchant;
                     try {
                         transaction.setMerchantPayee(financialInstitution.parseMerchantPayee(transaction.getDate(),
                                 transaction.getAmount(), transaction.getPayee()));
@@ -428,9 +430,7 @@ public class Register extends IndependentEntity {
                     }
 
                     // Detach the merchant payee from the "unknown" merchant:
-                    // TODO: 2023-10-07  This call seems conceptually wrong.  It should delete the payee for a the
-                    //  unknown merchant, but it is only specifying the payee.  It doesn't work anyway.
-                    MerchantPayee.deleteByName(transaction.getMerchantPayee());
+                    MerchantPayee.deleteByMerchantAndPayee(unknownMerchant, transaction.getMerchantPayee());
 
                     // And null out the merchant, so we will go through the normal merchant assignment process:
                     merchant = null;
@@ -465,11 +465,11 @@ public class Register extends IndependentEntity {
                 transaction.reconcileWithProvisional();
 
                 // Get the assigned budget items for the merchant:
-                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
 
                 // If we couldn't find any matching items, get some help from the user:
                 if (budgetItems.size() < 1) {
-                    budgetItems = resolver.assignBudgetItems(merchant);
+                    budgetItems = resolver.assignBudgetItems(budget, merchant);
                     if (budgetItems == null) {
                         switch (resolver.getTerminationCondition()) {
                             case SKIP:
@@ -492,7 +492,7 @@ public class Register extends IndependentEntity {
                 // Get the splits for the transaction.  Create them if they don't already exist:
                 List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
                 if (splits == null) {
-                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItems);
                 }
 
                 // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
@@ -500,7 +500,7 @@ public class Register extends IndependentEntity {
                 transaction.setIsNew(true);
 
                 // Save the transaction and associated items:
-                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                transaction.save(UPDATE);
                 if (splits != null) {
                     for (TransactionSplit split : splits) {
                         split.save();
@@ -531,8 +531,8 @@ public class Register extends IndependentEntity {
     }
 
     // Reprocess any transactions that were previously skipped:
-    public boolean processUnreconciledTransactions(FinancialInstitutionInt financialInstitution, Register register, Forecast forecast)
-            throws QuitException, EntityException, RegisterException, ViewException, ControllerException, BudgetException {
+    public boolean processUnreconciledTransactions(FinancialInstitutionInt financialInstitution, Register register,
+           Budget budget, Forecast forecast) throws QuitException, RegisterException {
 
         ImportLog importLog = new ImportLog();
 
@@ -569,7 +569,7 @@ public class Register extends IndependentEntity {
                     }
 
                     // Detach the merchant payee from the "unknown" merchant:
-                    MerchantPayee.deleteByName(transaction.getMerchantPayee());
+                    MerchantPayee.deleteByMerchantAndPayee(merchant, transaction.getMerchantPayee());
 
                     // And null out the merchant so we will go through the normal merchant assignment process:
                     merchant = null;
@@ -604,11 +604,11 @@ public class Register extends IndependentEntity {
                 transaction.reconcileWithProvisional();
 
                 // Get the assigned budget items for the merchant:
-                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(merchant);
+                List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
 
                 // If we couldn't find any matching items, get some help from the user:
                 if (budgetItems.size() < 1) {
-                    budgetItems = resolver.assignBudgetItems(merchant);
+                    budgetItems = resolver.assignBudgetItems(budget, merchant);
                     if (budgetItems == null) {
                         switch (resolver.getTerminationCondition()) {
                             case SKIP:
@@ -631,7 +631,7 @@ public class Register extends IndependentEntity {
                 // Get the splits for the transaction.  Create them if they don't already exist:
                 List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
                 if (splits == null) {
-                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budgetItems);
+                    splits = resolver.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItems);
                 }
 
                 // Since we have changed the transaction, Set the transaction to new so that it will appear in the new
@@ -707,7 +707,8 @@ public class Register extends IndependentEntity {
      *
      * @return True if there are skipped transactions.  Otherwise, false.
      */
-    public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException {
+    public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException, BudgetException,
+            RegisterException {
         return Transaction.isSkippedTransactionsWrtForecast(forecast);
     }
 }

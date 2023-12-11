@@ -3,6 +3,7 @@ package com.hixon.financialApp.view.base;
 import com.hixon.financialApp.controller.Importer;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
@@ -36,20 +37,21 @@ public interface TransactionResolverInt {
 
     Importer.TerminationCondition getTerminationCondition();
 
-    List<BudgetItemMerchant> assignBudgetItems(Merchant transaction)
+    List<BudgetItemMerchant> assignBudgetItems(Budget budget, Merchant transaction)
             throws BudgetException, ParseException, SQLException, ViewException, EntityException, RegisterException;
 
     Merchant assignMerchant(String merchantPayeeString, String transactionPayeeString, double transactionAmount)
             throws ViewException, RegisterException, EntityException, QuitException, BudgetException;
 
-    Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException, SkipException, QuitException;
+    Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException, SkipException,
+            QuitException;
 
     // Assign new budget items to an existing list of budget items:
-    Importer.TerminationCondition assignMoreBudgetItems(Merchant merchant, List<BudgetItemMerchant> budgetItems)
-            throws BudgetException, ViewException, EntityException, RegisterException;
+    Importer.TerminationCondition assignMoreBudgetItems(Budget budget, Merchant merchant, List<BudgetItemMerchant>
+            budgetItems) throws BudgetException, ViewException, EntityException, RegisterException;
 
     List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant,
-                                                      List<BudgetItemMerchant> budgetItems)
+                                                      Budget budget, List<BudgetItemMerchant> budgetItems)
             throws EntityException, RegisterException, SQLException, ViewException, BudgetException, ParseException;
 
     void ask(String s);
@@ -120,7 +122,7 @@ public interface TransactionResolverInt {
      * Interact with the user to confirm or override the budget item amounts and then create splits for them.  Allow the
      * user to and add new budget items and create splits for them as well.
      */
-    void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant,
+    void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget budget,
                    List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
             throws ViewException, EntityException, BudgetException, RegisterException;
 

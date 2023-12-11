@@ -24,6 +24,7 @@ import static com.hixon.financialApp.model.budget.Item.ItemType.*;
 import static com.hixon.financialApp.model.budget.Item.PeriodType.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.isNotNullOrEmpty;
 import static java.lang.Math.abs;
 
 // This class represents an expense item.  It is used in budgets and forecasts.
@@ -48,6 +49,7 @@ public abstract class Item extends IndependentEntity {
      */
     protected String category = null;
     protected String payee = null;
+    protected String memo = null;
     protected PeriodType period;
     // Expected amount for this budget item:
     protected double amount = 0;
@@ -241,6 +243,15 @@ public abstract class Item extends IndependentEntity {
 
     public void setPayee(String payee) {
         this.payee = payee;
+        setDirty(true);
+    }
+
+    public String getMemo() {
+        return Utility.emptyStringIfNull(memo);
+    }
+
+    public void setMemo(String memo) {
+        this.memo = (isNotNullOrEmpty(memo)) ? memo : "";
         setDirty(true);
     }
 
@@ -1018,7 +1029,10 @@ public abstract class Item extends IndependentEntity {
                 if (onOrAfterDate.get(Calendar.DATE) > 1 && onOrAfterDate.get(Calendar.DATE) <= 15) {
                     nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH), 15);
                 } else {
-                    nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1, 1);
+                    // If the onOrAfterDate is after the 15th, then the next date is the 1st of the next month:
+                    if (onOrAfterDate.get(Calendar.DATE) > 15) {
+                        nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1, 1);
+                    }
                 }
                 int month = nextDate.get(Calendar.MONTH);
                 if (month >= 6 && month <= 8) {
@@ -1418,11 +1432,12 @@ public abstract class Item extends IndependentEntity {
         } else {
             endDate = "null";
         }
-        String line = "Item:  \t\nid = " + id + ", \t\ncategory = " + category + ", \t\npayee = " + payee +
-                ", \t\nperiod = " + period + ", \t\namount = " + amount + ", \t\nrunning balance = " + runningBalance +
-                ", \t\nstart date = " + Utility.calendarDateToStringDate(startDate) + " \t\nnumber of payments = " +
-                numberOfPayments + ", \t\nend date = " + endDate + ", \t\nitem type = " + itemType + ", \t\nhow important = " +
-                howImportant + ", \t\nhow occurs = " + howOccurs + ", \t\nhow paid = " + howPaid + ".";
+        String line = "Item:  \t\nid = " + id + ", \t\ncategory = " + category + ", \t\npayee = " + payee + ", " +
+                "\t\nmemo = " + memo + ", \t\nperiod = " + period + ", \t\namount = " + amount + ", " +
+                "\t\nrunning balance = " + runningBalance + ", \t\nstart date = " +
+                Utility.calendarDateToStringDate(startDate) + " \t\nnumber of payments = " + numberOfPayments + ", " +
+                "\t\nend date = " + endDate + ", \t\nitem type = " + itemType + ", \t\nhow important = " + howImportant +
+                ", \t\nhow occurs = " + howOccurs + ", \t\nhow paid = " + howPaid + ".";
         return line;
     }
 

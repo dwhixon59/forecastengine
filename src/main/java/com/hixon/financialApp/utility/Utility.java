@@ -479,7 +479,7 @@ public class Utility {
     // Convert a string date in month/day format to a Java Calendar date:
     public static Calendar stringMonthDayToCalendar(String stringDate) throws ParseException {
         Calendar calendarDate = null;
-        if (stringDate != null) {
+        if (stringDate.isEmpty()) {
             Calendar now = Calendar.getInstance();
             int year = now.get(YEAR);
             stringDate = stringDate + "/" + year;
@@ -519,6 +519,50 @@ public class Utility {
         }
 
         return difference;
+    }
+
+    /**
+     * This function determines if a string is null, empty (zero characters), or equal to the string 'null' via a
+     * case insensitive comparison.
+     *
+     * @param string The string to analyze.
+     * @return true if the string is null or empty.
+     */
+    public static boolean isNullOrEmpty(String string) {
+        return string == null || string.isEmpty() || string.equalsIgnoreCase("null");
+    }
+
+    /**
+     * This function ensures that a string is not null, empty (zero characters), or equal to the string 'null' via a
+     * case insensitive comparison.
+     *
+     * @param string The string to analyze.
+     * @return true if the string is not null or empty.
+     */
+    public static boolean isNotNullOrEmpty(String string) {
+        return !isNullOrEmpty(string);
+    }
+
+    /**
+     * This function ensures that a string is not null, empty (zero characters), or equal to the string 'null' via a
+     * case-insensitive comparison.
+     *
+     * @param string The string to analyze.
+     * @return The string if the string is not null or empty or equal to "null".  Otherwise, a new empty string.
+     */
+    public static String emptyStringIfNull(String string) {
+        if (string == null) {
+            return new String("");
+        }
+        else {
+            if (string.equalsIgnoreCase("null")) {
+                string = "";
+                return string;
+            }
+            else {
+                return string;
+            }
+        }
     }
 
     /**

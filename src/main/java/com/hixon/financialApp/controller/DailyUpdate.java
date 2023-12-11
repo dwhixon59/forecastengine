@@ -96,7 +96,7 @@ public class DailyUpdate {
                     // Then ask the user if they want to reprocess them now:
                     if (getResolver().getYesOrNo("\nThere are skipped transactions in the register." +
                             "Do you want to process them now?")) {
-                        inSync = register.processUnreconciledTransactions(financialInstitution, register, forecast);
+                        inSync = register.processUnreconciledTransactions(financialInstitution, register, budget, forecast);
                         if (!inSync) {
                             forecast.updateForecast();
                         }
@@ -127,7 +127,7 @@ public class DailyUpdate {
                         register.getTrxImportFilePath()))
                 {
                     inSync = importer.importCsvRegisterTransactionFile(financialInstitution,
-                            register, forecast);
+                            register, budget, forecast);
                 } else
                 {
                     getResolver().say("Import of cleared transactions skipped at user's request.");
@@ -152,7 +152,7 @@ public class DailyUpdate {
                 {
                     // Then import them:
                     boolean inSyncProv = importer.importCsvProvisionalTransactionFile(financialInstitution,
-                            register, forecast);
+                            register, budget, forecast);
                     getResolver().say("\nThe provisional transactions were successfully imported.");
                     if (!inSyncProv) {
                         inSync = false;
@@ -174,13 +174,7 @@ public class DailyUpdate {
             getResolver().say("\n\n========================================================================");
             getResolver().say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
             try {
-                if (getResolver().existsFileWithRetry(Forecast.FORECAST_TRANSACTIONS_FILE, Forecast.FORECAST_TRANSACTIONS_FILENAME)) {
                     getForecastView().updateFromExternalSource();
-                } else {
-                    getResolver().say("Update of the forecast from an external source skipped at user's request.");
-                }
-            } catch (QuitException qe) {
-                throw qe;
             } catch (Exception e) {
                 if (!getResolver().askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
                         "an external source.")) {

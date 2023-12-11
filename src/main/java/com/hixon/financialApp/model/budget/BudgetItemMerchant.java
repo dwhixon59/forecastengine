@@ -35,13 +35,15 @@ public class BudgetItemMerchant extends DependentEntity {
 
    private static final String selectItemsForMerchantQuery =
            "select bin_to_uuid(bi.idBudgetItem) as 'bi.idBudgetItem', bi.category as 'bi.category', " +
-                   "bi.payee as 'bi.payee', bi.period as 'bi.period', bi.amount as 'bi.amount', " +
+                   "bi.payee as 'bi.payee', bi.memo as 'bi.memo', bi.period as 'bi.period', bi.amount as 'bi.amount', " +
                    "bi.runningBalance as 'bi.runningBalance', bi.startDate as 'bi.startDate', " +
                    "bi.numberOfPayments as 'bi.numberOfPayments', bi.endDate as 'bi.endDate', bi.ItemType as 'bi.itemType', " +
                    "bi.howImportant as 'bi.howImportant', bi.howOccurs as 'bi.howOccurs', bi.howPaid as 'bi.howPaid', " +
                    "bin_to_uuid(bi.Budget_idBudget) as 'bi.idBudget', bm.amount as 'bm.amount', " +
                    "bm.percentage as 'bm.percentage' " +
-           "from budget_item bi inner join budgetitem_merchant bm on bi.idBudgetItem = bm.BudgetItem_idBudgetItem ";
+           "from budget_item bi " +
+                   "inner join budgetitem_merchant bm on bi.idBudgetItem = bm.BudgetItem_idBudgetItem " +
+                   "inner join budget b on bi.Budget_idBudget = b.idBudget ";
 
 
    /*
@@ -207,13 +209,13 @@ public class BudgetItemMerchant extends DependentEntity {
    /*
     * Main methods for BudgetItemMerchant
     */
-   // Get a list of budget items that go with a merchant:
-   public static List<BudgetItemMerchant> getAssignedBudgetItems(Merchant merchant) throws
+   // Get a list of budget items in the specified budget that are assigned to the specified merchant:
+   public static List<BudgetItemMerchant> getAssignedBudgetItems(Budget budget, Merchant merchant) throws
            BudgetException {
 
-      // Find out what budget items are associated with the merchant for this transaction:
-      String query = selectItemsForMerchantQuery + "where bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "')"
-              + " order by payee ";
+      // Find out what budget items are associated with the given merchant in the given budget:
+      String query = selectItemsForMerchantQuery + "where b.idBudget = uuid_to_bin('" + budget.getId() +
+              "') and bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "') order by payee ";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);

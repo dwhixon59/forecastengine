@@ -1,5 +1,6 @@
 package com.hixon.financialApp.notification.async.file;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -127,7 +128,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
     }
 
     @Override
-    public void requestAssignSplits(User user, Transaction transaction) throws IOException, EntityException,
+    public void requestAssignSplits(User user, Transaction transaction, Budget budget) throws IOException, EntityException,
             RegisterException, ParseException, BudgetException, SQLException {
 
         try (FileWriter writer = new FileWriter(getNotificationFilename(user), true)) {
@@ -137,7 +138,8 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             writer.append(transaction.toStringSummary());
 
             // Get the budget items for the merchant associated with this transaction:
-            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(transaction.getMerchant());
+            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget,
+                    transaction.getMerchant());
             writer.append("\nThe assigned budget items and amounts (if specified) for this merchant are:\n");
             int i = 1;
             for (BudgetItemMerchant budgetItem : budgetItems

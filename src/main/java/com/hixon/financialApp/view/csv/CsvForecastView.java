@@ -13,8 +13,8 @@ import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
-import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 import org.apache.commons.csv.CSVFormat;
@@ -124,6 +124,9 @@ public class CsvForecastView extends AbstractForecastView {
    public List<ForecastTransaction> openForecastTransactionSource() throws ControllerException, BudgetException {
       int i = 0;
       List<ForecastTransaction> forecastTransactions = new ArrayList<>();
+
+      importForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+              "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".csv";
 
       try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)))) {
 

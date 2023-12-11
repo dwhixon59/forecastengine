@@ -13,8 +13,8 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.OverdueItemsReport;
+import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
 import com.hixon.financialApp.view.text.UpcomingItemsReport;
 
@@ -157,7 +157,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Iterate over all the forecast transactions in chronological order beginning on the start date:
         ForecastTransactionIterator forecastTransactions =
-                ForecastTransaction.getForecastTransactionsStartingOn(this.forecast, startDate);
+                ForecastTransaction.getForecastTransactionsStartingOn(forecast, startDate);
         ForecastTransaction forecastTransaction = forecastTransactions.getNext();
         ForecastTransaction firstForecastTransaction = forecastTransaction;
         ForecastTransaction lastForecastTransaction = null;
@@ -355,7 +355,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         if (forecastItem == null) {
 
                             // then create a forecast item, so we have something to link the forecast transaction to:
-                            BudgetItem budgetItem = BudgetItem.getByPayee(ssForecastTransaction.getForecastItem().getPayee());
+                            BudgetItem budgetItem = BudgetItem.getByPayee(
+                                    ssForecastTransaction.getForecastItem().getForecast().getBudget(),
+                                    ssForecastTransaction.getForecastItem().getPayee());
 
                             // TODO:  Handle if the budget item isn't found.
                             // If the budget item isn't found:

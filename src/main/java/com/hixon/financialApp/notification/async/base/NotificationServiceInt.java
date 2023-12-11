@@ -1,5 +1,6 @@
 package com.hixon.financialApp.notification.async.base;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -27,7 +28,7 @@ public interface NotificationServiceInt {
    void requestAssignBudgetItems(User user, Merchant merchant) throws FileNotFoundException, UnsupportedEncodingException;
 
    // Send a request to the specified user to classify a transaction:
-   void requestAssignSplits(User user, Transaction transaction) throws IOException, EntityException, RegisterException,
+   void requestAssignSplits(User user, Transaction transaction, Budget budget) throws IOException, EntityException, RegisterException,
            ParseException, BudgetException, SQLException;
 
    // Create an items of interest report and send it to a user:
