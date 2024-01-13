@@ -1,19 +1,15 @@
 package com.hixon.financialApp.view.base;
 
-import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.view.ViewException;
 
 import java.io.File;
-import java.io.IOException;
-import java.sql.SQLException;
 import java.util.List;
 
 // These are the forecast views in the MVC architecture for the forecast:
@@ -27,8 +23,7 @@ public interface ForecastViewInt {
    boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException, RegisterException;
 
    // Update the forecast from an external representation of the forecast like a spreadsheet:
-   void updateFromExternalSource() throws ControllerException, ForecastException, EntityException, SQLException,
-           RegisterException, BudgetException, ViewException, IOException;
+   void updateFromExternalSource() throws Exception;
 
    // Render items of interest report for a specific user:
    UserResource renderItemsOfInterestReport(User user) throws EntityException, Exception, BudgetException,

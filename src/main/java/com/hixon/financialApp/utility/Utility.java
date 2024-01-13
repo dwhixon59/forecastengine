@@ -114,7 +114,7 @@ public class Utility {
         toDate.set(fromDate.get(YEAR), fromDate.get(MONTH), fromDate.get(DATE));
     }
 
-    // Print out a date in human readable format with dashes:
+    // Print out a date in human-readable format with dashes:
     public static String calendarDateToStringDate(Calendar calendar) {
         String dateFormatted;
         if (calendar != null) {
@@ -428,6 +428,20 @@ public class Utility {
         return calendarDate;
     }
 
+    // Return a new Calendar object set to the date of the next first of the month.
+    public static Calendar getNextFirstOfMonth(Calendar date) {
+
+        // Clone the input date to avoid modifying the original
+        Calendar newDate = (Calendar) date.clone();
+
+        // Move to the next month and set the day to the first:
+        newDate.add(Calendar.MONTH, 1);
+        newDate.set(Calendar.DAY_OF_MONTH, 1);
+
+        return newDate;
+    }
+
+
     // Clear the time fields of a calendar date:
     private static void clearTime(Calendar calendarDate) {
         calendarDate.set(HOUR_OF_DAY, 0);
@@ -719,6 +733,33 @@ public class Utility {
         int diffDays = Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
         return diffDays;
     }
+
+    /**
+     * Get the number of months between two Calendar dates.
+     *
+     * @param startDate  The first date, presumably the earliest date, though that is not required.
+     * @param endDate The second date, presumably the later date, though that is not required.
+     * @return The number of months between the two dates inclusive.  Negative if the second date is earlier than the
+     * first date.
+     */
+    public static int monthsBetweenDatesInclusive(Calendar startDate, Calendar endDate) {
+        int diffYear = endDate.get(Calendar.YEAR) - startDate.get(Calendar.YEAR);
+        int diffMonth = diffYear * 12 + endDate.get(Calendar.MONTH) - startDate.get(Calendar.MONTH);
+        return diffMonth + 1;
+    }
+
+    public static Calendar getLastDayOfMonth(Calendar date) {
+        // Create a clone of the provided calendar to avoid modifying the original one
+        Calendar lastDayOfMonth = (Calendar) date.clone();
+
+        // Set the calendar to the first day of the next month and then subtract one day
+        lastDayOfMonth.add(Calendar.MONTH, 1);
+        lastDayOfMonth.set(Calendar.DAY_OF_MONTH, 1);
+        lastDayOfMonth.add(Calendar.DATE, -1);
+
+        return lastDayOfMonth;
+    }
+
 
     public static int businessDaysBeteween(Calendar firstDate, Calendar secondDate) {
         Calendar firstDateCopy = (Calendar) firstDate.clone();

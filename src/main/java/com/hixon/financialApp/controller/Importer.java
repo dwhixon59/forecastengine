@@ -271,7 +271,8 @@ public class Importer {
                          * Phase 3:  Get the assigned budget items for this merchant:
                          */
                         // Get the assigned budget items for the merchant:
-                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
+                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget,
+                                merchant);
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItems.size() < 1) {
@@ -552,7 +553,7 @@ public class Importer {
                          */
                         // Get the assigned budget items for the merchant:
                         Merchant merchant = provisionalTransactions.get(provTrxIndex).getMerchant();
-                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
+                        List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItems.size() < 1) {

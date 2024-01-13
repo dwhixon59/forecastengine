@@ -50,7 +50,7 @@ public class ForecastView extends AbstractForecastView {
     }
 
     @Override
-    protected void renderForecastTransaction(ForecastTransaction forecastTransaction, int credit, int debit)
+    protected void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit)
             throws EntityException, SQLException, ForecastException, BudgetException {
 
     }

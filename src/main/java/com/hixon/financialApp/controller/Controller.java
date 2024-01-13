@@ -361,7 +361,7 @@ public class Controller {
 
                         // Render the long term forecast:
                         Utility.getForecastView().renderLongTermForecast(forecast);
-                        Utility.getResolver().say("Successfully rendered the long term forecast.");
+                        Utility.getResolver().say("\nSuccessfully rendered the long term forecast.");
                         Utility.getResolver().say("------------------------------------------------------------------------");
                         break;
 

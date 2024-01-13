@@ -100,7 +100,7 @@ public class CsvForecastView extends AbstractForecastView {
    }
 
    @Override
-   public void renderForecastTransaction(ForecastTransaction forecastTransaction, int credit, int debit) throws EntityException,
+   public void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit) throws EntityException,
            SQLException, ForecastException, BudgetException {
 
    }

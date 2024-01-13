@@ -227,7 +227,7 @@ public class DailyUpdate {
             getResolver().say("RENDER THE LONG TERM FORECAST\n");
             try {
                 getForecastView().renderLongTermForecast(forecast);
-                getResolver().say("Successfully rendered the long term forecast.");
+                getResolver().say("\nSuccessfully rendered the long term forecast.");
             } catch (QuitException qe) {
                 throw qe;
             } catch (Exception e) {

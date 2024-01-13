@@ -81,7 +81,7 @@ public abstract class Item extends IndependentEntity {
     // How frequently this forecast item is expected to occur:
     public enum PeriodType {
         ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, THREE_WEEKS, FOUR_WEEKS, SEMIMONTHLY, SCHOOL_YEAR_SEMIMONTHLY, MONTHLY,
-        SIX_WEEKS, BIMONTHLY, QUARTERLY, SEMIANNUALLY, ANNUALLY;
+        SIX_WEEKS, BIMONTHLY, QUARTERLY, FOUR_MONTHS, SEMIANNUALLY, ANNUALLY;
     }
 
     public boolean isExpired(Calendar nextDate) {
@@ -401,6 +401,9 @@ public abstract class Item extends IndependentEntity {
             case QUARTERLY:
                 monthlyAmount = amount * 4.0;
                 break;
+            case FOUR_MONTHS:
+                monthlyAmount = amount * 3.0;
+                break;
             case ANNUALLY:
                 monthlyAmount = amount;
                 break;
@@ -460,6 +463,9 @@ public abstract class Item extends IndependentEntity {
             case "Quarterly":
                 period = QUARTERLY;
                 break;
+            case "Four-Months":
+                period = FOUR_MONTHS;
+                break;
             case "Semi-Annually":
                 period = SEMIANNUALLY;
                 break;
@@ -510,6 +516,9 @@ public abstract class Item extends IndependentEntity {
                 break;
             case QUARTERLY:
                 dbPeriodType = "Quarterly";
+                break;
+            case FOUR_MONTHS:
+                dbPeriodType = "Four-Months";
                 break;
             case ANNUALLY:
                 dbPeriodType = "Annually";
@@ -877,6 +886,7 @@ public abstract class Item extends IndependentEntity {
                     break;
                 case BIMONTHLY:
                 case QUARTERLY:
+                case FOUR_MONTHS:
                 case SEMIANNUALLY:
                 case ANNUALLY:
                     isOk = variance > -8 && variance < 8;
@@ -1139,6 +1149,20 @@ public abstract class Item extends IndependentEntity {
                 while (nextDate.compareTo(threeMonthsAfterOnOrAfterDate) >= 0) nextDate.add(Calendar.MONTH, -3);
                 break;
 
+            case FOUR_MONTHS:
+                // Set the next date year to be the same as the start date of the item:
+                nextDate.set(onOrAfterDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH), startDate.get(Calendar.DATE));
+
+                // Increment by 4 month increments till the nextDate is on or after the onOrAfterDate date:
+                while (nextDate.before(onOrAfterDate)) nextDate.add(Calendar.MONTH, 4);
+
+                // Decrement by increments of 4 months till the nextDate is less than 4 months ahead of the forecast
+                // start date:
+                Calendar fourMonthsAfterOnOrAfterDate = (Calendar) onOrAfterDate.clone();
+                fourMonthsAfterOnOrAfterDate.add(Calendar.MONTH, 4);
+                while (nextDate.compareTo(fourMonthsAfterOnOrAfterDate) >= 0) nextDate.add(Calendar.MONTH, -4);
+                break;
+
             case SEMIANNUALLY:
                 // Semi-annual dates occur on the same date each year, so set the next date year to be the same as the
                 // start date of the forecast:
@@ -1272,6 +1296,11 @@ public abstract class Item extends IndependentEntity {
                     nextDate.add(Calendar.MONTH, 3);
                     break;
 
+                case FOUR_MONTHS:
+                    // Increment the date by four months:
+                    nextDate.add(Calendar.MONTH, 4);
+                    break;
+
                 case SEMIANNUALLY:
                     // Increment the date by six months:
                     nextDate.add(Calendar.MONTH, 6);
@@ -1386,6 +1415,11 @@ public abstract class Item extends IndependentEntity {
                 case QUARTERLY:
                     // Decrement the date by three months:
                     previousDateOfItemOccurrence.add(Calendar.MONTH, -3);
+                    break;
+
+                case FOUR_MONTHS:
+                    // Decrement the date by four months:
+                    previousDateOfItemOccurrence.add(Calendar.MONTH, -4);
                     break;
 
                 case SEMIANNUALLY:

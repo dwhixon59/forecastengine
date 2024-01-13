@@ -26,8 +26,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
-import static com.hixon.financialApp.utility.Utility.daysBeteween;
-import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.*;
 
 /**
  * The AbstractForecastView class implements the {@link ForecastViewInt}, provides default implementations of its
@@ -74,8 +73,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract void renderMonthHeader(Calendar plannedDate, double runningBalance);
 
-    protected abstract void renderForecastTransaction(ForecastTransaction forecastTransaction, int credit, int debit)
-            throws EntityException, SQLException, ForecastException, BudgetException;
+    protected abstract void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit)
+            throws EntityException,
+            SQLException, ForecastException, BudgetException;
 
     protected abstract void renderLongTermForecastBackMatter();
 
@@ -148,6 +148,24 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double startingBalance = registers.get(0).getBalance();
         double runningBalance = startingBalance;
 
+        // Variables to save significant events over the period of the forecast and the date on which they occurred:
+        double lowestBalance = startingBalance;
+        Calendar dateOfLowestBalance = null;
+        double highestBalance = startingBalance;
+        Calendar dateOfHighestBalance = null;
+        double firstNegativeBalance = 0.0;
+        Calendar dateOfFirstNegativBalance = null;
+        double totalIncome = 0.0;
+        double totalExpense = 0.0;
+        double totalSavings = 0.0;
+        double totalDebtExpense = 0.0;
+
+        // Variables to hold the date  of the first first-of-the-month and balance on that date.  This is used to
+        // calculate whether the forecast is solvent over the period of the forecast, and also the required amount of
+        // float to keep the forecast solvent.
+        Calendar firstFirstOfMonth = getNextFirstOfMonth(Calendar.getInstance());
+        double firstFirstOfMonthBalance = 0.0;
+
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput();
         renderLongTermForecastFrontMatter();
@@ -162,26 +180,76 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         ForecastTransaction firstForecastTransaction = forecastTransaction;
         ForecastTransaction lastForecastTransaction = null;
         int currentMonth = -1;
+        boolean firstTime = true;
         while (forecastTransaction != null) {
 
             // If the month changed, write out a header line with the name of the month:
             if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
                 renderMonthHeader(forecastTransaction.getPlannedDate(), runningBalance);
                 currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+                if (dateOnlyCompare(firstFirstOfMonth, forecastTransaction.getPlannedDate()) == 0) {
+                    firstFirstOfMonthBalance = runningBalance;
+                    lowestBalance = runningBalance;
+                    dateOfLowestBalance = firstFirstOfMonth;
+                }
             }
 
+            // Update the running balance:
             runningBalance += forecastTransaction.getRemainingAmount();
             forecastTransaction.setRunningBalance(runningBalance);
+
+            // Record the first negative balance and the date on which it occurred:
+            if (runningBalance < 0 && firstTime) {
+                firstTime = false;
+                firstNegativeBalance = runningBalance;
+                dateOfFirstNegativBalance = forecastTransaction.getPlannedDate();
+            }
+
+            // If we are within the forecast summary period (from the firstFirstOfMonth data to the end of the forecast),
+            // then update the summary:
+            if (dateOnlyCompare(forecastTransaction.getPlannedDate(), firstFirstOfMonth) >= 0) {
+                if (runningBalance < lowestBalance) {
+                    lowestBalance = runningBalance;
+                    dateOfLowestBalance = forecastTransaction.getPlannedDate();
+                }
+
+                if (runningBalance > highestBalance) {
+                    highestBalance = runningBalance;
+                    dateOfHighestBalance = forecastTransaction.getPlannedDate();
+                }
+
+                // Record the total income and the date on which it occurred:
+                if (forecastTransaction.getRemainingAmount() > 0) {
+                    totalIncome += forecastTransaction.getRemainingAmount();
+                }
+
+                // Record the total expense:
+                if (forecastTransaction.getRemainingAmount() < 0) {
+                    totalExpense += forecastTransaction.getRemainingAmount();
+                }
+
+                // Record the total savings:
+                if (forecastTransaction.getForecastItem().getPayee().equalsIgnoreCase("Savings")) {
+                    totalSavings -= forecastTransaction.getRemainingAmount();
+                }
+
+                // Record the total debt expense:
+                if (forecastTransaction.getForecastItem().getCategory().substring(0, 4).equalsIgnoreCase("Debt")) {
+                    totalDebtExpense += forecastTransaction.getRemainingAmount();
+                }
+            }
+
+            // Save off the forecast transaction with tne updated running balance:
             forecastTransaction.save(EntityInt.SaveMethod.UPDATE);
 
-            int credit;
-            int debit;
+            double credit;
+            double debit;
             if (Utility.doubleToInt(forecastTransaction.getRemainingAmount()) > 0) {
-                credit = Utility.doubleToInt(forecastTransaction.getRemainingAmount());
+                credit = forecastTransaction.getRemainingAmount();
                 debit = 0;
             } else {
                 credit = 0;
-                debit = -Utility.doubleToInt(forecastTransaction.getRemainingAmount());
+                debit = -forecastTransaction.getRemainingAmount();
             }
 
             // Write out the forecast line:
@@ -196,9 +264,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         renderLongTermForecastBackMatter();
         closeLongTermForecastOutput();
 
-        // TODO: To clue the user into what things to look for in the spreadsheet, run the forecast summary routine
-        // requesting below minimum balance events:
 /*
+      // requesting below minimum balance events:
       LongTermForecast.SignificantEvents[] events = {daysBelowMinimumBalance};
       longTermForecast.summarize(events);
 
@@ -214,13 +281,152 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
       }
 */
 
-        // Print out the starting and ending balances:
-        getResolver().say("The starting balance is: " + Utility.formatDollarAmount(startingBalance));
-        getResolver().say("The ending balance is: " + Utility.formatDollarAmount(runningBalance));
-        double numberOfMonthsInForecast =
-            daysBeteween(firstForecastTransaction.getPlannedDate(), lastForecastTransaction.getPlannedDate()) / 365.0 * 12.0;
-        getResolver().say("The savings rate is: " +
-                Utility.formatDollarAmount((runningBalance - startingBalance) / numberOfMonthsInForecast));
+        // Print out the forecast summary:
+        getResolver().say("\nForecast Summary:");
+
+        // Display the forecast summary period:
+        int numberOfMonthsInForecast = Utility.monthsBetweenDatesInclusive(firstFirstOfMonth,
+                lastForecastTransaction.getPlannedDate());
+        getResolver().say(new StringBuilder().append("The forecast summary period is the ").
+                append(numberOfMonthsInForecast).append(" month period from ").
+                append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" to ").
+                append(Utility.calendarDateToStringDate(
+                        Utility.getLastDayOfMonth(lastForecastTransaction.getPlannedDate()))).append(".").toString());
+
+        // Display the starting balance:
+        getResolver().say(new StringBuilder().append("The starting balance is: ").
+                append(Utility.formatRoundedDollarAmount(firstFirstOfMonthBalance)).toString());
+
+        // Display the ending balance:
+        getResolver().say(new StringBuilder().append("The ending balance is: ").
+                append(Utility.formatRoundedDollarAmount(runningBalance)).append(".").toString());
+
+        // Display the net change in balance:
+        double netChangeInBalance = runningBalance - firstFirstOfMonthBalance;
+        getResolver().say(new StringBuilder().append("The net change in balance is: ").
+                append(Utility.formatRoundedDollarAmount(netChangeInBalance)).append(".").toString());
+
+        // Display the average monthly change in balance:
+        double rateOfChangeInBalance = netChangeInBalance / numberOfMonthsInForecast;
+        if (netChangeInBalance > 0) {
+            getResolver().say(new StringBuilder().append("The average accumulation rate is: ").
+                    append(Utility.formatRoundedDollarAmount(rateOfChangeInBalance)).
+                    append(" per month.").toString());
+        } else {
+            getResolver().say(new StringBuilder().append("The average depletion rate is: ").
+                    append(Utility.formatRoundedDollarAmount(rateOfChangeInBalance)).append(".").toString());
+        }
+
+        // Display the highest balance and the date on which it occurred:
+        getResolver().say(new StringBuilder().append("The highest balance is: ").
+                append(Utility.formatRoundedDollarAmount(highestBalance)).append(" on ").
+                append(Utility.calendarDateToStringDate(dateOfHighestBalance)).append(".").toString());
+
+        // Display the lowest balance and the date on which it occurred
+        getResolver().say(new StringBuilder().append("The lowest balance is: ").
+                append(Utility.formatRoundedDollarAmount(lowestBalance)).append(" on ").
+                append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(".").toString());
+
+        // If there are one or more negative balances, display the first negative balance and the date on which it
+        // occurred:
+        if (firstNegativeBalance < 0) {
+            getResolver().say(new StringBuilder().append("The first negative balance is: ").
+                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(" on ").
+                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(".").toString());
+        }
+
+        // Display the total amount of income:
+        getResolver().say(new StringBuilder().append("The total amount of income is: ").
+                append(Utility.formatRoundedDollarAmount(totalIncome)).toString());
+
+        // Display the total amount of expenses:
+        getResolver().say(new StringBuilder().append("The total amount of expense is: ").
+                append(Utility.formatRoundedDollarAmount(totalExpense)).toString());
+
+        // Display the total amount of savings:
+        getResolver().say(new StringBuilder().append("The total amount of savings is: ").
+                append(Utility.formatRoundedDollarAmount(totalSavings)).toString());
+
+        // Display the total amount of debt expense:
+        getResolver().say(new StringBuilder().append("The total amount of debt expense is: ").
+                append(Utility.formatRoundedDollarAmount(-totalDebtExpense)).toString());
+
+        // Display the monthly amount of debt expense:
+        getResolver().say(new StringBuilder().append("The monthly amount of debt expense is: ").
+                append(Utility.formatRoundedDollarAmount(-totalDebtExpense / numberOfMonthsInForecast)).toString());
+
+        // Display the debt to expense ratio:
+        double debtToExpenseRatio = totalDebtExpense / totalExpense;
+        double debtToIncomeRatio = -totalDebtExpense / totalIncome;
+        getResolver().say(new StringBuilder().append("Debt expense comprises ").append(Math.round(debtToIncomeRatio * 100)).
+                        append("% of total income and ").append(Math.round(debtToExpenseRatio * 100)).
+                        append("% of total expense.").toString());
+
+        // Print out the forecast analysis:
+        getResolver().say("\nForecast Analysis:");
+
+        // If the forecast is out of balance:
+        double outOfBalanceAmount = runningBalance - firstFirstOfMonthBalance;
+        double outOfBalanceMonthlyAmount = outOfBalanceAmount / numberOfMonthsInForecast;
+        if (outOfBalanceAmount < 0) {
+
+            getResolver().say(new StringBuilder().append("The forecast is out of balance by ").
+                    append(Utility.formatRoundedDollarAmount(-outOfBalanceAmount)).
+                    append(".").toString());
+
+            // Tell the user how much they need to reduce spending or increase income to get the forecast back in
+            // balance on a monthly basis:
+            getResolver().say(new StringBuilder().append("You need to reduce spending or increase income by ").
+                    append(Utility.formatRoundedDollarAmount(-outOfBalanceMonthlyAmount) + " per month.").toString());
+        } else {
+            getResolver().say("The forecast is balanced.  No action is required.");
+        }
+
+        // If there are any negative balances, then the float is insufficient.  Calculate the required float and let
+        // the user know how much they need to deposit to fix the float issue:
+        if (lowestBalance < 0) {
+
+            // Recompute the required float by recomputing the running balances assuming that the user fixes the
+            // out-of-balance issue:
+            forecastTransactions = ForecastTransaction.getForecastTransactionsStartingOn(forecast, firstFirstOfMonth);
+            forecastTransaction = forecastTransactions.getNext();
+            runningBalance = 0;
+            lowestBalance = 0;
+            currentMonth = -1;
+            while (forecastTransaction != null) {
+                if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
+                    runningBalance -= outOfBalanceMonthlyAmount;
+                    currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+                }
+                runningBalance += forecastTransaction.getRemainingAmount();
+                if (runningBalance < lowestBalance) {
+                    lowestBalance = runningBalance;
+                    dateOfLowestBalance = forecastTransaction.getPlannedDate();
+                }
+                forecastTransaction = forecastTransactions.getNext();
+            }
+            getResolver().say(new StringBuilder().append("The required float on the date of the lowest balance (").
+                    append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(") taking into account the " +
+                            "effect of fixing the out-of-balance issue is ").
+                    append(Utility.formatRoundedDollarAmount(-lowestBalance)).toString());
+
+            // Tell the user how much they need to deposit to fix the float issue:
+            if (lowestBalance + firstFirstOfMonthBalance < 0) {
+                getResolver().say(new StringBuilder().append("To ensure you have no negative balances, you need to deposit ").
+                        append(Utility.formatRoundedDollarAmount(-lowestBalance - firstFirstOfMonthBalance)).
+                        append(" to the ").append(forecast.getBudget().getRegisters().get(0).getName()).append(" account.").
+                        toString());
+            } else if ((lowestBalance + firstFirstOfMonthBalance) > -1 && (lowestBalance + firstFirstOfMonthBalance < 1)) {
+                getResolver().say(new StringBuilder().append("You have sufficient float to ensure no negative balances.").
+                        append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
+                        append(" account.").toString());
+            } else {
+                getResolver().say(new StringBuilder().append("You have excess float in the amount of ").
+                        append(Utility.formatRoundedDollarAmount(lowestBalance + firstFirstOfMonthBalance)).
+                        append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
+                        append(" account.").toString());
+            }
+        }
 
         return true;
     }
@@ -230,7 +436,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
      * Update the forecast from a list of forecast transactions from some external source:
      */
     public void updateFromExternalSource()
-            throws ControllerException, ForecastException, EntityException, SQLException, ViewException, IOException {
+            throws Exception {
 
         // Keep a count of the forecast transactions from the external source for debugging purposes:
         int i = 0;
@@ -271,8 +477,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
                             // then if the forecast planned date has been modified then update the database transaction:
                             boolean overwrite;
-                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0)
-                            {
+                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
                                 // If the database forecast transaction was updated after it was sent to the external
                                 // source:
                                 overwrite = true;
@@ -310,8 +515,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                                     dbForecastTransaction.getRemainingAmount()) > 0.50) {
 
                                 overwrite = true;
-                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0)
-                                {
+                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
                                     // Then ask the user if they want to overwrite the updated database value:
                                     Utility.getResolver().say("\nThe amount of an imported forecast transaction has " +
                                             "changed, but the version of the imported forecast transaction is prior to" +
@@ -355,14 +559,23 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         if (forecastItem == null) {
 
                             // then create a forecast item, so we have something to link the forecast transaction to:
-                            BudgetItem budgetItem = BudgetItem.getByPayee(
+                            // Get a list of budget items that match the entered payee:
+                            List<BudgetItem> budgetItemsForPayee = BudgetItem.getUnexpiredByPayee(
                                     ssForecastTransaction.getForecastItem().getForecast().getBudget(),
                                     ssForecastTransaction.getForecastItem().getPayee());
+                            BudgetItem budgetItem;
+                            if (budgetItemsForPayee.size() > 1) {
+                                budgetItem = getResolver().getUserSelectedBudgetItem(budgetItemsForPayee);
+                            } else if (budgetItemsForPayee.size() == 1) {
+                                budgetItem = budgetItemsForPayee.get(0);
+                            } else {
+                                budgetItem = null;
+                            }
 
                             // TODO:  Handle if the budget item isn't found.
                             // If the budget item isn't found:
 
-                               // then get the budget item from the user (adding a new one if required):
+                            // then get the budget item from the user (adding a new one if required):
 
                             ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
                             ssForecastTransaction.getForecastItem().insert();

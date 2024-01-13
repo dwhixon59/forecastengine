@@ -196,21 +196,33 @@ public class BudgetItem extends Item {
       return this;
    }  // End loadFromResultSet().
 
+   public static List<BudgetItem> getUnexpiredByPayee(Budget budget, String payee) throws BudgetException {
 
-   public static BudgetItem getByPayee(Budget budget, String payee) throws BudgetException {
-      String query = getSelectQuery() + " where payee = \"" + payee + "\"" + "and Budget_idBudget = uuid_to_bin('" +
-              budget.getId() + "')";
+      // Convert the current date to SQL date string
+      String currentDateSqlString = Utility.calendarDateToSqlDateString(Calendar.getInstance());
+
+      // Get the budget items for the specified payee that are not expired:
+      String query =
+              getSelectQuery() + " " +
+                      "where payee = '" + payee.replace("'", "''") + "' and " +
+                      "Budget_idBudget = uuid_to_bin('" + budget.getId() + "') and " +
+                      "(" +
+                      "endDate is null or " +
+                      "endDate >= " + currentDateSqlString +
+                      ")";
+
+      List<BudgetItem> budgetItems = new ArrayList<>();
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
-         BudgetItem budgetItem = null;
-         if (rs.next()) {
-            budgetItem = new BudgetItem(rs);
+         while (rs.next()) {
+            BudgetItem budgetItem = new BudgetItem(rs);
+            budgetItems.add(budgetItem);
          }
-         return budgetItem;
+         return budgetItems;
 
       } catch (SQLException e) {
-         BudgetException be = new BudgetException("Database error occurred trying to get the budget item for " +
+         BudgetException be = new BudgetException("Database error occurred trying to get the budget items for " +
                  "payee " + payee);
          be.initCause(e);
          throw be;

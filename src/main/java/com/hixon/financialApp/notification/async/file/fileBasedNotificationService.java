@@ -138,7 +138,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             writer.append(transaction.toStringSummary());
 
             // Get the budget items for the merchant associated with this transaction:
-            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedBudgetItems(budget,
+            List<BudgetItemMerchant> budgetItems = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget,
                     transaction.getMerchant());
             writer.append("\nThe assigned budget items and amounts (if specified) for this merchant are:\n");
             int i = 1;

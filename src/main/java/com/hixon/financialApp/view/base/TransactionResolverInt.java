@@ -50,9 +50,11 @@ public interface TransactionResolverInt {
     Importer.TerminationCondition assignMoreBudgetItems(Budget budget, Merchant merchant, List<BudgetItemMerchant>
             budgetItems) throws BudgetException, ViewException, EntityException, RegisterException;
 
+    BudgetItem getUserSelectedBudgetItem(List<BudgetItem> budgetItems) throws Exception;
+
     List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant,
                                                       Budget budget, List<BudgetItemMerchant> budgetItems)
-            throws EntityException, RegisterException, SQLException, ViewException, BudgetException, ParseException;
+            throws Exception;
 
     void ask(String s);
 
@@ -124,7 +126,7 @@ public interface TransactionResolverInt {
      */
     void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget budget,
                    List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
-            throws ViewException, EntityException, BudgetException, RegisterException;
+            throws Exception;
 
     boolean askRegenerateForecast();
 
@@ -134,8 +136,11 @@ public interface TransactionResolverInt {
     // Print a prompt, get a response, parse it based on commas and return it in a string array:
     String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue);
 
+    // Generate a list of displayable budget item strings for a list of budget items:
+    List<String> generateDisplayableBudgetItemList(List<BudgetItem> budgetItems) throws Exception;
+
     // Show a list of the assigned budget items for a transaction, and the amount of the transaction:
-    void showAssignedBudgetItems(List<BudgetItemMerchant> budgetItems, double amount);
+    void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItems, double amount) throws Exception;
 
     // What to do if the split amount exceeds the budgeted amount:
     ForecastTransactionSplit.SplitDisposition assignOverageAmount(String prompt) throws IOException;

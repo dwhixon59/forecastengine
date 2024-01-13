@@ -233,4 +233,34 @@ public class BudgetItemMerchant extends DependentEntity {
          throw be;
       }
    }
+
+   // Get a list of budget items in the specified budget that are assigned to the specified merchant:
+   public static List<BudgetItemMerchant> getAssignedUnexpiredBudgetItems(Budget budget, Merchant merchant) throws
+           BudgetException {
+
+      // Find out what budget items are associated with the given merchant in the given budget:
+      String query =
+              selectItemsForMerchantQuery +
+              "where " +
+                      "b.idBudget = uuid_to_bin('" + budget.getId() + "') and " +
+                      "bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "') and " +
+                      "(bi.endDate is null or bi.endDate > now()) " +
+                      "order by payee ";
+      try {
+         Statement statement = Utility.getDbConnection().createStatement();
+         ResultSet rs = statement.executeQuery(query);
+         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
+         while (rs.next()) {
+            budgetItems.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("bm.amount"),
+                    rs.getInt("bm.percentage")));
+         }
+         return budgetItems;
+
+      } catch (SQLException e) {
+         BudgetException be = new BudgetException("Database error occurred trying to get the budget items for " +
+                 "merchant ID " + merchant.getId());
+         be.initCause(e);
+         throw be;
+      }
+   }
 }

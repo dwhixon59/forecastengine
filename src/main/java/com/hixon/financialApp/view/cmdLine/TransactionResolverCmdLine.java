@@ -3,10 +3,7 @@ package com.hixon.financialApp.view.cmdLine;
 import com.hixon.financialApp.controller.Importer.TerminationCondition;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
-import com.hixon.financialApp.model.budget.Budget;
-import com.hixon.financialApp.model.budget.BudgetException;
-import com.hixon.financialApp.model.budget.BudgetItem;
-import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntityInt;
@@ -31,6 +28,7 @@ import java.util.List;
 import java.util.Scanner;
 
 import static com.hixon.financialApp.controller.Importer.TerminationCondition.*;
+import static com.hixon.financialApp.model.budget.BudgetItem.getUnexpiredByPayee;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
 import static com.hixon.financialApp.utility.Utility.StartDateType.*;
 import static java.util.Calendar.YEAR;
@@ -600,13 +598,25 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         String[] tokens = line.split(",");
                         double amount = 0;
                         int percentage = 0;
-                        BudgetItem budgetItem = BudgetItem.getByPayee(budget, tokens[0]);
+
+                        // Get a list of budget items that match the entered payee:
+                        List<BudgetItem> budgetItemsForPayee = getUnexpiredByPayee(budget, tokens[0]);
+                        BudgetItem selectedBudgetItem;
+                        if (budgetItemsForPayee.size() > 1) {
+                            selectedBudgetItem = getUserSelectedBudgetItem(budgetItemsForPayee);
+                        } else if (budgetItemsForPayee.size() == 1) {
+                            selectedBudgetItem = budgetItemsForPayee.get(0);
+                        } else {
+                            selectedBudgetItem = null;
+                        }
+
+                        // Continue with selectedBudgetItem
 
                         // If the budget item doesn't exist, then create it:
-                        if (budgetItem == null) {
+                        if (selectedBudgetItem == null) {
                             if (getYesOrNo("Specified budget item not found.  Create as a new budget item")) {
-                                budgetItem = getBudgetItemFromUser();
-                                budgetItem.save(EntityInt.SaveMethod.INSERT);
+                                selectedBudgetItem = getBudgetItemFromUser();
+                                selectedBudgetItem.save(EntityInt.SaveMethod.INSERT);
                             } else {
                                 continue;
                             }
@@ -615,7 +625,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
                         // Associate the budget item with the merchant:
                         if (tokens.length > 1) amount = parseDouble(tokens[1], "Invalid amount");
                         if (tokens.length > 2) percentage = parseInt(tokens[2], "Invalid percentage");
-                        BudgetItemMerchant budgetItemMerchant = merchant.addBudgetItem(budgetItem, amount, percentage);
+                        BudgetItemMerchant budgetItemMerchant = merchant.addBudgetItem(selectedBudgetItem, amount, percentage);
                         if (budgetItemMerchant != null) {
                             budgetItems.add(budgetItemMerchant);
                         }
@@ -641,6 +651,22 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         return terminationCondition;
     }
 
+    public BudgetItem getUserSelectedBudgetItem(List<BudgetItem> budgetItems) throws Exception {
+        if (budgetItems.isEmpty()) {
+            return null;
+        }
+
+        // Create a list of budget item names:
+        List<String> displayableBudgetItemsList = generateDisplayableBudgetItemList(budgetItems);
+
+        // Ask the user to select one of the budget items:
+        int index = selectFromNumberedList("Multiple budget items found.  Please select one:",
+                displayableBudgetItemsList, false);
+
+        // Return the selected budget item:
+        return budgetItems.get(index);
+    }
+
     /**
      * Assign amounts to the budget items for a transaction.
      *
@@ -656,8 +682,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
      */
     @Override
     public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget budget,
-         List<BudgetItemMerchant> budgetItemMerchants) throws EntityException, RegisterException, ViewException,
-            BudgetException {
+         List<BudgetItemMerchant> budgetItemMerchants) throws Exception {
 
         // If we need to ask the user to enter the splits:
         List<TransactionSplit> splits = new ArrayList<>();
@@ -733,7 +758,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
     @Override
     public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget budget,
                           List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
-            throws ViewException, EntityException, BudgetException, RegisterException {
+            throws Exception {
 
         // There should be at least one budget item.  If there isn't then throw an error:
         if (budgetItemsForMerchant.size() == 0) {
@@ -749,7 +774,7 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
             done = true;
 
             // Show the assigned budget items to the user:
-            showAssignedBudgetItems(budgetItemsForMerchant, transaction.getAmount());
+            showBudgetItemsForMerchant(budgetItemsForMerchant, transaction.getAmount());
 
             /*
              * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the
@@ -1040,23 +1065,83 @@ public class TransactionResolverCmdLine implements TransactionResolverInt {
         return tokens;
     }
 
+    // Generate a list of displayable budget item strings for a list of budget items:
+    @Override
+    public List<String> generateDisplayableBudgetItemList(List<BudgetItem> budgetItems) throws Exception {
+
+        say("The budget items are:");
+        List<String> budgetItemNames = new ArrayList<>();
+        for (BudgetItem budgetItem : budgetItems
+        ) {
+            String line = "";
+            line += budgetItem.getPayee();
+            line += " (";
+            line += budgetItem.getCategory();
+            line += ", ";
+            if (budgetItem.getAmount() != 0) {
+                line += Utility.formatRoundedDollarAmount(budgetItem.getAmount());
+                line += " ";
+            }
+            line += Item.generatePeriodType(budgetItem.getPeriod());
+            if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND) {
+                line += ", ";
+                line += Utility.calendarDateToStringDate(
+                        ForecastTransaction.getApplicableForecastTransaction(
+                                budgetItem.getId(), Calendar.getInstance()).getPlannedDate());
+            }
+            if (budgetItem.getMemo() != null &&
+                    !budgetItem.getMemo().isEmpty()) {
+                line += ", " + budgetItem.getMemo();
+            }
+            line += ")";
+            budgetItemNames.add(line);
+        }
+        return budgetItemNames;
+    }
+
     // Show a list of the assigned budget items for a transaction, and the amount of the transaction:
     @Override
-    public void showAssignedBudgetItems(List<BudgetItemMerchant> budgetItems, double amount) {
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, double amount) throws Exception {
 
         say("The assigned budget items and amounts (if specified) for this merchant are:");
         int i = 1;
-        for (BudgetItemMerchant budgetItem : budgetItems
+        for (BudgetItemMerchant budgetItemMerchant : budgetItemMerchants
         ) {
-            String lineEnd = "";
-            if (budgetItem.getAmount() > 0) {
-                lineEnd = ", " + Utility.formatDollarAmount(budgetItem.getBudgetItem().getAmount()) + ", 0";
-            } else {
-                if (budgetItem.getPercentage() > 0) {
-                    lineEnd = ", 0, " + budgetItem.getPercentage() + "%";
+            String line = "";
+            line += "   " + i++ + ".  ";
+            line += budgetItemMerchant.getBudgetItem().getPayee();
+            line += " (";
+            line += budgetItemMerchant.getBudgetItem().getCategory();
+            line += ", ";
+            if (budgetItemMerchant.getBudgetItem().getAmount() != 0) {
+                line += Utility.formatRoundedDollarAmount(budgetItemMerchant.getBudgetItem().getAmount());
+                line += " ";
+            }
+            line += Item.generatePeriodType(budgetItemMerchant.getBudgetItem().getPeriod());
+            if (budgetItemMerchant.getBudgetItem().getPeriod() != Item.PeriodType.ON_DEMAND) {
+                line += ", ";
+
+                ForecastTransaction forecastTransaction = ForecastTransaction.getApplicableForecastTransaction(
+                        budgetItemMerchant.getBudgetItem().getId(), Calendar.getInstance());
+                if (forecastTransaction != null) {
+                    line += Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate());
+                } else {
+                    line += "Not planned.";
                 }
             }
-            say("   " + i++ + ".  " + budgetItem.getBudgetItem().getPayee() + lineEnd);
+            if (budgetItemMerchant.getBudgetItem().getMemo() != null &&
+                    !budgetItemMerchant.getBudgetItem().getMemo().isEmpty()) {
+                line += ", " + budgetItemMerchant.getBudgetItem().getMemo();
+            }
+            line += ")";
+            if (budgetItemMerchant.getAmount() > 0) {
+                line += ", " + Utility.formatDollarAmount(budgetItemMerchant.getBudgetItem().getAmount()) + ", 0";
+            } else {
+                if (budgetItemMerchant.getPercentage() > 0) {
+                    line += ", 0, " + budgetItemMerchant.getPercentage() + "%";
+                }
+            }
+            say(line);
         }
     }
 
