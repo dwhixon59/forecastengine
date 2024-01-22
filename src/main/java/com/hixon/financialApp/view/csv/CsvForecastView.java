@@ -59,8 +59,13 @@ public class CsvForecastView extends AbstractForecastView {
    /*
     * Constructors:
     */
-   public CsvForecastView(Forecast forecast) throws EntityException, SQLException {
+   public CsvForecastView() throws EntityException, SQLException {
       super(Forecast.getMostRecent());
+
+   }
+
+   public CsvForecastView(Forecast forecast) throws EntityException, SQLException {
+      super(forecast);
 
    }
 

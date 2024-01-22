@@ -417,6 +417,8 @@ public class ForecastTransaction extends IndependentEntity {
                 "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
                 "where ft.remainingAmount <> 0 " +
                 "and fi.idForecastItem = uuid_to_bin('" + forecastItem.getId() + "') " +
+                // TODO: This doesn't seem correct.  Both sides of the equality come from the same object?  The forecast
+                // TODO: item ID in the table should be the same as the forecast item ID in the object.
                 "and fi.Forecast_idForecast = uuid_to_bin('" + forecastItem.getForecast().getId() + "') " +
                 "order by ft.plannedDate asc ";
 
@@ -1194,7 +1196,7 @@ public class ForecastTransaction extends IndependentEntity {
 
     public static ForecastTransaction getApplicableForecastTransaction(Forecast forecast, UUID idBudgetItem, Calendar date)
             throws EntityException, Exception, BudgetException, RegisterException {
-        // TODO:  Fix situation where there is no forecast transaction for the budget item.
+        // TODO:  Fix situation where there is no forecast item for the budget item.
         ForecastItem forecastItem = ForecastItem.getByBudgetItemId(forecast, idBudgetItem);
         if (forecastItem != null) {
             ForecastTransaction forecastTransaction = getApplicableForecastTransaction(ForecastItem.getByBudgetItemId(forecast,
