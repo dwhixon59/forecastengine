@@ -1238,8 +1238,8 @@ public class ForecastTransaction extends IndependentEntity {
 
 
     /**
-     * Get the applicable non-zero occurrence of a forecast transaction for a given date .  The algorithm used is to
-     * find the first non-zero forecast transaction for a given forecast item.  Then if that forecast transaction is
+     * Get the applicable non-zero occurrence of a forecast transaction for a given date.  The algorithm used is to
+     * find the first non-zero forecast transaction for a given forecast item.  Then, if that forecast transaction is
      * prior to the applicability period of the specified date, roll up the old forecast transactions until we get to
      * the one that is.
      *
