@@ -1,9 +1,9 @@
 package com.hixon.financialApp.model.forecast;
 
+import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
-import com.hixon.financialApp.model.register.TransactionSplit;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -67,7 +67,11 @@ public class ForecastTransactionSplit extends DependentEntity {
 
    // The entity type attributes:
    @Override
-   public String getPrintableEntityTypeName() {
+   public String getPrintableTypeName() {
+      return getPrintableTypeName_static();
+   }
+
+   public static String getPrintableTypeName_static() {
       return "forecast transaction split";
    }
 
@@ -100,7 +104,7 @@ public class ForecastTransactionSplit extends DependentEntity {
    /*
     * Constructors:
     */
-   ForecastTransactionSplit(ForecastTransaction forecastTransaction, TransactionSplit split) {
+   public ForecastTransactionSplit(ForecastTransaction forecastTransaction, TransactionSplit split) {
       super();
       this.idForecastTransaction = forecastTransaction.getId();
       this.idBudgetItem = split.getIdBudgetItem();

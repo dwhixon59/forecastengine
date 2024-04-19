@@ -38,8 +38,6 @@ public class CsvForecastView extends AbstractForecastView {
    /*
     * Fields:
     */
-   private String importForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
-           "\\Expenses.csv";
    private FileReader in;
    private CSVParser records;
 
@@ -47,13 +45,6 @@ public class CsvForecastView extends AbstractForecastView {
    /*
     * Getters and Setters:
     */
-   public String getImportForecastFilename() {
-      return importForecastFilename;
-   }
-
-   public void setImportForecastFilename(String importForecastFilename) {
-      this.importForecastFilename = importForecastFilename;
-   }
 
 
    /*
@@ -126,19 +117,13 @@ public class CsvForecastView extends AbstractForecastView {
    }
 
    @Override
-   public List<ForecastTransaction> openForecastTransactionSource() throws ControllerException, BudgetException {
+   public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws ControllerException, BudgetException {
       int i = 0;
       List<ForecastTransaction> forecastTransactions = new ArrayList<>();
 
-      importForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
-              "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".csv";
+      try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(sourceName)))) {
 
-      try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(importForecastFilename)))) {
-
-         getResolver().say("\nUpdate the forecast from the forecast transactions in the CSV file " + importForecastFilename);
-
-         // Work on the most recent forecast:
-         Forecast forecast = Forecast.getMostRecent();
+         getView().say("\nUpdate the forecast from the forecast transactions in the CSV file " + sourceName);
 
          // Iterate over the CSV records and create a list of forecast transactions from them:
          BufferedReader in = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
@@ -228,11 +213,11 @@ public class CsvForecastView extends AbstractForecastView {
          }
 
       } catch (FileNotFoundException e) {
-         ControllerException ce = new ControllerException("Transactions file " + importForecastFilename + " not found.");
+         ControllerException ce = new ControllerException("Transactions file " + sourceName + " not found.");
          forecastTransactions = null;
       } catch (IOException e) {
          ControllerException ce = new ControllerException("I/O error reading from the transactions file " +
-                 importForecastFilename + "on line " + i + ".");
+                 sourceName + "on line " + i + ".");
          ce.initCause(e);
          throw (ce);
       } catch (EntityException e) {
@@ -241,7 +226,7 @@ public class CsvForecastView extends AbstractForecastView {
          throw ce;
       } catch (Exception e) {
          ControllerException ce = new ControllerException("Exception while processing the transactions file " +
-                 importForecastFilename + " on line " + i + ".");
+                 sourceName + " on line " + i + ".");
          ce.initCause(e);
          throw ce;
       }
@@ -298,11 +283,11 @@ public class CsvForecastView extends AbstractForecastView {
 
    // Close the forecast transactions CSV file and remove it:
    @Override
-   public void closeForecastTransactionSource() throws ViewException {
+   public void closeForecastTransactionSource(String sourceName) throws ViewException {
 
       // Create a previous version of the import file:
       try {
-         Utility.versionFile(importForecastFilename);
+         Utility.versionFile(sourceName);
       } catch (Exception e) {
          ViewException ve =  new ViewException("Error occured while creating a previous version of the forecast " +
                  "transaction import file.");

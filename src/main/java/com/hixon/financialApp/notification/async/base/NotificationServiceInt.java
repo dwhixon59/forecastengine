@@ -4,7 +4,7 @@ import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;

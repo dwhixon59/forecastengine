@@ -5,7 +5,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
@@ -23,7 +23,7 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.List;
 
-import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.getView;
 
 /**
  * The file based notification service performs "notification" by putting files created by underlying services in the
@@ -84,11 +84,11 @@ public class fileBasedNotificationService implements NotificationServiceInt {
                 Utility.copyToUsersFileSystem(user, file, filename);
 
                 // Log the results:
-                getResolver().say("File " + file.getName() + " was written to the file " + filename + " on the users personal " +
+                getView().say("File " + file.getName() + " was written to the file " + filename + " on the users personal " +
                         "file system " + user.getPersonalFileSystem());
             } else {
                 // Log the results:
-                getResolver().say("File " + targetFilename + " was versioned on the users personal " +
+                getView().say("File " + targetFilename + " was versioned on the users personal " +
                         "file system " + user.getPersonalFileSystem());
             }
         } else {
@@ -109,7 +109,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             writer.println("");
             writer.println(user.getFirstName() + ":  Please identify the merchant for the following transaction:");
             writer.println(transaction);
-            getResolver().say("Request to identify the merchant for a transaction sent to user " + user.getFirstName() +
+            getView().say("Request to identify the merchant for a transaction sent to user " + user.getFirstName() +
                     " was written to the file: " + getNotificationFilename(user));
         }
     }
@@ -122,7 +122,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             writer.println("");
             writer.println("Hi " + user.getFirstName() + ".  What budget items should be associated with the merchant "
                     + merchant + "?");
-            getResolver().say("Request to assign budget items the merchant " + merchant + " sent to " +
+            getView().say("Request to assign budget items the merchant " + merchant + " sent to " +
                     user.getFirstName() + " was written to the file: " + getNotificationFilename(user));
         }
     }
@@ -156,7 +156,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             }
             writer.append("Enter:  item_number <sp> amount <sp> memo (if multiple items add <comma> between):  \n");
 
-            getResolver().say("Request to " + user.getFirstName() + " classify transaction was written to the " +
+            getView().say("Request to " + user.getFirstName() + " classify transaction was written to the " +
                     "file: " + getNotificationFilename(user));
         }
     }
@@ -233,7 +233,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
                 sendFileToUser(overdueAndUpcomingItemsReport.getUser(), overdueAndUpcomingItemsReport.getFile(),
                         OVERDUE_AND_UPCOMING_ITEMS_REPORT);
             } else {
-                Utility.getResolver().say("No overdue or upcoming items were found.  No report generated.");
+                Utility.getView().say("No overdue or upcoming items were found.  No report generated.");
             }
 
         }
@@ -249,7 +249,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         ) {
             sendFileToUser(userResource.getUser(), userResource.getFile(), NEW_TRANSACTION_SUMMARY_REPORT);
             if (userResource.getFile().getAbsolutePath() == null) {
-                Utility.getResolver().say("No new transactions were found.  No report generated.");
+                Utility.getView().say("No new transactions were found.  No report generated.");
             }
         }
 

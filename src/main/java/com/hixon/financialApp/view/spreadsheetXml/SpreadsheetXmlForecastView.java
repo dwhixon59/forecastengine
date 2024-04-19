@@ -170,7 +170,7 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
     */
    @Override
    public void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException {
-      Utility.getResolver().say("Long term forecast will be rendered to the file: " + longTermForecastFilename);
+      Utility.getView().say("Long term forecast will be rendered to the file: " + longTermForecastFilename);
       Utility.versionFile(longTermForecastFilename);
       writer = new PrintWriter(longTermForecastFilename, encoding);
    }
@@ -425,16 +425,16 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
 
    @Override
    // For now, defer to the CSV view for importing forecast transactions:
-   public List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException,
+   public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
            BudgetException {
-      return csvForecastView.openForecastTransactionSource();
+      return csvForecastView.openForecastTransactionSource(sourceName);
 
 
    }
 
    // For now, defer to the CSV view for importing forecast transactions:
    @Override
-   public void closeForecastTransactionSource() throws ViewException {
-      csvForecastView.closeForecastTransactionSource();
+   public void closeForecastTransactionSource(String sourceName) throws ViewException {
+      csvForecastView.closeForecastTransactionSource(sourceName);
    }
 }

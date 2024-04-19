@@ -1,4 +1,4 @@
-package com.hixon.financialApp.model.register;
+package com.hixon.financialApp.model.merchant;
 
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
@@ -6,8 +6,9 @@ import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
+import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.model.register.RegisterException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,7 +18,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
-public class Merchant extends IndependentEntity {
+import static com.hixon.financialApp.utility.Utility.getDbConnection;
+import static com.hixon.financialApp.utility.Utility.getView;
+
+public class Merchant extends IndependentEntity implements IndependentEntityInt {
 
     /*
      * Fields in the Merchant class:
@@ -55,6 +59,15 @@ public class Merchant extends IndependentEntity {
         return new Merchant(rs);
     }
 
+    public static void deleteByName(String merchantPayeeString) {
+        try {
+            Statement statement = getDbConnection().createStatement();
+            statement.executeUpdate("delete from merchant where name = \"" + merchantPayeeString + "\"");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     /*
      * Getters and setters:
@@ -66,6 +79,10 @@ public class Merchant extends IndependentEntity {
     public void setName(String name) {
         setDirty(true);
         this.name = name;
+    }
+
+    public static String getType() {
+        return "Merchant";
     }
 
     public boolean isAskAlways() {
@@ -86,8 +103,8 @@ public class Merchant extends IndependentEntity {
         this.idUser = idUser;
     }
 
-    public List<MerchantPayee> getPayees() {
-        return merchantPayees;
+    public List<MerchantPayee> getPayees() throws SQLException, EntityException {
+        return MerchantPayee.getPayeesForMerchant(this);
     }
 
     @Override
@@ -111,8 +128,12 @@ public class Merchant extends IndependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
-        return null;
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
+        return "merchant";
     }
 
 
@@ -127,7 +148,7 @@ public class Merchant extends IndependentEntity {
 
     // Create and load an existing merchant from the database:
     public Merchant(ResultSet rs) throws RegisterException {
-        super(false);
+        super(true);
         loadFromResultSet(rs);
     }
 
@@ -143,7 +164,9 @@ public class Merchant extends IndependentEntity {
      * @return true if the object is valid
      */
     @Override
-    public boolean isValid() { return true; }
+    public boolean isValid() {
+        return true;
+    }
 
     private void loadFromResultSet(ResultSet rs) throws RegisterException {
         try {
@@ -163,6 +186,27 @@ public class Merchant extends IndependentEntity {
             throw (re);
         }
     }  // End loadFromResultSet().
+
+    @Override
+    public boolean loadByName(IndependentEntity scope, String name) throws EntityException {
+
+        // Find the ID of the merchant that uses the passed in name:
+        String query = selectQuery + " where m.name = \"" + name + "\"";
+        try {
+            Statement statement = getDbConnection().createStatement();
+            ResultSet rs = statement.executeQuery(query);
+            if (rs.next()) {
+                loadFromResultSet(rs);
+                return true;
+            } else {
+                return false;
+            }
+        } catch (SQLException | RegisterException e) {
+            EntityException ee = new EntityException("Database error occurred trying to get the Merchant for the " +
+                    "name " + name, e);
+            throw ee;
+        }
+    }
 
 
     public static Merchant loadFromCSV(String merchantName) throws RegisterException {
@@ -185,7 +229,7 @@ public class Merchant extends IndependentEntity {
         // Find the ID of the merchant that uses the passed in payee:
         String query = selectJoinPayeeQuery + "where mp.payee = \"" + payee + "\"";
         try {
-            Statement statement = Utility.getDbConnection().createStatement();
+            Statement statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);
             if (rs.next()) {
                 return new Merchant(rs);
@@ -204,7 +248,7 @@ public class Merchant extends IndependentEntity {
         // Find the ID of the merchant that uses the passed in name:
         String query = selectQuery + " where m.name = \"" + name + "\"";
         try {
-            Statement statement = Utility.getDbConnection().createStatement();
+            Statement statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);
             if (rs.next()) {
                 return new Merchant(rs);
@@ -214,23 +258,6 @@ public class Merchant extends IndependentEntity {
         } catch (SQLException e) {
             RegisterException re = new RegisterException("Database error occurred trying to get the Merchant for the " +
                     "name " + name, e);
-            throw re;
-        }
-    }
-
-    public static Merchant getByNameLike(String name) throws RegisterException {
-        // Find the ID of the merchant that uses the passed in name:
-        String query = selectQuery + " where m.name like \"" + name + "%\"";
-        try {
-            ResultSet rs = EntityInt.getRS(query, "trying to get the Merchant with the name like " + name);
-            if (rs.next()) {
-                return new Merchant(rs);
-            } else {
-                return null;
-            }
-        } catch (EntityException | SQLException e) {
-            RegisterException re = new RegisterException("Database error occurred.");
-            re.initCause(e);
             throw re;
         }
     }
@@ -284,7 +311,7 @@ public class Merchant extends IndependentEntity {
                 Throwable ec = e.getCause();
                 if (ec != null) {
                     if (ec instanceof SQLIntegrityConstraintViolationException) {
-                        Utility.getResolver().say("That budget item is already associated with this merchant.");
+                        getView().say("That budget item is already associated with this merchant.");
                         budgetItemMerchant = null;
                         isSqlIntegrityException = true;
                     }

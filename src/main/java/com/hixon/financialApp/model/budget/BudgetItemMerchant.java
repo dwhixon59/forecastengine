@@ -4,7 +4,7 @@ import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 
@@ -115,7 +115,11 @@ public class BudgetItemMerchant extends DependentEntity {
    }
 
    @Override
-   public String getPrintableEntityTypeName() {
+   public String getPrintableTypeName() {
+      return getPrintableTypeName_static();
+   }
+
+   public static String getPrintableTypeName_static() {
       return "budget item merchant";
    }
 
@@ -129,6 +133,16 @@ public class BudgetItemMerchant extends DependentEntity {
       this.idMerchant = merchant.getId();
       this.amount = amount;
       this.percentage = percentage;
+      this.budgetItem = budgetItem;
+      setDirty(true);
+   }
+
+   public BudgetItemMerchant(Merchant merchant, BudgetItem budgetItem) {
+      super();
+      this.idBudgetItem = budgetItem.getId();
+      this.idMerchant = merchant.getId();
+      this.amount = 0.0;
+      this.percentage = 0;
       this.budgetItem = budgetItem;
       setDirty(true);
    }
@@ -150,6 +164,9 @@ public class BudgetItemMerchant extends DependentEntity {
    }
 
 
+   /*
+    * Helper methods for BudgetItemMerchant:
+    */
    /**
     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
     * the entity.
@@ -158,6 +175,22 @@ public class BudgetItemMerchant extends DependentEntity {
     */
    @Override
    public boolean isValid() { return true; }
+
+   /**
+    * Check if a budget item is in the list of budget items for the merchant.
+    *
+    * @param budgetItem     The budget item to check if it is in the list.
+    * @param budgetItemsForMerchant The list of budget items for the merchant.
+    * @return True if the selected budget item is in the list, false otherwise.
+    */
+   public static boolean isBudgetItemInList(BudgetItem budgetItem, List<BudgetItemMerchant> budgetItemsForMerchant) {
+      for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
+         if (budgetItemMerchant.getBudgetItem().getId().equals(budgetItem.getId())) {
+            return true;
+         }
+      }
+      return false;
+   }
 
 
    /*
@@ -249,12 +282,12 @@ public class BudgetItemMerchant extends DependentEntity {
       try {
          Statement statement = Utility.getDbConnection().createStatement();
          ResultSet rs = statement.executeQuery(query);
-         List<BudgetItemMerchant> budgetItems = new ArrayList<>();
+         List<BudgetItemMerchant> budgetItemMerchants = new ArrayList<>();
          while (rs.next()) {
-            budgetItems.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("bm.amount"),
+            budgetItemMerchants.add(new BudgetItemMerchant(new BudgetItem(rs), merchant, rs.getDouble("bm.amount"),
                     rs.getInt("bm.percentage")));
          }
-         return budgetItems;
+         return budgetItemMerchants;
 
       } catch (SQLException e) {
          BudgetException be = new BudgetException("Database error occurred trying to get the budget items for " +

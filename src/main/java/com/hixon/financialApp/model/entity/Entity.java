@@ -70,51 +70,60 @@ public abstract class Entity implements EntityInt {
 */
    // The generic save operation:
    @Override
-   public void save(SaveMethod method) throws EntityException, RegisterException, BudgetException, SQLException, ForecastException {
+   public void save(SaveMethod method) throws EntityException, SQLException {
 
-      if (isDirty()) {
-         switch (method) {
-            case INSERT:
-               executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableEntityTypeName());
-               break;
+      try {
+         if (isDirty()) {
+            switch (method) {
+               case INSERT:
+                  executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableTypeName());
+                  break;
 
-            case UPDATE:
-               executeQueryForThis(getUpdateByIdQuery(), "Trying to update a " + getPrintableEntityTypeName() + ".");
-               break;
+               case UPDATE:
+                  executeQueryForThis(getUpdateByIdQuery(), "Trying to update a " + getPrintableTypeName() + ".");
+                  break;
 
-            case INSERT_ON_DUPLICATE_UPDATE:
-               executeQueryForThis(getInsertOnDuplicateUpdateQuery(), getPrintableEntityTypeName());
-               break;
+               case INSERT_ON_DUPLICATE_UPDATE:
+                  executeQueryForThis(getInsertOnDuplicateUpdateQuery(), getPrintableTypeName());
+                  break;
 
-            case INSERT_ON_DUPLICATE_SKIP:
-               try {
-                  executeQueryForThis(getInsertQuery(), " inserting a " + getPrintableEntityTypeName());
-               } catch (EntityException e) {
-                  SQLException se = (SQLException) e.getCause();
-                  if (!se.getSQLState().equalsIgnoreCase("SQL92"))
-                     throw new NotImplementedException();
-               }
+               case INSERT_ON_DUPLICATE_SKIP:
+                  try {
+                     String query = getInsertQuery();
+                     // insert the word "ignore" after the word "insert":
+                     query = query.substring(0, 6) + " ignore" + query.substring(6);
+                     executeQueryForThis(query, " inserting a " + getPrintableTypeName());
+                  } catch (EntityException e) {
+                     SQLException se = (SQLException) e.getCause();
+                     if (!se.getSQLState().equalsIgnoreCase("SQL92"))
+                        throw new NotImplementedException();
+                  }
+            }
          }
+         isDirty = false;
+      } catch (RegisterException | BudgetException | ForecastException e) {
+         EntityException ee = new EntityException("Error occurred trying to save a " + getPrintableTypeName() + ".");
+         ee.initCause(e);
+         throw ee;
       }
-      isDirty = false;
    }
 
    // The generic insert operation:
    @Override
    public void insert() throws ForecastException, BudgetException, EntityException, RegisterException, SQLException {
-      EntityInt.executeUpdate(getInsertQuery(), "trying to insert a " + getPrintableEntityTypeName() + ".");
+      EntityInt.executeUpdate(getInsertQuery(), "trying to insert a " + getPrintableTypeName() + ".");
    }
 
    // The generic update operation:
    @Override
    public void update() throws EntityException, BudgetException, SQLException, RegisterException {
-      EntityInt.executeUpdate(getUpdateByIdQuery(), "trying to update a " + getPrintableEntityTypeName() + ".");
+      EntityInt.executeUpdate(getUpdateByIdQuery(), "trying to update a " + getPrintableTypeName() + ".");
    }
 
    // The generic delete operation:
    @Override
    public void delete() throws EntityException, RegisterException {
-         EntityInt.executeUpdate(getDeleteByIdQuery(), getPrintableEntityTypeName());
+         EntityInt.executeUpdate(getDeleteByIdQuery(), getPrintableTypeName());
    }
 
 
@@ -133,7 +142,8 @@ public abstract class Entity implements EntityInt {
             statement.executeUpdate(query);
             setDirty(false);
          } else {
-            //System.out.println("Attempt to execute a query on an entity of type " + getEntityTypeName() + " that isn't dirty.  Skipped.");
+            System.out.println("Attempt to execute a query on an entity of type " + getPrintableTypeName() +
+                    " that isn't dirty.  Skipped.");
          }
       } catch (SQLException e) {
 

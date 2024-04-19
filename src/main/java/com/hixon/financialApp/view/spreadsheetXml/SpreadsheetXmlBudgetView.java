@@ -3,10 +3,10 @@ package com.hixon.financialApp.view.spreadsheetXml;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
-import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.*;
@@ -67,7 +67,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
      * Main methods:
      */
     public void openSpendingReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException {
-        com.hixon.financialApp.utility.Utility.getResolver().say("MTD Spending Report will be rendered to the file: "
+        com.hixon.financialApp.utility.Utility.getView().say("MTD Spending Report will be rendered to the file: "
                 + spendingReportFilename);
         Boolean done = false;
         while (!done) {
@@ -78,10 +78,10 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
                 category = " ";
                 lastCategory = " ";
             } catch (Exception e) {
-                Utility.getResolver().say(e.getMessage());
-                done = !Utility.getResolver().getYesOrNo("Do you want to try again?");
+                Utility.getView().say(e.getMessage());
+                done = !Utility.getView().getYesOrNo("Do you want to try again?");
                 if (done) {
-                    Utility.getResolver().say("Aborting spending report generation process.");
+                    Utility.getView().say("Aborting spending report generation process.");
                     ViewException ve = new ViewException("Unable to open the spending report export file.");
                     ve.initCause(e);
                     throw ve;
@@ -307,7 +307,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
      */
     @Override
     public void openBudgetSummaryReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException {
-        com.hixon.financialApp.utility.Utility.getResolver().say("Budget Summary Report will be rendered to the file: "
+        com.hixon.financialApp.utility.Utility.getView().say("Budget Summary Report will be rendered to the file: "
                 + budgetSummaryReportFilename);
         Boolean done = false;
         while (!done) {
@@ -317,10 +317,10 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
                 category = " ";
                 lastCategory = " ";
             } catch (Exception e) {
-                Utility.getResolver().say(e.getMessage());
-                done = !Utility.getResolver().getYesOrNo("Do you want to try again?");
+                Utility.getView().say(e.getMessage());
+                done = !Utility.getView().getYesOrNo("Do you want to try again?");
                 if (done) {
-                    Utility.getResolver().say("Aborting budget summary report generation process.");
+                    Utility.getView().say("Aborting budget summary report generation process.");
                     ViewException ve = new ViewException("Unable to open the budget summary report export file.");
                     ve.initCause(e);
                     throw ve;

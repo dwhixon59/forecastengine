@@ -2,30 +2,22 @@ package com.hixon.financialApp.model.forecast;
 
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
-import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.budget.ItemOfInterest;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
-import com.hixon.financialApp.model.register.Transaction;
-import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.UserResponse;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
-import static com.hixon.financialApp.model.budget.Item.ItemType.INCOME;
-import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.*;
+import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.executeUpdate;
-import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.ASSIGN;
-import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.IGNORE;
-import static com.hixon.financialApp.utility.Utility.*;
 
 /**
  * This the class that represents a single transaction in the forecast.
@@ -334,7 +326,11 @@ public class ForecastTransaction extends IndependentEntity {
 
     // The entity name:
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "forecast transaction";
     }
 
@@ -348,34 +344,6 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Main methods:
      */
-    // Zero out the amounts for all the Forecast Transactions that are marked not found:
-    public static void zeroNotFound()
-            throws EntityException, RegisterException, SQLException, BudgetException {
-
-        // List the forecast transactions that are about to be zeroed out for the user:
-        ResultSet rs = EntityInt.getRS(getSelectQuery() + " " +
-                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
-                        "fi.idForecastItem " +
-                        "where found = false and remainingAmount <> 0 " +
-                        "order by ft.plannedDate desc, fi.category asc, fi.payee asc",
-                "Forecast Transactions that are marked not found."
-        );
-        boolean firstTime = true;
-        while (rs.next()) {
-            if (firstTime) {
-                getResolver().say("\nThe following transactions were deleted from the spreadsheet and will be " +
-                        "zeroed out in the forecast:  ");
-                firstTime = false;
-            }
-            ForecastTransaction forecastTransaction = new ForecastTransaction(rs);
-            getResolver().say(forecastTransaction.toStringConcise() + " .");
-        }
-
-        // Zero out the forcast transactions that were deleted from the spreadsheet:
-        executeUpdate(getUpdateQuery() + "remainingAmount = 0 where found = false and remainingAmount <> 0", "to zero the " +
-                "Forecast Transactions that are marked not found.");
-    }
-
     // Zero out the running balances for all the Forecast Transactions:
     public static void zeroRunningBalances() throws EntityException, RegisterException {
         executeUpdate(getUpdateQuery() + "runningBalance = 0", "to zero the " +
@@ -393,7 +361,7 @@ public class ForecastTransaction extends IndependentEntity {
         return forecastTransactions;
     }
 
-    private static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
+    public static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 
         String selectQuery = getSelectQuery() + " " +
@@ -500,11 +468,10 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Helper methods:
      */
-
     /**
-     * Determines whether this forecast transaction is overdue as of today's date.
+     * Determine whether this forecast transaction is overdue as of today's date.
      *
-     * @return True if the this forecast transaction is considered overdue today.
+     * @return True if this forecast transaction is considered overdue today.
      */
     private boolean isOverdue() throws BudgetException {
         int variance = Utility.daysBeteween(getPlannedDate(), Calendar.getInstance());
@@ -512,7 +479,7 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     // Timing of a date with respect to the applicability period of a forecast transaction:
-    enum Timing {PRIOR_TO, WITHIN, AFTER, UNDEFINED}
+    public enum Timing {PRIOR_TO, WITHIN, AFTER, UNDEFINED}
 
     /**
      * Determine the timing of a date with respect to the applicability period of a forecast transaction.
@@ -539,7 +506,7 @@ public class ForecastTransaction extends IndependentEntity {
                 if (comparison < 0) {
                     timing = Timing.PRIOR_TO;
                 } else {
-                    // Compute the next date of occurrence of the related forecast item:
+                    // Compute the next date of occurrence for the related forecast item:
                     Calendar nextDate = forecastItem.getNextDateOfOccurrence(plannedDate);
 
                     // If the transaction date is prior to the next forecast transaction planned date:
@@ -646,466 +613,6 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Main methods:
      */
-    // Reconcile a register transaction with a forecast transaction:
-    public static void reconcile(Forecast forecast, Transaction transaction, List<TransactionSplit> splits)
-            throws Exception {
-
-        // For each split assigned to this transaction:
-        ForecastTransactionSplit forecastTransactionSplit;
-        String prefix = "";
-        for (TransactionSplit split : splits
-        ) {
-            // Let the user know what split we are working on:
-            getResolver().say(prefix + split.toString());
-
-            // If it hasn't already been reconciled:
-            forecastTransactionSplit = ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
-            if (forecastTransactionSplit == null) {
-
-                // Find the forecast transaction in the list that this split applies to:
-                ForecastTransaction forecastTransaction = getApplicableForecastTransaction(forecast, split);
-
-                // if we weren't able to match the split to a forecast transaction.
-                if (forecastTransaction == null) {
-
-                    // Create a forecast transaction and forecast item (if it doesn't already exist) for it so we have
-                    // something to link the forecast transaction split to:
-                    ForecastItem forecastItem = ForecastItem.getByBudgetItemId(split.getIdBudgetItem());
-                    if (forecastItem == null) {
-                        forecastItem = new ForecastItem(forecast, split.getBudgetItem());
-                        forecastItem.setAmount(split.getAmount());
-                        forecastItem.save(INSERT);
-                    }
-                    forecastTransaction = new ForecastTransaction(forecastItem, split.getTransaction().getDate(), true);
-                    forecastTransaction.setRemainingAmount(0);
-                    forecastTransaction.save(INSERT);
-
-                    // Let the user know we created a dummy forecast transaction:
-                    getResolver().say("Created a new forecast transaction for this split as there was no applicable " +
-                            "forecast transaction in the forecast.");
-
-                    // Let the user know about the new forecast transaction we created for the split:
-                    getResolver().say("New " + forecastTransaction.toStringConcise());
-
-                } else { // but if we were able to match the split to a forecast transaction,
-
-                    // then deduct the amount of the split:
-                    forecastTransaction = deductSplitAmount(split, forecastTransaction);
-                }
-
-                // And finally link the split to the forecast transaction for historical purposes:
-                forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
-                forecastTransactionSplit.save(INSERT);
-
-            } // End if it hasn't already been reconciled.
-            else {
-                // but if it has been reconciled show a summary of the reconciliation record to the user:
-                ForecastTransaction forecastTransaction =
-                        ForecastTransaction.getById(forecastTransactionSplit.getIdForecastTransaction());
-                getResolver().say("Already reconciled.");
-                getResolver().say("Applicable " + forecastTransaction.toStringConcise());
-            } // End if it has already been reconciled.
-            prefix = "==========\n";
-        } // End for each split assigned to this transaction.
-    } // End ForecastTransaction.reconcile().
-
-
-    /**
-     * This method finds the applicable forecast transaction for a given split.  The algorithm is to get a list of
-     * non-zero forecast transactions for the budget item in chronological order, then proceed through the list looking
-     * for the forecast transaction where the date of the transaction associated with the split falls into the
-     * applicability period.  Various special cases are handled based upon how the items occurs, like periodic vs.
-     * collection type items and whether the split date falls just outside the forecast transaction applicability
-     * period.
-     *
-     * @param forecast The forecast is which to look for applicable forecast transactions.
-     * @param split    The split to match to a forecast transaction.
-     * @return The applicable forecast transaction if one is found, else null.
-     * @throws EntityException
-     * @throws Exception
-     * @throws BudgetException
-     * @throws RegisterException
-     */
-    public static ForecastTransaction getApplicableForecastTransaction(Forecast forecast, TransactionSplit split)
-            throws EntityException, Exception, BudgetException, RegisterException {
-
-        // Get a list of forecast transactions beginning with the earliest non-zero amount occurrence of a forecast
-        // transaction in the forecast for the budget item associated with the split:
-        ForecastTransactionIterator it =
-                ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(split.getIdBudgetItem(), forecast.getId());
-
-        // Find the forecast transaction in the list that this split applies to.  Roll up any old forecast transactions
-        // encountered in the process:
-        ForecastTransaction forecastTransaction = it.getNext();
-        if (forecastTransaction != null) {
-
-            Timing timing = forecastTransaction.fallsWithinWindow(split.getTransaction().getDate());
-            switch (timing) {
-
-                case PRIOR_TO:  // The split occurs before the period of this forecast transaction:
-
-                    switch (split.getBudgetItem().getHowOccurs()) {
-
-                        case COLLECTION: // This split is an instance of overspending.
-                            // If the transaction split occurred prior to the first occurrence of forecast item in the
-                            // forecast, then it doesn't apply because collection forecast items always occur prior to any
-                            // associated splits:
-                            if (forecastTransaction.isFirstOccurrence()) {
-                                getResolver().say("Split occurs before the first occurrence of the budget item " +
-                                        split.getBudgetItem().getPayee() + " in the forecast.  Ignoring it.");
-                                forecastTransaction = null;
-                            } else {
-                                // Set the applicable forecast transaction to the one applicable to the date of the
-                                // split regardless of the fact that that forecast transaction is exhausted:
-                                forecastTransaction = getApplicableZeroOccurrence(forecast,
-                                        split.getIdBudgetItem(), split.getTransaction().getDate());
-                            }
-                            break;
-
-                        case ENVELOPE: // We are before the effective start of this forecast item so nothing to reconcile to.
-                            getResolver().say("Split occurred before the forecast item became effective.  Ignoring.");
-                            split.setDisposition(IGNORE);
-                            forecastTransaction = null;
-                            break;
-
-                        case PERIODIC: // The transaction was paid early?
-                        case VARIABLE_PERIODIC:
-
-                            // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
-                            int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(),
-                                    split.getTransaction().getDate());
-
-                            // If it is not on or about the planned date, then ask the user what they want to do:
-                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
-
-                                // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                UserResponse resp = getResolver().assignSplitDateToForecastTransaction(split, forecastTransaction);
-                                split.setDisposition(resp.getDisposition());
-                                switch (split.getDisposition()) {
-
-                                    case ADJUST: // Change the seed date for the budget item:
-                                        split.getBudgetItem().setStartDate(Utility.stringDateDashToCalendarDate(
-                                                resp.getResponse()));
-                                        split.getBudgetItem().save(UPDATE);
-                                        forecastTransaction.setPlannedDate(Utility.stringDateDashToCalendarDate(
-                                                resp.getResponse()));
-                                        // TODO: ForecastTransaction.updateAllDates(forecastTransaction, Utility.stringDateDashToCalendarDate(resp.getResponse()));
-                                        forecast.setInSync(false);
-                                        forecast.save(UPDATE);
-                                        break;
-
-                                    case ASSIGN: // Assign the split to the forecast transaction:
-                                        break;
-
-                                    case IGNORE:
-                                        forecastTransaction = null;
-                                        break;
-
-                                    case DISPUTE:
-                                        split.getTransaction().setIsImproper(true);
-                                        split.getTransaction().save(INSERT_ON_DUPLICATE_UPDATE);
-                                        split.getTransaction().getRegister().addSignificantEvent(split.getTransaction());
-                                        break;
-                                }
-                            }
-                            break;
-
-                        default:
-                            throw new ForecastException("Invalid item howOccurs:  " + split.getBudgetItem().getHowOccurs()
-                                    + ".");
-                    }
-                    break;
-
-                case WITHIN:  // Found the applicable forecast transaction.
-                    split.setDisposition(ASSIGN);
-                    break;
-
-                case AFTER:  // There is money left from a prior period for the budgeted item:
-
-                    switch (split.getBudgetItem().getHowOccurs()) {
-
-                        case COLLECTION: // This split is an instance of underspending.  Roll the money forward:
-                            while (forecastTransaction.fallsWithinWindow(split.getTransaction().getDate()) == Timing.AFTER) {
-                                double remainingAmount = forecastTransaction.getRemainingAmount();
-                                forecastTransaction.setRemainingAmount(0);
-                                forecastTransaction.save(UPDATE);
-                                forecastTransaction = it.getNext();
-                                if (forecastTransaction != null) {
-                                    forecastTransaction.setRemainingAmount(forecastTransaction.getRemainingAmount() +
-                                            remainingAmount);
-                                } else break;
-                            }
-                            split.setDisposition(ASSIGN);
-                            break;
-
-                        case ENVELOPE:  // Once the date for an envelope contribution passes, remove it:
-
-                            // Roll up the expired items into the current item and mark them expired:
-                            do {
-                                // The budget item contains the running balance, so add this forecast transaction to it:
-                                split.getBudgetItem().setRunningBalance(split.getBudgetItem().getRunningBalance() +
-                                        forecastTransaction.getRemainingAmount());
-                                split.getBudgetItem().save(UPDATE);
-
-                                // and zero out the forecast transaction:
-                                forecastTransaction.setRemainingAmount(0);
-                                forecastTransaction.save(UPDATE);
-                                forecastTransaction = it.getNext();
-                            } while (forecastTransaction != null &&
-                                    forecastTransaction.fallsWithinWindow(split.getTransaction().getDate()) == Timing.AFTER);
-                            split.setDisposition(ASSIGN);
-                            break;
-
-                        case PERIODIC: // The transaction was paid late?
-                        case VARIABLE_PERIODIC:
-                        case UNPLANNED:
-
-                            // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
-                            int variance = Utility.daysBeteween(split.getTransaction().getDate(),
-                                    forecastTransaction.getPlannedDate());
-                            if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
-
-                                // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                UserResponse resp = getResolver().assignSplitDateToForecastTransaction(split, forecastTransaction);
-                                split.setDisposition(resp.getDisposition());
-                                switch (split.getDisposition()) {
-
-                                    case ADJUST: // Change the seed date for the budget item:
-                                        split.getBudgetItem().setStartDate(Utility.stringDateDashToCalendarDate(
-                                                resp.getResponse()));
-                                        split.getBudgetItem().save(UPDATE);
-
-                                        forecastTransaction.getForecastItem().setNextDate(Utility.stringDateDashToCalendarDate(
-                                                resp.getResponse()));
-                                        forecastTransaction.getForecastItem().save(UPDATE);
-
-                                        forecastTransaction.setPlannedDate(Utility.stringDateDashToCalendarDate(
-                                                resp.getResponse()));
-                                        forecastTransaction.save(UPDATE);
-
-                                        forecast.setInSync(false);
-                                        forecast.save(UPDATE);
-                                        break;
-
-                                    case ASSIGN: // Assign the split to the forecast transaction:
-                                        break;
-
-                                    case IGNORE:
-                                        forecastTransaction = null;
-                                        break;
-
-                                    case DISPUTE:
-                                        split.getTransaction().setIsImproper(true);
-                                        split.getTransaction().save(INSERT_ON_DUPLICATE_UPDATE);
-                                        split.getTransaction().getRegister().addSignificantEvent(split.getTransaction());
-                                        break;
-                                }
-                            }
-                            break;
-                    }
-                    break;
-            }
-        }
-        return forecastTransaction;
-    }
-
-
-    /**
-     * Deduct the split amount from collection type items because they ore a collection of smaller transactions that are
-     * add up to the budgeted (and spent) amount.  In addition, any remaining amounts at the end of the period are
-     * carried over to the next period so we must keep track of the remaining amount.
-     * <p>
-     * For periodic and unplanned type items, zero out the remaining amount because they occur as a single payment each
-     * period and do not carry over to subsequent periods.  If they are over or under what was expected, that may have
-     * triggered an adjustment to the item planned amount, or it may have been ignored, but that does not matter here.
-     * <p>
-     * Finally, for envelope type items, deduct from the budget item rather than the forecast item because that is where
-     * envelope amounts are stored.  As far as the remaining amount in the forecast transaction, if today is on or after
-     * the planned date, then credit the amount to the envelope and zero out the remaining amount in the forecast
-     * transaction.
-     *
-     * @param split
-     * @param forecastTransaction
-     * @return
-     * @throws EntityException
-     * @throws BudgetException
-     * @throws Exception
-     * @throws RegisterException
-     */
-    public static ForecastTransaction deductSplitAmount(TransactionSplit split, ForecastTransaction forecastTransaction)
-            throws EntityException, BudgetException, Exception, RegisterException {
-
-        Forecast forecast = forecastTransaction.getForecastItem().getForecast();
-        Transaction transaction = split.getTransaction();
-
-        // Deduct the actual amount from the planned amount:
-        double remainingAmount = 0;
-        switch (split.getBudgetItem().getHowOccurs()) {
-
-            case COLLECTION:
-
-                // If the user has overspent on this item, e.g. the amount of the split is greater than the remaining
-                // amount in the current period of the budgeted amount per period for this budget item:
-                if (split.getAmount() < forecastTransaction.getRemainingAmount()) {
-
-                    // Then ask the user what they would like to do:
-                    getResolver().say("You exceeded the remaining amount for this budget item by " +
-                            Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount() -
-                                    split.getAmount())) + ".  ");
-                    ForecastTransactionIterator it = ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(
-                            split.getIdBudgetItem(), forecast.getId());
-                    ForecastTransaction nextNonZeroForecastTransaction = it.getNext();
-                    if (nextNonZeroForecastTransaction != null) {
-                        getResolver().say("Next non-zero " + nextNonZeroForecastTransaction.toStringConcise());
-                    }
-                    split.setDisposition(getResolver().assignOverageAmount(""));
-
-                    // And Execute the user's request:
-                    switch (split.getDisposition()) {
-
-                        case ADJUST:  // The user would like to increase the budgeted amount to cover the overage:
-                            split.getBudgetItem().setAmount(split.getAmount());
-                            split.getBudgetItem().save(INSERT_ON_DUPLICATE_UPDATE);
-                            forecast.setInSync(false);
-                            forecast.save(UPDATE);
-                            forecastTransaction.setRemainingAmount(split.getAmount());
-                            break;
-
-                        case DISPUTE:  // The user believes that the register transaction is in error and would like to
-                            // dispute it and not reconcile the split:
-                            transaction.setIsImproper(true);
-                            transaction.save(UPDATE);
-                            transaction.getRegister().addSignificantEvent(transaction);
-                            break;
-
-                        case IGNORE:  // This is a one time overage.  Ignore the overage and do not reconcile the split.
-                            // However, the amount spent exceeds the amount budgeted for this period, so zero
-                            // out the remaining amount for this budget item in the current period:
-                            forecastTransaction.setRemainingAmount(0);
-                            forecastTransaction.save(UPDATE);
-                            getResolver().say(Utility.formatDollarAmount(split.getAmount()) + " assigned to, but not " +
-                                    ((split.getAmount() < 0) ? "deducted from " : " added to ") +
-                                    forecastTransaction.toStringVeryConcise());
-                            break;
-
-                        case ROLL_FORWARD:
-                            boolean done = false;
-                            remainingAmount = split.getAmount();
-                            while (!done) {
-                                if (nextNonZeroForecastTransaction != null) {
-                                    // If there is enough money in the forecast transaction to cover the split amount:
-                                    if (nextNonZeroForecastTransaction.getRemainingAmount() <= remainingAmount) {
-
-                                        // then deduct the split amount from the forecast transaction amount:
-                                        nextNonZeroForecastTransaction.setRemainingAmount(
-                                                nextNonZeroForecastTransaction.getRemainingAmount() - remainingAmount);
-
-                                        // and save the new remaining amount in the forecast transactions:
-                                        nextNonZeroForecastTransaction.save(UPDATE);
-                                        getResolver().say(Utility.formatDollarAmount(remainingAmount) +
-                                                ((remainingAmount < 0) ? " deducted from " : " added to ") +
-                                                nextNonZeroForecastTransaction.toStringVeryConcise());
-
-                                        // and we are done.
-                                        done = true;
-
-                                    } else { // but if there isn't enough money to cover:
-
-                                        // then figure out how much to carry over to the next forecast transaction:
-                                        remainingAmount -= nextNonZeroForecastTransaction.getRemainingAmount();
-
-                                        // then let the user know what we are doing:
-                                        double amount =
-                                                (currencyDifference(nextNonZeroForecastTransaction.getRemainingAmount(),
-                                                        remainingAmount) >= 0) ?
-                                                        remainingAmount : nextNonZeroForecastTransaction.getRemainingAmount();
-
-                                        // and zero out and save off the current forecast transaction:
-                                        getResolver().say(Utility.formatDollarAmount(amount) +
-                                                ((amount < 0) ? " deducted from " : " added to ") +
-                                                nextNonZeroForecastTransaction.toStringVeryConcise());
-                                        nextNonZeroForecastTransaction.setRemainingAmount(0);
-                                        nextNonZeroForecastTransaction.save(UPDATE);
-
-                                        // and move to the next non-zero forecast transaction
-                                        nextNonZeroForecastTransaction = it.getNext();
-                                        if (nextNonZeroForecastTransaction != null) {
-                                            getResolver().say("Carry over " + formatDollarAmount(remainingAmount) + " to " +
-                                                    nextNonZeroForecastTransaction.toStringVeryConcise());
-                                        } else {
-                                            getResolver().say("Unable to roll forward " + formatDollarAmount(remainingAmount) +
-                                                    " because there are no more forecast transactions to roll foward to.");
-                                            done = true;
-                                        }
-                                    }
-
-                                } else {
-                                    getResolver().say("Unable to roll forward " + formatDollarAmount(remainingAmount) +
-                                            " because there are no more forecast transactions to roll foward to.");
-                                    done = true;
-                                }
-                            }
-                            break;
-                    }
-                } else { // But if the user did not overspend on this item, e.g. the amount of the split is less than the
-                    // remaining amount in the current period:
-
-                    // then if this might be an overspend reimbursement to an expense category that has already been
-                    // zeroed out:
-                    boolean deduct = true;
-                    if (split.getAmount() > CURRENCY_COMPARISON_THRESHOLD &&
-                            forecastTransaction.getForecastItem().getItemType() != INCOME) {
-
-                        // then check with the user to see if they want to credit the amount to the remaining amount
-                        // of the forecast item:
-                        resolver.say("Appicable:  " + forecastTransaction.toStringConcise());
-                        deduct = resolver.getYesOrNo("Do you want to credit the amount of this split to the " +
-                                "forecast transaction");
-                    }
-
-                    // then deduct the split amount from the remaining amount:
-                    if (deduct) {
-                        forecastTransaction.setRemainingAmount(forecastTransaction.getRemainingAmount() - split.getAmount());
-
-                        // and save the new remaining amount in the forecast transactions:
-                        forecastTransaction.save(UPDATE);
-
-                        // and notify the user what we did:
-                        getResolver().say(Utility.formatDollarAmount(split.getAmount()) +
-                                ((split.getAmount() < 0) ? " deducted from " : " added to ") +
-                                forecastTransaction.toStringVeryConcise());
-                    }
-                }
-                break;
-
-            case ENVELOPE:
-                // Credit the forecast transaction amount to envelope if appropriate:
-                Item.updateEnvelopeAmount(forecastTransaction);
-
-                // then deduct the amount spent from the envelope.
-                Item.updateEnvelopeAmount(split);
-
-                // and then if the split caused the balance of the envelope to go to zero create a significant event:
-                if (Utility.isEqualCurrency(split.getBudgetItem().getRunningBalance(), 0)) {
-                    forecast.addSignificantEvent(forecastTransaction);
-                }
-                break;
-
-            case PERIODIC:
-            case VARIABLE_PERIODIC:
-            case UNPLANNED:
-                forecastTransaction.setRemainingAmount(0);
-                forecastTransaction.save(UPDATE);
-                getResolver().say(Utility.formatDollarAmount(split.getAmount()) +
-                        ((split.getAmount() < 0) ? " deducted from " : " added to ") +
-                        forecastTransaction.toStringVeryConcise());
-                break;
-        }
-
-        return forecastTransaction;
-    }
-
-
     /*
      *   Get a list of forecast transactions that a particular user is tracking closely:
      */
@@ -1335,7 +842,7 @@ public class ForecastTransaction extends IndependentEntity {
      * @param date         The date on which the forecast transaction must be the applicable forecast transaction.
      * @return The applicable forecast transaction.
      */
-    private static ForecastTransaction getApplicableZeroOccurrence(Forecast forecast, UUID idBudgetItem, Calendar date)
+    public static ForecastTransaction getApplicableZeroOccurrence(Forecast forecast, UUID idBudgetItem, Calendar date)
             throws SQLException, EntityException, ForecastException, BudgetException {
 
         return getApplicableZeroOccurrence(ForecastItem.getByBudgetItemId(idBudgetItem), date);
@@ -1500,30 +1007,25 @@ public class ForecastTransaction extends IndependentEntity {
                 forecastItem + ".");
 
         // If there is a next occurrence:
-        ForecastTransaction forecastTransaction = null;
         if (rsNO.next()) {
 
-            // then retrieve it:
-            forecastTransaction = new ForecastTransaction(rsNO);
+            // then return it:
+            return new ForecastTransaction(rsNO);
 
         } else {
 
             // This is normal if the forecast item is unplanned because unplanned forecast items only occur in the forecast
-            // if they are required to reconcile transaction splits.  However if it isn't unplanned:
-            if (forecastItem.getHowOccurs() != Item.HowOccurs.UNPLANNED) {
-                // Then this is an odd situation.  The item either expired, or the forecast ended:
-                getResolver().say("Warning:  There is no forecast transaction for forecast item " +
-                        forecastItem.getCategory() + ", " + forecastItem.getPayee() + " that occurs after today's date.");
-            }
+            // if they are required to reconcile transaction splits.  However, if it isn't unplanned, Then this is an
+            // odd situation.  Probably the item either expired before the forecast begins, or the forecast ended before
+            // the first occurrence of the item in the forecast.
+            return null;
         }
-
-        return forecastTransaction;
-    }
+   }
 
 
     /**
-     * Get the first non-zero occurrence of a forecast transaction. The algorithm is to get the head of a list of
-     * of forecast transctions for the forecast item with a nan-zero remaining amount in chronological order.
+     * Get the first non-zero occurrence of a forecast transaction. The algorithm is to return the head of a list of
+     * of forecast transactions for the forecast item with a nan-zero remaining amount in chronological order.
      *
      * @param forecastItem
      * @return
@@ -1545,24 +1047,19 @@ public class ForecastTransaction extends IndependentEntity {
                 "transaction with a non-zero remaining amount for the forecast item" + forecastItem + ".");
 
         // If there is a non-zero occurrence:
-        ForecastTransaction forecastTransaction = null;
         if (rsNZ.next()) {
 
-            // then retrieve it:
-            forecastTransaction = new ForecastTransaction(rsNZ);
+            // then return it:
+            return new ForecastTransaction(rsNZ);
 
         } else {
 
             // This is normal if the forecast item is unplanned because unplanned forecast items only occur in the forecast
-            // if they are required to reconcile transaction splits.  However if it isn't unplanned:
-            if (forecastItem.getHowOccurs() != Item.HowOccurs.UNPLANNED) {
-                // Then this is an odd situation.  The item either expired, or the forecast ended:
-                getResolver().say("Warning:  There is no next non-zero forecast transaction for forecast item " +
-                        forecastItem.getCategory() + ", " + forecastItem.getPayee() + ".");
-            }
+            // if they are required to reconcile transaction splits.  However, if it isn't unplanned, Then this is an
+            // odd situation.  Probably the item either expired before the forecast begins, or the forecast ended before
+            // the first occurrence of the item in the forecast.
+            return null;
         }
-
-        return forecastTransaction;
     }
 
     /**
@@ -1588,7 +1085,6 @@ public class ForecastTransaction extends IndependentEntity {
         ResultSet rsFI = ForecastItem.getAllUsableForecastItemsInForecast(forecast);
         Calendar today = Calendar.getInstance();
         if (rsFI != null) {
-            getResolver().say("\nCleaning up the forecast.");
             while (rsFI.next()) {
 
                 // Get the first occurrence of a forecast transaction for the current forecast item:
@@ -1609,15 +1105,17 @@ public class ForecastTransaction extends IndependentEntity {
                     ForecastItem forecastItem = new ForecastItem(rsFI);
                     ForecastTransaction.getApplicableForecastTransaction(forecastItem, today);
                 } else {
-                    // It is unusual for usable forecast item not to occur in the forecast, so issue a warning:
+                    // If a forecast item does not to occur in the forecast because it is expired, then delete it.  If
+                    // it is not expired, then its first occurrence must be after the end of the forecast, which is OK,
+                    // so we don't need to do anything.
                     ForecastItem forecastItem = new ForecastItem(rsFI);
-                    getResolver().say("\nWARNING:  This forecast item does not occur in the forecast:\n" +
-                            forecastItem.toString());
+                    if (forecastItem.isExpired(Calendar.getInstance())) {
+                        forecastItem.delete();
+                    }
                 }
             }
         }
     }
-
 
     public static List<Entity> getOverdueItems(User user) throws SQLException, EntityException, ForecastException,
             BudgetException {

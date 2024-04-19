@@ -1,8 +1,8 @@
 package com.hixon.financialApp.view.base;
 
-import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.budget.TransactionSplit;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
-import com.hixon.financialApp.model.register.TransactionSplit;
 
 /**
  * This class represents a row in a tabular report that represents a budget item.  It contains some meta-data

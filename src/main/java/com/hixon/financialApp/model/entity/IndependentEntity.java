@@ -9,23 +9,48 @@ import java.util.UUID;
 
 public abstract class IndependentEntity extends Entity implements IndependentEntityInt {
 
-   protected UUID id = null;
+    /*
+     * Fields for IndependentEntity:
+     */
+    protected UUID id = null;
 
-   @Override
-   public UUID getId() {
-      return this.id;
-   }
 
-   @Override
-   public void setId(UUID id) {
-      this.id = id;
-      setDirty(true);
-   }
+    /*
+    // Getters and setters for IndependentEntity:
+     */
+    @Override
+    public UUID getId() {
+        return this.id;
+    }
 
-   public static IndependentEntity getById(UUID uuid) throws EntityException, SQLException, RegisterException,
-           BudgetException, ForecastException {
-      return null;
-   }
+    @Override
+    public void setId(UUID id) {
+        this.id = id;
+        setDirty(true);
+    }
+
+
+    /*
+    // Constructors for IndependentEntity:
+     */
+    public IndependentEntity(boolean createId) {
+        if (createId) {
+            id = UUID.randomUUID();
+            setDirty(true);
+        }
+    }
+
+    /*
+    // Main methods for IndependentEntity:
+     */
+    public static IndependentEntity getById(UUID uuid) throws EntityException, SQLException, RegisterException,
+            BudgetException, ForecastException {
+        return null;
+    }
+
+    public boolean loadByName(IndependentEntity scope, String name) throws EntityException {
+        throw new EntityException("The method loadByName() is not overriden by the derived class.");
+    }
 
    /*
    public static <T extends IndependentEntity> T getById(UUID uuid) throws Exception {
@@ -47,13 +72,5 @@ public abstract class IndependentEntity extends Entity implements IndependentEnt
       }
    }
  */
-
-   public IndependentEntity(boolean createId) {
-      if (createId) {
-         id = UUID.randomUUID();
-         setDirty(true);
-      }
-   }
-
 
 }

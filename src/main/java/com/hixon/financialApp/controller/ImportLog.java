@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.hixon.financialApp.utility.Utility.*;
-import static com.hixon.financialApp.utility.Utility.calendarDateToStringDate;
 
 /**
  * This class encapsulates the logic around logging what was done while importing transactions.
@@ -49,7 +48,7 @@ public class ImportLog {
         } else {
             creditOrDebitString = "debit to ";
         }
-        getResolver().say("\nImported a " + creditOrDebitString + transaction.getMerchant().getName() + " for " +
+        getView().say("\nImported a " + creditOrDebitString + transaction.getMerchant().getName() + " for " +
                 formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
                 ((transaction.getAuthorizationDate() != null) ?
                         calendarDateToStringDate(transaction.getAuthorizationDate()) :

@@ -1,12 +1,11 @@
-package com.hixon.financialApp.model.register;
+package com.hixon.financialApp.model.budget;
 
-import com.hixon.financialApp.model.budget.BudgetException;
-import com.hixon.financialApp.model.budget.BudgetItem;
-import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -179,7 +178,11 @@ public class TransactionSplit extends DependentEntity {
    }
 
    @Override
-   public String getPrintableEntityTypeName() {
+   public String getPrintableTypeName() {
+      return getPrintableTypeName_static();
+   }
+
+   public static String getPrintableTypeName_static() {
       return "transaction split";
    }
 

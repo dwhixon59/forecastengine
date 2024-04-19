@@ -1,9 +1,14 @@
 package com.hixon.financialApp.utility;
 
-import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.BudgetController;
+import com.hixon.financialApp.controller.ForecastController;
+import com.hixon.financialApp.controller.MerchantController;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
-import com.hixon.financialApp.view.base.*;
+import com.hixon.financialApp.view.base.BudgetViewInt;
+import com.hixon.financialApp.view.base.ForecastViewInt;
+import com.hixon.financialApp.view.base.RegisterViewInt;
+import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -36,8 +41,11 @@ public class Utility {
     // Common database connection for the App:
     private static Connection dbConnection;
 
-    // The configured transaction resolver:
-    public static TransactionResolverInt resolver;
+    // The configured resolvers:
+    public static ViewInt resolver;
+    private static BudgetController budgetController;
+    private static MerchantController merchantController;
+    private static ForecastController forecastController;
 
     // Configured views for interfacing with external agents:
     private static RegisterViewInt registerView;
@@ -52,6 +60,7 @@ public class Utility {
     public static User getUser() {
         return user;
     }
+
     public static void setUser(User user) {
         Utility.user = user;
     }
@@ -61,15 +70,38 @@ public class Utility {
     }
 
     public static void setDbConnection(Connection dbConnection) {
-        com.hixon.financialApp.utility.Utility.dbConnection = dbConnection;
+        Utility.dbConnection = dbConnection;
     }
 
-    public static TransactionResolverInt getResolver() {
+    public static ViewInt getView() {
         return resolver;
     }
 
-    public static void setResolver(TransactionResolverInt resolver) {
-        com.hixon.financialApp.utility.Utility.resolver = resolver;
+    public static void setView(ViewInt resolverParam) {
+        Utility.resolver = resolverParam;
+    }
+
+    public static BudgetController getBudgetController() {
+        return budgetController;
+    }
+
+    public static void setBudgetController(BudgetController budgetController) {
+        Utility.budgetController = budgetController;
+    }
+
+    public ForecastController getForecastController() {
+        return forecastController;
+    }
+
+    public static void setForecastController(ForecastController forecastController) {
+        Utility.forecastController = forecastController;
+    }
+    public static MerchantController getMerchantController() {
+        return merchantController;
+    }
+
+    public static void setMerchantController(MerchantController merchantController) {
+        Utility.merchantController = merchantController;
     }
 
     public static NotificationServiceInt getNotificationService() {
@@ -234,6 +266,29 @@ public class Utility {
             calendarDate.setTime(sqlDate);
         }
         return calendarDate;
+    }
+
+    public static String toTitleCase(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        StringBuilder titleCase = new StringBuilder();
+        boolean nextTitleCase = true;
+
+        for (char c : input.toCharArray()) {
+            if (Character.isSpaceChar(c)) {
+                nextTitleCase = true;
+            } else if (nextTitleCase) {
+                c = Character.toTitleCase(c);
+                nextTitleCase = false;
+            } else {
+                c = Character.toLowerCase(c);
+            }
+            titleCase.append(c);
+        }
+
+        return titleCase.toString();
     }
 
     // Convert a Java LocalDate to a Java Calendar date:
@@ -567,13 +622,11 @@ public class Utility {
     public static String emptyStringIfNull(String string) {
         if (string == null) {
             return new String("");
-        }
-        else {
+        } else {
             if (string.equalsIgnoreCase("null")) {
                 string = "";
                 return string;
-            }
-            else {
+            } else {
                 return string;
             }
         }
@@ -642,8 +695,8 @@ public class Utility {
                 bufferedReader = new BufferedReader(new FileReader(fileName));
                 done = true;
             } catch (FileNotFoundException fe) {
-                getResolver().say("\n" + fileType + " " + fileName + " does not exist.");
-                if (!getResolver().getYesOrNo("Do you want to try again?")) {
+                getView().say("\n" + fileType + " " + fileName + " does not exist.");
+                if (!getView().getYesOrNo("Do you want to try again?")) {
                     throw (fe);
                 }
             }
@@ -664,48 +717,6 @@ public class Utility {
     public enum StartDateType {
         FIRST_OF_LAST_MONTH, FIRST_OF_THIS_MONTH, TODAY, FIRST_OF_NEXT_MONTH, ONE_MONTH_FROM_TODAY,
         ARBITRARY_DATE
-    }
-
-    /**
-     * Ask the user for the starting date for rendering a forecast.  Getting a start date is not strictly necessary.  Most
-     * of the time the user wants to render the entire forecast, not just the transactions on or after a certain date.
-     *
-     * @return The date that the forecast rendering should begin on.
-     * @throws QuitException
-     */
-    public static Calendar askStartDate() throws QuitException {
-        // Get the starting date type:
-        UserResponse response = getResolver().getForecastStartDate();
-
-        // Compute the start date:
-        Calendar startDate = Calendar.getInstance();
-        switch (response.getStartDate()) {
-            case FIRST_OF_LAST_MONTH:
-                startDate.add(MONTH, -1);
-                startDate.set(DATE, 1);
-                break;
-
-            case FIRST_OF_THIS_MONTH:
-                startDate.set(DATE, 1);
-                break;
-
-            case TODAY:
-                break;
-
-            case FIRST_OF_NEXT_MONTH:
-                startDate.add(MONTH, 1);
-                startDate.set(DATE, 1);
-                break;
-
-            case ONE_MONTH_FROM_TODAY:
-                startDate.add(MONTH, 1);
-                break;
-
-            case ARBITRARY_DATE:
-                startDate = response.getDate();
-                break;
-        }
-        return startDate;
     }
 
     /**
@@ -730,15 +741,14 @@ public class Utility {
         secondDate2.clear(Calendar.HOUR);
         secondDate2.clear(Calendar.MINUTE);
         secondDate2.clear(Calendar.SECOND);
-        int diffDays = Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
-        return diffDays;
+        return Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
     }
 
     /**
      * Get the number of months between two Calendar dates.
      *
-     * @param startDate  The first date, presumably the earliest date, though that is not required.
-     * @param endDate The second date, presumably the later date, though that is not required.
+     * @param startDate The first date, presumably the earliest date, though that is not required.
+     * @param endDate   The second date, presumably the later date, though that is not required.
      * @return The number of months between the two dates inclusive.  Negative if the second date is earlier than the
      * first date.
      */
@@ -782,20 +792,21 @@ public class Utility {
     }
 
     /*
-     *  US Bank holidays for 2021:
-     * New Year's Day - Wednesday, January 1
-     * Martin Luther King, Jr. Day - Monday, January 20
-     * Presidents' Day - Monday, February 17
-     * Memorial Day - Monday, May 25
-     * Independence Day - Saturday, July 4
-     * Labor Day - Monday, September 7
-     * Veterans' Day - Wednesday, November 11
-     * Thanksgiving Day Thursday, November 26
-     * Christmas Day Friday, December 25
+     *  US FinancialInstitutionController holidays for 2024:
+     * New Year's Day: January 1
+     * Martin Luther King Jr. Day: January 15
+     * Presidents' Day: February 19
+     * Memorial Day: May 28
+     * Independence Day: July 4
+     * Labor Day: September 3
+     * Columbus Day: October 8
+     * Veterans Day: November 12
+     * Thanksgiving Day: November 28
+     * Christmas Day: December 25
      */
     public static boolean isaBankHoliday(String date) {
-        String holidays[] = {"01-01-2021", "01-18-2021", "02-15-2021", "04-02-2021", "05-31-2021", "07-05-2021", "09-06-2021",
-                "11-11-2021", "11-25-2021", "12-24-2021", "12-31-2021"};
+        String holidays[] = {"01-01-2024", "01-15-2024", "02-19-2024", "05-28-2024", "07-04-2024", "09-03-2024",
+                "10-08-2024", "11-12-2024", "11-28-2024", "12-25-2024"};
         for (int i = 0; i < holidays.length; i++) {
             if (date.equalsIgnoreCase(holidays[i])) {
                 return true;
@@ -804,13 +815,11 @@ public class Utility {
         return false;
     }
 
-
     // Create a file:
     public static Boolean createFile(String currentFilename) throws IOException {
         File file = new File(currentFilename);
         return file.createNewFile();
     }
-
 
     /**
      * This utility method closes a file and handles any exceptions.
@@ -822,7 +831,7 @@ public class Utility {
             if (stream != null) {
                 stream.close();
             }
-        } catch (IOException e) {
+        } catch (IOException ignored) {
         }
     }
 
@@ -888,14 +897,14 @@ public class Utility {
      */
     public static Boolean versionFile(String currentFilename, String oldFilenameExtension) {
 
-        Boolean result = false;
+        boolean result = false;
         boolean done;
 
         // Delete the previous save file:
         String saveFileName = appendToFilename(currentFilename, oldFilenameExtension);
         File saveFile = new File(saveFileName);
         if (!saveFile.exists()) {
-            getResolver().say("Old file " + saveFileName + " was not deleted because it does not exist.");
+            getView().say("Old file " + saveFileName + " was not deleted because it does not exist.");
         }
 
         // Rename the current file to the save file name:
@@ -910,10 +919,10 @@ public class Utility {
 
                         // Wait for the file to be deleted:
                         while (Files.exists(saveFile.toPath())) {
-                            getResolver().say("Waiting for " + saveFileName + " to be deleted...");
+                            getView().say("Waiting for " + saveFileName + " to be deleted...");
                             try {
                                 Thread.sleep(1000);
-                            } catch (InterruptedException e) {
+                            } catch (InterruptedException ignored) {
                             }
                         }
                     }
@@ -923,22 +932,21 @@ public class Utility {
                     done = true;
                     result = true;
                 } catch (IOException e) {
-                    getResolver().say("\nUnable to rename the file " + currentFilename + " to " + saveFileName);
-                    getResolver().say("Error message: " + e.getMessage());
-                    done = !getResolver().getYesOrNo("Would you like to try again?");
+                    getView().say("\nUnable to rename the file " + currentFilename + " to " + saveFileName);
+                    getView().say("Error message: " + e.getMessage());
+                    done = !getView().getYesOrNo("Would you like to try again?");
                     if (done) {
-                        getResolver().say("Failed to rename the file " + currentFilename + " to " +
+                        getView().say("Failed to rename the file " + currentFilename + " to " +
                                 saveFileName);
                         result = false;
                     }
                 }
             }
         } else {
-            getResolver().say("Current file " + currentFilename + " was not renamed because it does not exist.");
+            getView().say("Current file " + currentFilename + " was not renamed because it does not exist.");
             result = false;
         }
 
         return result;
-}
-
+    }
 }

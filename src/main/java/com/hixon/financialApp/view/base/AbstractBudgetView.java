@@ -3,10 +3,9 @@ package com.hixon.financialApp.view.base;
 import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
-import com.hixon.financialApp.model.register.Merchant;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
-import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import org.jetbrains.annotations.NotNull;
@@ -19,7 +18,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.getView;
 import static com.hixon.financialApp.utility.Utility.setToLastBusinessDayBefore;
 
 public abstract class AbstractBudgetView extends AbstractView implements BudgetViewInt {
@@ -214,7 +213,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
 
         // Close the output file:
         closeSpendingReportOutput();
-        getResolver().say("MTD Spending Report successfully rendered.");
+        getView().say("MTD Spending Report successfully rendered.");
     }
 
 
@@ -291,7 +290,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
             renderBudgetSummaryReportSummary(budgetTotalsReportRow);
 
         } else {
-            Utility.getResolver().say("[WARN]  There were no items in the budget to report on.");
+            Utility.getView().say("[WARN]  There were no items in the budget to report on.");
         }
 
         // Render any trailer matter:
@@ -299,7 +298,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
 
         // Close the output file:
         closeSpendingReportOutput();
-        getResolver().say("Budget Summary Report successfully rendered.");
+        getView().say("Budget Summary Report successfully rendered.");
     }
 
 
@@ -383,7 +382,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
             budgetItem = new BudgetItem(budgetItemsWithSplits);
 
             // Keep the user updated with what is going on:
-            Utility.getResolver().say("Processing budget item " + budgetItem.getCategory() + ", " +
+            Utility.getView().say("Processing budget item " + budgetItem.getCategory() + ", " +
                     budgetItem.getPayee() + ".");
 
             // Create a BudgetItemReportRow for this budget item and add it to the list:

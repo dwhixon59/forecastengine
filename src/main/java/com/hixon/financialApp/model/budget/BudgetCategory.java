@@ -94,7 +94,11 @@ public class BudgetCategory extends DependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "Budget Category";
     }
 

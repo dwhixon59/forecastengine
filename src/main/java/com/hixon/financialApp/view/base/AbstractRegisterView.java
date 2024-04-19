@@ -14,7 +14,6 @@ import com.hixon.financialApp.view.text.NewTransactionSummaryReport;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.UnsupportedEncodingException;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -41,28 +40,6 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
     /*
      * Main methods:
      */
-    @Override
-    public boolean verifyRegisterBalance(Register register) throws EntityException, SQLException, BudgetException,
-            RegisterException {
-        boolean wasCorrect = true;
-        Register dbRegister = Register.getById(register.getId());
-
-        if (!Utility.isEqualCurrency(register.getBalance(), dbRegister.getBalance())) {
-            Utility.getResolver().say("The in memory register balance is " + Utility.formatDollarAmount(
-                    register.getBalance()) + " but the register balance in the database is " + Utility.formatDollarAmount(
-                    register.getBalance()) + ".  You should update it.");
-        }
-
-        if (Utility.getResolver().getYesOrNo("\nThe current balance of the " +
-                register.getName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
-                "  Do you want to update it?")) {
-            double balance = Utility.getResolver().getDollarAmount();
-            register.setBalance(balance);
-            register.update();
-            wasCorrect = false;
-        }
-        return wasCorrect;
-    }
 
     @Override
     public boolean renderTransactionReport(Calendar startDate) throws FileNotFoundException, UnsupportedEncodingException,
@@ -89,7 +66,7 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
             if (userResource != null) {
                 reports.add(userResource);
             } else {
-                Utility.getResolver().say("\nNo new transactions to report on.");
+                Utility.getView().say("\nNo new transactions to report on.");
                 break;
             }
         }

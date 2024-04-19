@@ -6,7 +6,6 @@ import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.register.RegisterException;
-import com.hixon.financialApp.model.register.TransactionSplit;
 import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
@@ -23,7 +22,7 @@ import static com.hixon.financialApp.model.budget.Item.ItemType.CREDIT_CARD;
 import static com.hixon.financialApp.model.budget.Item.ItemType.*;
 import static com.hixon.financialApp.model.budget.Item.PeriodType.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
-import static com.hixon.financialApp.utility.Utility.getResolver;
+import static com.hixon.financialApp.utility.Utility.getView;
 import static com.hixon.financialApp.utility.Utility.isNotNullOrEmpty;
 import static java.lang.Math.abs;
 
@@ -178,7 +177,7 @@ public abstract class Item extends IndependentEntity {
             budgetItem.save(UPDATE);
 
             // and let the user know what we just did:
-            getResolver().say(Utility.formatDollarAmount(forecastTransaction.getRemainingAmount()) +
+            getView().say(Utility.formatDollarAmount(forecastTransaction.getRemainingAmount()) +
                     ((forecastTransaction.getRemainingAmount() < 0) ? " deducted from " : " added to ") +
                     forecastTransaction.toStringVeryConcise() + " envelope.  New balance is " +
                     Utility.formatDollarAmount(budgetItem.getAmount()));
@@ -219,7 +218,7 @@ public abstract class Item extends IndependentEntity {
         budgetItem.update();
 
         // let the user know what we did:
-        getResolver().say(Utility.formatDollarAmount(split.getAmount()) +
+        getView().say(Utility.formatDollarAmount(split.getAmount()) +
                 ((split.getAmount() < 0) ? " deducted from " : " added to ") +
                 " envelope for " + budgetItem.toStringVeryConcise());
     }
@@ -228,6 +227,15 @@ public abstract class Item extends IndependentEntity {
     /*
      *  Getter and setter methods:
      */
+    @Override
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
+        return "item";
+    }
+
     public String getCategory() {
         return category;
     }

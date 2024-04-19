@@ -1,10 +1,12 @@
 package com.hixon.financialApp.model.register;
 
+import com.hixon.financialApp.controller.FinancialInstitutionInt;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.TransactionResolverInt;
+import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.ResultSet;
@@ -18,7 +20,7 @@ public class GenericClassifer implements FinancialInstitutionInt {
     protected BudgetItem[] budgetItems;
 
     // Constructors:
-    public GenericClassifer(TransactionResolverInt resolver) throws SQLException, BudgetException, EntityException {
+    public GenericClassifer(ViewInt resolver) throws SQLException, BudgetException, EntityException {
 
         // Create a prepared statement for using with the database:
         Statement stmt = null;

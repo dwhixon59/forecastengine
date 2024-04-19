@@ -18,17 +18,17 @@ public interface EntityInt {
 
    void setDirty(boolean dirty);
 
+   String getPrintableTypeName();
+
    // The base CRUD queries:
    String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException, NotImplementedException;
    String getInsertOnDuplicateUpdateQuery() throws BudgetException, EntityException, SQLException, ForecastException;
    String getUpdateByIdQuery() throws BudgetException;
    String getDeleteByIdQuery();
-   String getPrintableEntityTypeName();
 
    // The save operation:
    enum SaveMethod {INSERT, UPDATE, INSERT_ON_DUPLICATE_UPDATE, INSERT_ON_DUPLICATE_SKIP}
-   void save(SaveMethod method) throws EntityException, RegisterException, BudgetException, SQLException,
-           ForecastException;
+   void save(SaveMethod method) throws EntityException, SQLException;
 
    // The insert operation:
    void insert() throws ForecastException, BudgetException, EntityException, RegisterException, SQLException;
@@ -52,9 +52,6 @@ public interface EntityInt {
       try {
          statement = Utility.getDbConnection().createStatement();
          rowCount = statement.executeUpdate(query);
-         if (rowCount == 0) {
-            Utility.getResolver().say("\n----------\nNo rows affected by the statement:  " + query);
-         }
       } catch (SQLException e) {
          try {
             if (statement != null) statement.close();

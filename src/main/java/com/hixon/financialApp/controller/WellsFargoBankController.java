@@ -1,10 +1,16 @@
-package com.hixon.financialApp.model.register;
+package com.hixon.financialApp.controller;
 
-import com.hixon.financialApp.controller.QuitException;
-import com.hixon.financialApp.controller.SkipException;
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.merchant.Merchant;
+import com.hixon.financialApp.model.register.Register;
+import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
+import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
@@ -16,13 +22,13 @@ import java.util.Locale;
 /*
  * This class analyzes transactions from a Wells Fargo CSV download file:
  */
-public class WellsFargoBank extends Bank {
+public class WellsFargoBankController extends FinancialInstitutionController {
 
     /*
      * Fields in the Wells Fargo download file transaction classifier:
      */
     //TODO:  Had to remove UT because it clashed with the abbreviation for "utilities".
-    private static String states = "|AL|AK|AS|AZ|AR|CA|CO|CT|DE|DC|FM|FL|GA|GU|HI|ID|IL|IN|IA|KS|KY|LA|ME|MH|MD|MA|MI|" +
+    private static final String states = "|AL|AK|AS|AZ|AR|CA|CO|CT|DE|DC|FM|FL|GA|GU|HI|ID|IL|IN|IA|KS|KY|LA|ME|MH|MD|MA|MI|" +
             "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|VT|VA|WA|WV|WI|WY|";
     private final SimpleDateFormat sdf = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
     private String[] payeeTokens;
@@ -36,9 +42,10 @@ public class WellsFargoBank extends Bank {
     /*
      * Constructors for the Wells Fargo download file transaction classifier:
      */
-    public WellsFargoBank(Register register) {
+    public WellsFargoBankController(Register register, Budget budget, Forecast forecast, ViewInt view,
+                                    NotificationServiceInt notificationService) {
 
-        super(register, Utility.getResolver());
+        super(register, budget, forecast, view, notificationService);
     }
 
 
@@ -46,7 +53,7 @@ public class WellsFargoBank extends Bank {
      * Helper methods:
      */
     @Override
-    public String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException {
+    public String getRegisterImportRecordBaseName(CSVRecord record) {
         return record.get(Transaction.Headers.TRANSACTION_DATE) + "\t" + record.get(Transaction.Headers.AMOUNT) + "\t" +
                 record.get(Transaction.Headers.CLEARED) + "\t" + record.get(Transaction.Headers.CHECK_NUMBER) + "\t" +
                 record.get(Transaction.Headers.PAYEE);
@@ -59,7 +66,7 @@ public class WellsFargoBank extends Bank {
     // Load up a Transaction from a Wells Fargo CSV transaction download file:
     @Override
     public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
-            SQLException, SkipException, QuitException {
+            SQLException, SkipException, QuitException, CancelException {
 
         Transaction transaction = loadFromCsvRecord(record, importRecordId);
         TransactionHistory.getInstance().add(transaction);
@@ -68,7 +75,7 @@ public class WellsFargoBank extends Bank {
 
     // Load a transaction from a posted transaction CSV record:
     public Transaction loadFromCsvRecord(CSVRecord record, String importRecordId) throws ParseException,
-            RegisterException, SQLException, SkipException, QuitException {
+            RegisterException, SkipException, QuitException, CancelException {
 
         // Compute the fields of the transaction from the tokens in the record:
         Calendar postDate = Calendar.getInstance();
@@ -78,7 +85,7 @@ public class WellsFargoBank extends Bank {
         boolean cleared = record.get(Transaction.Headers.CLEARED).contentEquals("*");
         String checkNumberString = record.get(Transaction.Headers.CHECK_NUMBER);
         int checkNumber = 0;
-        if (checkNumberString != null && checkNumberString.length() > 0) {
+        if (checkNumberString != null && !checkNumberString.isEmpty()) {
             checkNumber = Integer.parseInt(record.get(Transaction.Headers.CHECK_NUMBER));
         }
 
@@ -93,7 +100,7 @@ public class WellsFargoBank extends Bank {
         for (; i < payeeTokens.length; i++) {
 
             // If we found a date, use it as the authorization date:
-            if (payeeTokens[i].matches("^(0?[1-9]|1[0-2]){1}\\/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]){1}.*")) {
+            if (payeeTokens[i].matches("^(0?[1-9]|1[0-2])/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]){1}.*")) {
                 transaction.setAuthorizationDate(Utility.stringDateSlashToCalendarDate(payeeTokens[i]));
                 break;
             }
@@ -111,9 +118,9 @@ public class WellsFargoBank extends Bank {
     }
 
     @Override
-    public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant merchant) throws RegisterException,
-            SQLException,
+    public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant merchant) throws SQLException,
             EntityException {
+
         return Transaction.getFirstProvisionalTransaction(merchant.getId(),
                 Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
     }
@@ -121,7 +128,7 @@ public class WellsFargoBank extends Bank {
     // Load a transaction from a CSV provisional transaction record:
     @Override
     public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException,
-            SQLException, RegisterException, SkipException, QuitException {
+            RegisterException, SkipException, QuitException, CancelException {
         String[] tokens;
 
         // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
@@ -144,16 +151,16 @@ public class WellsFargoBank extends Bank {
 
         // Determine the amount of the credit and debit:
         double amount = 0;
-        if (tokens.length >= (3 + iOffset) && tokens[2 + iOffset].length() > 0) {
+        if (tokens.length >= (3 + iOffset) && !tokens[2 + iOffset].isEmpty()) {
             try {
                 amount = Utility.parseDollarAmount(tokens[2 + iOffset]);
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException ignored) {
             }
         } else {
-            if (tokens.length >= (4 + iOffset) && tokens[3 + iOffset].length() > 0) {
+            if (tokens.length >= (4 + iOffset) && !tokens[3 + iOffset].isEmpty()) {
                 try {
                     amount = -Utility.parseDollarAmount(tokens[3 + iOffset]);
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException ignored) {
                 }
             }
         }
@@ -170,7 +177,7 @@ public class WellsFargoBank extends Bank {
 
     // Parse out the merchant name from a Wells Fargo CSV transaction download file:
     public String parseMerchantPayee(Calendar date, double amount, String payee)
-            throws RegisterException, SkipException, QuitException {
+            throws RegisterException, SkipException, QuitException, CancelException {
 
         // Construct the merchant payee string from portions of the bank payee string:
         String merchantPayee;
@@ -231,7 +238,9 @@ public class WellsFargoBank extends Bank {
                 if (i == payeeTokens.length) {
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
-                    transferRegister = resolver.resolveUnmatchedAccount(date, amount, payee);
+                    RegisterController registerController = new RegisterController(register, this,
+                            budget, forecast, view, notificationService);
+                    transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee);
                     accountNumber = transferRegister.getAccountNumber();
                 }
                 else {
@@ -335,7 +344,7 @@ public class WellsFargoBank extends Bank {
         } else if (tokens.length == 1) {
             token = tokens[0];
         } else {
-            token = (tokens[0].length() > 0) ? tokens[0] : tokens[1];
+            token = (!tokens[0].isEmpty()) ? tokens[0] : tokens[1];
         }
         return token;
     }

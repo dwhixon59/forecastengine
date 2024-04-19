@@ -102,8 +102,7 @@ public class ForecastTransactionView extends ForecastTransaction {
    }
 
    // The entity name:
-   @Override
-   public String getPrintableEntityTypeName() {
+   public static String getPrintableEntityTypeName() {
       return "CSV forecast transaction";
    }
 

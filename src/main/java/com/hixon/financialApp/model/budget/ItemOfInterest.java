@@ -102,8 +102,12 @@ public class ItemOfInterest extends DependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
-        return "ItemOfInterest";
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
+        return "item of interest";
     }
 
 

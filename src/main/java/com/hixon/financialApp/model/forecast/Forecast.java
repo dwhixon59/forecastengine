@@ -4,23 +4,20 @@ import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
-import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.TransactionResolverInt;
+import com.hixon.financialApp.view.base.ViewInt;
 
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT;
-import static com.hixon.financialApp.model.entity.EntityInt.*;
-import static java.util.Calendar.MONTH;
+import static com.hixon.financialApp.model.entity.EntityInt.getSingletonRS;
 
 
 public class Forecast extends IndependentEntity {
@@ -29,7 +26,6 @@ public class Forecast extends IndependentEntity {
 
     public static final String FORECAST_TRANSACTIONS_FILE = "Forecast transactions";
     public static final String FORECAST_TRANSACTIONS_FILENAME = "forecast_transactions.csv";
-
 
     // The types of significant events that can be generated:
     public enum SignificantEvents {daysBelowMinimumBalance}
@@ -73,7 +69,6 @@ public class Forecast extends IndependentEntity {
     /*
      * Forecast class getters and setters:
      */
-
     public String getName() {
         return getDescription();
     }
@@ -86,8 +81,18 @@ public class Forecast extends IndependentEntity {
         return startDate;
     }
 
+    public void setStartDate(Calendar forecastStartDate) {
+        this.startDate = forecastStartDate;
+        setDirty(true);
+    }
+
     public Calendar getEndDate() {
         return endDate;
+    }
+
+    public void setEndDate(Calendar endDate) {
+        this.endDate = endDate;
+        setDirty(true);
     }
 
     public double getStartingBalance() {
@@ -124,6 +129,10 @@ public class Forecast extends IndependentEntity {
 
     ForecastTransaction[] getTransactions() {
         return transactions;
+    }
+
+    public void setTransactions(ForecastTransaction[] forecastTransactions) {
+        this.transactions = forecastTransactions;
     }
 
     public ForecastTransaction getFirstSignificantEvent() {
@@ -181,7 +190,11 @@ public class Forecast extends IndependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "forecast";
     }
 
@@ -207,7 +220,7 @@ public class Forecast extends IndependentEntity {
         this.minimumBalance = minimumBalance;
         this.endingBalance = 0;
         this.numberOfMonths = numberOfMonths;
-        this.budgetName = budget.getBudgetName();
+        this.budgetName = budget.getName();
         this.idBudget = budget.getId();
 
     }
@@ -267,8 +280,8 @@ public class Forecast extends IndependentEntity {
         }
 
         // Otherwise, let the user select a forecast:
-        Forecast forecast = Utility.getResolver().selectByNameFromNumberedList("Select a forecast:", forecasts,
-                TransactionResolverInt.DO_NOT_ALLOW_NONE);
+        Forecast forecast = Utility.getView().selectByNameFromList("Select a forecast:", forecasts,
+                ViewInt.DO_NOT_ALLOW_NONE);
 
         // If a forecast was selected, return it, else throw an exception:
         if (forecast != null) {
@@ -430,7 +443,7 @@ public class Forecast extends IndependentEntity {
             for (ForecastTransaction transaction : this.transactions) {
                 if (transaction != null) {
                     ForecastTransaction forecastTransaction = transaction;
-                    Utility.getResolver().say("Updating " + forecastTransaction.getForecastItem().toStringShort());
+                    Utility.getView().say("Updating " + forecastTransaction.getForecastItem().toStringShort());
                     while (forecastTransaction != null) {
                         preparedStmt.setString(1, forecastTransaction.getId().toString());
                         preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
@@ -462,96 +475,6 @@ public class Forecast extends IndependentEntity {
 
     } // End saveAll().
 
-    /*
-     * Update the long term forecast, which means regenerate the portion of the forecast from the update start date
-     * (usually the first day of the next month) to the end of the forecast window (defaults to 12 months), which
-     * likely results in extending the forecast:
-     */
-    public void updateForecast() throws Exception, EntityException, BudgetException, QuitException, RegisterException {
-
-        // Get the starting date of the forecast to update:
-        boolean done = false;
-        Calendar updateStartDate = null;
-        while (!done) {
-            Utility.getResolver().say("Updating the forecast.  WARNING:  Normally this should begin with the first of next " +
-                    "month.");
-            updateStartDate = Utility.askStartDate();
-            Calendar nextMonth = Calendar.getInstance();
-            nextMonth.add(MONTH, 1);
-            if (updateStartDate.get(MONTH) != nextMonth.get(MONTH) || updateStartDate.get(Calendar.DATE) != 1) {
-                done = Utility.getResolver().getYesOrNo("You did not select the first of next month.  Are you sure?");
-            } else {
-                done = true;
-            }
-        }
-
-        // Update up the end date so that the forecast window will be the same number of months as it was originally
-        // set to be:
-        endDate = (Calendar) updateStartDate.clone();
-        endDate.add(MONTH, numberOfMonths);
-
-        // Update all the forecast items in the forecast from the current budget items:
-        ForecastItem.updateForecastItemsFromBudgetItems(this);
-
-        // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
-        // was created:
-        String query = BudgetItem.getSelectQuery() + " " +
-                "LEFT JOIN forecast_item fi ON bi.idBudgetItem = fi.BudgetItem_idBudgetItem " +
-                "AND fi.Forecast_idForecast = uuid_to_bin('" + getId() + "') " +
-                "WHERE bi.Budget_idBudget = uuid_to_bin('" + getBudget().getId() + "') " +
-                "and fi.idForecastItem is null";
-        ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
-
-        // Create forecast items for budget items that weren't previously included:
-        ForecastItem forecastItem;
-        while (rs.next()) {
-            forecastItem = new ForecastItem(this, rs);
-            forecastItem.save(INSERT);
-        }
-
-        // Expire any forecast items generated from budget items that no longer exist so they no longer generate new
-        // forecast transactions:
-        ForecastItem.expireOldForecastItems(this);
-
-        // Delete any expired forecast items that have no linked forecast transactions:
-        ForecastItem.deleteExpiredUnusedForecastItems(this);
-
-        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones:
-        query = ForecastTransaction.getDeleteQuery() +
-                "where ForecastItem_idForecastItem " +
-                "in (" +
-                "select idForecastItem " +
-                "from forecast_item " +
-                "where Forecast_idForecast = uuid_to_bin('" + getId() + "')" +
-                ") " +
-                "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
-                "and not overridden";
-        executeUpdate(query, "deleting all the forecast transactions after " +
-                Utility.calendarDateToStringDate(updateStartDate));
-
-        // Generate the updated portion of the forecast starting on the update start date:
-        this.transactions = new ForecastTransaction[numberOfMonths * 31];
-        ForecastEngine forecastEngine = new ForecastEngine();
-        forecastEngine.generateForecastTransactions(this, updateStartDate);
-
-        // Save the updated portion of the forecast:
-        saveForecastTransactions();
-
-        // The forecast engine doesn't know that we are updating a forecast.  It will have set the first occurrence
-        // properly for a new forecast.  Fix up the flags in the updated forecast.
-        ForecastTransaction.cleanUpForecast(this);
-
-        // Mark the forecast as insync now:
-        inSync = true;
-
-        // Get the start date of the forecast:
-        startDate = Forecast.getForecastStartDate(this);
-
-        // Update the forecast object in the database with the new start and end dates:
-        save();
-
-    } // End Forecast.update().
-
 
     /*
      *  Helper methods:
@@ -564,7 +487,6 @@ public class Forecast extends IndependentEntity {
         Budget budget = Budget.getById(idBudget);
         return budget;
     }
-
 
     /*
      * Forecast class main methods:

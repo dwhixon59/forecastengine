@@ -66,12 +66,12 @@ public class ForecastView extends AbstractForecastView {
     }
 
     @Override
-    protected void closeForecastTransactionSource() throws ViewException {
+    public void closeForecastTransactionSource(String sourceName) throws ViewException {
 
     }
 
     @Override
-    protected List<ForecastTransaction> openForecastTransactionSource() throws IOException, ControllerException,
+    public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
             BudgetException {
         return null;
     }

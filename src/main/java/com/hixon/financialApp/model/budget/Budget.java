@@ -27,7 +27,7 @@ public class Budget extends IndependentEntity {
      * Getters and setters:
      */
 
-    public String getBudgetName() {
+    public String getName() {
         return budgetName;
     }
 
@@ -57,7 +57,11 @@ public class Budget extends IndependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "budget";
     }
 

@@ -18,7 +18,7 @@
     </Appenders>
     <Loggers>
         <!-- avoid duplicated logs with additivity=false -->
-        <Logger name="com.hixon.financialApp.controller.Controller" level="debug" additivity="false">
+        <Logger name="com.hixon.financialApp.mainController.MainController" level="debug" additivity="false">
             <AppenderRef ref="LogToRollingFile"/>
             <AppenderRef ref="LogToConsole"/>
         </Logger>

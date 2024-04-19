@@ -215,7 +215,11 @@ public class User extends IndependentEntity {
 
    // The entity name:
    @Override
-   public String getPrintableEntityTypeName() {
+   public String getPrintableTypeName() {
+      return getPrintableTypeName_static();
+   }
+
+   public static String getPrintableTypeName_static() {
       return "user";
    }
 

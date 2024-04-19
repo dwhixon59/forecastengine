@@ -271,7 +271,11 @@ public class ForecastItem extends Item {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "forecast item";
     }
 

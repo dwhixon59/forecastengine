@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
 
@@ -92,8 +93,8 @@ public class Transaction extends IndependentEntity {
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
                 + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
-                + balance + ", isImproper = " + isImproper + ", isNew = " + isNew + ", importRecordId = \"" +
-                importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "'), Merchant_idMerchant = " +
+                + balance + ", isImproper = " + isImproper + ", isNew = " + isNew
+                + ", Register_idRegister = uuid_to_bin('" + getIdRegister() + "'), Merchant_idMerchant = " +
                 "uuid_to_bin('" + getIdMerchant() + "')";
     }
 
@@ -133,7 +134,11 @@ public class Transaction extends IndependentEntity {
     }
 
     @Override
-    public String getPrintableEntityTypeName() {
+    public String getPrintableTypeName() {
+        return getPrintableTypeName_static();
+    }
+
+    public static String getPrintableTypeName_static() {
         return "transaction";
     }
 
