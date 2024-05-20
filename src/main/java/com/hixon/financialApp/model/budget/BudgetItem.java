@@ -161,8 +161,8 @@ public class BudgetItem extends Item {
 
     public BudgetItem(Budget budget, String newName) {
         super(false);
-        setPayee(newName);
         setIdBudget(budget.getId());
+        setPayee(newName);
         setDirty(true);
     }
 
@@ -189,36 +189,40 @@ public class BudgetItem extends Item {
     public String getDisplayString() {
         String line = "";
         line += getPayee();
-        line += " (";
-        line += getCategory();
-        line += ", ";
-        if (getAmount() != 0) {
-            line += Utility.formatRoundedDollarAmount(getAmount()) + " ";
-        }
-        try {
-            line += Item.generatePeriodType(getPeriod());
-        } catch (BudgetException e) {
-            throw new RuntimeException(e);
-        }
-        if (getPeriod() != Item.PeriodType.ON_DEMAND) {
+        if (getCategory() != null && !getCategory().isEmpty()) {
+            line += " (";
+            line += getCategory();
             line += ", ";
-            ForecastTransaction forecastTransaction = null;
+            if (getAmount() != 0) {
+                line += Utility.formatRoundedDollarAmount(getAmount()) + " ";
+            }
             try {
-                forecastTransaction = ForecastTransaction.getApplicableForecastTransaction(
-                        getId(), Calendar.getInstance());
-            } catch (Exception e) {
+                if (getPeriod() != null) {
+                    line += Item.generatePeriodType(getPeriod());
+                }
+            } catch (BudgetException e) {
                 throw new RuntimeException(e);
             }
-            if (forecastTransaction != null) {
-                line += Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate());
-            } else {
-                line += "Not planned.";
+            if (getPeriod() != null && getPeriod() != Item.PeriodType.ON_DEMAND) {
+                line += ", ";
+                ForecastTransaction forecastTransaction = null;
+                try {
+                    forecastTransaction = ForecastTransaction.getApplicableForecastTransaction(
+                            getId(), Calendar.getInstance());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if (forecastTransaction != null) {
+                    line += Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate());
+                } else {
+                    line += "Not planned.";
+                }
             }
+            if (getMemo() != null && !getMemo().isEmpty()) {
+                line += ", " + getMemo();
+            }
+            line += ")";
         }
-        if (getMemo() != null && !getMemo().isEmpty()) {
-            line += ", " + getMemo();
-        }
-        line += ")";
         return line;
     }
 

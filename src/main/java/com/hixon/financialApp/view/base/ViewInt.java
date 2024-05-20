@@ -12,6 +12,7 @@ import com.hixon.financialApp.model.user.User;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
+import java.util.function.Function;
 
 public interface ViewInt {
 
@@ -251,7 +252,7 @@ public interface ViewInt {
      * @return The selected user.
      * @throws SQLException
      * @throws EntityException
-    */
+     */
     User getUser(String prompt, List<User> users, boolean allowNull);
 
     /**
@@ -339,13 +340,14 @@ public interface ViewInt {
      * string is presumably to indicate that none of the options are what they are looking for and provide instructions
      * on how to regenerate the list.
      *
-     * @param prompt          The prompt to display to the user.
-     * @param list            A list of entities to select from.
-     * @param allowNone       Is the user allowed to select none of the items?
+     * @param prompt           The prompt to display to the user.
+     * @param list             A list of entities to select from.
+     * @param allowNone        Is the user allowed to select none of the items?
      * @param allowCreate
-     * @param isCancelAllowed Is the user allowed to cancel the current process?
-     * @param isQuitAllowed   Is the user allowed to quit the program?
-     * @param isSkipAllowed   Is the user allowed to skip this item and not enter an integer?
+     * @param isCancelAllowed  Is the user allowed to cancel the current process?
+     * @param isQuitAllowed    Is the user allowed to quit the program?
+     * @param isSkipAllowed    Is the user allowed to skip this item and not enter an integer?
+     * @param getDisplayString
      * @return The selected item, or null if none was selected and none allowed, or a new search string.
      * @throws EntityException
      * @throws CancelException
@@ -355,8 +357,10 @@ public interface ViewInt {
     <T extends IndependentEntityInt> EntityOrStringResult<T> selectByNameFromListOrString(
             String prompt,
             List<T> list,
+            Function<T, String> getDisplayString,
             boolean allowNone,
-            boolean allowCreate, boolean isCancelAllowed,
+            boolean allowCreate,
+            boolean isCancelAllowed,
             boolean isQuitAllowed,
             boolean isSkipAllowed)
             throws EntityException, CancelException, QuitException, SkipException;

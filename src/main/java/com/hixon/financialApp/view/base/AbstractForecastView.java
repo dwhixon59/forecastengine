@@ -165,7 +165,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double totalSavings = 0.0;
         double totalDebtExpense = 0.0;
 
-        // Variables to hold the date  of the first first-of-the-month and balance on that date.  This is used to
+        // Variables to hold the date of the first first-of-the-month and balance on that date.  This is used to
         // calculate whether the forecast is solvent over the period of the forecast, and also the required amount of
         // float to keep the forecast solvent.
         Calendar firstFirstOfMonth = getNextFirstOfMonth(Calendar.getInstance());

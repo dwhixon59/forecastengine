@@ -82,39 +82,36 @@ public class BudgetController {
     public BudgetItem getBudgetItemByNameFullText(String seedName) throws Exception, QuitException, SkipException {
 
         BudgetItem selectedBudgetItem = null;
-        try {
-            // Use the SelectionController to select a budget item from the database using natural language queries:
-            SelectionController selectionController = new SelectionController(view);
-            selectedBudgetItem = selectionController.getByNameFullText(
-                    seedName,
-                    budget,
-                    ViewInt.DO_NOT_ALLOW_NONE,
-                    ViewInt.ALLOW_CREATE,
-                    ViewInt.DO_NOT_ALLOW_CANCEL,
-                    ViewInt.ALLOW_QUIT,
-                    ViewInt.ALLOW_SKIP,
-                    BudgetItem.getPrintableTypeName_static(),
-                    BudgetItem::getDisplayString,
-                    new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
-                            budget.getId() + "') AND", "bi.payee", "bi.category, bi.payee, bi.memo"),
-                    rs -> {
-                        try {
-                            return new BudgetItem(rs);
-                        } catch (BudgetException e) {
-                            throw new RuntimeException(e);
-                        }
-                    },
-                    (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
+        // Use the SelectionController to select a budget item from the database using natural language queries:
+        SelectionController selectionController = new SelectionController(view);
+        selectedBudgetItem = selectionController.getByNameFullText(
+                seedName,
+                budget,
+                ViewInt.DO_NOT_ALLOW_NONE,
+                ViewInt.ALLOW_CREATE,
+                ViewInt.ALLOW_CANCEL,
+                ViewInt.ALLOW_QUIT,
+                ViewInt.ALLOW_SKIP,
+                BudgetItem.getPrintableTypeName_static(),
+                BudgetItem::getDisplayString,
+                new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
+                        budget.getId() + "') AND (endDate is null OR endDate > CURRENT_DATE) AND ", "bi.payee",
+                        "bi.category, bi.payee, bi.memo"),
+                rs -> {
+                    try {
+                        return new BudgetItem(rs);
+                    } catch (BudgetException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
 
-            // If the budget item is new, then fill it out and save it:
-            if (selectedBudgetItem.isDirty()) {
-                selectedBudgetItem = getBudgetItemFromUser();
-                selectedBudgetItem.save(EntityInt.SaveMethod.INSERT);
-            }
-
-        } catch (CancelException ignored) {
-            // We don't allow cancel exceptions so ignore:
+        // If the budget item is new, then fill it out and save it:
+        if (selectedBudgetItem.isDirty()) {
+            selectedBudgetItem = getBudgetItemFromUser();
+            selectedBudgetItem.save(EntityInt.SaveMethod.INSERT);
         }
+
         return selectedBudgetItem;
     }
 
@@ -129,7 +126,7 @@ public class BudgetController {
      * @throws SkipException
      */
     public void assignBudgetItemsToMerchant(Merchant merchant, List<BudgetItemMerchant>
-            budgetItemsForMerchant) throws Exception, QuitException, SkipException {
+            budgetItemsForMerchant) throws Exception, CancelException, QuitException, SkipException {
 
         try {
             boolean firstTime = true;
@@ -150,9 +147,9 @@ public class BudgetController {
                     // then if the user wants to add this budget item to the list of budget items for the merchant:
                     if (
                             !firstTime || // Later iterations don't make sense if we don't add them to the list:
-                            view.getYesOrNo("Do you want to add this budget item \"" +
-                                    selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
-                                    + merchant.getName() + "\"?")
+                                    view.getYesOrNo("Do you want to add this budget item \"" +
+                                            selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
+                                            + merchant.getName() + "\"?")
                     ) {
                         firstTime = false;
 
@@ -176,8 +173,7 @@ public class BudgetController {
 
                     // Add the budget item to the list of budget items passed in:
                     budgetItemsForMerchant.add(budgetItemMerchant);
-                }
-                else {
+                } else {
                     // Tell the user that this budget item is already associated with this merchant:
                     view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
                             "associated with the merchant \"" + merchant.getName() + "\".");
@@ -188,8 +184,9 @@ public class BudgetController {
 
             } // End while there are budget items to enter.
 
-        } catch (QuitException | SkipException e) {
+        } catch (CancelException | QuitException | SkipException e) {
             throw e;
+
         } catch (Exception e) {
             ViewException ve = new ViewException("Exception occurred trying to import this transaction: " +
                     merchant + ".", e);
@@ -215,7 +212,8 @@ public class BudgetController {
         ) {
             // Ask the user to enter the splits:
             getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
-        } else {
+        }
+        else {
             // Track the total of the splits so that we can ensure they splits balance in the end:
             double transactionAmount = transaction.getAmount();
 
@@ -413,7 +411,7 @@ public class BudgetController {
             }
 
             // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
-            // Add a new budget item to current Merchant:
+            // Add a new budget item to the current Merchant:
             if (amounts[0].equalsIgnoreCase("a")) {
                 try {
                     assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
@@ -422,9 +420,9 @@ public class BudgetController {
                     view.say("Skipping this transaction.");
                     terminationCondition = SKIP;
                 }
-
-                // Delete one of the displayed budget items from the merchant for this transaction:
-            } else if (amounts[0].equalsIgnoreCase("d")) {
+            }
+            // Delete one of the displayed budget items from the merchant for this transaction:
+            else if (amounts[0].equalsIgnoreCase("d")) {
                 view.say("The delete budget item from merchant function has not been implemented yet.");
                 done = false;
 

@@ -9,6 +9,7 @@ import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.user.User;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -53,6 +54,10 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     private UUID idUser;
     private List<MerchantPayee> merchantPayees = new LinkedList<>();
 
+
+    /*
+     * CRUD methods:
+     */
     public static Merchant getById(UUID idMerchant) throws EntityException, RegisterException {
         ResultSet rs = EntityInt.getRSById(selectQuery + " where m.idMerchant = ", idMerchant,
                 "trying to retrieve a Merchant by it's ID.");
@@ -324,8 +329,35 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
         return budgetItemMerchant;
     }
 
-    // Nice "to String" function for debugging:
+    /**
+     * The getDisplayString method is responsible for generating a display string for a merchant item that will be used in
+     * lists of budget items to clearly identify which merchant this is.
+     *
+     * @return A string that displays the merchant's member variables.
+     */
+    public String getDisplayString() {
 
+        String displayString = getName();
+        displayString += " (";
+        displayString += (askAlways) ? "ask before using" : "use automatically";
+        try {
+            if (getIdUser() != null) {
+                displayString += ", " + User.getById(idUser).getFirstName();
+            }
+            else {
+                displayString += ", no user assigned";
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        };
+        displayString += ')';
+
+        // Return the string:
+        return displayString;
+    }
+
+
+    // Nice "to String" function for debugging:
     @Override
     public String toString() {
         return "Merchant{" +

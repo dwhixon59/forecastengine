@@ -49,7 +49,7 @@ public class SelectionController {
      * @param isQuitAllowed       Is the user allowed to quit this operation?
      * @param isSkipAllowed       Is the user allowed to skip this selection?
      * @param typeName            The type name of the entity that the user is selecting
-     * @param getDisplayString
+     * @param getDisplayString    A description of the entity that is suitable for displaying it to the user
      * @param matchQuery          The query to retrieve the entities from the database
      * @param rsEntityCreator     A function that creates an instance of T from a ResultSet
      * @param stringEntityCreator A function that creates an instance of T from a string
@@ -104,7 +104,7 @@ public class SelectionController {
                     boolean loaded = entity.loadByName(scope, seedName);
                     if (loaded) {
                         if (view.getYesOrNo(typeName + " with the name " + entity.getName() + " found.  " +
-                                "Is " + entity.getName() + " the correct " + typeName)) {
+                                "Is " + getDisplayString.apply(entity) + " the correct " + typeName)) {
                             return entity;
                         }
                     }
@@ -157,8 +157,9 @@ public class SelectionController {
 
                         // Ask the user to select the correct entity from the list of entities:
                         EntityOrStringResult<T> entityOrStringResult = view.selectByNameFromListOrString(
-                                "Select the correct " + typeName + " for " + seedName, entities, allowNone,
-                                allowCreateInList, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+                                "Select the correct " + typeName + " for " + seedName, entities,
+                                getDisplayString, allowNone, allowCreateInList, isCancelAllowed, isQuitAllowed,
+                                isSkipAllowed);
 
                         // If the user selected an entity from the list, then return the entity:
                         if (entityOrStringResult.isEntitySelected()) {
@@ -170,7 +171,7 @@ public class SelectionController {
                     } else {
                         // If there is only one similar entity found, then ask the user if it is the correct entity:
                         if (view.getYesOrNo("Only one similar " + typeName + " found.  Is " +
-                                entity.getName() + " the correct " + typeName)) {
+                                getDisplayString.apply(entity) + " the correct " + typeName)) {
                             return entity;
                         } else {
                             // If the entity is an exact match, then there is no sense to giving the user the option
@@ -190,7 +191,7 @@ public class SelectionController {
                                 // Since the entity was not found and the user is not allowed to or does not want to
                                 // create a new entity, then ask the user for a new search string:
                                 seedName = view.getResponseString("Enter a new search string:", false,
-                                        ViewInt.DO_NOT_ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
+                                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
                             }
                         }
                     }

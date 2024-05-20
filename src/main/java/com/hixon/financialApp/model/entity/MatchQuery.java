@@ -62,12 +62,23 @@ public class MatchQuery {
             return selectQuery + nameColumn + " = \"" + searchString + "\"";
         } else if (escapedName.startsWith("l:")) {
             // For LIKE pattern match, we assume that '%' wildcards are already provided in the input if needed.
-            String searchString = escapedName.substring(2);
-            return selectQuery + nameColumn + " LIKE '" + searchString + "'";
+            // Append to the query string 'LIKE' for each column in the matchColumnList with 'AND' in between them:
+            String likeQuery = selectQuery;
+            for (String column : matchColumnList.split(",")) {
+                likeQuery += column + " LIKE " + escapedName.substring(2) + " OR ";
+            }
+            return likeQuery.substring(0, likeQuery.length() - 4);
+        } else if (escapedName.startsWith("s:")) {
+            // Append to the query string 'LIKE' for each column in the matchColumnList with 'AND' in between them:
+            String likeQuery = selectQuery;
+            for (String column : matchColumnList.split(",")) {
+                likeQuery += column + " LIKE '%" + escapedName.substring(2) + "%' OR ";
+            }
+            return likeQuery.substring(0, likeQuery.length() - 4);
         } else {
             // Default behavior (could be one of the above or an entirely different default)
             return selectQuery + " MATCH(" + matchColumnList + ") AGAINST(\"" + escapedName +
-                    "\" IN NATURAL LANGUAGE MODE)";
+                    "\" IN NATURAL LANGUAGE MODE) ORDER BY " + nameColumn + " ASC";
         }
     }
 
@@ -101,6 +112,12 @@ public class MatchQuery {
             return checkPart.matches(".*" + likeWildcards + ".*");
         }
 
+        // Check if string starts with "s:":
+        if (input.startsWith("s:")) {
+             return true;
+        }
+
+
         // Return false if none of the conditions are met
         return false;
     }
@@ -115,9 +132,6 @@ public class MatchQuery {
      * @return The query string
      */
     public String cleanName(String name) {
-
-        // Remove any wildcard characters from the name:
-
 
         // Remove the prefix and any wildcards from the name and return:
         if (name.startsWith("n:")) {

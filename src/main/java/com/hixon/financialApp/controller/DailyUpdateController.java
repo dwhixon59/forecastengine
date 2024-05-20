@@ -111,7 +111,7 @@ public class DailyUpdateController {
                 if (register.isSkippedTransactions(forecast)) {
 
                     // Then ask the user if they want to reprocess them now:
-                    if (view.getYesOrNo("\nThere are skipped transactions in the register." +
+                    if (view.getYesOrNo("\nThere are skipped transactions in the register.  " +
                             "Do you want to process them now?")) {
                         inSync = registerController.processUnreconciledTransactions();
                         if (!inSync) {

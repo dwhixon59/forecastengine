@@ -381,6 +381,9 @@ public class Forecast extends IndependentEntity {
             preparedStmt.setBoolean(18, true);
             preparedStmt.execute();
 
+            // Mark the forecast as saved:
+            setDirty(false);
+
         } catch (SQLException e) {
             System.out.println(errorMessage);
             if (preparedStmt != null) preparedStmt.close();
@@ -457,7 +460,6 @@ public class Forecast extends IndependentEntity {
                     }
                 }
             }
-
         } catch (SQLException | BudgetException | EntityException | ForecastException e) {
             System.out.println(errorMessage);
             if (preparedStmt != null) preparedStmt.close();

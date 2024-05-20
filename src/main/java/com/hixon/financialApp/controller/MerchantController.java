@@ -76,7 +76,7 @@ public class MerchantController {
                     ViewInt.ALLOW_QUIT, // is quitting the operation allowed
                     ViewInt.ALLOW_SKIP, // is skipping the operation allowed
                     Merchant.getType(),
-                    Merchant::toString,
+                    Merchant::getDisplayString,
                     new MatchQuery(Merchant.getSelectQuery() + " WHERE ", "m.name", "m.name"), // Entity creator from ResultSet
                     rs -> {
                         try {

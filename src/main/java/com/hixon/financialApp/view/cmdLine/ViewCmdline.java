@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Scanner;
+import java.util.function.Function;
 
 import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
 
@@ -581,6 +582,7 @@ public class ViewCmdline implements ViewInt {
     /**
      * {@inheritDoc}
      */
+    @Override
     public <T extends IndependentEntityInt> T selectByNameFromList(
             String prompt,
             List<T> list,
@@ -598,6 +600,7 @@ public class ViewCmdline implements ViewInt {
     /**
      * {@inheritDoc}
      */
+    @Override
     public <T extends IndependentEntityInt> T selectByNameFromList(
             String prompt, List<T> list,
             boolean allowNone,
@@ -625,6 +628,7 @@ public class ViewCmdline implements ViewInt {
     /**
      * {@inheritDoc}
      */
+    @Override
     public <T extends IndependentEntityInt> EntityOrStringResult<T> selectByNameFromListOrString(
             String prompt,
             List<T> list,
@@ -633,18 +637,34 @@ public class ViewCmdline implements ViewInt {
             throws EntityException {
 
         try {
-            return selectByNameFromListOrString(prompt, list, allowNone, allowCreate, false, false, false);
-        } catch (CancelException | SkipException | QuitException ignored) {
-            throw new RuntimeException("Logic error, received a cancel, skip or quit exception which should not happen.");
+            return selectByNameFromListOrString(
+                    prompt,
+                    list,
+                    t -> {
+                        try {
+                            return t.getName();
+                        } catch (EntityException e) {
+                            throw new RuntimeException("Error while getting the display string for an entity.", e);
+                        }
+                    },
+                    allowNone,
+                    allowCreate,
+                    false,
+                    false,
+                    false);
+        } catch (CancelException | SkipException | QuitException e) {
+            throw new RuntimeException("Logic error, received a cancel, skip or quit exception which should not happen.", e);
         }
-    }
+     }
 
     /**
      * {@inheritDoc}
      */
+    @Override
     public <T extends IndependentEntityInt> EntityOrStringResult<T> selectByNameFromListOrString(
             String prompt,
             List<T> list,
+            Function<T, String> getDisplayString,
             boolean allowNone,
             boolean allowCreate,
             boolean isCancelAllowed,
@@ -659,7 +679,7 @@ public class ViewCmdline implements ViewInt {
         // Iterate over the list of objects and add the name of each object to the list of names:
         for (T entity : list) {
             // Execute the method String getName() for each object and add the name to the list
-            names.add(entity.getName());
+            names.add(getDisplayString.apply(entity));
         }
 
         // Ask the user to select one of the names from the list:

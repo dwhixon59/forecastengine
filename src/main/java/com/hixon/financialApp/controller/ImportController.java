@@ -307,13 +307,18 @@ public class ImportController {
                     if (splits == null) {
 
                         // Get the assigned budget items for the merchant:
-                        List<BudgetItemMerchant> budgetItemsForMerchant = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget,
-                                merchant);
+                        List<BudgetItemMerchant> budgetItemsForMerchant =
+                                BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItemsForMerchant.isEmpty()) {
                             try {
                                 budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                            } catch (CancelException ce) {
+                                // Restart processing of the current record:
+                                i++;
+                                j--;
+                                continue;
                             } catch (SkipException se) {
                                 continue;
                             }
@@ -337,6 +342,12 @@ public class ImportController {
                         // If the user aborted the split assignment process, then figure out what to do:
                         if (splits == null) {
                             switch (budgetController.getTerminationCondition()) {
+                                case CANCEL:
+                                    // Restart processing of the current record:
+                                    i++;
+                                    j--;
+                                    continue;
+
                                 case SKIP:
                                     continue;
 
@@ -358,7 +369,7 @@ public class ImportController {
                             }
                         }
 
-                        // The splits are now complete so save them off:
+                        // The splits are now complete, so save them off:
                         for (TransactionSplit split : splits) {
                             split.save();
                         }
@@ -468,6 +479,8 @@ public class ImportController {
                     // Load the transaction from the CSV line:
                     try {
                         transaction = financialInstitution.loadProvisionalTransactionFromCSV(line, register);
+                    } catch (CancelException ce) {
+                        continue;
                     } catch (SkipException se) {
                         continue;
                     }
@@ -507,7 +520,6 @@ public class ImportController {
                 }
             }
             br.close();
-
 
             // If we found any provisional transactions, then process them:
             if (provisionalTransactions.size() > 0) {
@@ -552,7 +564,9 @@ public class ImportController {
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
                     // Tell the user about the bank transaction we are processing:
-                    importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
+                    if (provTrxIndex < provisionalTransactions.size()) {
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
+                    }
 
                     // Compare the current provisional transaction to the current register transaction:
                     int comparison;
@@ -634,12 +648,21 @@ public class ImportController {
                                         provTrxIndex++;
                                         continue;
 
+                                    case CANCEL:
+                                        // Move to the next provisional transaction:
+                                        provTrxIndex++;
+                                        continue;
+
                                     case SKIP:
                                         // Move to the next provisional transaction:
                                         provTrxIndex++;
                                         continue;
 
                                     case QUIT:
+                                    case RESTART:
+                                        break;
+
+                                    case FOUND:
                                         break;
 
                                     default:

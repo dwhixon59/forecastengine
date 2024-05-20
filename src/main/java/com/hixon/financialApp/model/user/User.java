@@ -227,6 +227,13 @@ public class User extends IndependentEntity {
    /*
     * Main methods:
     */
+   // Get a user by their ID:
+   public static User getById(UUID idUser) throws EntityException, SQLException {
+      ResultSet rs = EntityInt.getSingletonRS(User.getSelectQuery()  + " where idUser = uuid_to_bin('" + idUser + "')",
+              "attempting to retrieve a user by their id");
+      return new User(rs);
+   }
+
    // Get a user by name:
    public static User getByName(String userName) throws EntityException, SQLException {
       ResultSet rs = EntityInt.getSingletonRS(User.getSelectQuery()  + " where username = '" + userName + "'",

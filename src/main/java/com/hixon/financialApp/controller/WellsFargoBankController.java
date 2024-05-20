@@ -138,7 +138,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         }
 
         // There are two formats for the CSV list that it could be.  The first one starts with a date (short version).
-        // The second one start with some useless text (long version).  To figure out which format it is, test if we
+        // The second one starts with some useless text (long version).  To figure out which format it is, test if we
         // can convert the first column to a date:
         int iOffset;
         Calendar postDate = Calendar.getInstance();

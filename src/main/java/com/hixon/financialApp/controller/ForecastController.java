@@ -31,7 +31,7 @@ import static java.util.Calendar.DATE;
 import static java.util.Calendar.MONTH;
 
 public class ForecastController {
-    
+
     /*
      * Fields for ForecastController:
      */
@@ -41,7 +41,7 @@ public class ForecastController {
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
 
-    
+
     /**
      * Constructors and destructor for ForecastController:
      */
@@ -153,6 +153,7 @@ public class ForecastController {
 
     /**
      * Ask the user what to do if the split amount differs from the forecast transaction amount:
+     *
      * @param split
      * @param forecastTransaction
      * @return the user's response
@@ -196,6 +197,7 @@ public class ForecastController {
 
     /**
      * Ask the user what to do if the split date differs from the forecast transaction date:
+     *
      * @param split
      * @param forecastTransaction
      * @return the user's response
@@ -345,7 +347,7 @@ public class ForecastController {
 
             } // End if it hasn't already been reconciled.
             else {
-                // but if it has been reconciled show a summary of the reconciliation record to the user:
+                // but if it has been reconciled, show a summary of the reconciliation record to the user:
                 ForecastTransaction forecastTransaction =
                         ForecastTransaction.getById(forecastTransactionSplit.getIdForecastTransaction());
                 view.say("Already reconciled.");
@@ -763,39 +765,40 @@ public class ForecastController {
     } // End updateFromExternalSource(Connection dbConnection).
 
     /**
-     * Update the long-term forecast.  This means to regenerate the portion of the forecast from the update start date
-     * (usually the first day of the next month) to the end of the forecast window.  The end of the forecast window
-     * defaults to 12 months, which likely results in extending the forecast:
+     * Updates the long-term forecast. This means to regenerate the portion of the forecast from the update start date
+     * (usually the first day of the next month) to the end of the forecast window. The end of the forecast window
+     * defaults to 12 months, which likely results in extending the forecast.
+     *
+     * @throws Exception if there are any errors during the update process.
      */
     public void updateForecast() throws Exception {
 
-        // Get the starting date of the forecast to update:
-        boolean done = false;
+        // Get the starting date of the forecast to update.
         Calendar updateStartDate = null;
+        boolean done = false;
         while (!done) {
-            view.say("Updating the forecast.  WARNING:  Normally this should begin with the first of next " +
-                    "month.");
+            view.say("Updating the forecast. WARNING: Normally this should begin with the first of next month.");
             updateStartDate = askStartDate();
             Calendar nextMonth = Calendar.getInstance();
             nextMonth.add(MONTH, 1);
             if (updateStartDate.get(MONTH) != nextMonth.get(MONTH) || updateStartDate.get(Calendar.DATE) != 1) {
-                done = view.getYesOrNo("You did not select the first of next month.  Are you sure?");
+                done = view.getYesOrNo("You did not select the first of next month. Are you sure?");
             } else {
                 done = true;
             }
         }
 
         // Update up the end date so that the forecast window will be the same number of months as it was originally
-        // set to be:
+        // set to be.
         Calendar endDate = (Calendar) updateStartDate.clone();
         endDate.add(MONTH, forecast.getNumberOfMonths());
         forecast.setEndDate(endDate);
 
-        // Update all the forecast items in the forecast from the current budget items:
+        // Update all the forecast items in the forecast from the current budget items.
         ForecastItem.updateForecastItemsFromBudgetItems(forecast);
 
         // Get a list of budget items that weren't included in the forecast because they didn't exist when the forecast
-        // was created:
+        // was created.
         String query = BudgetItem.getSelectQuery() + " " +
                 "LEFT JOIN forecast_item fi ON bi.idBudgetItem = fi.BudgetItem_idBudgetItem " +
                 "AND fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
@@ -803,7 +806,7 @@ public class ForecastController {
                 "and fi.idForecastItem is null";
         ResultSet rs = getRS(query, "retrieving the budget items not included in the forecast");
 
-        // Create forecast items for budget items that weren't previously included:
+        // Create forecast items for budget items that weren't previously included.
         ForecastItem forecastItem;
         while (rs.next()) {
             forecastItem = new ForecastItem(forecast, new BudgetItem(rs));
@@ -811,14 +814,14 @@ public class ForecastController {
         }
 
         // Expire any forecast items generated from budget items that no longer exist so they no longer generate new
-        // forecast transactions:
+        // forecast transactions.
         ForecastItem.expireOldForecastItems(forecast);
 
-        // Delete any expired forecast items that have no linked forecast transactions:
+        // Delete any expired forecast items that have no linked forecast transactions.
         ForecastItem.deleteExpiredUnusedForecastItems(forecast);
 
-        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones:
-        query = ForecastTransaction.getDeleteQuery() +
+        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones.
+        String deleteQuery = ForecastTransaction.getDeleteQuery() +
                 "where ForecastItem_idForecastItem " +
                 "in (" +
                 "select idForecastItem " +
@@ -827,30 +830,29 @@ public class ForecastController {
                 ") " +
                 "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
                 "and not overridden";
-        executeUpdate(query, "deleting all the forecast transactions after " +
+        executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
 
-        // Generate the updated portion of the forecast starting on the update start date:
+        // Generate the updated portion of the forecast starting on the update start date.
         forecast.setTransactions(new ForecastTransaction[forecast.getNumberOfMonths() * 31]);
         ForecastEngine forecastEngine = new ForecastEngine();
         forecastEngine.generateForecastTransactions(forecast, updateStartDate);
 
-        // Save the updated portion of the forecast:
+        // Save the updated portion of the forecast.
         forecast.saveForecastTransactions();
 
-        // The forecast engine doesn't know that we are updating a forecast.  It will have set the first occurrence
-        // properly for a new forecast.  Fix up the flags in the updated forecast.
+        // The forecast engine doesn't know that we are updating a forecast. It will have set the first occurrence
+        // properly for a new forecast. Fix up the flags in the updated forecast.
         ForecastTransaction.cleanUpForecast(forecast);
 
-        // Mark the forecast as in sync:
+        // Mark the forecast as in sync.
         forecast.setInSync(true);
 
-        // Set the start date of the forecast to the date of the first real forecast transaction in the forecast:
+        // Set the start date of the forecast to the date of the first real forecast transaction in the forecast.
         forecast.setStartDate(Forecast.getForecastStartDate(forecast));
 
-        // Update the forecast object in the database with the new start and end dates:
+        // Update the forecast object in the database with the new start and end dates.
         forecast.save();
 
-    } // End Forecast.update().
-
+    }
 }

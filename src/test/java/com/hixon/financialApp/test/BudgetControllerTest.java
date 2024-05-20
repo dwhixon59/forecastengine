@@ -60,7 +60,6 @@ public class BudgetControllerTest {
             String seedName = "water";
             try {
 
-                List<BudgetItemMerchant> budgetItems = new ArrayList<>();
                 budgetItem = budgetController.getBudgetItemByNameFullText(seedName);
                 System.out.println("The selected budget item is:  " + budgetItem);
 
@@ -77,11 +76,11 @@ public class BudgetControllerTest {
             }
         }
 
-        // Loop through the assignBudgetItem method:
+        // Test the assignBudgetItemsToMerchant method:
         while (true) {
             try {
 
-                List<BudgetItemMerchant> budgetItems = new ArrayList<BudgetItemMerchant>();
+                List<BudgetItemMerchant> budgetItems = new ArrayList<>();
                 budgetController.assignBudgetItemsToMerchant(merchant, budgetItems);
                 showWork(budgetItems);
 

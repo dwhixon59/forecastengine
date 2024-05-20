@@ -9,7 +9,6 @@ import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
-import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,6 +17,7 @@ import java.util.*;
 
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.executeUpdate;
+import static com.hixon.financialApp.utility.Utility.*;
 
 /**
  * This the class that represents a single transaction in the forecast.
@@ -215,14 +215,14 @@ public class ForecastTransaction extends IndependentEntity {
     public ForecastTransaction(ResultSet rs) throws SQLException {
         super(false);
         this.id = UUID.fromString(rs.getString("ft.idForecastTransaction"));
-        this.plannedDate = Utility.localDateToCalendarDate(rs.getObject("ft.plannedDate", LocalDate.class));
+        this.plannedDate = localDateToCalendarDate(rs.getObject("ft.plannedDate", LocalDate.class));
         this.memo = rs.getString("ft.memo");
         this.firstOccurrence = rs.getBoolean("ft.firstOccurrence");
         this.overridden = rs.getBoolean("ft.overridden");
         this.found = rs.getBoolean("ft.found");
         this.remainingAmount = rs.getDouble("ft.remainingAmount");
         this.runningBalance = rs.getDouble("ft.runningBalance");
-        this.version = Utility.SqlTimestampToCalendarDate(rs.getTimestamp("ft.version"));
+        this.version = SqlTimestampToCalendarDate(rs.getTimestamp("ft.version"));
         this.idForecastItem = UUID.fromString(rs.getString("ft.idForecastItem"));
     }
 
@@ -237,7 +237,7 @@ public class ForecastTransaction extends IndependentEntity {
         this.remainingAmount = forecastTransaction.getRemainingAmount();
         this.runningBalance = forecastTransaction.getRunningBalance();
         this.idForecastItem = forecastTransaction.getIdForecastItem();
-        Utility.copyDate(forecastTransaction.getVersion(), this.version);
+        copyDate(forecastTransaction.getVersion(), this.version);
         this.forecastItem = forecastTransaction.getForecastItem();
     }
 
@@ -282,7 +282,7 @@ public class ForecastTransaction extends IndependentEntity {
     @Override
     public String getInsertQuery() throws EntityException, SQLException, ForecastException, BudgetException {
         return insertQuery + "uuid_to_bin('" + getId() + "'), " + remainingAmount + ", " +
-                Utility.calendarDateToSqlDateString(plannedDate) + ", \"" + memo + "\", " + runningBalance + ", " +
+                calendarDateToSqlDateString(plannedDate) + ", \"" + memo + "\", " + runningBalance + ", " +
                 overridden + ", " + firstOccurrence + ", " + found + ", uuid_to_bin('" + getIdForecastItem() + "'))";
     }
 
@@ -301,7 +301,7 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     public String getUpdateClause() {
-        return "remainingAmount = " + remainingAmount + ", plannedDate = " + Utility.calendarDateToSqlDateString(plannedDate) +
+        return "remainingAmount = " + remainingAmount + ", plannedDate = " + calendarDateToSqlDateString(plannedDate) +
                 ", memo = \"" + memo + "\", runningBalance = " + runningBalance + ", overridden = " +
                 overridden + ", firstOccurrence = " + firstOccurrence + ", found = " + found +
                 ", updatedTimeStamp = current_timestamp() where idForecastTransaction = uuid_to_bin('" + id + "')";
@@ -474,7 +474,7 @@ public class ForecastTransaction extends IndependentEntity {
      * @return True if this forecast transaction is considered overdue today.
      */
     private boolean isOverdue() throws BudgetException {
-        int variance = Utility.daysBeteween(getPlannedDate(), Calendar.getInstance());
+        int variance = daysBeteween(getPlannedDate(), Calendar.getInstance());
         return !forecastItem.isWithinNormalDateVariance(variance);
     }
 
@@ -566,11 +566,11 @@ public class ForecastTransaction extends IndependentEntity {
     public String toString() {
         String s;
         try {
-            s = "Forecast Transaction:  \n\tPlanned Date = " + Utility.calendarDateToStringDate(this.getPlannedDate()) +
+            s = "Forecast Transaction:  \n\tPlanned Date = " + calendarDateToStringDate(this.getPlannedDate()) +
                     ", \n\tCategory = " + this.getForecastItem().getCategory() +
                     ", \n\tPayee =  " + this.getForecastItem().getPayee() + ", \n\tBudgeted Amount = " +
-                    Utility.formatDollarAmount(forecastItem.getAmount()) + ", \n\tRemaining Amount = " +
-                    Utility.formatDollarAmount(remainingAmount) + ", \n\tFirst occurrence = " + firstOccurrence + ", \n\tfound = "
+                    formatDollarAmount(forecastItem.getAmount()) + ", \n\tRemaining Amount = " +
+                    formatDollarAmount(remainingAmount) + ", \n\tFirst occurrence = " + firstOccurrence + ", \n\tfound = "
                     + found + ", \n\tForecast transaction - ID = " + this.getId().toString() + ", \n\tNext significant event = " +
                     this.getNextSignificantEvent();
         } catch (Exception e) {
@@ -582,10 +582,14 @@ public class ForecastTransaction extends IndependentEntity {
     public String toStringConcise() {
         String s;
         try {
-            s = "Forecast Transaction:  Planned Date = " + Utility.calendarDateToStringDate(this.getPlannedDate()) +
-                    ", Category = " + this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() +
-                    ", Budgeted Amount = " + Utility.formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
-                    Utility.formatDollarAmount(remainingAmount);
+            String memoString =
+                    (this.getForecastItem().getMemo() == null || this.getForecastItem().getMemo().isEmpty()) ?
+                            "" : " Memo = " + this.getForecastItem().getMemo();
+            s = "Forecast Transaction:  Planned Date = " + calendarDateToStringDate(this.getPlannedDate()) +
+                    ", Category = " + this.getForecastItem().getCategory() + ", Payee = " +
+                    this.getForecastItem().getPayee() + memoString + ", Budgeted Amount = " +
+                    formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
+                    formatDollarAmount(remainingAmount);
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
@@ -593,16 +597,16 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     public String toStringVeryConcise() throws BudgetException, SQLException, EntityException, ForecastException {
-        return "Forecast Transaction:  Planned date = " + Utility.calendarDateToMonthDayStringDate(getPlannedDate()) +
-                ", Budgeted amount = " + Utility.formatDollarAmount(getForecastItem().getAmount()) +
-                ", Remaining amount = " + Utility.formatDollarAmount(getRemainingAmount());
+        return "Forecast Transaction:  Planned date = " + calendarDateToMonthDayStringDate(getPlannedDate()) +
+                ", Budgeted amount = " + formatDollarAmount(getForecastItem().getAmount()) +
+                ", Remaining amount = " + formatDollarAmount(getRemainingAmount());
     }
 
     public String toStringCompact() {
         String s;
         try {
-            s = Utility.calendarDateToMonthDayStringDate(this.getPlannedDate()) + ", " + this.getForecastItem().getPayee() +
-                    ", " + Utility.formatDollarAmount(remainingAmount);
+            s = calendarDateToMonthDayStringDate(this.getPlannedDate()) + ", " + this.getForecastItem().getPayee() +
+                    ", " + formatDollarAmount(remainingAmount);
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
@@ -871,14 +875,14 @@ public class ForecastTransaction extends IndependentEntity {
                         "from forecast_transaction ft " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
                         "where " +
-                        "ft.plannedDate <= " + Utility.calendarDateToSqlDateString(date) + " and " +
+                        "ft.plannedDate <= " + calendarDateToSqlDateString(date) + " and " +
                         "fi.category = \"" + forecastItem.getCategory() + "\" and " +
                         "fi.payee = \"" + forecastItem.getPayee() + "\" " +
                         "order by ft.plannedDate desc " +
                         "limit 1";
         ResultSet rsLO = EntityInt.getRS(lastOccurrenceBeforeDateQuery, "retrieve the latest occurrence " +
                 "of a the forecast transaction for forecast item" + forecastItem + " before " +
-                Utility.calendarDateToStringDate(date) + ".");
+                calendarDateToStringDate(date) + ".");
 
         // If there is a last occurrence before today of a forecast transaction for the forecast item:
         if (rsLO.next()) {
@@ -934,7 +938,7 @@ public class ForecastTransaction extends IndependentEntity {
                                 // The specified date occurs after the applicability window of the next forecast transaction
                                 // planned, which is a violation of the "bracketing principle":
                                 throw new ForecastException("The next forecast transaction \n" + nextForecastTransaction +
-                                        "\nfollowing the one immediately prior to " + Utility.calendarDateToMonthDayStringDate(date) +
+                                        "\nfollowing the one immediately prior to " + calendarDateToMonthDayStringDate(date) +
                                         " is \n" + forecastTransaction + "\nwhich is also prior to the specified date, which " +
                                         "should not occur.");
                         }
@@ -999,7 +1003,7 @@ public class ForecastTransaction extends IndependentEntity {
         String nextOccurrenceQuery =
                 ForecastTransaction.getSelectQuery() + " " +
                         "where ft.ForecastItem_idForecastItem = uuid_to_bin ('" + forecastItem.getId() + "') and " +
-                        "ft.plannedDate > " + Utility.calendarDateToSqlDateString(date) + " " +
+                        "ft.plannedDate > " + calendarDateToSqlDateString(date) + " " +
                         "order by ft.plannedDate asc " +
                         "limit 1";
         ResultSet rsNO = EntityInt.getRS(nextOccurrenceQuery, "retrieve the next occurrence of a forecast " +
@@ -1127,7 +1131,7 @@ public class ForecastTransaction extends IndependentEntity {
                 "select " + getSelectColumns() + ", " + ForecastItem.getSelectColumns() +
                         "from forecast_transaction ft inner join forecast_item fi " +
                         "on ft.ForecastItem_idForecastItem = fi.idForecastItem" +
-                        " where plannedDate < " + Utility.calendarDateToSqlDateString(currentDate) +
+                        " where plannedDate < " + calendarDateToSqlDateString(currentDate) +
                         " and remainingAmount <> 0";
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
                 "get a list of overdue Forecast Transactions.");
