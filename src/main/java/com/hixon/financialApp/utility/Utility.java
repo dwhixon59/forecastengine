@@ -251,6 +251,8 @@ public class Utility {
     public static Calendar stringTimeStampToCalendarDate(String timeStamp) throws ParseException {
         Calendar calendarDate = null;
         if (timeStamp != null && timeStamp.length() > 0) {
+            // Parse the timestamp string which is in the format 9/8/2024 6:57:00
+            //SimpleDateFormat sdf = new SimpleDateFormat("M/d/yyyy h:mm", Locale.ENGLISH);
             SimpleDateFormat sdf = new SimpleDateFormat("MM-dd-yyyy HH:mm:ss", Locale.ENGLISH);
             sdf.parse(timeStamp);
             calendarDate = sdf.getCalendar();

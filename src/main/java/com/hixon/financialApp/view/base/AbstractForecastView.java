@@ -551,13 +551,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // through the 10th of the month, the end date is the 14th.  For the 10th through the 25th it is the end of the
         // month.
         Calendar endDate = Calendar.getInstance();
-        if (endDate.get(Calendar.DATE) >= 25) {
+        if (endDate.get(Calendar.DATE) >= 20) {
+            endDate.add(Calendar.MONTH, 1);
+            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
+        } else if (endDate.get(Calendar.DATE) <= 5) {
+            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
+        } else {
             endDate.add(Calendar.MONTH, 1);
             endDate.set(Calendar.DATE, 14);
-        } else if (endDate.get(Calendar.DATE) < 10) {
-            endDate.set(Calendar.DATE, 14);
-        } else {
-            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
         }
 
         // Get a list of upcoming items through the end date:
@@ -571,6 +572,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             renderer.renderReport();
             result = true;
         }
+
         return result;
     }
 

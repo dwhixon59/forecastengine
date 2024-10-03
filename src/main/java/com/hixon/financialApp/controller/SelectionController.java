@@ -171,7 +171,8 @@ public class SelectionController {
                     } else {
                         // If there is only one similar entity found, then ask the user if it is the correct entity:
                         if (view.getYesOrNo("Only one similar " + typeName + " found.  Is " +
-                                getDisplayString.apply(entity) + " the correct " + typeName)) {
+                                getDisplayString.apply(entity) + " the correct " + typeName))
+                        {
                             return entity;
                         } else {
                             // If the entity is an exact match, then there is no sense to giving the user the option
@@ -184,9 +185,9 @@ public class SelectionController {
                             if (
                                     allowCreateInList &&
                                             view.getYesOrNo("Do you want to create a new " + typeName +
-                                                    " called " + toTitleCase(entity.getName()) + "?")
+                                                    " called " + toTitleCase(seedName) + "?")
                             ) {
-                                return stringEntityCreator.apply(scope, toTitleCase(entity.getName()));
+                                return stringEntityCreator.apply(scope, toTitleCase(seedName));
                             } else {
                                 // Since the entity was not found and the user is not allowed to or does not want to
                                 // create a new entity, then ask the user for a new search string:

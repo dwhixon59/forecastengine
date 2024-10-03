@@ -492,7 +492,7 @@ public class BudgetItem extends Item {
 
         String[] values = csvLine.split(",");
         BudgetItem budgetItem = new BudgetItem();
-        if (values.length < 14) throw new BudgetException("Less than 13 values submitted for new budget item");
+        if (values.length < 14) throw new BudgetException("Less than 14 values submitted for new budget item");
         budgetItem.setId(UUID.randomUUID());
         budgetItem.setCategory(values[0]);
         budgetItem.setPayee(values[1]);

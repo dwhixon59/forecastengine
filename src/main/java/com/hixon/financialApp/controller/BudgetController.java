@@ -472,6 +472,9 @@ public class BudgetController {
                     int itemNumber = 0;
                     try {
                         itemNumber = Integer.parseInt(itemNumberString);
+                        if (itemNumber <= 0 || itemNumber > budgetItemsForMerchant.size()) {
+                            throw new NumberFormatException();
+                        }
 
                     } catch (NumberFormatException nfe) {
 

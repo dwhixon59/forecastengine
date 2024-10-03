@@ -27,7 +27,6 @@ import static com.hixon.financialApp.controller.ImportController.TerminationCond
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
-import static com.hixon.financialApp.utility.Utility.getMerchantController;
 
 public class RegisterController {
     /*
@@ -276,7 +275,8 @@ public class RegisterController {
                     if (merchant == null) {
                         ImportController.TerminationCondition terminationCondition =  FOUND;
                         try {
-                            merchant = getMerchantController().assignMerchant(transaction.getMerchantPayee(),
+                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {
                             terminationCondition = CANCEL;
@@ -294,7 +294,8 @@ public class RegisterController {
                                     continue;
 
                                 case QUIT:
-                                    throw new QuitException("Quitting reprocessing of skipped transactions at user request.");
+                                    throw new QuitException("Quitting reprocessing of skipped transactions at user " +
+                                            "request.");
 
                                 default:
                                     throw new ControllerException("Invalid termination condition " +
@@ -425,7 +426,8 @@ public class RegisterController {
                     if (merchant == null) {
                         ImportController.TerminationCondition terminationCondition =  FOUND;
                         try {
-                            merchant = getMerchantController().assignMerchant(transaction.getMerchantPayee(),
+                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {
                             terminationCondition = CANCEL;

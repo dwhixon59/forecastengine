@@ -4,7 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+import org.apache.commons.lang3.NotImplementedException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -96,7 +96,7 @@ public abstract class Entity implements EntityInt {
                   } catch (EntityException e) {
                      SQLException se = (SQLException) e.getCause();
                      if (!se.getSQLState().equalsIgnoreCase("SQL92"))
-                        throw new NotImplementedException();
+                        throw new NotImplementedException("SQL92");
                   }
             }
          }
