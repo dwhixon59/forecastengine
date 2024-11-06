@@ -1464,6 +1464,23 @@ public abstract class Item extends IndependentEntity {
         return previousDateOfItemOccurrence;
     }
 
+    public void renew() throws SQLException, EntityException {
+
+        // If the item expired by date, then renew it:
+        if (getEndDate() != null && getEndDate().compareTo(Calendar.getInstance()) <= 0) {
+            setEndDate(null);
+        }
+
+        // If the item expired by number of payments:
+        if (getNumberOfPayments() > 0) {
+
+            // then turn off the scheduled payments for this item:
+            setNumberOfPayments(0);
+        }
+
+        // Update the budget item in the database:
+        save(UPDATE);
+    }
 
     // Format an item as a string:
     public String toString() {

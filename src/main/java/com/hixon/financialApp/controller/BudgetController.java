@@ -707,4 +707,29 @@ public class BudgetController {
             view.say(line);
         }
     }
+
+    public void renewBudgetItems(List<BudgetItemMerchant> expiredBudgetItemMerchants) throws Exception {
+
+        // If there are more than one expired budget items:
+        BudgetItem budgetItem = null;
+        if (expiredBudgetItemMerchants.size() > 1) {
+
+            // then create a list of the expired budget items:
+            List <BudgetItem> expiredBudgetItems = new ArrayList<>();
+            for (BudgetItemMerchant budgetItemMerchant : expiredBudgetItemMerchants) {
+                expiredBudgetItems.add(budgetItemMerchant.getBudgetItem());
+            }
+
+            // and ask the user to select one:
+            view.say("Multiple expired budget items found.  Please select one:");
+            budgetItem = getUserSelectedBudgetItem(expiredBudgetItems);
+        }
+
+        // and if they did select one:
+        if (budgetItem != null) {
+
+            // Then un-expire it:
+            budgetItem.renew();
+        }
+    }
 }

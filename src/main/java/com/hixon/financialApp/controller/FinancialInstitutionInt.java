@@ -19,13 +19,13 @@ public interface FinancialInstitutionInt {
 
     // Load a single record from a CSV file into a single transaction instance with associated merchant:
     Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
-            ViewException, SQLException, SkipException, QuitException, CancelException;
+            ViewException, SQLException, SkipException, QuitException, CancelException, EntityException;
 
     // Parse a payee string from a particular bank into a Merchant payee:
-    String parseMerchantPayee(Calendar date, double amount, String payee) throws ParseException, RegisterException, SQLException, SkipException, QuitException, CancelException;
+    String parseMerchantPayee(Calendar date, double amount, String payee) throws ParseException, RegisterException, SQLException, SkipException, QuitException, CancelException, EntityException;
 
     // Create a transaction and load it from a provisional CSV record:
-    Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException, RegisterException, SkipException, QuitException, CancelException;
+    Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException, SQLException, RegisterException, SkipException, QuitException, CancelException, EntityException;
 
     // Get a provisional transaction from an import record:
     Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException;

@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.CityStateChecker;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -66,7 +67,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     // Load up a Transaction from a Wells Fargo CSV transaction download file:
     @Override
     public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
-            SQLException, SkipException, QuitException, CancelException {
+            SQLException, SkipException, QuitException, CancelException, EntityException {
 
         Transaction transaction = loadFromCsvRecord(record, importRecordId);
         TransactionHistory.getInstance().add(transaction);
@@ -75,7 +76,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
 
     // Load a transaction from a posted transaction CSV record:
     public Transaction loadFromCsvRecord(CSVRecord record, String importRecordId) throws ParseException,
-            RegisterException, SkipException, QuitException, CancelException {
+            RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
 
         // Compute the fields of the transaction from the tokens in the record:
         Calendar postDate = Calendar.getInstance();
@@ -128,7 +129,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     // Load a transaction from a CSV provisional transaction record:
     @Override
     public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException,
-            RegisterException, SkipException, QuitException, CancelException {
+            RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
         String[] tokens;
 
         // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
@@ -177,7 +178,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
 
     // Parse out the merchant name from a Wells Fargo CSV transaction download file:
     public String parseMerchantPayee(Calendar date, double amount, String payee)
-            throws RegisterException, SkipException, QuitException, CancelException {
+            throws RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
 
         // Construct the merchant payee string from portions of the bank payee string:
         String merchantPayee;
@@ -227,6 +228,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
             case "RECURRING TRANSFER FROM":
             case "ATM TRANSFER AUTHORIZED":
             case "Transfer in Branch/Store":
+            case "SAVE AS YOU":
 
                 // Find the register by the last four digits of the account number, or if the account number is not
                 // present, then have the user tell us which register it came from. The reason we only use the last four
@@ -310,9 +312,11 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return merchantPayee;
     }
 
-    public String makePayeeFromTokens(int start) {
+    public String makePayeeFromTokens(int start) throws SQLException, EntityException {
         int i;
-        StringBuilder merchantPayee;// Overwrite certain extraneous tokens like city and state so they won't be included in the merchant payee:
+        StringBuilder merchantPayee;
+
+        // Overwrite certain extraneous tokens like city and state so they won't be included in the merchant payee:
         cleanPayeeTokenList(start);
 
         // Skip over any numeric tokens:
@@ -350,12 +354,14 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     }
 
     // Remove city, state and the word "RECURRING" from a token list:
-    private void cleanPayeeTokenList(int start) {
+    private void cleanPayeeTokenList(int start) throws SQLException, EntityException {
         for (int i = start; i < payeeTokens.length; i++) {
             // Remove city followed by state from the merchant payee:
             if (payeeTokens[i].length() == 2 && states.indexOf(payeeTokens[i]) > 0) {
-                payeeTokens[i] = "###";
-                payeeTokens[i - 1] = "###";
+                if (CityStateChecker.exists(payeeTokens[i - 1], payeeTokens[i])) {
+                    payeeTokens[i] = "###";
+                    payeeTokens[i - 1] = "###";
+                }
             }
 
             // Remove the word "RECURRING" from the merchant payee:

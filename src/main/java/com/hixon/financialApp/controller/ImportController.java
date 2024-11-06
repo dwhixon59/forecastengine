@@ -618,11 +618,55 @@ public class ImportController {
                         // If we couldn't find any matching items, get some help from the user:
                         if (budgetItemMerchants.size() < 1) {
                             try {
-                                budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
-                            } catch (SkipException se) {
+                                // See if there are any expired budget items assigned to the merchant:
+                                List<BudgetItemMerchant> expiredBudgetItemMerchants =
+                                        BudgetItemMerchant.getAssignedExpiredBudgetItems(budget, merchant);
+
+                                // If there is exactly one expired budget item assigned to the merchant:
+                                if (expiredBudgetItemMerchants.size() == 1) {
+
+                                    // Then ask the user if they want to renew it:
+                                    BudgetItem budgetItem = BudgetItem.getById(expiredBudgetItemMerchants.get(0).getIdBudgetItem());
+                                    if (view.getYesOrNo("There is an expired budget item assigned to the merchant " +
+                                            merchant.getName() + "\n" + budgetItem.toStringVeryConcise() +
+                                            "\nDo you want to renew it?")) {
+
+                                        // Renew the expired budget item and regenerate the list of budget item merchants:
+                                        budgetItem.renew();
+                                        budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                                    }
+                                }
+                                // If there is more than one expired budget item assigned to the merchant:
+                                else if (expiredBudgetItemMerchants.size() > 1) {
+                                    if (view.getYesOrNo("There are expired budget items assigned to the merchant " +
+                                            merchant.getName() + ".  Do you want to view them?")) {
+                                        try {
+                                            budgetController.renewBudgetItems(expiredBudgetItemMerchants);
+
+                                            // Then ask the user which one they want to renew:
+                                            budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                                        } catch (CancelException ce) {
+                                            // User canceled the renewal of an expired budget item, so continue without one.
+                                        }
+                                    }
+                                }
+                            }
+                            catch (SkipException se) {
                                 // Move to the next provisional transaction:
                                 provTrxIndex++;
                                 continue;
+                            }
+
+                            // If the user didn't renew any expired budget items, then assign new ones:
+                            if (budgetItemMerchants.size() < 1) {
+                                try {
+                                    budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
+                                } catch (CancelException|SkipException ce) {
+
+                                    // Move to the next provisional transaction:
+                                    provTrxIndex++;
+                                    continue;
+                                }
                             }
                         }
 
