@@ -1,9 +1,13 @@
 package com.hixon.financialApp.model.forecast;
 
+import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -135,6 +139,20 @@ public class ForecastTransactionSplit extends DependentEntity {
    @Override
    public boolean isValid() { return true; }
 
+   public ForecastTransaction getForecastTransaction() throws SQLException, EntityException, ForecastException {
+      return ForecastTransaction.getById(idForecastTransaction);
+   }
+   public BudgetItem getBudgetItem() throws BudgetException, EntityException {
+      return BudgetItem.getById(idBudgetItem);
+
+   }
+      public Transaction getTransaction() throws SQLException, EntityException {
+      return Transaction.getById(idTransaction);
+
+   }
+    public TransactionSplit getTransactionSplit() throws SQLException, EntityException, RegisterException {
+        return TransactionSplit.getbyId(idBudgetItem, idTransaction);
+    }
 
    /*
     * Load and save methods:

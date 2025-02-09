@@ -97,7 +97,7 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
 
         // Render an New Transaction Summary report for those items:
         boolean result = false;
-        if (items.size() > 0) {
+        if (!items.isEmpty()) {
             NewTransactionSummaryReport report = getNewTransactionSummaryReport(register, items, file);
             Renderer<NewTransactionSummaryReport> renderer = new Renderer<>(report);
             renderer.renderReport();

@@ -11,6 +11,7 @@ import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
+import lombok.Getter;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -22,8 +23,7 @@ import static com.hixon.financialApp.model.entity.EntityInt.getSingletonRS;
 
 public class Forecast extends IndependentEntity {
 
-//    private static final Logger logger = LogManager.getLogger(Forecast.class);
-
+    //    private static final Logger logger = LogManager.getLogger(Forecast.class);
     public static final String FORECAST_TRANSACTIONS_FILE = "Forecast transactions";
     public static final String FORECAST_TRANSACTIONS_FILENAME = "forecast_transactions.csv";
 
@@ -33,24 +33,34 @@ public class Forecast extends IndependentEntity {
     /*
      * Forecast class fields:
      */
+    // Fields from the database:
     protected String description;
+    protected UUID idBudget;
+    @Getter
     protected Calendar startDate;
     protected Calendar dateGenerated;
     protected double startingBalance;
+    @Getter
+    protected Item.PeriodType payPeriod = Item.PeriodType.SEMIMONTHLY;
+
+    // Derived fields:
     protected Calendar endDate;
     protected double minimumBalance;
     protected double endingBalance;
     protected int numberOfMonths;
     protected String budgetName;
-    protected UUID idBudget;
-    protected ForecastTransaction[] transactions = null;
-    private ForecastItem firstForecastItem = null;
+    protected Calendar currentPayPeriodStartDate = null;
+    protected Calendar currentPayPeriodEndDate = null;
 
+    private ForecastItem firstForecastItem = null;
     private ForecastItem lastForecastItem = null;
 
+    protected ForecastTransaction[] transactions = null;
     private ForecastTransaction firstSignificantEvent = null;
     private ForecastTransaction lastSignificantEvent = null;
+
     private boolean inSync = true;
+
     private static final String selectQuery = "select bin_to_uuid(idForecast) as idForecast, description, " +
             "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
             "bin_to_uuid(Budget_idBudget) as idBudget from forecast ";
@@ -75,10 +85,6 @@ public class Forecast extends IndependentEntity {
 
     public String getDescription() {
         return description;
-    }
-
-    public Calendar getStartDate() {
-        return startDate;
     }
 
     public void setStartDate(Calendar forecastStartDate) {
@@ -137,6 +143,21 @@ public class Forecast extends IndependentEntity {
 
     public ForecastTransaction getFirstSignificantEvent() {
         return firstSignificantEvent;
+    }
+
+    public List<Envelope> getEnvelopes() throws Exception {
+
+        // Get a list of all the forecast transaction in the forecast:
+        List<ForecastItem> envelopes =
+                Collections.unmodifiableList(ForecastItem.getListOfAllUsableForecastItemsInForecast(this));
+
+        // Make the forecast items into envelopes:
+        List<Envelope> envelopesList = new ArrayList<>();
+        for (ForecastItem forecastItem : envelopes) {
+            envelopesList.add(new Envelope(forecastItem));
+        }
+
+        return envelopesList;
     }
 
     public boolean getInSync() {
@@ -319,14 +340,14 @@ public class Forecast extends IndependentEntity {
      * are no forecast transactions, then return today's date.
      *
      * @return The date that the forecast is considered to start on.
-     * @throws SQLException      If there is a database error.
-     * @throws EntityException   If there is an error non-database error.
+     * @throws SQLException    If there is a database error.
+     * @throws EntityException If there is an error non-database error.
      */
-    public static Calendar getForecastStartDate(Forecast forecast) throws EntityException, SQLException {
+    public static Calendar getFirstNonZeroTransactionDate(Forecast forecast) throws EntityException, SQLException {
         String query =
                 "select MIN(plannedDate) as 'ft.plannedDate' " +
-                 "from forecast_transaction ft inner join forecast_item on ForecastItem_idForecastItem = idForecastItem " +
-                 "where remainingAmount <>0 and amount <>0";
+                        "from forecast_transaction ft inner join forecast_item on ForecastItem_idForecastItem = idForecastItem " +
+                        "where remainingAmount <>0 and amount <>0";
         ResultSet rs = EntityInt.getSingletonRS(query, "Database error encountered trying to retrieve the " +
                 "forecast start date.");
         if (rs != null) {
@@ -490,10 +511,164 @@ public class Forecast extends IndependentEntity {
         return budget;
     }
 
+    /**
+     * Get the number of months remaining until the forecast's end date from the passed in date.
+     * @param startDate The date to start counting from.
+     * @return The number of months remaining.
+     */
+    public double getMonthsRemaining(Calendar startDate) {
+        return ChronoUnit.MONTHS.between(startDate.toInstant(), this.endDate.toInstant());
+    }
+
+    /**
+     * Determine if a forecast transaction starts a new pay period.  A new pay period is defined according to the
+     * declared period type of the register.  If the period type is "monthly", then a new pay period starts on the first
+     * day of the month.  If the period type is "semi-monthly", then a new pay period starts on the first day of the
+     * month and the 15th day of the month.  If the period type is "bi-weekly", then a new pay period starts every 14
+     * days.  If the period type is "weekly", then a new pay period starts every 7 days.
+     * <p>
+     * The algorithm is to first determine if the forecast transaction's planned date is greater than the start date of
+     * the current pay period.  If it is not, then it can't be the start of a new pay period, so return false.
+     * <p>
+     * If it is greater than the start date of the current pay period, then determine if the forecast transaction's
+     * planned date is greater than the end date of the current pay period, which depends on the type of pay period.  If
+     * it is, then it is the start of a new pay period, so update the start date of the current pay period and return
+     * true.  If it is not, then it is not the start of a new pay period, so return false.
+     *
+     * @param transaction The forecast transaction that may or may not start a new pay period.
+     * @return True if the forecast transaction starts a new pay period, else false.
+     * @throws SQLException    If there is a database error.
+     * @throws EntityException If there is an error non-database error.
+     */
+    public boolean isNewPayPeriod(ForecastTransaction transaction) throws Exception {
+
+        // If the current pay period start date is null, then determine the start date of the first pay period:
+        if (currentPayPeriodStartDate == null) {
+            currentPayPeriodStartDate = getFirstPayPeriodStartDate(transaction.getPlannedDate());
+            currentPayPeriodEndDate = getPayPeriodEndDate(currentPayPeriodStartDate);
+            return true;
+        }
+
+        // then if the forecast item's planned date is greater than the end date of the current pay period:
+        if (transaction.getPlannedDate().compareTo(currentPayPeriodEndDate) > 0) {
+
+            // then it is the start of a new pay period, so update the start date of the current pay period to the
+            // day after the end date of the current pay period and the end date of the current pay period to the end
+            // date of the new pay period:
+            currentPayPeriodStartDate = (Calendar) currentPayPeriodEndDate.clone();
+            currentPayPeriodStartDate.add(Calendar.DATE, 1);
+            currentPayPeriodEndDate = getPayPeriodEndDate(currentPayPeriodStartDate);
+            return true;
+        }
+        else {
+            // The transaction doesn't start a new pay period:
+            return false;
+        }
+    }
+
+    /**
+     * Get the start date of the first pay period that contains the planned date. The algorithm is to first determine
+     * the pay period type of the forecast item. If the period type is "monthly", then the start date of the first pay
+     * period is the first day of the month of the planned date. If the period type is "semi-monthly", then the start
+     * date is the first day of the month if the planned date is between the 1st and the 14th day of the month
+     * (inclusive), else the start date is the 15th day of the month. If the period type is "bi-weekly", then the start
+     * date is the first Sunday on or after the planned date. If the period type is "weekly", then the start date is the
+     * first Sunday on or after the planned date.
+     *
+     * @param plannedDate The planned date of the forecast transaction.
+     * @return The start date of the first pay period that contains the planned date.
+     */
+    public Calendar getFirstPayPeriodStartDate(Calendar plannedDate) {
+        Calendar payPeriodStartDate = (Calendar) plannedDate.clone();
+
+        // If the forecast item's period type is "monthly":
+        if (payPeriod.equals(Item.PeriodType.MONTHLY)) {
+            payPeriodStartDate.set(Calendar.DAY_OF_MONTH, 1);
+            return payPeriodStartDate;
+        }
+
+        // If the forecast item's period type is "semi-monthly":
+        if (payPeriod.equals(Item.PeriodType.SEMIMONTHLY)) {
+            if (plannedDate.get(Calendar.DAY_OF_MONTH) <= 14) {
+                payPeriodStartDate.set(Calendar.DAY_OF_MONTH, 1);
+            } else {
+                payPeriodStartDate.set(Calendar.DAY_OF_MONTH, 15);
+            }
+            return payPeriodStartDate;
+        }
+
+        // If the forecast item's period type is "bi-weekly":
+        if (payPeriod.equals(Item.PeriodType.BIWEEKLY)) {
+            while (payPeriodStartDate.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+                payPeriodStartDate.add(Calendar.DATE, 1);
+            }
+            return payPeriodStartDate;
+        }
+
+        // If the forecast item's period type is "weekly":
+        if (payPeriod.equals(Item.PeriodType.WEEKLY)) {
+            while (payPeriodStartDate.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+                payPeriodStartDate.add(Calendar.DATE, 1);
+            }
+            return payPeriodStartDate;
+        }
+
+        // Unknown period type:
+        throw new IllegalArgumentException("Unknown period type: " + payPeriod);
+    }
+
+    /**
+     * Get the end date of the pay period that starts on the current pay period start date. The algorithm is to first
+     * determine the pay period type of the forecast item. If the period type is "monthly", then the end date is the last
+     * day of the month of the current pay period start date. If the period type is "semi-monthly", then the end date is
+     * the 14th day of the month if the current pay period start date is the 1st day of the month, else the end date is
+     * the last day of the month. If the period type is "bi-weekly", then the end date is 14 days after the current pay
+     * period start date. If the period type is "weekly", then the end date is 7 days after the current pay period start
+     * date.
+     *
+     * @param currentPayPeriodStartDate The start date of the current pay period.
+     * @return The end date of the pay period that starts on the current pay period start date.
+     */
+    public Calendar getPayPeriodEndDate(Calendar currentPayPeriodStartDate) {
+
+        Calendar payPeriodEndDate = (Calendar) currentPayPeriodStartDate.clone();
+
+        // If the forecast item's period type is "monthly":
+        if (payPeriod.equals(Item.PeriodType.MONTHLY)) {
+            payPeriodEndDate.set(Calendar.DAY_OF_MONTH, payPeriodEndDate.getActualMaximum(Calendar.DAY_OF_MONTH));
+            return payPeriodEndDate;
+        }
+
+        // If the forecast item's period type is "semi-monthly":
+        if (payPeriod.equals(Item.PeriodType.SEMIMONTHLY)) {
+            if (currentPayPeriodStartDate.get(Calendar.DAY_OF_MONTH) == 1) {
+                payPeriodEndDate.set(Calendar.DAY_OF_MONTH, 14);
+            } else {
+                payPeriodEndDate.set(Calendar.DAY_OF_MONTH, payPeriodEndDate.getActualMaximum(Calendar.DAY_OF_MONTH));
+            }
+            return payPeriodEndDate;
+        }
+
+        // If the forecast item's period type is "bi-weekly":
+        if (payPeriod.equals(Item.PeriodType.BIWEEKLY)) {
+            payPeriodEndDate.add(Calendar.DATE, 13);
+            return payPeriodEndDate;
+        }
+
+        // If the forecast item's period type is "weekly":
+        if (payPeriod.equals(Item.PeriodType.WEEKLY)) {
+            payPeriodEndDate.add(Calendar.DATE, 6);
+            return payPeriodEndDate;
+        }
+
+        // Unknown period type:
+        throw new IllegalArgumentException("Unknown period type: " + payPeriod);
+    }
+
     /*
      * Forecast class main methods:
      */
-    // Determine if a date falls within the forecast window of this forecast object:
+// Determine if a date falls within the forecast window of this forecast object:
     public boolean fallsWithinForecastWindow(Calendar date) {
         boolean decision = false;
 

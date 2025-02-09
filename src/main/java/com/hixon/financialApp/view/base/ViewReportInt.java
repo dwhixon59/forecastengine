@@ -20,11 +20,11 @@ public interface ViewReportInt {
 
    void renderHeaderRow();
 
-   List<Entity> getItems();
+   List<Entity> getItems() throws Exception;
 
-   void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException, RegisterException;
+   void renderItemRow(Entity item) throws Exception;
 
-   void renderSummaryRow();
+   void renderSummaryRow() throws Exception;
 
    void renderReportBackMatter() throws EntityException, SQLException, ForecastException, BudgetException, Exception, RegisterException;
 

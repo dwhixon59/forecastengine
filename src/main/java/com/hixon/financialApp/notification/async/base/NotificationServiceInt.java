@@ -42,5 +42,8 @@ public interface NotificationServiceInt {
    // Create a New Transactions Summary Report and send it to a user:"
    void sendNewTransactionSummaryReport(Register register) throws Exception, ViewException, EntityException,
            BudgetException, RegisterException, NotificationServiceException;
+
+   // Create an Envelope Report and send it to a user:"
+   void sendEnvelopeReport(Forecast forecast) throws Exception;
 }
 

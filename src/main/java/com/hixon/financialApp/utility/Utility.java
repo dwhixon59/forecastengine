@@ -647,7 +647,7 @@ public class Utility {
         String usersPersonalFileSystem = user.getPersonalFileSystem();
 
         // Copy the source file to the user's file system:
-        FileUtils.copyFile(sourceFilePath, new File(usersPersonalFileSystem + "\\" + destinationFilename));
+        FileUtils.copyFile(sourceFilePath, new File(usersPersonalFileSystem + "\\" + destinationFilename), false);
     }
 
 

@@ -341,9 +341,24 @@ public class ForecastController {
                     deductSplitAmount(forecastTransaction, split);
                 }
 
-                // And finally, link the split to the forecast transaction for historical purposes:
+                // and link the split to the forecast transaction for historical purposes:
                 forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
                 forecastTransactionSplit.save(INSERT_ON_DUPLICATE_SKIP);
+
+                // And finally, if the forecast item is an envelope type item:
+                if (forecastTransaction.getForecastItem().getHowOccurs() == Item.HowOccurs.ENVELOPE) {
+
+                    // then credit the amount to the envelope and zero out the remaining amount in the forecast
+                    // transaction:
+                    ForecastItem forecastItem = forecastTransaction.getForecastItem();
+                    forecastItem.setRunningBalance(forecastItem.getRunningBalance() + split.getAmount());
+                    forecastItem.save(UPDATE);
+                    forecastTransaction.setRemainingAmount(0);
+                    forecastTransaction.save(UPDATE);
+                    view.say(Utility.formatDollarAmount(split.getAmount()) + " credited to " +
+                            forecastTransaction.toStringVeryConcise());
+                }
+
 
             } // End if it hasn't already been reconciled.
             else {
@@ -527,18 +542,6 @@ public class ForecastController {
                 break;
 
             case ENVELOPE:
-                // Credit the forecast transaction amount to envelope if appropriate:
-                Item.updateEnvelopeAmount(forecastTransaction);
-
-                // then deduct the amount spent from the envelope.
-                Item.updateEnvelopeAmount(split);
-
-                // and then if the split caused the balance of the envelope to go to zero create a significant event:
-                if (Utility.isEqualCurrency(split.getBudgetItem().getRunningBalance(), 0)) {
-                    forecast.addSignificantEvent(forecastTransaction);
-                }
-                break;
-
             case PERIODIC:
             case VARIABLE_PERIODIC:
             case UNPLANNED:
@@ -788,6 +791,9 @@ public class ForecastController {
             }
         }
 
+        // Update the forecast start date:
+        forecast.setStartDate(updateStartDate);
+
         // Update up the end date so that the forecast window will be the same number of months as it was originally
         // set to be.
         Calendar endDate = (Calendar) updateStartDate.clone();
@@ -848,8 +854,14 @@ public class ForecastController {
         // Mark the forecast as in sync.
         forecast.setInSync(true);
 
-        // Set the start date of the forecast to the date of the first real forecast transaction in the forecast.
-        forecast.setStartDate(Forecast.getForecastStartDate(forecast));
+        // Get a chronological list of all the non-zero forecast transactions in the forecast:
+        ForecastTransactionIterator forecastTransactions = ForecastTransaction.getNonZeroForecastTransactions(forecast);
+
+        // Get the first forecast transaction in the list:
+        ForecastTransaction firstForecastTransaction = forecastTransactions.getNext();
+
+        // Reset the forecast start date to the date of the first non-zero forecast transaction:
+        forecast.setStartDate(firstForecastTransaction.getPlannedDate());
 
         // Update the forecast object in the database with the new start and end dates.
         forecast.save();

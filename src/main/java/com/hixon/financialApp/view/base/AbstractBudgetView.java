@@ -76,7 +76,8 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
      * Create and render a spending report for a given month as an XML spreadsheet file that can be imported into a
      * spreadsheet.
      *
-     * @param month The month to report on.
+     * @param month  The month to report on.
+     * @param budget
      * @throws FileNotFoundException
      * @throws UnsupportedEncodingException
      * @throws EntityException
@@ -87,7 +88,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
      * @throws ViewException
      */
     @Override
-    public void renderSpendingReportForMonth(Calendar month) throws FileNotFoundException, UnsupportedEncodingException,
+    public void renderSpendingReportForMonth(Calendar month, Budget budget) throws FileNotFoundException, UnsupportedEncodingException,
             EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException {
 
         // Insulate the parameter from side effects:
@@ -103,7 +104,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         endDate.add(Calendar.DATE, -1);
 
         // Render the report:
-        renderPlannedVsActualReport(startDate, endDate);
+        renderPlannedVsActualReport(startDate, endDate, budget);
     }
 
 
@@ -113,6 +114,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
      *
      * @param startDate The starting date of the reporting period.
      * @param endDate   Then ending date of the reporting period.
+     * @param budget
      * @throws FileNotFoundException
      * @throws UnsupportedEncodingException
      * @throws EntityException
@@ -123,7 +125,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
      * @throws ViewException
      */
     @Override
-    public void renderPlannedVsActualReport(Calendar startDate, Calendar endDate)
+    public void renderPlannedVsActualReport(Calendar startDate, Calendar endDate, Budget budget)
             throws FileNotFoundException, UnsupportedEncodingException, EntityException, SQLException, BudgetException,
             RegisterException, ForecastException, ViewException {
 
@@ -136,7 +138,7 @@ public abstract class AbstractBudgetView extends AbstractView implements BudgetV
         renderHeaderRow();
 
         // For each budget item in the budget:
-        ResultSet rsbi = BudgetItem.getAllUnexpiredBudgetItems(startDate);
+        ResultSet rsbi = BudgetItem.getAllUnexpiredBudgetItems(startDate, budget);
         BudgetItem budgetItem;
 
         // Amounts for this item in this period:

@@ -106,7 +106,7 @@ public class ForecastEngine {
 
             Calendar nextDate = (Calendar) startDate.clone();
             System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) +
-                    "Next Date:  " + Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
+                    "  Next Date:  " + Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
                     Utility.calendarDateToStringDate(forecast.getEndDate()));
 
             // For each item in the forecast:

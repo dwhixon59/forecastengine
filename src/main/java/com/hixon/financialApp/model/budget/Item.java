@@ -4,7 +4,9 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.forecast.ForecastItem;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 
@@ -15,6 +17,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.Locale;
+import java.util.Objects;
 
 import static com.hixon.financialApp.model.budget.Item.HowOccurs.*;
 import static com.hixon.financialApp.model.budget.Item.HowPaid.*;
@@ -54,6 +57,8 @@ public abstract class Item extends IndependentEntity {
     protected double amount = 0;
     // The running balance if this item is an envelope:
     protected double runningBalance = 0;
+    // The minimum balance for this item if it is an envelope:
+    protected double minimumBalance = 0;
     // The first date that this item is expected to occur as a Transaction:
     protected Calendar startDate = new GregorianCalendar();
     // If this item is a a fixed number of payments (like an installment loan) this is the number of payments:
@@ -159,28 +164,26 @@ public abstract class Item extends IndependentEntity {
      * Update the amount of an envelope if the planned date of the forecast transaction is on or before today.
      *
      * @param forecastTransaction
-     * @throws BudgetException
      * @throws SQLException
      * @throws EntityException
-     * @throws RegisterException
      * @throws ForecastException
      */
     public static void updateEnvelopeAmount(ForecastTransaction forecastTransaction)
-            throws BudgetException, SQLException, EntityException, RegisterException, ForecastException {
+            throws SQLException, EntityException, ForecastException, BudgetException {
 
         // If the planned date of the forecast transaction has passed:
         if (Utility.dateOnlyCompare(forecastTransaction.getPlannedDate(), Calendar.getInstance()) <= 0) {
 
             // then credit the remaining amount of the forecast transaction to the envelope:
-            BudgetItem budgetItem = forecastTransaction.getForecastItem().getBudgetItem();
-            budgetItem.setRunningBalance(budgetItem.getRunningBalance() + forecastTransaction.getRemainingAmount());
-            budgetItem.save(UPDATE);
+            ForecastItem forecastItem = forecastTransaction.getForecastItem();
+            forecastItem.setRunningBalance(forecastItem.getRunningBalance() + forecastTransaction.getRemainingAmount());
+            forecastItem.save(UPDATE);
 
             // and let the user know what we just did:
             getView().say(Utility.formatDollarAmount(forecastTransaction.getRemainingAmount()) +
                     ((forecastTransaction.getRemainingAmount() < 0) ? " deducted from " : " added to ") +
                     forecastTransaction.toStringVeryConcise() + " envelope.  New balance is " +
-                    Utility.formatDollarAmount(budgetItem.getAmount()));
+                    Utility.formatDollarAmount(forecastItem.getAmount()));
 
             // and then zero out the forecast transaction because it has been credited to the envelope:
             forecastTransaction.setRemainingAmount(0);
@@ -189,38 +192,39 @@ public abstract class Item extends IndependentEntity {
     }
 
     /**
-     * Update the amount in an envelope from a transaction split.  This means that the user has spent money that was
-     * saved in the envelope.  The amount in the envelope will be reduced by the amount of the split if there is enough
-     * money in the envelope to cover it.  Otherwise it will be zeroed out because envelopes don't store negative
+     * Update the amount in an envelope from a forecast transaction split.  This means that the user has spent money that
+     * was saved in the envelope.  The amount in the envelope will be reduced by the amount of the split if there is enough
+     * money in the envelope to cover it.  Otherwise, it will be zeroed out because envelopes don't store negative
      * amounts of money.
      *
-     * @param split
+     * @param forecastTransactionSplit
      * @throws BudgetException
      * @throws SQLException
      * @throws EntityException
      */
-    public static void updateEnvelopeAmount(TransactionSplit split)
-            throws BudgetException, SQLException, EntityException {
+    public static void updateEnvelopeAmount(ForecastTransactionSplit forecastTransactionSplit)
+            throws BudgetException, SQLException, EntityException, ForecastException, RegisterException {
 
         // If the amount of the split is less than what is available in the envelope (since envelopes and splits are
         // really different "accounts", the debit from one is a credit to the other and vice versa):
-        BudgetItem budgetItem = split.getBudgetItem();
-        if (budgetItem.getAmount() >= -split.getAmount()) {
+        ForecastItem forecastItem = Objects.requireNonNull(
+                ForecastTransaction.getById(forecastTransactionSplit.getIdForecastTransaction())).getForecastItem();
+        if (forecastItem.getRunningBalance() >= -forecastTransactionSplit.getTransactionSplit().getAmount()) {
 
             // then deduct split amount from the envelope amount:
-            budgetItem.setAmount(budgetItem.getAmount() + split.getAmount());
+            forecastItem.setAmount(forecastItem.getAmount() + forecastTransactionSplit.getTransactionSplit().getAmount());
 
         } else { // but if the user has overspent:
 
             // then zero out the envelope because envelopes cannot hold negative amounts:
-            budgetItem.setAmount(0);
+            forecastItem.setAmount(0);
         }
-        budgetItem.update();
+        forecastItem.update();
 
         // let the user know what we did:
-        getView().say(Utility.formatDollarAmount(split.getAmount()) +
-                ((split.getAmount() < 0) ? " deducted from " : " added to ") +
-                " envelope for " + budgetItem.toStringVeryConcise());
+        getView().say(Utility.formatDollarAmount(forecastTransactionSplit.getTransactionSplit().getAmount()) +
+                ((forecastTransactionSplit.getTransactionSplit().getAmount() < 0) ? " deducted from " : " added to ") +
+                " envelope for " + forecastItem.toStringVeryConcise());
     }
 
 
@@ -289,6 +293,10 @@ public abstract class Item extends IndependentEntity {
         this.runningBalance = runningBalance;
         setDirty(true);
     }
+
+    // The minimum balance for an envelope:
+    public double getMinimumBalance() { return minimumBalance; }
+    public void setMinimumBalance(double minimumBalance) { this.minimumBalance = minimumBalance; }
 
     public Calendar getStartDate() {
         return startDate;
@@ -901,6 +909,7 @@ public abstract class Item extends IndependentEntity {
                     break;
                 case ON_DEMAND:
                     isOk = variance > -8 && variance < 8;
+                    break;
                 default:
                     throw new BudgetException("Unknow HowOccurs type " + howOccurs + " in switch statement.");
             }
@@ -1090,19 +1099,19 @@ public abstract class Item extends IndependentEntity {
 
                     // then it's next date is it's start date:
                     nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
-                            startDate.get(Calendar.DATE));
+                            Math.min(startDate.get(Calendar.DATE), onOrAfterDate.getActualMaximum(Calendar.DATE)));
                 } else {
-
-                    // Make the item start on it's day of the month, this month:
+                    // Make the item start this month on its day of the month, or the last day of the month if its day
+                    // of the month is the last day of this month:
                     nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH),
-                            startDate.get(Calendar.DATE));
+                            Math.min(startDate.get(Calendar.DATE), onOrAfterDate.getActualMaximum(Calendar.DATE)));
+                }
 
-                    // If the item start date day-of-the-month occurs before the forecast start date day-of-the-month:
-                    if (startDate.get(Calendar.DATE) < onOrAfterDate.get(Calendar.DATE)) {
+                // If the item start date day-of-the-month occurs before the forecast start date day-of-the-month:
+                if (startDate.get(Calendar.DATE) < onOrAfterDate.get(Calendar.DATE)) {
 
-                        // then make it the start in the second month in the forecast window:
-                        nextDate.add(Calendar.MONTH, 1);
-                    }
+                    // then make it the start in the second month in the forecast window:
+                    nextDate.add(Calendar.MONTH, 1);
                 }
                 break;
 
@@ -1287,6 +1296,7 @@ public abstract class Item extends IndependentEntity {
                 case MONTHLY:
                     // Increment the date by one month:
                     nextDate.add(Calendar.MONTH, 1);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 case SIX_WEEKS:
@@ -1297,26 +1307,31 @@ public abstract class Item extends IndependentEntity {
                 case BIMONTHLY:
                     // Increment the date by three months:
                     nextDate.add(Calendar.MONTH, 2);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 case QUARTERLY:
                     // Increment the date by three months:
                     nextDate.add(Calendar.MONTH, 3);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 case FOUR_MONTHS:
                     // Increment the date by four months:
                     nextDate.add(Calendar.MONTH, 4);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 case SEMIANNUALLY:
                     // Increment the date by six months:
                     nextDate.add(Calendar.MONTH, 6);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 case ANNUALLY:
                     // Increment the date by one year:
                     nextDate.add(Calendar.YEAR, 1);
+                    nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
                 default:

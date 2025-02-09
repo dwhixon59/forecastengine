@@ -15,20 +15,14 @@ import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.text.OverdueItemsReport;
-import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
-import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
-import com.hixon.financialApp.view.text.UpcomingItemsReport;
+import com.hixon.financialApp.view.text.*;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
 import static com.hixon.financialApp.utility.Utility.*;
@@ -47,6 +41,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
      * Fields:
      */
     protected Forecast forecast;
+    protected boolean firstItem = true;
+    protected boolean firstItemInMonth = true;
+    protected int firstItemInMonthRowNum = 0;
+    protected boolean firstMonth = true;
+
+    // A map of forecast item ID's to a list of forecast transactions that are based on it and the rows in the
+    // spreadsheet rendering where they are displayed:
+    protected Map<UUID, List<RowTransactionPair>> forecastItemToRowsMap = new HashMap<>();
 
 
     /*
@@ -72,33 +74,43 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     /*
      * Helper methods:
      */
-    protected abstract void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException;
+    protected abstract void openLongTermForecastOutput(String reportType) throws FileNotFoundException,
+            UnsupportedEncodingException, ForecastException;
 
-    protected abstract void renderLongTermForecastFrontMatter();
+    protected abstract void renderLongTermForecastFrontMatter(String reportType) throws ForecastException;
 
-    protected abstract void renderMonthHeader(Calendar plannedDate, double runningBalance);
+    protected abstract void renderLongTermForecastMonthHeader(String reportType, Calendar plannedDate, double runningBalance)
+            throws ForecastException;
 
-    protected abstract void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit)
-            throws EntityException,
-            SQLException, ForecastException, BudgetException;
+    protected abstract int renderLongTermForecastTransaction(String reportType, ForecastTransaction forecastTransaction,
+                                                             double credit, double debit)
+            throws EntityException, SQLException, ForecastException, BudgetException;
 
-    protected abstract void renderLongTermForecastBackMatter();
+    protected abstract void renderLongTermForecastBackMatter(String reportType) throws IOException, ForecastException;
 
-    protected abstract void closeLongTermForecastOutput();
+    protected abstract void closeLongTermForecastOutput(String reportType) throws IOException, ForecastException;
 
     public abstract void closeForecastTransactionSource(String sourceName) throws ViewException;
 
-    public abstract List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException, BudgetException;
+    public abstract List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException,
+            ControllerException, BudgetException;
 
     protected abstract TrackingItemsOfInterestReport getTrackingItemsOfInterestReport(User user, List<Entity> items,
-                                                                                      File reportFile) throws FileNotFoundException;
+                                                                                      File reportFile)
+            throws FileNotFoundException;
 
     protected abstract UpcomingItemsOfInterestReport getUpcomingItemsOfInterestReport(User user, List<Entity> items,
-                                                                                      File reportFile) throws FileNotFoundException;
+                                                                                      File reportFile)
+            throws FileNotFoundException;
 
-    protected abstract OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException;
+    protected abstract OverdueItemsReport getOverdueItemsReport(Forecast forecast, List<Entity> items, File reportFile)
+            throws FileNotFoundException;
 
-    protected abstract UpcomingItemsReport getUpcomingItemsReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException;
+    protected abstract UpcomingItemsReport getUpcomingItemsReport(Forecast forecast, List<Entity> items, File reportFile)
+            throws FileNotFoundException;
+
+    public abstract EnvelopeReport getEnvelopeReport(Forecast forecast, List<Entity> items, File reportFile)
+            throws FileNotFoundException;
 
 
     /*
@@ -146,10 +158,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         this.forecast = forecast;
 
         // Get the first day of the forecast rendering:
-        Calendar startDate = forecast.getStartDate();
+        Calendar startDate = Forecast.getFirstNonZeroTransactionDate(forecast);
 
         // Get the starting balance.  Take if from the first register associated with the budget for now:
         List<Register> registers = forecast.getBudget().getRegisters();
+        String reportType = registers.get(0).getReportType();
         double startingBalance = registers.get(0).getBalance();
         double runningBalance = startingBalance;
 
@@ -172,8 +185,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double firstFirstOfMonthBalance = 0.0;
 
         // Open and initialize the forecast rendering output file:
-        openLongTermForecastOutput();
-        renderLongTermForecastFrontMatter();
+        openLongTermForecastOutput(reportType);
+        renderLongTermForecastFrontMatter(reportType);
 
         // Set all the running balances to zero in the database:
         ForecastTransaction.zeroRunningBalances();
@@ -185,13 +198,26 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         ForecastTransaction firstForecastTransaction = forecastTransaction;
         ForecastTransaction lastForecastTransaction = null;
         int currentMonth = -1;
-        boolean firstTime = true;
+        boolean noNegativeBalanceYet = true;
         while (forecastTransaction != null) {
 
-            // If the month changed, write out a header line with the name of the month:
+            // If the month changed:
             if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
-                renderMonthHeader(forecastTransaction.getPlannedDate(), runningBalance);
+
+                // The first month is special because it cannot reference anything from the previous month, there are no
+                // balances to carry forward, etc.  Turn off the first month indicator if we are no longer in the first
+                // month:
+                if (currentMonth != -1) {
+                    firstMonth = false;
+                }
+
+                // Update the current month to the month of the current forecast transaction:
                 currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+
+                // Write out a month header if this report type requires it:
+                renderLongTermForecastMonthHeader(reportType, forecastTransaction.getPlannedDate(), runningBalance);
+
+                // If this is the first first-of-the-month, then save off the balance on that date for reporting purposes:
                 if (dateOnlyCompare(firstFirstOfMonth, forecastTransaction.getPlannedDate()) == 0) {
                     firstFirstOfMonthBalance = runningBalance;
                     lowestBalance = runningBalance;
@@ -204,8 +230,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             forecastTransaction.setRunningBalance(runningBalance);
 
             // Record the first negative balance and the date on which it occurred:
-            if (runningBalance < 0 && firstTime) {
-                firstTime = false;
+            if (runningBalance < 0 && noNegativeBalanceYet) {
+                noNegativeBalanceYet = false;
                 firstNegativeBalance = runningBalance;
                 dateOfFirstNegativBalance = forecastTransaction.getPlannedDate();
             }
@@ -258,7 +284,17 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             }
 
             // Write out the forecast line:
-            renderForecastTransaction(forecastTransaction, credit, debit);
+            int rowNumber = renderLongTermForecastTransaction(reportType, forecastTransaction, credit, debit);
+
+            // Save the row number and the forecast transaction in the map:
+            RowTransactionPair rowTransactionPair = new RowTransactionPair(rowNumber, forecastTransaction);
+            List<RowTransactionPair> rowTransactionPairList =
+                    forecastItemToRowsMap.get(forecastTransaction.getForecastItem().getId());
+            if (rowTransactionPairList == null) {
+                rowTransactionPairList = new LinkedList<>();
+            }
+            rowTransactionPairList.add(rowTransactionPair);
+            forecastItemToRowsMap.put(forecastTransaction.getForecastItem().getId(), rowTransactionPairList);
 
             // Move to the next transaction:
             lastForecastTransaction = forecastTransaction;
@@ -266,8 +302,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         }
 
         // Finish up and closeout the forecast rendering:
-        renderLongTermForecastBackMatter();
-        closeLongTermForecastOutput();
+        renderLongTermForecastBackMatter(reportType);
+        closeLongTermForecastOutput(reportType);
 
 /*
       // requesting below minimum balance events:
@@ -364,8 +400,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double debtToExpenseRatio = totalDebtExpense / totalExpense;
         double debtToIncomeRatio = -totalDebtExpense / totalIncome;
         getView().say(new StringBuilder().append("Debt expense comprises ").append(Math.round(debtToIncomeRatio * 100)).
-                        append("% of total income and ").append(Math.round(debtToExpenseRatio * 100)).
-                        append("% of total expense.").toString());
+                append("% of total income and ").append(Math.round(debtToExpenseRatio * 100)).
+                append("% of total expense.").toString());
 
         // Print out the forecast analysis:
         getView().say("\nForecast Analysis:");
@@ -566,7 +602,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Render an upcoming items report for those items:
         boolean result = false;
-        if (items.size() > 0) {
+        if (!items.isEmpty()) {
             UpcomingItemsReport report = getUpcomingItemsReport(forecast, items, file);
             Renderer<UpcomingItemsReport> renderer = new Renderer<>(report);
             renderer.renderReport();
@@ -618,11 +654,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             RegisterException, BudgetException {
 
         // Get a list of the overdue items:
-        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getOverdueItems(user));
+        List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getOverdueItems(user, forecast));
 
         // Render an overdue items report for those items:
         boolean result = false;
-        if (items.size() > 0) {
+        if (!items.isEmpty()) {
             OverdueItemsReport report = getOverdueItemsReport(forecast, items, file);
             Renderer<OverdueItemsReport> renderer = new Renderer<>(report);
             renderer.renderReport();
@@ -631,4 +667,51 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         return result;
     }
 
+    @Override
+    public List<UserResource> renderEnvelopeReport(Forecast forecast) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        // Create a holder for the individual user reports:
+        List<UserResource> reports = new ArrayList<>();
+
+        // Get a list of users:
+        List<User> users = User.getAllUsers();
+
+        // For each user:
+        for (User user : users) {
+            // Render an items of interest report for the current user:
+            UserResource userResource = renderEnvelopeReport(forecast, user);
+            reports.add(userResource);
+        }
+        return reports;
+    }
+
+    @Override
+    public UserResource renderEnvelopeReport(Forecast forecast, User user) throws EntityException, ViewException,
+            Exception, BudgetException, RegisterException {
+
+        UserResource userResource = null;
+        File envelopeReportFile = File.createTempFile("EnvelopeReport" + user.getFirstName() + "_",
+                ".txt");
+        if (renderEnvelopeReport(forecast, user, envelopeReportFile)) {
+            userResource = new UserResource(user, UserResource.ResourceType.EnvelopeReport,
+                    envelopeReportFile);
+        } else {
+            envelopeReportFile.delete();
+        }
+        return userResource;
+    }
+
+    @Override
+    public boolean renderEnvelopeReport(Forecast forecast, User user, File file) throws Exception {
+
+        // Create an envelope report object for the forecast:
+        EnvelopeReport envelopeReport = new EnvelopeReport(forecast, Calendar.getInstance(), file);
+
+        // Create a renderer for the report:
+        Renderer<EnvelopeReport> renderer = new Renderer<>(envelopeReport);
+
+        // Render the envelope report:
+        return renderer.renderReport();
+    }
 } // End class AbstractForecastView.

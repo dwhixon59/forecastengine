@@ -1,20 +1,17 @@
 package com.hixon.financialApp.view.text;
 
-import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.Entity;
-import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
-import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.sql.SQLException;
 import java.util.List;
 
 public class UpcomingItemsReport extends ForecastReport {
+
+    boolean firstPayPeriod = true;
 
     /*
      * Constructors:
@@ -50,10 +47,19 @@ public class UpcomingItemsReport extends ForecastReport {
     }
 
     @Override
-    public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException, RegisterException {
+    public void renderItemRow(Entity item) throws Exception {
 
         // Cast the entity passed in to what it really is. This is required because we are using generics:
         ForecastTransaction forecastTransaction = (ForecastTransaction) item;
+
+        // If this is the start of a new pay period, then render the pay period header row:
+        if (forecast.isNewPayPeriod(forecastTransaction)) {
+            if (!firstPayPeriod) {
+                pw.println("==========");
+            } else {
+                firstPayPeriod = false;
+            }
+        }
 
         // Use a short version of the date to take less space:
         String date = Utility.calendarDateToMonthDayStringDate(forecastTransaction.getPlannedDate());

@@ -15,7 +15,8 @@ public class UserResource {
         setFile(file);
     }
 
-    public enum ResourceType {NewTransactionSummaryReport, upcomingItemsReport, overdueItemsReport, ItemsOfInterestReport}
+    public enum ResourceType {NewTransactionSummaryReport, upcomingItemsReport, overdueItemsReport, ItemsOfInterestReport,
+        EnvelopeReport, BudgetReport, RegisterReport, MerchantReport, TransactionReport, UserReport}
     private ResourceType resourceType;
     private File file;
 

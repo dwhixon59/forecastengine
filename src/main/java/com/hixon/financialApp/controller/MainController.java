@@ -11,6 +11,7 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
+import com.hixon.financialApp.view.excel.EnvelopeReport;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
@@ -40,8 +41,8 @@ public class MainController {
     private Budget budget = null;
     private Forecast forecast = null;
     private FinancialInstitutionInt financialInstitution = null;
-    private ViewInt view = null;
-    private NotificationServiceInt notificationService = null;
+    private ViewInt view;
+    private NotificationServiceInt notificationService;
 
 
     /*
@@ -121,12 +122,24 @@ public class MainController {
 
             // Process the goals:
             Calendar startDate;
-            String filename = null;
-            boolean inSync = true;
+            boolean inSync;
             for (int i = 0; i < goals.length; i++) {
                 switch (goals[i]) {
+                    case "createEnvelopeReport":
+                        view.say("\n\n========================================================================");
+                        view.say("CREATE ENVELOPE REPORT");
+
+                        // Call the EnvelopeReport class to create the report:
+                        EnvelopeReport envelopeReport = new EnvelopeReport(Utility.getDbConnection());
+                        envelopeReport.createReport();
+
+                        // Notify the user that the report was created:
+                        view.say("The envelope report was successfully created.");
+                        view.say("------------------------------------------------------------------------");
+                        break;
+
                     case "processUncategorizedTransactions":
-                       view.say("\n\n========================================================================");
+                        view.say("\n\n========================================================================");
                         view.say("REPROCESS UNCATEGORIZED TRANSACTIONS");
 
                         // Set up the objects we need:
@@ -296,7 +309,7 @@ public class MainController {
                         getRegisterBudgetForecast();
 
                         // Render the spending report:
-                        getBudgetView().renderSpendingReportForMonth(Calendar.getInstance());
+                        getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
                         view.say("The spending report was successfully rendered");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -310,7 +323,7 @@ public class MainController {
 
                         // Render the spending report for the specified month
                         Calendar month = getBudgetController().getSpendingReportMonth();
-                        getBudgetView().renderSpendingReportForMonth(month);
+                        getBudgetView().renderSpendingReportForMonth(month, budget);
                         view.say("The spending report was successfully rendered");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -402,6 +415,19 @@ public class MainController {
                         // Render the long term forecast:
                         Utility.getForecastView().renderLongTermForecast(forecast);
                         view.say("\nSuccessfully rendered the long term forecast.");
+                        view.say("------------------------------------------------------------------------");
+                        break;
+
+                    case "renderEnvelopeReport":
+                        view.say("\n\n========================================================================");
+                        view.say("Rendering the Envelope Report.\n");
+
+                        // Set up the objects we need:
+                        getRegisterBudgetForecast();
+
+                        // Render the items of interest report:
+                        notificationService.sendEnvelopeReport(forecast);
+                        view.say("Successfully rendered the Envelope Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
 

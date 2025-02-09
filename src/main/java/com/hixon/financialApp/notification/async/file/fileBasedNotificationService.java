@@ -39,6 +39,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
     public static final String OVERDUE_AND_UPCOMING_ITEMS_REPORT = "OverdueAndUpcomingItemsReport.txt";
     public static final String NEW_TRANSACTION_SUMMARY_REPORT = "NewTransactionSummaryReport.txt";
     public static final String ITEMS_OF_INTEREST_REPORT = "ItemsOfInterestReport.txt";
+    public static final String ENVELOPE_REPORT = "EnvelopeReport.txt";
 
 
     /*
@@ -51,14 +52,15 @@ public class fileBasedNotificationService implements NotificationServiceInt {
     /*
      * Helper methods:
      */
+
     /**
      * Copy a file to a users personal file system, renaming it in the process if required and versioning any previous
      * such file.
      *
-     * @param user The user to send the file to.
-     * @param file The file to send to the user.  May be null in which case we only version the old file.
+     * @param user           The user to send the file to.
+     * @param file           The file to send to the user.  May be null in which case we only version the old file.
      * @param targetFilename A new name for the file.  May be null in which case the existing filename will be used.
-     * @throws IOException If any error occurs manipulating the files.
+     * @throws IOException                  If any error occurs manipulating the files.
      * @throws NotificationServiceException If both the file and target filename are null.
      */
     private void sendFileToUser(User user, File file, String targetFilename) throws IOException, NotificationServiceException {
@@ -181,7 +183,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         for (UserResource userResource : reports
         ) {
             sendFileToUser(userResource.getUser(), userResource.getFile(), ITEMS_OF_INTEREST_REPORT);
-         }
+        }
     }
 
     /**
@@ -200,7 +202,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
             EntityException, BudgetException, RegisterException, NotificationServiceException {
 
         // Generate the Overdue and Upcoming Items Report using the text based forecast view:
-        ForecastView forecastView = new com.hixon.financialApp.view.text.ForecastView(forecast);
+        ForecastView forecastView = new ForecastView(forecast);
         List<UserResource> overdueItemsReports = forecastView.renderOverdueItemsReport(forecast);
         List<UserResource> upcomingItemsReports = forecastView.renderUpcomingItemsReport(forecast);
         for (int i = 0; i < Math.max(overdueItemsReports.size(), upcomingItemsReports.size()); i++) {
@@ -255,5 +257,15 @@ public class fileBasedNotificationService implements NotificationServiceInt {
 
         // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
         register.setTransactionsToNotNew();
+    }
+
+    @Override
+    public void sendEnvelopeReport(Forecast forecast) throws Exception {
+        ForecastView forecastView = new ForecastView(forecast);
+        List<UserResource> reports = forecastView.renderEnvelopeReport(forecast);
+        for (UserResource userResource : reports
+        ) {
+            sendFileToUser(userResource.getUser(), userResource.getFile(), ENVELOPE_REPORT);
+        }
     }
 }

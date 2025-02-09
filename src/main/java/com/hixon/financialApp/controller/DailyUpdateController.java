@@ -256,7 +256,7 @@ public class DailyUpdateController {
             try {
                view.say("\n\n========================================================================");
                view.say("RENDER THE SPENDING REPORT\n");
-               getBudgetView().renderSpendingReportForMonth(Calendar.getInstance());
+               getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
                view.say("The spending report was successfully rendered");
                view.say("------------------------------------------------------------------------");
             } catch (Exception e) {

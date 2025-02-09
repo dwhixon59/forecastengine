@@ -1,5 +1,6 @@
 package com.hixon.financialApp.view.base;
 
+import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -17,13 +18,14 @@ public interface BudgetViewInt {
      * Create and render a spending report for a given month as an XML spreadsheet file that can be imported into a
      * spreadsheet.
      *
-     * @param month The month to report on.
+     * @param month  The month to report on.
+     * @param budget
      */
-    public void renderSpendingReportForMonth(Calendar month) throws FileNotFoundException, UnsupportedEncodingException,
+    public void renderSpendingReportForMonth(Calendar month, Budget budget) throws FileNotFoundException, UnsupportedEncodingException,
             EntityException, SQLException, BudgetException, RegisterException, ForecastException, ViewException;
 
     // Render the spending report:
-    void renderPlannedVsActualReport(Calendar startDate, Calendar endDate) throws FileNotFoundException,
+    void renderPlannedVsActualReport(Calendar startDate, Calendar endDate, Budget budget) throws FileNotFoundException,
             UnsupportedEncodingException, EntityException, SQLException, BudgetException, RegisterException,
             ForecastException, ViewException;
 

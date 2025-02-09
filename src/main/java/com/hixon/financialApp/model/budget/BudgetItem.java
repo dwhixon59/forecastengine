@@ -37,8 +37,8 @@ public class BudgetItem extends Item {
      */
 // Column headers in an import file:
     public enum Headers {
-        ID_BUDGET_ITEM, CATEGORY, PAYEE, MEMO, PERIOD, AMOUNT, RUNNING_BALANCE, START_DATE, NUMBER_OF_PAYMENTS, END_DATE,
-        ITEM_TYPE, HOW_IMPORTANT, HOW_OCCURS, HOW_PAID, ID_BUDGET
+        ID_BUDGET_ITEM, CATEGORY, PAYEE, MEMO, PERIOD, AMOUNT, RUNNING_BALANCE, MINIMUM_BALANCE, START_DATE,
+        NUMBER_OF_PAYMENTS, END_DATE, ITEM_TYPE, HOW_IMPORTANT, HOW_OCCURS, HOW_PAID, ID_BUDGET
     }   // End Headers.
 
 
@@ -71,10 +71,10 @@ public class BudgetItem extends Item {
      */
     private static final String selectColumns = "bin_to_uuid(bi.idBudgetItem) as 'bi.idBudgetItem', bi.category as " +
             "'bi.category', bi.payee as 'bi.payee', bi.memo as 'bi.memo', bi.period as 'bi.period', bi.amount as " +
-            "'bi.amount', bi.runningBalance as 'bi.runningBalance', bi.startDate as 'bi.startDate', bi.numberOfPayments as " +
-            "'bi.numberOfPayments', bi.endDate as 'bi.endDate', bi.itemType as 'bi.itemType', bi.howImportant as " +
-            "'bi.howImportant', bi.howOccurs as 'bi.howOccurs', bi.howPaid as 'bi.howPaid', bin_to_uuid(bi.Budget_idBudget) " +
-            "as 'bi.idBudget' ";
+            "'bi.amount', bi.runningBalance as 'bi.runningBalance', bi.minimumBalance as 'bi.minimumBalance', " +
+            "bi.startDate as 'bi.startDate', bi.numberOfPayments as 'bi.numberOfPayments', bi.endDate as 'bi.endDate', " +
+            "bi.itemType as 'bi.itemType', bi.howImportant as 'bi.howImportant', bi.howOccurs as 'bi.howOccurs', " +
+            "bi.howPaid as 'bi.howPaid', bin_to_uuid(bi.Budget_idBudget) as 'bi.idBudget' ";
 
     public static String getSelectColumns() {
         return selectColumns;
@@ -85,14 +85,14 @@ public class BudgetItem extends Item {
     }
 
     private static final String insertQuery = "insert into budget_item (idBudgetItem, category, payee, memo, " +
-            "period, amount, runningBalance, startDate, numberOfPayments, endDate, itemType, howImportant, howOccurs, " +
-            "howPaid, Budget_idBudget) values (";
+            "period, amount, runningBalance, minimumBalance, startDate, numberOfPayments, endDate, itemType, howImportant, " +
+            "howOccurs, howPaid, Budget_idBudget) values (";
 
     @Override
     public String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException, NotImplementedException {
 
         return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
-                generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", " +
+                generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", "  + minimumBalance + ", " +
                 Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
                 Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
                 generateHowImportant(howImportant) + "', '" + generateHowOccurs(howOccurs) + "', '" +
@@ -114,22 +114,22 @@ public class BudgetItem extends Item {
                 generateHowPaid(howPaid) + "', uuid_to_bin('" + idBudget + "')) on duplicate key update " +
                 "category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo + "\", period = '" +
                 generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
-                ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
-                numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" +
-                generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '"
-                + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idBudget = " +
-                "uuid_to_bin('" + idBudget + "')";
+                ", minimumBalance = " + minimumBalance + ", startDate = " + Utility.calendarDateToSqlDateString(startDate) +
+                ", numberOfPayments = " + numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) +
+                ", itemType = '" + generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) +
+                "', howOccurs = '" + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) +
+                "', Budget_idBudget = uuid_to_bin('" + idBudget + "')";
     }
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
         return updateQuery + "category = '" + category + "', payee = \"" + payee + "\", memo = \"" + memo + "\", period = '" +
                 generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
-                ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " +
-                numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" +
-                generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '"
-                + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idBudget = " +
-                "uuid_to_bin('" + idBudget + "') where idBudgetItem = uuid_to_bin('" + id + "')";
+                ", minimumBalance = " + minimumBalance + ", startDate = " + Utility.calendarDateToSqlDateString(startDate) +
+                ", numberOfPayments = " + numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) +
+                ", itemType = '" + generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) +
+                "', howOccurs = '" + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) +
+                "', Budget_idBudget = uuid_to_bin('" + idBudget + "') where idBudgetItem = uuid_to_bin('" + id + "')";
     }
 
     @Override
@@ -261,6 +261,7 @@ public class BudgetItem extends Item {
                 this.period = budgetItem.getPeriod();
                 this.amount = budgetItem.getAmount();
                 this.runningBalance = budgetItem.getRunningBalance();
+                this.minimumBalance = budgetItem.getMinimumBalance();
                 this.startDate = budgetItem.getStartDate();
                 this.endDate = budgetItem.getEndDate();
                 this.numberOfPayments = budgetItem.getNumberOfPayments();
@@ -293,6 +294,7 @@ public class BudgetItem extends Item {
             period = parsePeriodType(rs.getString("bi.period"));
             amount = rs.getDouble("bi.amount");
             runningBalance = rs.getDouble("bi.runningBalance");
+            minimumBalance = rs.getDouble("bi.minimumBalance");
             startDate = Utility.localDateToCalendarDate(rs.getObject("bi.startDate", LocalDate.class));
             endDate = Utility.localDateToCalendarDate(rs.getObject("bi.endDate", LocalDate.class));
             numberOfPayments = rs.getInt("bi.numberOfPayments");
@@ -463,6 +465,7 @@ public class BudgetItem extends Item {
         setPeriod(parsePeriodType(record.get(Headers.PERIOD)));
         setAmount(Double.parseDouble(record.get(Headers.AMOUNT)));
         setRunningBalance(Double.parseDouble(record.get(Headers.RUNNING_BALANCE)));
+        setMinimumBalance(Double.parseDouble(record.get(Headers.MINIMUM_BALANCE)));
         Calendar tempDate = Calendar.getInstance();
         tempDate.setTime(sdfMDY.parse(record.get(Headers.START_DATE)));
         setStartDate(tempDate);
@@ -500,21 +503,22 @@ public class BudgetItem extends Item {
         budgetItem.setPeriod(parsePeriodType(values[3]));
         budgetItem.setAmount(Double.parseDouble(values[4]));
         budgetItem.setRunningBalance(Double.parseDouble(values[5]));
+        budgetItem.setMinimumBalance(Double.parseDouble(values[6]));
         Calendar tempDate = Calendar.getInstance();
-        tempDate.setTime(sdfMDY.parse(values[6]));
+        tempDate.setTime(sdfMDY.parse(values[7]));
         budgetItem.setStartDate(tempDate);
-        budgetItem.setNumberOfPayments(Integer.parseInt(values[7]));
-        if (isNotNullOrEmpty(values[8])) {
-            tempDate.setTime(sdfMDY.parse(values[8]));
+        budgetItem.setNumberOfPayments(Integer.parseInt(values[8]));
+        if (isNotNullOrEmpty(values[9])) {
+            tempDate.setTime(sdfMDY.parse(values[9]));
         } else {
             tempDate = null;
         }
         budgetItem.setEndDate(tempDate);
-        budgetItem.setItemType(parseItemType(values[9]));
-        budgetItem.setHowImportant(parseHowImportant(values[10]));
-        budgetItem.setHowOccurs(parseHowOccurs(values[11]));
-        budgetItem.setHowPaid(parseHowPaid(values[12]));
-        Budget budget = Budget.getByName(values[13]);
+        budgetItem.setItemType(parseItemType(values[10]));
+        budgetItem.setHowImportant(parseHowImportant(values[11]));
+        budgetItem.setHowOccurs(parseHowOccurs(values[12]));
+        budgetItem.setHowPaid(parseHowPaid(values[13]));
+        Budget budget = Budget.getByName(values[14]);
         budgetItem.setIdBudget(budget.getId());
 
         System.out.println("Created new budget item " + budgetItem.toString());
@@ -541,11 +545,12 @@ public class BudgetItem extends Item {
 
         String query = updateQuery + "category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo +
                 "\", period = '" + generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " +
-                runningBalance + ", startDate = " + Utility.calendarDateToSqlDateString(startDate) + ", " +
-                "numberOfPayments = " + numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) +
-                ", itemType = '" + generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant)
-                + "', howOccurs = '" + generateHowOccurs(howOccurs) + "', howPaid = '" + generateHowPaid(howPaid) +
-                "', Budget_idbudget = uuid_to_bin('" + idBudget + "') where idBudgetItem = uuid_to_bin('" + id + "')";
+                runningBalance + ", minimumBalance = " + minimumBalance + ", startDate = " +
+                Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments +
+                ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" + generateItemType(itemType) +
+                "', howImportant = '" + generateHowImportant(howImportant) + "', howOccurs = '" + generateHowOccurs(howOccurs) +
+                "', howPaid = '" + generateHowPaid(howPaid) + "', Budget_idbudget = uuid_to_bin('" + idBudget + "') " +
+                "where idBudgetItem = uuid_to_bin('" + id + "')";
 
         Statement statement = null;
         try {
@@ -591,14 +596,19 @@ public class BudgetItem extends Item {
      * method is useful to get a filtered list of budget items that does not include any of the ones that are no
      * longer in use.
      *
-     * @param date The for which the budget items must be valid (unexpired).
+     * @param date   The for which the budget items must be valid (unexpired).
+     * @param budget
      * @return A result set of budget items that does not include any expired budget items.
      * @throws EntityException
      */
-    public static ResultSet getAllUnexpiredBudgetItems(Calendar date) throws EntityException {
+    public static ResultSet getAllUnexpiredBudgetItems(Calendar date, Budget budget) throws EntityException {
 
-        String query = getSelectQuery() + " where endDate is null or endDate >= " +
-                Utility.calendarDateToSqlDateString(date) + "order by category, payee";
+        String query = getSelectQuery() +
+                " where " +
+                    "Budget_idBudget = uuid_to_bin('" + budget.getId() + "') and " +
+                    "endDate is null or endDate >= " + Utility.calendarDateToSqlDateString(date) + " " +
+                "order by " +
+                    "category, payee";
         return EntityInt.getRS(query, "getting the budget items for a MTD spending report");
 
     }

@@ -13,10 +13,7 @@ import com.hixon.financialApp.model.user.UserResource;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
-import com.hixon.financialApp.view.text.OverdueItemsReport;
-import com.hixon.financialApp.view.text.TrackingItemsOfInterestReport;
-import com.hixon.financialApp.view.text.UpcomingItemsOfInterestReport;
-import com.hixon.financialApp.view.text.UpcomingItemsReport;
+import com.hixon.financialApp.view.text.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -81,33 +78,34 @@ public class CsvForecastView extends AbstractForecastView {
     * Main methods:
     */
    @Override
-   public void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException {
+   public void openLongTermForecastOutput(String reportType) throws FileNotFoundException, UnsupportedEncodingException {
 
    }
 
    @Override
-   protected void renderLongTermForecastFrontMatter() {
+   protected void renderLongTermForecastFrontMatter(String reportType) {
 
    }
 
    @Override
-   public void renderMonthHeader(Calendar plannedDate, double runningBalance) {
+   public void renderLongTermForecastMonthHeader(String reportType, Calendar plannedDate, double runningBalance) {
 
    }
 
    @Override
-   public void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit) throws EntityException,
+   public int renderLongTermForecastTransaction(String reportType, ForecastTransaction forecastTransaction, double credit,
+                                                double debit) throws EntityException,
            SQLException, ForecastException, BudgetException {
+      return 0;
+   }
+
+   @Override
+   protected void renderLongTermForecastBackMatter(String reportType) {
 
    }
 
    @Override
-   protected void renderLongTermForecastBackMatter() {
-
-   }
-
-   @Override
-   protected void closeLongTermForecastOutput() {
+   protected void closeLongTermForecastOutput(String reportType) {
 
    }
 
@@ -294,5 +292,10 @@ public class CsvForecastView extends AbstractForecastView {
          ve.initCause(e);
          throw ve;
       }
+   }
+
+   @Override
+   public EnvelopeReport getEnvelopeReport(Forecast forecast, List<Entity> items, File reportFile) throws FileNotFoundException {
+      return null;
    }
 }

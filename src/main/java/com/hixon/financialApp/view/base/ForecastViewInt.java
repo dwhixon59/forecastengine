@@ -52,4 +52,12 @@ public interface ForecastViewInt {
     // Render upcoming items report for a specific user to a specific file:
     boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
 
+    // Render the envelope report for all users:
+    List<UserResource> renderEnvelopeReport(Forecast forecast) throws EntityException, ViewException, Exception, BudgetException, RegisterException;
+
+    // Render the envelope report for a specific user:
+    UserResource renderEnvelopeReport(Forecast forecast, User user) throws Exception;
+
+    // Render the envelope report for a specific user to a specific file:
+    boolean renderEnvelopeReport(Forecast forecast, User user, File file) throws Exception;
 }

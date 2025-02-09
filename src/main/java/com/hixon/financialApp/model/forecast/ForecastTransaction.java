@@ -1,7 +1,6 @@
 package com.hixon.financialApp.model.forecast;
 
 import com.hixon.financialApp.model.budget.BudgetException;
-import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.ItemOfInterest;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -67,7 +66,6 @@ public class ForecastTransaction extends IndependentEntity {
 
     // A pointer to the next transaction in the list of significant transactions:
     protected ForecastTransaction nextSignificantEvent = null;
-
 
     /*
      * Getters and setters:
@@ -428,6 +426,48 @@ public class ForecastTransaction extends IndependentEntity {
                 "get a list of Forecast Transactions by date.");
 
         return new ForecastTransactionDatabaseIterator(rs);
+    }
+
+    /**
+     * Get the list of goals for a particular envelope.  Envelopes are forecast items in an envelope type register. Goals
+     * are forecast transactions for a particular forecast item that are in the future and have a negative amount.
+     *
+     * @param envelope The envelope to get the goals for.
+     * @param reportDate The date after which is considered the future from the perspective af goals.
+     * @return A list of goals (forecast transaction in the future with negative amounts).                                  .
+     */
+    public static List<ForecastTransaction> getGoalsForEnvelope(ForecastItem envelope, Calendar reportDate)
+            throws ForecastException, EntityException {
+
+        // Get a ResultSet of forecast transactions for the envelope:
+        String selectQuery =
+                getSelectQuery() + " " +
+                "where " +
+                    "ft.remainingAmount < 0 + and " +
+                    "ft.plannedDate > " + calendarDateToSqlDateString(reportDate) + " and " +
+                    "ft.ForecastItem_idForecastItem = uuid_to_bin('" + envelope.getId() + "') " +
+                "order by " +
+                    "ft.plannedDate asc ";
+        ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
+                "get a list of goas for the envelope " + envelope.toStringVeryConcise() + ".");
+
+        // Create a list of goals:
+        List<ForecastTransaction> goals = new ArrayList<>();
+        try {
+            while (rs.next()) {
+                goals.add(new ForecastTransaction(rs));
+            }
+        } catch (SQLException e) {
+            // Create a forecast exception and log the error:
+            String message = "Database error occurred attempting to get a list of goals for the envelope " +
+                    envelope.toStringVeryConcise() + ".";
+            //logger.error(message);
+            ForecastException forecastException = new ForecastException(message);
+            forecastException.initCause(e);
+            throw forecastException;
+        }
+
+        return goals;
     }
 
 
@@ -813,11 +853,11 @@ public class ForecastTransaction extends IndependentEntity {
 
                             // Roll up the expired items into the current item and mark them expired:
                             do {
-                                // The budget item contains the running balance, so add this forecast transaction to it:
-                                BudgetItem budgetItem = forecastItem.getBudgetItem();
-                                budgetItem.setRunningBalance(budgetItem.getRunningBalance() +
+                                // The forecast item contains the current envelope balance, so add this forecast
+                                // transaction to it:
+                                forecastItem.setRunningBalance(forecastItem.getRunningBalance() +
                                         forecastTransaction.getRemainingAmount());
-                                budgetItem.save(UPDATE);
+                                forecastItem.save(UPDATE);
 
                                 // and zero out the forecast transaction:
                                 forecastTransaction.setRemainingAmount(0);
@@ -1121,7 +1161,7 @@ public class ForecastTransaction extends IndependentEntity {
         }
     }
 
-    public static List<Entity> getOverdueItems(User user) throws SQLException, EntityException, ForecastException,
+    public static List<Entity> getOverdueItems(User user, Forecast forecast) throws SQLException, EntityException, ForecastException,
             BudgetException {
 
         // Get a result set from the database for the overdue items.  Overdue items are unreconciled items that are
@@ -1132,7 +1172,8 @@ public class ForecastTransaction extends IndependentEntity {
                         "from forecast_transaction ft inner join forecast_item fi " +
                         "on ft.ForecastItem_idForecastItem = fi.idForecastItem" +
                         " where plannedDate < " + calendarDateToSqlDateString(currentDate) +
-                        " and remainingAmount <> 0";
+                        " and remainingAmount <> 0" +
+                        " and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') ";
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
                 "get a list of overdue Forecast Transactions.");
 

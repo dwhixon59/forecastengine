@@ -35,33 +35,33 @@ public class ForecastView extends AbstractForecastView {
     }
 
     @Override
-    protected void openLongTermForecastOutput() throws FileNotFoundException, UnsupportedEncodingException {
+    protected void openLongTermForecastOutput(String reportType) throws FileNotFoundException, UnsupportedEncodingException {
 
     }
 
     @Override
-    protected void renderLongTermForecastFrontMatter() {
+    protected void renderLongTermForecastFrontMatter(String reportType) {
 
     }
 
     @Override
-    protected void renderMonthHeader(Calendar plannedDate, double runningBalance) {
+    protected void renderLongTermForecastMonthHeader(String reportType, Calendar plannedDate, double runningBalance) {
 
     }
 
     @Override
-    protected void renderForecastTransaction(ForecastTransaction forecastTransaction, double credit, double debit)
+    protected int renderLongTermForecastTransaction(String reportType, ForecastTransaction forecastTransaction, double credit, double debit)
             throws EntityException, SQLException, ForecastException, BudgetException {
+        return 0;
+    }
+
+    @Override
+    protected void renderLongTermForecastBackMatter(String reportType) {
 
     }
 
     @Override
-    protected void renderLongTermForecastBackMatter() {
-
-    }
-
-    @Override
-    protected void closeLongTermForecastOutput() {
+    protected void closeLongTermForecastOutput(String reportType) {
 
     }
 
@@ -99,4 +99,12 @@ public class ForecastView extends AbstractForecastView {
             throws FileNotFoundException {
         return new UpcomingItemsReport(forecast, items, reportFile);
     }
+
+    @Override
+    public EnvelopeReport getEnvelopeReport(Forecast forecast, List<Entity> items, File reportFile)
+            throws FileNotFoundException {
+        return new EnvelopeReport(forecast, Calendar.getInstance(), reportFile);
+    }
+
+
 }

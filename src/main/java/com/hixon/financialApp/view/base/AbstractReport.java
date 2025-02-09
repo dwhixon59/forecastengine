@@ -38,7 +38,7 @@ public abstract class AbstractReport extends AbstractView implements ViewReportI
     }
 
     @Override
-    public void renderItemRow(Entity item) throws EntityException, ForecastException, SQLException, BudgetException, RegisterException {
+    public void renderItemRow(Entity item) throws Exception {
 
     }
 

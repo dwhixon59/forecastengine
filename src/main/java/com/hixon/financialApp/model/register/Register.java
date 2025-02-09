@@ -33,6 +33,7 @@ public class Register extends IndependentEntity {
      */
     private String name = null;
     private String accountType = null;
+    private String default_view;
     private String accountNumber = null;
     private double balance = 0;
     @Getter
@@ -51,7 +52,6 @@ public class Register extends IndependentEntity {
     private List<Transaction> significantEvents = new ArrayList<>();
     protected ViewInt view = null;
     protected NotificationServiceInt notificationService = null;
-
 
 
     /*
@@ -75,12 +75,13 @@ public class Register extends IndependentEntity {
         this.accountType = accountType;
     }
 
+    public String getReportType() {return default_view;}
+    public void setDefaultView(String default_view) {this.default_view = default_view;}
+
     public String getAccountNumber() {
         return accountNumber;
     }
-    public void setAccountNumber(String accountNumber) {
-        this.accountNumber = accountNumber;
-    }
+    public void setAccountNumber(String accountNumber) {this.accountNumber = accountNumber;}
 
     public double getBalance() {
         return balance;
@@ -160,7 +161,7 @@ public class Register extends IndependentEntity {
      * Database CRUD methods:
      */
     private static final String selectQuery = "select bin_to_uuid(r.idRegister) as 'r.idRegister', r.name as 'r.name', " +
-            "r.account_type as 'r.account_type', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
+            "r.account_type as 'r.account_type', r.default_view as 'default_view', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
             "r.skippedAmount as 'r.skippedAmount', r.financialInstitution as 'r.financialInstitution', " +
             "r.trxImportFileName as 'r.trxImportFileName', r.trxImportFileDirectory as 'r.trxImportFileDirectory', " +
             "r.provisionalTrxFileName as 'r.provisionalTrxFileName', r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', " +
@@ -188,11 +189,11 @@ public class Register extends IndependentEntity {
     }
 
     public String getUpdateClause() {
-        return "name = '" + name + "', account_type = '" + accountType + "', account_number = '" + accountNumber +
-                "', balance = " + balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" +
-                financialInstitution + "', trxImportFileName = '"  + trxImportFileName + "', trxImportFileDirectory = '" +
-                Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
-                provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
+        return "name = '" + name + "', account_type = '" + accountType + "', default_view = '" + default_view +
+                "', account_number = '" + accountNumber + "', balance = " + balance + ", skippedAmount = " +
+                skippedAmount + ", financialInstitution = '" + financialInstitution + "', trxImportFileName = '"  +
+                trxImportFileName + "', trxImportFileDirectory = '" + Utility.doubleBackSlashes(trxImportFileDirectory) +
+                "', provisionalTrxFileName = '" + provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
                 Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget
                 + "') where idRegister = uuid_to_bin('" + id + "')";
     }
@@ -232,6 +233,7 @@ public class Register extends IndependentEntity {
                 this.id = UUID.fromString(rs.getString("r.idRegister"));
                 this.name = rs.getString("r.name");
                 this.accountType = rs.getString("r.account_type");
+                this.default_view = rs.getString("r.default_view");
                 this.accountNumber = rs.getString("r.account_number");
                 this.balance = rs.getDouble("r.balance");
                 this.skippedAmount = rs.getDouble("r.skippedAmount");
@@ -364,7 +366,7 @@ public class Register extends IndependentEntity {
         // Get a results set of the transactions that haven't been reported on before:
         ResultSet rs = Transaction.getNewTransactions(register);
 
-        // Then for each transactions in the result set:
+        // Then for each transaction in the result set:
         while (rs.next()) {
 
             // add it to the list of new transactions:
@@ -375,7 +377,7 @@ public class Register extends IndependentEntity {
     }
 
     /**
-     * Set the isNew flag for transactions in this register to false to reflect that the transactions have all been
+     * Set the isNew flag for transactions in this register too false to reflect that the transactions have all been
      * reported on already.
      */
     public void setTransactionsToNotNew() throws EntityException, RegisterException {
