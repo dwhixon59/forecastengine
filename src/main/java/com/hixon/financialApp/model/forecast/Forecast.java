@@ -15,6 +15,8 @@ import lombok.Getter;
 
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -156,6 +158,9 @@ public class Forecast extends IndependentEntity {
         for (ForecastItem forecastItem : envelopes) {
             envelopesList.add(new Envelope(forecastItem));
         }
+
+        // Sort the envelopes by name:
+        envelopesList.sort(Comparator.comparing(Envelope::getName));
 
         return envelopesList;
     }
@@ -517,7 +522,12 @@ public class Forecast extends IndependentEntity {
      * @return The number of months remaining.
      */
     public double getMonthsRemaining(Calendar startDate) {
-        return ChronoUnit.MONTHS.between(startDate.toInstant(), this.endDate.toInstant());
+        // Convert Calendar to YearMonth
+        YearMonth startYearMonth = YearMonth.from(startDate.toInstant().atZone(ZoneId.systemDefault()));
+        YearMonth endYearMonth = YearMonth.from(this.endDate.toInstant().atZone(ZoneId.systemDefault()));
+
+        // Calculate the difference in months
+        return ChronoUnit.MONTHS.between(startYearMonth, endYearMonth);
     }
 
     /**

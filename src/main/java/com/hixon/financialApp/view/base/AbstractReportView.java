@@ -15,12 +15,16 @@ import java.util.List;
 /**
  * The AbstractReport class contains the code that is common to all reports.  For example all reports are a formatted
  * list of items, so this class contains a list of items.  The class also implements the view report interface
- * {@link ViewReportInt} that is the basis of the generic report rendering class and provides default implementations of
+ * {@link ReportRendererInt} that is the basis of the generic report rendering class and provides default implementations of
  * all the methods is the interface so that sub classes only have to implement the methods that they need to.
  */
-public abstract class AbstractReport extends AbstractView implements ViewReportInt {
+public abstract class AbstractReportView extends AbstractView implements ReportRendererInt {
 
     protected final List<Entity> items;
+
+    protected AbstractReportView(List<Entity> items) {
+        this.items = items;
+    }
 
     @Override
     public void openReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException {
@@ -43,7 +47,7 @@ public abstract class AbstractReport extends AbstractView implements ViewReportI
     }
 
     @Override
-    public void renderSummaryRow() {
+    public void renderSummaryRow() throws Exception {
 
     }
 
@@ -57,12 +61,8 @@ public abstract class AbstractReport extends AbstractView implements ViewReportI
 
     }
 
-    protected AbstractReport(List<Entity> items) {
-        this.items = items;
-    }
-
     @Override
-    public List<Entity> getItems() {
+    public List<Entity> getItems() throws Exception {
         return items;
     }
 

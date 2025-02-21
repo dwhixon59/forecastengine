@@ -8,7 +8,7 @@ import com.hixon.financialApp.view.ViewException;
 
 import java.util.List;
 
-public class Renderer<T extends ViewReportInt> {
+public class ReportRenderer<T extends ReportRendererInt> {
 
     /*
      * Fields:
@@ -19,7 +19,7 @@ public class Renderer<T extends ViewReportInt> {
     /*
      * Constructors:
      */
-    public Renderer(T reportObject) {
+    public ReportRenderer(T reportObject) {
         this.reportObject = reportObject;
     }
 

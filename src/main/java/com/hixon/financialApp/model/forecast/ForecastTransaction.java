@@ -235,6 +235,7 @@ public class ForecastTransaction extends IndependentEntity {
         this.remainingAmount = forecastTransaction.getRemainingAmount();
         this.runningBalance = forecastTransaction.getRunningBalance();
         this.idForecastItem = forecastTransaction.getIdForecastItem();
+        this.version = Calendar.getInstance();
         copyDate(forecastTransaction.getVersion(), this.version);
         this.forecastItem = forecastTransaction.getForecastItem();
     }
@@ -429,27 +430,27 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     /**
-     * Get the list of goals for a particular envelope.  Envelopes are forecast items in an envelope type register. Goals
+     * Get the list of goals for a particular forecastItem.  Envelopes are forecast items in an forecastItem type register. Goals
      * are forecast transactions for a particular forecast item that are in the future and have a negative amount.
      *
-     * @param envelope The envelope to get the goals for.
-     * @param reportDate The date after which is considered the future from the perspective af goals.
+     * @param forecastItem The forecastItem to get the goals for.
+     * @param OnOrAfterDate The date after which is considered the future from the perspective af goals.
      * @return A list of goals (forecast transaction in the future with negative amounts).                                  .
      */
-    public static List<ForecastTransaction> getGoalsForEnvelope(ForecastItem envelope, Calendar reportDate)
-            throws ForecastException, EntityException {
+    public static List<ForecastTransaction> getNegativeForecastTransForItemOnOrAfter(ForecastItem forecastItem,
+             Calendar OnOrAfterDate) throws ForecastException, EntityException {
 
-        // Get a ResultSet of forecast transactions for the envelope:
+        // Get a ResultSet of forecast transactions for the forecastItem:
         String selectQuery =
                 getSelectQuery() + " " +
                 "where " +
-                    "ft.remainingAmount < 0 + and " +
-                    "ft.plannedDate > " + calendarDateToSqlDateString(reportDate) + " and " +
-                    "ft.ForecastItem_idForecastItem = uuid_to_bin('" + envelope.getId() + "') " +
+                    "ft.remainingAmount < 0 and " +
+                    "ft.plannedDate > " + calendarDateToSqlDateString(OnOrAfterDate) + " and " +
+                    "ft.ForecastItem_idForecastItem = uuid_to_bin('" + forecastItem.getId() + "') " +
                 "order by " +
                     "ft.plannedDate asc ";
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
-                "get a list of goas for the envelope " + envelope.toStringVeryConcise() + ".");
+                "get a list of goas for the forecastItem " + forecastItem.toStringVeryConcise() + ".");
 
         // Create a list of goals:
         List<ForecastTransaction> goals = new ArrayList<>();
@@ -459,8 +460,8 @@ public class ForecastTransaction extends IndependentEntity {
             }
         } catch (SQLException e) {
             // Create a forecast exception and log the error:
-            String message = "Database error occurred attempting to get a list of goals for the envelope " +
-                    envelope.toStringVeryConcise() + ".";
+            String message = "Database error occurred attempting to get a list of goals for the forecastItem " +
+                    forecastItem.toStringVeryConcise() + ".";
             //logger.error(message);
             ForecastException forecastException = new ForecastException(message);
             forecastException.initCause(e);
@@ -606,13 +607,17 @@ public class ForecastTransaction extends IndependentEntity {
     public String toString() {
         String s;
         try {
-            s = "Forecast Transaction:  \n\tPlanned Date = " + calendarDateToStringDate(this.getPlannedDate()) +
-                    ", \n\tCategory = " + this.getForecastItem().getCategory() +
-                    ", \n\tPayee =  " + this.getForecastItem().getPayee() + ", \n\tBudgeted Amount = " +
-                    formatDollarAmount(forecastItem.getAmount()) + ", \n\tRemaining Amount = " +
-                    formatDollarAmount(remainingAmount) + ", \n\tFirst occurrence = " + firstOccurrence + ", \n\tfound = "
-                    + found + ", \n\tForecast transaction - ID = " + this.getId().toString() + ", \n\tNext significant event = " +
-                    this.getNextSignificantEvent();
+            s = "Forecast Transaction:  \n\tPlanned Date = " + calendarDateToStringDate(getPlannedDate()) +
+                    ", \n\tCategory = " + getForecastItem().getCategory() +
+                    ", \n\tPayee =  " + getForecastItem().getPayee() +
+                    ", \n\tForcast Item Memo =  " + getForecastItem().getMemo() +
+                    ", \n\tMemo =  " + getMemo() +
+                    ", \n\tBudgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) +
+                    ", \n\tRemaining Amount = " + formatDollarAmount(remainingAmount) +
+                    ", \n\tFirst occurrence = " + firstOccurrence +
+                    ", \n\tfound = " + found +
+                    ", \n\tForecast transaction - ID = " + this.getId().toString() +
+                    ", \n\tNext significant event = " + this.getNextSignificantEvent();
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }

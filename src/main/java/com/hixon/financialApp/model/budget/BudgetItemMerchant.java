@@ -33,18 +33,6 @@ public class BudgetItemMerchant extends DependentEntity {
    private static final String insertQuery = "insert into budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
 
-   private static final String selectItemsForMerchantQuery =
-           "select bin_to_uuid(bi.idBudgetItem) as 'bi.idBudgetItem', bi.category as 'bi.category', " +
-                   "bi.payee as 'bi.payee', bi.memo as 'bi.memo', bi.period as 'bi.period', bi.amount as 'bi.amount', " +
-                   "bi.runningBalance as 'bi.runningBalance', bi.startDate as 'bi.startDate', " +
-                   "bi.numberOfPayments as 'bi.numberOfPayments', bi.endDate as 'bi.endDate', bi.ItemType as 'bi.itemType', " +
-                   "bi.howImportant as 'bi.howImportant', bi.howOccurs as 'bi.howOccurs', bi.howPaid as 'bi.howPaid', " +
-                   "bin_to_uuid(bi.Budget_idBudget) as 'bi.idBudget', bm.amount as 'bm.amount', " +
-                   "bm.percentage as 'bm.percentage' " +
-           "from budget_item bi " +
-                   "inner join budgetitem_merchant bm on bi.idBudgetItem = bm.BudgetItem_idBudgetItem " +
-                   "inner join budget b on bi.Budget_idBudget = b.idBudget ";
-
 
    /*
     * Getters and setters for BudgetItemMerchant:
@@ -112,6 +100,14 @@ public class BudgetItemMerchant extends DependentEntity {
    @Override
    public String getDeleteByIdQuery() {
       return null;
+   }
+
+   public static String getItemsForMerchantQuery() {
+
+      return "select " + BudgetItem.getSelectColumns() + ", bm.amount as 'bm.amount', bm.percentage as 'bm.percentage' " +
+              "from budget_item bi " +
+              "inner join budgetitem_merchant bm on bi.idBudgetItem = bm.BudgetItem_idBudgetItem " +
+              "inner join budget b on bi.Budget_idBudget = b.idBudget ";
    }
 
    @Override
@@ -247,7 +243,7 @@ public class BudgetItemMerchant extends DependentEntity {
            BudgetException {
 
       // Find out what budget items are associated with the given merchant in the given budget:
-      String query = selectItemsForMerchantQuery + "where b.idBudget = uuid_to_bin('" + budget.getId() +
+      String query = getItemsForMerchantQuery() + "where b.idBudget = uuid_to_bin('" + budget.getId() +
               "') and bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "') order by payee ";
       try {
          Statement statement = Utility.getDbConnection().createStatement();
@@ -273,7 +269,7 @@ public class BudgetItemMerchant extends DependentEntity {
 
       // Find out what budget items are associated with the given merchant in the given budget:
       String query =
-              selectItemsForMerchantQuery +
+              getItemsForMerchantQuery() +
               "where " +
                       "b.idBudget = uuid_to_bin('" + budget.getId() + "') and " +
                       "bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "') and " +
@@ -302,7 +298,7 @@ public class BudgetItemMerchant extends DependentEntity {
 
       // Find out what expired budget items are associated with the given merchant in the given budget:
       String query =
-              selectItemsForMerchantQuery +
+              getItemsForMerchantQuery() +
                       "where " +
                       "b.idBudget = uuid_to_bin('" + budget.getId() + "') and " +
                       "bm.Merchant_idMerchant = uuid_to_bin('" + merchant.getId() + "') and " +

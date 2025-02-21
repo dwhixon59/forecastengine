@@ -2,7 +2,7 @@ package com.hixon.financialApp.view.text;
 
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.view.ViewException;
-import com.hixon.financialApp.view.base.AbstractReport;
+import com.hixon.financialApp.view.base.AbstractReportView;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 
@@ -15,7 +15,7 @@ import java.util.List;
  * member variables for a {@link PrintWriter} and a {@link File}.  It also contains various constants useful for
  * formatting text.
  */
-public class TextReport extends AbstractReport {
+public class TextReport extends AbstractReportView {
 
     /*
      * Constants:

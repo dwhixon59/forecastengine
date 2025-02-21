@@ -1,8 +1,8 @@
 package com.hixon.financialApp.model.forecast;
 
+import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.model.register.Transaction;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,6 +15,7 @@ import java.util.List;
  * for handling envelopes within a forecast.
  */
 public class Envelope extends ForecastItem {
+
 
     /**
      * Constructs an Envelope object from a ResultSet.
@@ -30,7 +31,7 @@ public class Envelope extends ForecastItem {
     /**
      * Constructs an Envelope object from a ForecastItem.
      */
-    public Envelope(ForecastItem item) {
+    public Envelope(ForecastItem item) throws Exception {
         super(item);
     }
 
@@ -39,9 +40,24 @@ public class Envelope extends ForecastItem {
         return getPayee();
     }
 
+    // Get the contribution amount for the envelope:
+    public double getContributionAmount() {
+        return getAmount();
+    }
+
+    // Get the envelope balance:
+    public double getEnvelopeBalance() {
+        return getRunningBalance();
+    }
+
     // Get the buffer amount for the envelope:
-    public double getBufferAmount() {
+    public double getBufferTarget() {
         return getMinimumBalance();
+    }
+
+    // Retrieve the new transactions for this envelope from the database:
+    public List<Transaction> getNewTransactions() throws Exception {
+        return  TransactionSplit.getNewTransactionsForBudgetItem(getBudgetItem());
     }
 
     /**
@@ -53,18 +69,17 @@ public class Envelope extends ForecastItem {
      * @throws EntityException if an entity-related error occurs
      */
     public List<Goal> getGoals(Calendar reportDate) throws Exception {
-        String query =
-                ForecastTransaction.getSelectQuery() + " " +
-                 "WHERE " +
-                    "ForecastItem_idForecastItem = uuid_to_bin('" + idForecast + "') AND " +
-                    "remainingAmount < 0 AND plannedDate > " + Utility.calendarDateToSqlDateString(reportDate) +
-                " ORDER BY " +
-                    "plannedDate";
-        ResultSet rs = EntityInt.getRS(query, "retrieve goals for envelope " + toStringVeryConcise());
+
+        // Retrieve the forecast transactions for this envelope that are in the future and have a negative amount:
+        List<ForecastTransaction> forecastTransactions =
+                ForecastTransaction.getNegativeForecastTransForItemOnOrAfter(this, reportDate);
+
+        // Create goals for the forecast transaction and add the goals to the list:
         List<Goal> goals = new ArrayList<>();
-        while (rs.next()) {
-            goals.add(new Goal(rs));
+        for (ForecastTransaction forecastTransaction : forecastTransactions) {
+            goals.add(new Goal(forecastTransaction));
         }
+
         return goals;
     }
 }

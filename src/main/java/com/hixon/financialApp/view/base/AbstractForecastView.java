@@ -110,7 +110,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             throws FileNotFoundException;
 
     public abstract EnvelopeReport getEnvelopeReport(Forecast forecast, List<Entity> items, File reportFile)
-            throws FileNotFoundException;
+            throws Exception;
 
 
     /*
@@ -521,7 +521,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         boolean result = false;
         if (items.size() > 0) {
             TrackingItemsOfInterestReport trackingReport = getTrackingItemsOfInterestReport(user, items, file);
-            Renderer<TrackingItemsOfInterestReport> renderer = new Renderer<>(trackingReport);
+            ReportRenderer<TrackingItemsOfInterestReport> renderer = new ReportRenderer<>(trackingReport);
             renderer.renderReport();
             result = true;
         }
@@ -536,7 +536,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             result = false;
             if (items.size() > 0) {
                 UpcomingItemsOfInterestReport upcomingReport = getUpcomingItemsOfInterestReport(user, items, file);
-                Renderer<UpcomingItemsOfInterestReport> renderer = new Renderer<>(upcomingReport);
+                ReportRenderer<UpcomingItemsOfInterestReport> renderer = new ReportRenderer<>(upcomingReport);
                 renderer.renderReport();
                 result = true;
             }
@@ -604,7 +604,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         boolean result = false;
         if (!items.isEmpty()) {
             UpcomingItemsReport report = getUpcomingItemsReport(forecast, items, file);
-            Renderer<UpcomingItemsReport> renderer = new Renderer<>(report);
+            ReportRenderer<UpcomingItemsReport> renderer = new ReportRenderer<>(report);
             renderer.renderReport();
             result = true;
         }
@@ -660,7 +660,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         boolean result = false;
         if (!items.isEmpty()) {
             OverdueItemsReport report = getOverdueItemsReport(forecast, items, file);
-            Renderer<OverdueItemsReport> renderer = new Renderer<>(report);
+            ReportRenderer<OverdueItemsReport> renderer = new ReportRenderer<>(report);
             renderer.renderReport();
             result = true;
         }
@@ -709,7 +709,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         EnvelopeReport envelopeReport = new EnvelopeReport(forecast, Calendar.getInstance(), file);
 
         // Create a renderer for the report:
-        Renderer<EnvelopeReport> renderer = new Renderer<>(envelopeReport);
+        ReportRenderer<EnvelopeReport> renderer = new ReportRenderer<>(envelopeReport);
 
         // Render the envelope report:
         return renderer.renderReport();

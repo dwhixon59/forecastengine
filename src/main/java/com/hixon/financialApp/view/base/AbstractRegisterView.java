@@ -99,7 +99,7 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
         boolean result = false;
         if (!items.isEmpty()) {
             NewTransactionSummaryReport report = getNewTransactionSummaryReport(register, items, file);
-            Renderer<NewTransactionSummaryReport> renderer = new Renderer<>(report);
+            ReportRenderer<NewTransactionSummaryReport> renderer = new ReportRenderer<>(report);
             renderer.renderReport();
             result = true;
         }

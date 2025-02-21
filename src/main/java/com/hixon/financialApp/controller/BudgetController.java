@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.*;
+import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
 import static com.hixon.financialApp.model.budget.BudgetItemMerchant.isBudgetItemInList;
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 import static com.hixon.financialApp.utility.Utility.stringDateDashToCalendarDate;
@@ -211,7 +211,8 @@ public class BudgetController {
                         )
         ) {
             // Ask the user to enter the splits:
-            getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
+            TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget, forecast, view, notificationService);
+            transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
         }
         else {
             // Track the total of the splits so that we can ensure they splits balance in the end:
@@ -249,7 +250,8 @@ public class BudgetController {
             if (transactionAmount != 0) {
                 view.say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
-                getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
+                TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget, forecast, view, notificationService);
+                transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
             }
         }
         return (splits.isEmpty()) ? null : splits;
@@ -358,292 +360,6 @@ public class BudgetController {
             }
         }
         return month;
-    }
-
-    /**
-     * Interact with the user to confirm or override the budget item amounts and then create splits for them.  Allow the
-     * user to add new budget items and create splits for them as well.
-     *
-     * @param transaction            The transaction to get the splits for.
-     * @param splits                 A list of splits that this function will add the splits to.
-     * @param merchant               The merchant associated with this transaction.
-     * @param budgetItemsForMerchant The budget items associated with the specified merchant.
-     * @param skipAllowed            Is the user allowed to skip assigning splits to this transaction?
-     * @param inquireAllowed         Is the user allowed to send an inquiry for clarification of this transaction?
-     * @throws Exception If there is a problem with the input or the database.
-     */
-    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget
-            budget,
-                          List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
-            throws Exception {
-
-        // There should be at least one budget item.  If there isn't then throw an error:
-        if (budgetItemsForMerchant.isEmpty()) {
-            throw new ViewException("Must be at least one budget item assigned to a transaction to be able to get the " +
-                    "splits for  it.");
-        }
-
-        // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
-        boolean done = false;
-        while (!done) {
-
-            // Assume we will get this done in one iteration:
-            done = true;
-
-            // Show the assigned budget items to the user:
-            showBudgetItemsForMerchant(budgetItemsForMerchant, transaction.getAmount());
-
-            /*
-             * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the
-             * budget items:
-             */
-            // If the amounts are pre-established in the budget item:
-            String[] amounts;
-            if (budgetItemsForMerchant.get(0).getAmount() > 0 || budgetItemsForMerchant.get(0).getPercentage() > 0) {
-
-                // Then ask the user to confirm or override the amounts:
-                amounts = view.getAndParseCsvLine("Enter the split amounts, or just return to accept displayed amounts:",
-                        budgetItemsForMerchant.size(), true, true);
-
-            } else { // the amounts are not pre-established, so ask the user to enter them:
-                amounts = view.getAndParseCsvLine("Enter the split amounts (or a - add, i - inquire, s - skip):  ",
-                        0, false, true);
-            }
-
-            // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
-            // Add a new budget item to the current Merchant:
-            if (amounts[0].equalsIgnoreCase("a")) {
-                try {
-                    assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
-                    done = false;
-                } catch (SkipException se) {
-                    view.say("Skipping this transaction.");
-                    terminationCondition = SKIP;
-                }
-            }
-            // Delete one of the displayed budget items from the merchant for this transaction:
-            else if (amounts[0].equalsIgnoreCase("d")) {
-                view.say("The delete budget item from merchant function has not been implemented yet.");
-                done = false;
-
-                // Send an inquiry to someone as to how to categorize this transaction:
-            } else if (amounts[0].equalsIgnoreCase("i")) {
-                if (inquireAllowed) {
-                    view.say("Sending an inquiry.");
-                    terminationCondition = INQUIRE;
-                } else {
-                    view.say("Inquiry function not allowed at this time.");
-                    done = false;
-                }
-
-                // Skip this transaction for now:
-            } else if (amounts[0].equalsIgnoreCase("s")) {
-                if (skipAllowed) {
-                    view.say("Skipping this transaction.");
-                    terminationCondition = SKIP;
-                } else {
-                    view.say("Skip not allowed at this time.");
-                    done = false;
-                }
-
-                // Create the splits from a sparse list of categories entered by the user as "payee_#:amount":
-            } else if (amounts[0].matches("^[1-9][0-9]*\\s*:(.*)")) {
-                // For each of the payee:amount combinations entered by the user:
-                List<Integer> evenRemainders = new ArrayList<>();
-                List<Integer> apportionedRemainders = new ArrayList<>();
-                List<Integer> addTaxItems = new ArrayList<>();
-                for (int i = 0; i < amounts.length; i++) {
-
-                    // Remove leading and trailing blanks from the amount:
-                    amounts[i] = amounts[i].trim();
-
-                    // Validate that the current amount is indeed a sparse list amount:
-                    if (!amounts[i].matches("^[1-9][0-9]*\\s*:(.*)")) {
-
-                        // The user didn't enter "payee_#:".  Inform them and ask them to re-enter the values:
-                        view.say("The amount " + amounts[i] + " does not start with a number followed by " +
-                                "a colon.  Please re-enter the values");
-                        done = false;
-                        break;
-                    }
-
-                    // Get the number of the budget item from the user entered value:
-                    String itemNumberString = amounts[i].substring(0, amounts[i].indexOf(':')).trim();
-                    int itemNumber = 0;
-                    try {
-                        itemNumber = Integer.parseInt(itemNumberString);
-                        if (itemNumber <= 0 || itemNumber > budgetItemsForMerchant.size()) {
-                            throw new NumberFormatException();
-                        }
-
-                    } catch (NumberFormatException nfe) {
-
-                        // The user didn't enter a valid integer.  Inform them and ask them to re-enter the values:
-                        view.say("The payee number " + itemNumberString + "is not a valid number from the " +
-                                "list.  " + nfe.getMessage() + "  Please re-enter the values");
-                        done = false;
-                        break;
-                    }
-
-                    // If the user specified payee number is not in the list of payees:
-                    if (itemNumber <= 0 || itemNumber > budgetItemsForMerchant.size()) {
-
-                        // Then inform the user and ask them to re-enter the values:
-                        view.say("The payee number " + itemNumberString + "is not in the list.  Please " +
-                                "re-enter the values");
-                        done = false;
-                        break;
-                    }
-
-                    // Get the amount to be assigned to the transaction split for this payee:
-                    String itemAmountString = amounts[i].substring(amounts[i].indexOf(':') + 1).trim();
-
-                    // If there is a memo after the amount:
-                    String memo = null;
-                    if (itemAmountString.contains(" ")) {
-
-                        // then copy it into the memo variable:
-                        memo = itemAmountString.substring(itemAmountString.indexOf(" ") + 1).trim();
-
-                        // and remove it from the item amount string:
-                        itemAmountString = itemAmountString.substring(0, itemAmountString.indexOf(" "));
-                    }
-
-                    // Assign the amount to the split:
-                    double itemAmount = 0;
-
-                    // If the amount is a remainder split:
-                    if (itemAmountString.substring(itemAmountString.length() - 1).equalsIgnoreCase("e")) {
-
-                        // then add this item to the even remainders list:
-                        evenRemainders.add(i);
-
-                        // and trim the 'e' off the end of the amount:
-                        itemAmountString = itemAmountString.substring(0, itemAmountString.length() - 1);
-
-                    } // else if the amount is an apportionment split:
-                    else if (itemAmountString.substring(itemAmountString.length() - 1).equalsIgnoreCase("a")) {
-
-                        // then add this item to the apportionment list:
-                        apportionedRemainders.add(i);
-
-                        // and trim the 'a' off the end of the amount:
-                        itemAmountString = itemAmountString.substring(0, itemAmountString.length() - 1);
-
-                    } // else if we are supposed to add tax to the amount:
-                    else if (itemAmountString.substring(itemAmountString.length() - 1).equalsIgnoreCase("t")) {
-
-                        // then add this item to the add tax list:
-                        addTaxItems.add(i);
-
-                        // and trim the 't' off the end of the amount:
-                        itemAmountString = itemAmountString.substring(0, itemAmountString.length() - 1);
-
-                    }
-
-                    // If there is anything in the amount string assume it is an amount to be assigned to this item:
-                    if (itemAmountString.length() > 0) {
-
-                        // Convert the amount string to a number:
-                        try {
-                            itemAmount = Utility.parseDollarAmount(itemAmountString);
-
-                        } catch (NumberFormatException nfe) {
-
-                            // The user didn't enter a valid dollar amount.  Inform them and ask them to re-enter the values:
-                            view.say("The item amount " + itemAmountString + "is not a valid dollar amount.  " +
-                                    nfe.getMessage() + "  Please re-enter the values");
-                            done = false;
-                            break;
-                        }
-                    }
-
-                    // Add a split for this budget item:
-                    splits.add(new TransactionSplit(itemAmount, budgetItemsForMerchant.get(itemNumber - 1),
-                            transaction, memo));
-                }
-
-                // If there was an error in the format of the sparse category string, the have the user re-enter it:
-                if (!done) {
-                    splits.clear();
-                    continue;
-                }
-
-                // If there is a remainder to split evenly or apportion across the items, or we need to add tax:
-                if (evenRemainders.size() > 0 || apportionedRemainders.size() > 0 || addTaxItems.size() > 0) {
-                    TransactionSplit.splitRemainder(transaction.getAmount(), evenRemainders, apportionedRemainders,
-                            addTaxItems, splits);
-                }
-
-                // Verify that the amounts from the sparse list of payees add up to the transaction total:
-                double totalSplitsAmount = 0;
-                for (TransactionSplit split : splits) {
-                    totalSplitsAmount += split.getAmount();
-                }
-                if (!Utility.isEqualCurrency(transaction.getAmount(), totalSplitsAmount)) {
-
-                    // The user didn't enter a valid dollar amount.  Inform them and ask them to re-enter the values:
-                    view.say("The total of the list of splits entered (" + totalSplitsAmount + ") does not " +
-                            "equal the amount of the transaction (" + transaction.getAmount() + ").    Please re-enter the " +
-                            "values");
-                    splits.clear();
-                    done = false;
-                    continue;
-                }
-
-                // else if the response is a single use category:
-            } else if (amounts[0].matches("[a-zA-Z][a-zA-Z0-9 '()-\\+]+")) {
-                view.say("The allocate, but don't add, function has not been implemented yet.");
-                //String payee = amount.substring(0, amount.indexOf(':') - 1);
-                done = false;
-
-                // else if the response is a number selection and a memo:
-            } else if (amounts[0].matches("^[1-9][0-9]*[\\s]+[^,]*") && amounts.length == 1) {
-                String itemNumberString = amounts[0].substring(0, amounts[0].indexOf(' '));
-                int itemNumber = Integer.parseInt(itemNumberString);
-                String memo = amounts[0].substring(amounts[0].indexOf(' ') + 1);
-                if (itemNumber <= budgetItemsForMerchant.size()) {
-                    splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
-                            transaction, memo));
-                }
-
-                // else if the response is just a number selection:
-            } else if (amounts[0].matches("[1-9][0-9]*") && amounts.length == 1) {
-                int itemNumber = Integer.parseInt(amounts[0]);
-                if (itemNumber <= budgetItemsForMerchant.size()) {
-                    splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
-                            transaction, null));
-                }
-            } else {
-                // Allocate the splits as directed:
-                boolean useEnteredAmounts = amounts.length != 1 || amounts[0].length() != 0;
-                for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
-
-                    double enteredAmount = (useEnteredAmounts) ?
-                            view.getDouble(amounts[i], "Must be a dollar amount.") : 0;
-
-                    // Don't create a split if the user entered zero for this budget item:
-                    if (!useEnteredAmounts || enteredAmount != 0) {
-
-                        // If the splits are not based on percentages, then use amounts:
-                        if (budgetItemsForMerchant.get(i).getPercentage() == 0) {
-                            splits.add(new TransactionSplit(
-                                    (useEnteredAmounts) ? enteredAmount : budgetItemsForMerchant.get(i).getAmount(),
-                                    budgetItemsForMerchant.get(i), transaction,
-                                    null)
-                            );
-                        } else  // use the percentages:
-                        {
-                            splits.add(new TransactionSplit((useEnteredAmounts) ?
-                                    (Integer.parseInt(amounts[i]) / 100) * transaction.getAmount() :
-                                    (budgetItemsForMerchant.get(i).getPercentage() / 100) * transaction.getAmount(),
-                                    budgetItemsForMerchant.get(i), transaction, null)
-                            );
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /**

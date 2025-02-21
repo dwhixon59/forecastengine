@@ -381,8 +381,8 @@ public class Register extends IndependentEntity {
      * reported on already.
      */
     public void setTransactionsToNotNew() throws EntityException, RegisterException {
-        EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery(), "updated the transactions in Register " +
-                name + " to not new.");
+        EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery() + getId() + "')",
+                "updated the transactions in Register " + getName() + " to not new.");
     }
 
     /**

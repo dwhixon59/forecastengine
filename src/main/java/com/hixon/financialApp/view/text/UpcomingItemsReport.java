@@ -78,5 +78,11 @@ public class UpcomingItemsReport extends ForecastReport {
 
         // Output the forecast transaction line:
         pw.println(date + TAB + payee + amountString + TAB + runningBalanceString);
+
+        // Indented under the payee, output the memo:
+        String memo = forecastTransaction.getMemo();
+        if (memo != null && !memo.isEmpty()) {
+            pw.println(TAB + TAB + SPACE + SPACE + SPACE + memo);
+        }
     }
 }

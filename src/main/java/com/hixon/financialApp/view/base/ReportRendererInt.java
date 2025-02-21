@@ -12,7 +12,7 @@ import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.List;
 
-public interface ViewReportInt {
+public interface ReportRendererInt {
 
    void openReportOutput() throws FileNotFoundException, UnsupportedEncodingException, ViewException;
 

@@ -292,8 +292,8 @@ public class ForecastItem extends Item {
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
         return updateQuery + " category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo + "\", " +
-                "period = '" + Item.generatePeriodType(period) + "', amount = " + amount + "', runningBalance = " +
-                runningBalance + "', minimumBalance = " + minimumBalance + ", startDate = " +
+                "period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " +
+                runningBalance + ", minimumBalance = " + minimumBalance + ", startDate = " +
                 Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments +
                 ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemtype = '" +
                 Item.generateItemType(itemType) + "', howImportant = '" + Item.generateHowImportant(howImportant) +
@@ -444,8 +444,9 @@ public class ForecastItem extends Item {
     public static @Nullable ResultSet getAllUsableForecastItemsInForecast(Forecast forecast)
             throws EntityException, BudgetException {
         Calendar today = Calendar.getInstance();
-        String sqlQueryString = getSelectQuery() +
-                " where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+        String sqlQueryString =
+                getSelectQuery() + " " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
                 "and fi.howOccurs <> '" + generateHowOccurs(UNPLANNED) + "' " +
                 "and (fi.endDate is null or fi.endDate >= " + Utility.calendarDateToSqlDateString(today) + ")";
         ResultSet rs = EntityInt.getRS(sqlQueryString, "attempting to get a list of usable forecast items " +
@@ -456,7 +457,7 @@ public class ForecastItem extends Item {
     /**
      * Get a list of usable forecast items in a forecast.
      *
-     * @param forecast The forecast containing the forecast items of iterest.
+     * @param forecast The forecast containing the forecast items of interest.
      * @return a List containing all the forecast items in a forecast.
      */
     public static List<ForecastItem> getListOfAllUsableForecastItemsInForecast(Forecast forecast)

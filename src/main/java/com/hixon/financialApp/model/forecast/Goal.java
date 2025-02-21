@@ -24,13 +24,22 @@ public class Goal extends ForecastTransaction {
     }
 
     /**
+     * Constructs a Goal object from a ForecastTransaction.
+     *
+     * @param forecastTransaction the ForecastTransaction to be converted to a Goal
+     */
+    public Goal(ForecastTransaction forecastTransaction) throws Exception {
+        super(forecastTransaction);
+    }
+
+    /**
      * Gets the description of the goal.
      *
      * @return the description of the goal
      * @throws Exception if an error occurs
      */
     public String getDescription() throws Exception {
-        return getForecastItem().getPayee();
+        return memo;
     }
 
     /**

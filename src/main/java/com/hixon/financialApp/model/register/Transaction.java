@@ -102,7 +102,7 @@ public class Transaction extends IndependentEntity {
             "update transaction set ";
 
     public static String getUpdateIsNewQuery() {
-        return "update transaction set isNew = false ";
+        return "update transaction set isNew = false where register_idRegister = uuid_to_bin('";
     }
 
 

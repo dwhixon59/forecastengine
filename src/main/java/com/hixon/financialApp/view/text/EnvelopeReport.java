@@ -1,122 +1,101 @@
 package com.hixon.financialApp.view.text;
 
+import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.forecast.Envelope;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.Goal;
+import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.ViewReportInt;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-public class EnvelopeReport implements ViewReportInt {
+public class EnvelopeReport extends ForecastReport {
 
-    private final Forecast forecast;
     private final Calendar reportDate;
-    private final StringBuilder report;
 
-    public EnvelopeReport(Forecast forecast, Calendar reportDate, File reportFile) {
-        this.forecast = forecast;
+    public EnvelopeReport(Forecast forecast, Calendar reportDate, File reportFile) throws Exception {
+        super(forecast, new ArrayList<Entity>(forecast.getEnvelopes()), reportFile);
         this.reportDate = reportDate;
-        this.report = new StringBuilder();
-    }
-
-    @Override
-    public void openReportOutput() {
-        // No file output needed for text message
     }
 
     @Override
     public void renderReportFrontMatter() {
-        report.append("Envelopes (").append(Utility.calendarDateToStringDate(reportDate)).append("):\n\n");
-    }
-
-    @Override
-    public void renderHeaderRow() {
-        // No header row needed for this report
-    }
-
-    @Override
-    public List<Entity> getItems() throws Exception{
-
-        // Get a list of envelopes in the forecast:
-        List<Envelope> envelopes = forecast.getEnvelopes();
-
-        // Return a list of entities:
-        return new ArrayList<>(envelopes);
+        pw.println("Envelopes (" + Utility.calendarDateToStringDate(reportDate) + "):\n");
     }
 
     @Override
     public void renderItemRow(Entity item) throws Exception {
-
         // Output the details of the current envelope:
         Envelope envelope = (Envelope) item;
-        double currentAmount = envelope.getAmount();
-        double buffer = envelope.getBufferAmount();
-        double deficit = buffer - currentAmount;
-        report.append(envelope.getName()).append(": $").append(currentAmount).append(" / $").append(buffer).append("\n");
+        double contributionAmount = envelope.getContributionAmount();
+        double envelopeBalance = envelope.getEnvelopeBalance();
+        double bufferTarget = envelope.getBufferTarget();
+        double deficit = bufferTarget - contributionAmount;
+        pw.println(envelope.getName() + ": $" + envelopeBalance + " ($" + contributionAmount + "/ $" + bufferTarget +
+                " | Deficit: $" + deficit + ")");
 
-        // Retrieve any goals from the database.  A goal is a forecast transaction that is in the future and has a
-        // negative amount.
+        // Retrieve any new transactions for this envelope from the database:
+        List<Transaction> envelopeTransactions = envelope.getNewTransactions();
+
+        // If there are transactions, then output the details of each transaction:
+        if (!envelopeTransactions.isEmpty()) {
+
+            // Output the transactions for the envelope:
+            for (Transaction transaction : envelopeTransactions) {
+
+                // Output the transaction details:
+                pw.println("      " + transaction.toString());
+
+                // Output the splits for the transaction:
+                List<TransactionSplit> transactionSplits = TransactionSplit.getSplitsForTransaction(transaction);
+                if (transactionSplits != null) {
+                    for (TransactionSplit split : transactionSplits) {
+                        pw.println("            " + split.toStringConcise());
+                    }
+                }
+            }
+        }
+
+        // Retrieve any goals from the database. A goal is a forecast transaction that is in the future and has a negative amount.
         List<Goal> envelopeGoals = envelope.getGoals(reportDate);
 
         // If there are goals, then output the details of each goal:
         if (!envelopeGoals.isEmpty()) {
             for (Goal goal : envelopeGoals) {
                 double goalAmount = goal.getAmount();
-                double goalDeficit = goalAmount - currentAmount;
+                double goalDeficit = goalAmount - contributionAmount;
                 double monthlyDeficit = goalDeficit / goal.getMonthsRemaining(reportDate);
-                report.append("  Goal: ").append(goal.getDescription())
-                        .append(" by ")
-                        .append(Utility.calendarDateToStringDate(goal.getGoalDate()))
-                        .append(" | Forecast: $").append(goalAmount).append(" | Deficit: $").append(goalDeficit)
-                        .append(" (Needs +$").append(Math.round(monthlyDeficit)).append("/mo)\n");
+                pw.println("  Goal: " + goal.getDescription() + " on " + Utility.calendarDateToStringDate(goal.getGoalDate()) +
+                        " | Forecast: $" + goalAmount + " | Deficit: $" + goalDeficit + " (Needs +$" + Math.round(monthlyDeficit) + "/mo)");
             }
         } else {
-            if (currentAmount < buffer) {
-                double monthlyAddition = (buffer - currentAmount) / forecast.getMonthsRemaining(reportDate);
-                report
-                    .append("  Buffer $")
-                    .append(buffer).append(" (Below cushion - add $")
-                    .append(Math.round(monthlyAddition)).append("/mo)\n")
-                ;
+            if (contributionAmount < bufferTarget) {
+                double monthlyAddition = (bufferTarget - envelopeBalance) / forecast.getMonthsRemaining(reportDate);
+                pw.println("  Buffer $" + bufferTarget + " (Below cushion - add $" + Math.round(monthlyAddition) + "/mo)");
             }
         }
-        report.append("\n");
+        pw.println();
     }
 
     @Override
     public void renderSummaryRow() throws Exception {
         double totalAmount = forecast.getEnvelopes()
                 .stream()
-                .mapToDouble(Envelope::getAmount) // Fixed incorrect method call syntax
+                .mapToDouble(Envelope::getAmount)
                 .sum();
 
         double totalBuffer = forecast.getEnvelopes()
                 .stream()
-                .mapToDouble(Envelope::getBufferAmount)
+                .mapToDouble(Envelope::getMinimumBalance)
                 .sum();
 
         double totalDeficit = totalBuffer - totalAmount;
 
-        report.append("-----------------------------\n");
-        report.append("Total: $").append(totalAmount).append(" / $").append(totalBuffer).append(" (Below cushion and deficit - $").append(totalDeficit).append(")");
-    }
-
-    @Override
-    public void renderReportBackMatter() {
-        // No back matter needed for this report
-    }
-
-    @Override
-    public void closeReportOutput() {
-        // No file output to close
-    }
-
-    public String getReport() {
-        return report.toString();
+        pw.println("-----------------------------");
+        pw.println("Total: $" + totalAmount + " / $" + totalBuffer + " (Below cushion and deficit - $" + totalDeficit + ")");
     }
 }
