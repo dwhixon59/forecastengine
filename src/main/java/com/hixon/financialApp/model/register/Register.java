@@ -380,9 +380,9 @@ public class Register extends IndependentEntity {
      * Set the isNew flag for transactions in this register too false to reflect that the transactions have all been
      * reported on already.
      */
-    public void setTransactionsToNotNew() throws EntityException, RegisterException {
-        EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery() + getId() + "')",
-                "updated the transactions in Register " + getName() + " to not new.");
+    public static void setTransactionsToNotNew(Register register) throws EntityException, RegisterException {
+        EntityInt.executeUpdate(Transaction.getUpdateIsNewQuery() + register.getId() + "')",
+                "updated the transactions in Register " + register.getName() + " to not new.");
     }
 
     /**

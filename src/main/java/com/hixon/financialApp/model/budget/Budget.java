@@ -135,6 +135,11 @@ public class Budget extends IndependentEntity {
         return registers;
     }
 
+    // Get the register for the budget:
+    public Register getRegister() throws BudgetException, SQLException, RegisterException, EntityException {
+        return getRegisters().get(0);
+    }
+
 
     /*
      * Main methods:

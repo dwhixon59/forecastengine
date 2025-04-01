@@ -33,6 +33,9 @@ public class BudgetItemMerchant extends DependentEntity {
    private static final String insertQuery = "insert into budgetitem_merchant (amount, percentage, " +
            "BudgetItem_idBudgetItem, Merchant_idMerchant) values (";
 
+   private static final String deleteQuery = "delete from budgetitem_merchant where BudgetItem_idBudgetItem = " +
+           "uuid_to_bin('";
+
 
    /*
     * Getters and setters for BudgetItemMerchant:
@@ -100,6 +103,10 @@ public class BudgetItemMerchant extends DependentEntity {
    @Override
    public String getDeleteByIdQuery() {
       return null;
+   }
+
+   public static String getDeleteQuery() {
+      return deleteQuery;
    }
 
    public static String getItemsForMerchantQuery() {
@@ -320,6 +327,23 @@ public class BudgetItemMerchant extends DependentEntity {
          be.initCause(e);
          throw be;
       }
+   }
 
+   // Delete a budget item from a merchant:
+   public static void deleteBudgetItemFromMerchant(BudgetItemMerchant budgetItemMerchant)
+           throws BudgetException, EntityException, RegisterException {
+        try {
+             String query = getDeleteQuery() + budgetItemMerchant.getIdBudgetItem() + "') and Merchant_idMerchant = " +
+                     "uuid_to_bin('" + budgetItemMerchant.getIdMerchant() + "')";
+            try (Statement statement = Utility.getDbConnection().createStatement()) {
+                statement.executeUpdate(query);
+            }
+        } catch (SQLException e) {
+           BudgetException be = new BudgetException("Database error occurred trying to delete the budget item " +
+           BudgetItem.getById(budgetItemMerchant.getIdBudgetItem()).getPayee() + " from merchant " +
+                   Merchant.getById(budgetItemMerchant.getIdMerchant()));
+           be.initCause(e);
+           throw be;
+        }
    }
 }

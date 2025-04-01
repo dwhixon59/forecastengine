@@ -241,7 +241,6 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         }
     }
 
-
     @Override
     public void sendNewTransactionSummaryReport(Register register) throws Exception, ViewException, EntityException,
             BudgetException, RegisterException, NotificationServiceException {
@@ -256,7 +255,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         }
 
         // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
-        register.setTransactionsToNotNew();
+        Register.setTransactionsToNotNew(register);
     }
 
     @Override
@@ -267,5 +266,8 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         ) {
             sendFileToUser(userResource.getUser(), userResource.getFile(), ENVELOPE_REPORT);
         }
+
+        // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
+        Register.setTransactionsToNotNew(forecast.getBudget().getRegister());
     }
 }

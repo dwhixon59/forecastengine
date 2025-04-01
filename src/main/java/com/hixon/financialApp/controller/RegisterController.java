@@ -139,10 +139,45 @@ public class RegisterController {
      * @throws SkipException
      * @throws QuitException
      */
-    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException, SkipException,
-            QuitException, CancelException {
+    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException,
+            SkipException, QuitException, CancelException {
+
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
+/*
+        // See if there are budget items with a matching amount:
+        List<BudgetItem> budgetItems = BudgetItem.getByAmount(budget, amount);
+
+        // If there is only one budget item with the same amount, ask the user if they want to assign it to that budget item:
+        if (budgetItems.size() == 1) {
+            BudgetItem budgetItem = budgetItems.get(0);
+            view.say("The following budget item matches the amount: " + budgetItem.toString());
+            if (view.getYesOrNo("Do you want to assign this transaction to this budget item?")) {
+                return Register.getByName(budgetItem.getPayee());
+            }
+        }
+        // If there are multiple budget items with the same amount, ask the user if they want to assign it to one of them:
+        else if (budgetItems.size() > 1) {
+            view.say("There are " + budgetItems.size() + " budget items with the same amount.");
+            for (BudgetItem budgetItem : budgetItems) {
+                view.say(budgetItem.toString());
+            }
+            if (view.getYesOrNo("Do you want to assign this transaction to one of these budget items?")) {
+                BudgetItem budgetItem = view.selectByNameFromList("Select a budget item:", budgetItems,
+                        ViewInt.DO_NOT_ALLOW_NONE);
+                if (budgetItem != null) {
+                    return budgetItem.getRegister();
+                }
+            }
+        }
+
+        // Extract the description from the payee.  This is the portion of the payee that comes after any of the following
+        // strings: "EVERYDAY CHECKING", "CLEAR ACCESS BA*", "WAY2SAVE SAVINGS":
+
+        String description = payee;
+
+        // See if there is a budget item with a memo that matches the description:
+*/
 
         view.say("Select the account to assign this transaction to:  ");
         List<Register> registers = Register.getListOf();

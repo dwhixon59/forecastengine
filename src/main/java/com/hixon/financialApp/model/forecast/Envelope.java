@@ -60,6 +60,11 @@ public class Envelope extends ForecastItem {
         return  TransactionSplit.getNewTransactionsForBudgetItem(getBudgetItem());
     }
 
+    // Set the transactions for this envelope to not be new:
+    public void setTransactionsNotNew() throws Exception {
+        TransactionSplit.setTransactionsForBudgetItemToNotNew(getBudgetItem());
+    }
+
     /**
      * Retrieves a list of goals for this envelope.
      *
@@ -82,4 +87,5 @@ public class Envelope extends ForecastItem {
 
         return goals;
     }
+
 }

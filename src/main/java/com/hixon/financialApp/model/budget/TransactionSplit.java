@@ -284,9 +284,43 @@ public class TransactionSplit extends DependentEntity {
                 "Databsae error occurred deleting TransactionSplits from the database.");
     }
 
-    // Get a list new transactions for a budget item:
-    public static List<Transaction> getNewTransactionsForBudgetItem(BudgetItem budgetItem) {
-        return new ArrayList<>();
+    // Get a list of new transactions for a budget item:
+    public static List<Transaction> getNewTransactionsForBudgetItem(BudgetItem budgetItem)
+            throws EntityException, SQLException {
+
+        // Get the transactions for the budget item:
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Create a query to get the new transactions for the budget item:
+        String query =
+                TransactionSplit.getSelectQuery() +
+                "inner join " +
+                    "transaction tr on ts.Transaction_idTransaction = tr.idTransaction " +
+                "where " +
+                  "ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "') and " +
+                  "tr.isNew = true";
+
+        // Get the transactions for the budget item:
+        ResultSet rs = EntityInt.getRS(query, "while trying to get the new transactions for a budget item");
+        while (rs.next()) {
+            transactions.add(new Transaction(rs));
+        }
+
+        return transactions;
+    }
+
+    // Set the transactions for a budget item to not new:
+    public static void setTransactionsForBudgetItemToNotNew(BudgetItem budgetItem) throws EntityException {
+        String query =
+            "update " +
+                    "transaction t " +
+            "inner join " +
+                    "transaction_split ts on t.idTransaction = ts.Transaction_idTransaction " +
+            "set " +
+                    "t.isNew = false " +
+            "where " +
+                    "ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "')";
+        EntityInt.executeUpdate(query, "while trying to set the transactions for a budget item to not new");
     }
 
     // Get the splits associated with a budget item in a period:

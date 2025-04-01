@@ -230,10 +230,31 @@ public class BudgetItem extends Item {
     /*
      *  Load and save methods:
      */
-
     public static BudgetItem getById(UUID idBudgetItem) throws EntityException, BudgetException {
         return new BudgetItem(EntityInt.getRSById(getSelectQuery() + " where bi.idBudgetItem = ", idBudgetItem,
                 "Database error encountered trying to retrieve a budget item."));
+    }
+
+    /**
+     * Get a list of budget items by the amount of the budget item:
+     *
+     * @param budget The budget that contains the budget item.
+     * @param amount The amount of the budget item to search for.
+     * @return A list of budget items that match the amount.
+     * @throws BudgetException
+     * @throws SQLException
+     * @throws EntityException
+     */
+    public static List<BudgetItem> getByAmount(Budget budget, double amount) throws BudgetException, SQLException,
+            EntityException {
+        String query = getSelectQuery() + " where bi.Budget_idBudget = uuid_to_bin('" + budget.getId() +
+                "') and  bi.amount = " + amount;
+        List<BudgetItem> budgetItems = new ArrayList<>();
+        ResultSet rs = EntityInt.getRS(query, "Database error encountered trying to retrieve a budget item.");
+        while (rs.next()) {
+            budgetItems.add(new BudgetItem(rs));
+        }
+        return budgetItems;
     }
 
     /**

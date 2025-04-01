@@ -89,22 +89,50 @@ public class TransactionSplitsController {
              * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the
              * budget items:
              */
-            // If the amounts are pre-established in the budget item:
+            // Determine if all the amounts or percentages are pre-established in the budget item:
+            boolean allFixed = budgetItemsForMerchant.stream().allMatch(
+                    item -> item.getAmount() > 0 || item.getPercentage() > 0);
+
             String[] amounts;
-            if (budgetItemsForMerchant.get(0).getAmount() > 0 || budgetItemsForMerchant.get(0).getPercentage() > 0) {
+            String prompt = "Enter the split amounts (or a - add, d - delete, i - inquire, s - skip)";
 
-                // Then ask the user to confirm or override the amounts:
-                amounts = view.getAndParseCsvLine("Enter the split amounts, or just return to accept displayed amounts:",
-                        budgetItemsForMerchant.size(), true, true);
-
-            } else { // the amounts are not pre-established, so ask the user to enter them:
-                amounts = view.getAndParseCsvLine("Enter the split amounts (or a - add, i - inquire, s - skip):  ",
-                        0, false, true);
+            // If all the amounts are pre-established:
+            if (allFixed) {
+                // Then give the user the option to just accept the displayed amounts and percentages:
+                amounts = view.getAndParseCsvLine(prompt + ", or just return to accept displayed amounts and " +
+                                "percentages:", budgetItemsForMerchant.size(), true, true);
+            } else {
+                // the amounts are not pre-established, so ask the user to enter them:
+                amounts = view.getAndParseCsvLine(prompt + ":  ", 0, false, true);
             }
 
             // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
+            // If the user entered nothing, then just accept the displayed amounts and percentages:
+            if (amounts == null || amounts.length == 0) {
+
+                // Process the fixed amounts first keeping track of the total amount assigned:
+                double totalAmountAssigned = 0;
+                for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
+                    if (budgetItemMerchant.getAmount() > 0) {
+                        splits.add(new TransactionSplit(budgetItemMerchant.getAmount(), budgetItemMerchant,
+                                transaction, null));
+                        totalAmountAssigned += budgetItemMerchant.getAmount();
+                    }
+                }
+                // Calculate the amount left to assign:
+                double amountLeft = transaction.getAmount() - totalAmountAssigned;
+
+                // Process the percentages as percentages of the amount left:
+                for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
+                    if (budgetItemMerchant.getPercentage() > 0) {
+                        splits.add(new TransactionSplit(budgetItemMerchant.getPercentage() / 100 * amountLeft,
+                                budgetItemMerchant, transaction, null));
+                    }
+                }
+            }
+
             // Add a new budget item to the current Merchant:
-            if (amounts[0].equalsIgnoreCase("a")) {
+            else if (amounts[0].equalsIgnoreCase("a")) {
                 try {
                     budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
                     done = false;
@@ -115,10 +143,21 @@ public class TransactionSplitsController {
             }
             // Delete one of the displayed budget items from the merchant for this transaction:
             else if (amounts[0].equalsIgnoreCase("d")) {
-                view.say("The delete budget item from merchant function has not been implemented yet.");
+                try {
+                    // Get the number of the budget item to delete:
+                    int itemNumber = view.getNumberBetween("Enter the number of the budget item to delete:", 1,
+                            budgetItemsForMerchant.size(), true, true, true);
+
+                    BudgetItemMerchant.deleteBudgetItemFromMerchant(budgetItemsForMerchant.get(itemNumber - 1));
+                    budgetItemsForMerchant.remove(itemNumber - 1);
+                    done = false;
+                } catch (SkipException se) {
+                    view.say("Skipping this transaction.");
+                    terminationCondition = SKIP;
+                }
                 done = false;
 
-                // Send an inquiry to someone as to how to categorize this transaction:
+            // Send an inquiry to someone as to how to categorize this transaction:
             } else if (amounts[0].equalsIgnoreCase("i")) {
                 if (inquireAllowed) {
                     view.say("Sending an inquiry.");
@@ -128,7 +167,7 @@ public class TransactionSplitsController {
                     done = false;
                 }
 
-                // Skip this transaction for now:
+            // Skip this transaction for now:
             } else if (amounts[0].equalsIgnoreCase("s")) {
                 if (skipAllowed) {
                     view.say("Skipping this transaction.");
@@ -138,7 +177,7 @@ public class TransactionSplitsController {
                     done = false;
                 }
 
-                // Create the splits from a sparse list of categories entered by the user as "payee_#:amount":
+            // Create the splits from a sparse list of categories entered by the user as "payee_#:amount":
             } else if (amounts[0].matches("^[1-9][0-9]*\\s*:(.*)")) {
                 // For each of the payee:amount combinations entered by the user:
                 List<Integer> evenRemainders = new ArrayList<>();

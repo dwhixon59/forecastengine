@@ -21,8 +21,8 @@ import java.util.Objects;
 
 import static com.hixon.financialApp.model.budget.Item.HowOccurs.*;
 import static com.hixon.financialApp.model.budget.Item.HowPaid.*;
-import static com.hixon.financialApp.model.budget.Item.ItemType.CREDIT_CARD;
 import static com.hixon.financialApp.model.budget.Item.ItemType.*;
+import static com.hixon.financialApp.model.budget.Item.ItemType.CREDIT_CARD;
 import static com.hixon.financialApp.model.budget.Item.PeriodType.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.utility.Utility.getView;
@@ -274,6 +274,12 @@ public abstract class Item extends IndependentEntity {
     public void setPeriod(PeriodType period) {
         this.period = period;
         setDirty(true);
+    }
+
+    // Get the period type as a short string for display purposes:
+    public String getPeriodAsShortString() throws BudgetException {
+
+        return generatePeriodType(period);
     }
 
     public double getAmount() {

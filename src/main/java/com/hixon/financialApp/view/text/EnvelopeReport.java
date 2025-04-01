@@ -34,9 +34,23 @@ public class EnvelopeReport extends ForecastReport {
         double contributionAmount = envelope.getContributionAmount();
         double envelopeBalance = envelope.getEnvelopeBalance();
         double bufferTarget = envelope.getBufferTarget();
-        double deficit = bufferTarget - contributionAmount;
-        pw.println(envelope.getName() + ": $" + envelopeBalance + " ($" + contributionAmount + "/ $" + bufferTarget +
-                " | Deficit: $" + deficit + ")");
+        double deficit = bufferTarget - envelopeBalance;
+        if (deficit < 0) {
+            deficit = 0;
+        }
+
+        // Construct the envelope details string.  If the envelope has a minimum balance, then include the buffer target in the string.
+        String envelopeDetails = envelope.getName() + ": " + Utility.formatRoundedDollarAmount(envelopeBalance) +
+                " (" + Utility.formatRoundedDollarAmount(contributionAmount) + "/" + envelope.getPeriodAsShortString() + ")";
+
+        // Output the envelope details:
+        pw.println(envelopeDetails);
+
+        // If the envelope balance is below the buffer target, then output a message indicating it is:
+        if (bufferTarget > 0 && envelopeBalance < bufferTarget) {
+            pw.println("  Minimum Balance " + Utility.formatRoundedDollarAmount(bufferTarget) +
+                    ", Deficit " + Utility.formatRoundedDollarAmount(deficit));
+        }
 
         // Retrieve any new transactions for this envelope from the database:
         List<Transaction> envelopeTransactions = envelope.getNewTransactions();
@@ -66,16 +80,17 @@ public class EnvelopeReport extends ForecastReport {
         // If there are goals, then output the details of each goal:
         if (!envelopeGoals.isEmpty()) {
             for (Goal goal : envelopeGoals) {
-                double goalAmount = goal.getAmount();
-                double goalDeficit = goalAmount - contributionAmount;
+                double goalAmount = Math.abs(goal.getAmount());
+                double goalDeficit = Math.abs(goalAmount - envelopeBalance);
                 double monthlyDeficit = goalDeficit / goal.getMonthsRemaining(reportDate);
-                pw.println("  Goal: " + goal.getDescription() + " on " + Utility.calendarDateToStringDate(goal.getGoalDate()) +
-                        " | Forecast: $" + goalAmount + " | Deficit: $" + goalDeficit + " (Needs +$" + Math.round(monthlyDeficit) + "/mo)");
-            }
-        } else {
-            if (contributionAmount < bufferTarget) {
-                double monthlyAddition = (bufferTarget - envelopeBalance) / forecast.getMonthsRemaining(reportDate);
-                pw.println("  Buffer $" + bufferTarget + " (Below cushion - add $" + Math.round(monthlyAddition) + "/mo)");
+                pw.println("  Goal: " + goal.getDescription() + " on " + Utility.calendarDateToStringDate(goal.getGoalDate()));
+                pw.println("    Forecast: " + Utility.formatRoundedDollarAmount(goalAmount));
+                if (deficit > 0) {
+                    envelopeDetails += " | Deficit: " + Utility.formatRoundedDollarAmount(deficit);
+                    pw.println("    Deficit: " + Utility.formatRoundedDollarAmount(goalDeficit));
+                } else {
+                    pw.println("    Deficit: " + Utility.formatRoundedDollarAmount(goalDeficit));
+                }
             }
         }
         pw.println();
@@ -96,6 +111,7 @@ public class EnvelopeReport extends ForecastReport {
         double totalDeficit = totalBuffer - totalAmount;
 
         pw.println("-----------------------------");
-        pw.println("Total: $" + totalAmount + " / $" + totalBuffer + " (Below cushion and deficit - $" + totalDeficit + ")");
+        pw.println("Total: $" + Math.round(totalAmount) + " / $" + Math.round(totalBuffer) +
+                " (Below cushion and deficit - $" + Math.round(totalDeficit) + ")");
     }
 }

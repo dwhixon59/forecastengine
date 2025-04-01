@@ -73,6 +73,18 @@ public class DataManagerController {
         // Setup subsidiary controllers:
         budgetController = new BudgetController(register, budget, forecast, view, notificationService);
 
+        /*
+        // Create a list of entities that the user can manage:
+        List<String> entities = new ArrayList<>();
+        entities.add("Budget Items");
+        entities.add("Envelope Items");
+
+        // Show the user a list of entities that they can manage:
+        view.selectFromNumberedList();
+        String prompt = "What category of data would you like to manage (a-add, d-delete, u-update, q-quit)?";
+        String option = view.selectFromFirstLetterList(prompt, "a,d,u,q");
+        */
+
         // Confirm for the user what we are up to:
         view.say("MANAGE BUDGET ITEMS:  ");
 

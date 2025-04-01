@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.time.LocalDate;
 import java.util.Calendar;
+import java.util.List;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.entity.EntityInt.getRS;
@@ -272,7 +273,7 @@ public class Transaction extends IndependentEntity {
     }
 
     public boolean getIsNew() {
-        return isNew;
+        return false;
     }
 
     public void setIsNew(boolean isNew) {
@@ -572,6 +573,15 @@ public class Transaction extends IndependentEntity {
             result = true;
         }
         return result;
+    }
+
+    // Set a list of transactions to not new:
+    public static void setTransactionsNotNew(List<Transaction> transactions) throws SQLException, EntityException {
+        for (Transaction transaction : transactions
+        ) {
+            transaction.setIsNew(false);
+            transaction.save(SaveMethod.UPDATE);
+        }
     }
 }
 

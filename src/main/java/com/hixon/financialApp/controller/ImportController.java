@@ -369,9 +369,12 @@ public class ImportController {
                             }
                         }
 
-                        // The splits are now complete, so save them off:
-                        for (TransactionSplit split : splits) {
-                            split.save();
+                        // If the user entered any splits:
+                        if (splits != null) {
+                            // then they are now complete, so save them off
+                            for (TransactionSplit split : splits) {
+                                split.save();
+                            }
                         }
                     } else {
                         view.say("Already assigned splits.");
