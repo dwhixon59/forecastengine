@@ -101,7 +101,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         for (; i < payeeTokens.length; i++) {
 
             // If we found a date, use it as the authorization date:
-            if (payeeTokens[i].matches("^(0?[1-9]|1[0-2])/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]){1}.*")) {
+            if (payeeTokens[i].matches("^(0?[1-9]|1[0-2])/(0?[1-9]|1[0-9]|2[0-9]|3[0-1]).*")) {
                 transaction.setAuthorizationDate(Utility.stringDateSlashToCalendarDate(payeeTokens[i]));
                 break;
             }
@@ -195,6 +195,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         }
 
         int i;
+        int start = 0;
         switch (firstFewWords) {
 
             // If the transaction is a purchase:
@@ -204,18 +205,12 @@ public class WellsFargoBankController extends FinancialInstitutionController {
             case "RECURRING PAYMENT AUTHORIZED":
 
                 // Beginning with the token after the date of the transaction, skip over any tokens starting with a digit:
-                int start = 0;
-                switch (payeeTokens[2]) {
-                    case "ON":
-                        start = 4;
-                        break;
-                    case "AUTHORIZED":
-                        start = 5;
-                        break;
-                    case "CASH":
-                        start = 9;
-                        break;
-                }
+                start = switch (payeeTokens[2]) {
+                    case "ON" -> 4;
+                    case "AUTHORIZED" -> 5;
+                    case "CASH" -> 9;
+                    default -> start;
+                };
 
                 // Derive a payee from the remaining tokens:
                 merchantPayee = makePayeeFromTokens(start);
@@ -234,9 +229,10 @@ public class WellsFargoBankController extends FinancialInstitutionController {
                 // present, then have the user tell us which register it came from. The reason we only use the last four
                 // digits is that only the last four digits of the account number are provided by Wells Fargo in the
                 // payee string.
-                for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^XXXX[X]*[0-9]{4}"); i++) ;
-                Register transferRegister = null;
-                String accountNumber = null;
+                //noinspection StatementWithEmptyBody
+                for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^X{4,}[0-9]{4}"); i++) ;
+                Register transferRegister;
+                String accountNumber;
                 if (i == payeeTokens.length) {
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
@@ -300,8 +296,6 @@ public class WellsFargoBankController extends FinancialInstitutionController {
                 } else if (payeeTokens[0].equalsIgnoreCase("PURCHASE") ||
                         payeeTokens[0].equalsIgnoreCase("REVERSAL")) {
                     start = 1;
-                } else {
-                    start = 0;
                 }
 
                 // Derive a payee from the remaining tokens:
