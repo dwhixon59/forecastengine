@@ -121,5 +121,10 @@ public class GenericClassifer implements FinancialInstitutionInt {
     public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException {
         return null;
     }
+
+    @Override
+    public String extractUserDescription(String payee) {
+        return null;
+    }
 }
 

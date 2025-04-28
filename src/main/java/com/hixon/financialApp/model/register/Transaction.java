@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +51,7 @@ public class Transaction extends IndependentEntity {
     private boolean isNew = true;
     private String importRecordId = null;
     private Merchant merchant;
+
 
     public enum Headers {
         TRANSACTION_DATE, AMOUNT, CLEARED, CHECK_NUMBER, PAYEE
@@ -408,20 +410,6 @@ public class Transaction extends IndependentEntity {
                 checkNumberString;
         return s;
     }
-    public String toStringConcise() {
-        String checkNumberString = (checkNumber != 0) ? "Check number = " + checkNumber + ", " : "";
-        String authDate = (authorizationDate != null) ? ", Authorized = " +
-                Utility.calendarDateToStringDate(authorizationDate) : "";
-        String merchantName = (merchant != null) ? merchant.getName() : "not assigned yet";
-        String s = null;
-        s = checkNumberString +
-                "Posted = " + Utility.calendarDateToStringDate(postDate) +
-                authDate +
-                ", Merchant = " + merchantName +
-                ", Amount = " + formatDollarAmount(amount) +
-                ", Original Payee = " + payee;
-        return s;
-    }
 
     public String toString() {
         String s = null;
@@ -446,6 +434,41 @@ public class Transaction extends IndependentEntity {
         } catch (EntityException | SQLException | RegisterException e) {
             e.printStackTrace();
         }
+        return s;
+    }
+
+    public String toStringConcise() {
+        String checkNumberString = (checkNumber != 0) ? "Check number = " + checkNumber + ", " : "";
+        String authDate = (authorizationDate != null) ? ", Authorized = " +
+                Utility.calendarDateToStringDate(authorizationDate) : "";
+        String merchantName = (merchant != null) ? merchant.getName() : "not assigned yet";
+        String s = null;
+        s = checkNumberString +
+                "Posted = " + Utility.calendarDateToStringDate(postDate) +
+                authDate +
+                ", Merchant = " + merchantName +
+                ", Amount = " + formatDollarAmount(amount) +
+                ", Original Payee = " + payee;
+        return s;
+    }
+
+    public String toStringVeryConcise() throws Exception {
+        String date =
+            (authorizationDate != null) ?
+                Utility.calendarDateToStringDate(authorizationDate) :
+                Utility.calendarDateToStringDate(postDate);
+
+        String merchantName = "";
+        if (merchant == null) {
+            if (idMerchant != null) {
+                merchant = Merchant.getById(idMerchant);
+            }
+        }
+        merchantName = (merchant != null) ? merchant.getName() : "not assigned yet";
+        String s =
+                "Date = " + date +
+                ", Merchant = " + merchantName +
+                ", Amount = " + formatDollarAmount(amount);
         return s;
     }
 
@@ -582,6 +605,68 @@ public class Transaction extends IndependentEntity {
             transaction.setIsNew(false);
             transaction.save(SaveMethod.UPDATE);
         }
+    }
+
+    /**
+     * Get the most recent transaction by payee.
+     *
+     * @param payee The payee to search for.
+     * @return The most recent transaction by payee.  Null if no transaction is found.
+     */
+    public static Transaction getMostRecentTransactionByPayee(String payee) throws Exception {
+
+        // Create the SQL query to get the most recent transaction by payee ignoring the REF #:
+        String query =
+        getSelectQuery() + " " +
+        "INNER JOIN merchant m on tr.Merchant_idMerchant = m.idMerchant " +
+        "WHERE " +
+            "tr.payee LIKE '" + payee.replaceAll("REF #\\S+", "REF #%") + "' " +
+        "ORDER BY " +
+            "tr.postDate DESC " +
+        "lIMIT 1";
+
+        // Execute the query and return the result set:
+        ResultSet rs = getRS(query, "attempting to retrieve the most recent transaction by payee.");
+        if (rs.next()) {
+            return new Transaction(rs);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Get similar transactions by user entered description.
+     *
+     * @param userDescription The payee to search for.
+     * @return Up to 10 similar transactions.  Null if no transaction is found.
+     */
+    public static List<Transaction> getByUserDescriptionFullText(String userDescription) throws Exception {
+
+        // Create the SQL query to get the most similar transactions using a full text search on the payee description:
+        String query =
+            "SELECT " +
+                selectColumns + ", " +
+                "MATCH(user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) AS relevance " +
+            "FROM " +
+                "transaction tr " +
+            "WHERE " +
+                "MATCH(user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) " +
+            "ORDER BY " +
+                "relevance DESC " +
+            "LIMIT 10";
+
+        // Execute the query:
+        ResultSet rs = getRS(query, "attempting to retrieve similar transactions by payee.");
+
+        // Create a list to hold the transactions:
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Loop through the result set and add each transaction to the list:
+        while (rs.next()) {
+            transactions.add(new Transaction(rs));
+        }
+
+        return transactions;
     }
 }
 

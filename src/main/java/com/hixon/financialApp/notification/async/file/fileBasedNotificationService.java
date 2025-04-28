@@ -268,6 +268,6 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         }
 
         // If we successfully rendered the new transaction reports, then set the new transactions flags to false:
-        Register.setTransactionsToNotNew(forecast.getBudget().getRegister());
+        //Register.setTransactionsToNotNew(forecast.getBudget().getRegister());
     }
 }

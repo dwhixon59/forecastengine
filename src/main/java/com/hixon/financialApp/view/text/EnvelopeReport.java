@@ -62,13 +62,17 @@ public class EnvelopeReport extends ForecastReport {
             for (Transaction transaction : envelopeTransactions) {
 
                 // Output the transaction details:
-                pw.println("      " + transaction.toString());
+                pw.println("      " + transaction.toStringVeryConcise());
 
                 // Output the splits for the transaction:
                 List<TransactionSplit> transactionSplits = TransactionSplit.getSplitsForTransaction(transaction);
                 if (transactionSplits != null) {
                     for (TransactionSplit split : transactionSplits) {
-                        pw.println("            " + split.toStringConcise());
+                        // if the split if for this envelope, then output the split details:
+                        if (split.getBudgetItem().getId().equals(envelope.getBudgetItem().getId())) {
+                            // Output the split details:
+                            pw.println("            " + split.toStringConcise());
+                        }
                     }
                 }
             }

@@ -11,6 +11,7 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -31,24 +32,46 @@ public class Register extends IndependentEntity {
     /*
      * Fields in the Register class:
      */
+    @Getter
+    @Setter
     private String name = null;
+    @Getter
+    private String nickname = null;
+    @Getter
+    @Setter
     private String accountType = null;
+    @Getter
+    @Setter
     private String default_view;
+    @Getter
+    @Setter
     private String accountNumber = null;
+    @Getter
+    @Setter
     private double balance = 0;
     @Getter
+    @Setter
     private double skippedAmount = 0;
     @Getter
+    @Setter
     private String financialInstitution = null;
     @Getter
+    @Setter
     private String trxImportFileName = null;
     @Getter
+    @Setter
     private String trxImportFileDirectory = null;
     @Getter
+    @Setter
     private String provisionalTrxFileName = null;
     @Getter
+    @Setter
     private String provisionalTrxFileDirectory = null;
+    @Getter
+    @Setter
     private UUID idBudget = null;
+    @Getter
+    @Setter
     private List<Transaction> significantEvents = new ArrayList<>();
     protected ViewInt view = null;
     protected NotificationServiceInt notificationService = null;
@@ -61,79 +84,11 @@ public class Register extends IndependentEntity {
         return id;
     }
 
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getAccountType() {
-        return accountType;
-    }
-    public void setAccountType(String accountType) {
-        this.accountType = accountType;
-    }
-
     public String getReportType() {return default_view;}
     public void setDefaultView(String default_view) {this.default_view = default_view;}
 
-    public String getAccountNumber() {
-        return accountNumber;
-    }
-    public void setAccountNumber(String accountNumber) {this.accountNumber = accountNumber;}
-
-    public double getBalance() {
-        return balance;
-    }
-    public void setBalance(double balance) {
-        this.balance = balance;
-    }
-
-    public double getSkippedAmount() {
-        return skippedAmount;
-    }
-     public void setSkippedAmount(double skippedAmount) {
-        this.skippedAmount = skippedAmount;
-    }
-
-    public String getFinancialInstitution() {
-        return financialInstitution;
-    }
-    public void setFinancialInstitution(String financialInstitution) {
-        this.financialInstitution = financialInstitution;
-    }
-
-    public String getTrxImportFileName() {
-        return trxImportFileName;
-    }
-    public void setTrxImportFileName(String trxImportFileName) {
-        this.trxImportFileName = trxImportFileName;
-    }
-
-    public String getTrxImportFileDirectory() {
-        return trxImportFileDirectory;
-    }
-    public void setTrxImportFileDirectory(String trxImportFileDirectory) {
-        this.trxImportFileDirectory = trxImportFileDirectory;
-    }
     public String getTrxImportFilePath() {
         return getTrxImportFileDirectory() + "\\" + getTrxImportFileName();
-    }
-
-    public String getProvisionalTrxFileName() {
-        return provisionalTrxFileName;
-    }
-
-    public void setProvisionalTrxFileName(String provisionalTrxFileName) {
-        this.provisionalTrxFileName = provisionalTrxFileName;
-    }
-
-    public String getProvisionalTrxFileDirectory() {
-        return provisionalTrxFileDirectory;
-    }
-    public void setProvisionalTrxFileDirectory(String provisionalTrxFileDirectory) {
-        this.provisionalTrxFileDirectory = provisionalTrxFileDirectory;
     }
 
     public String getProvisionalTrxFilePath() {
@@ -144,28 +99,17 @@ public class Register extends IndependentEntity {
         return idBudget;
     }
 
-    public void setIdBudget(UUID idBudget) {
-        this.idBudget = idBudget;
-    }
-
-    public void setSignificantEvents(List<Transaction> significantEvents) {
-        this.significantEvents = significantEvents;
-    }
-
-    public List<Transaction> getSignificantEvents() {
-        return significantEvents;
-    }
-
 
     /*
      * Database CRUD methods:
      */
     private static final String selectQuery = "select bin_to_uuid(r.idRegister) as 'r.idRegister', r.name as 'r.name', " +
-            "r.account_type as 'r.account_type', r.default_view as 'default_view', r.account_number as 'r.account_number', r.balance as 'r.balance', " +
-            "r.skippedAmount as 'r.skippedAmount', r.financialInstitution as 'r.financialInstitution', " +
-            "r.trxImportFileName as 'r.trxImportFileName', r.trxImportFileDirectory as 'r.trxImportFileDirectory', " +
-            "r.provisionalTrxFileName as 'r.provisionalTrxFileName', r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', " +
-            "bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' from register r";
+            "r.nickname as 'r.nickname', r.account_type as 'r.account_type', r.default_view as 'default_view', " +
+            "r.account_number as 'r.account_number', r.balance as 'r.balance', r.skippedAmount as 'r.skippedAmount', " +
+            "r.financialInstitution as 'r.financialInstitution', r.trxImportFileName as 'r.trxImportFileName', " +
+            "r.trxImportFileDirectory as 'r.trxImportFileDirectory', r.provisionalTrxFileName as 'r.provisionalTrxFileName', " +
+            "r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' " +
+            "from register r";
 
     public static String getSelectQuery() {
         return selectQuery;
@@ -189,13 +133,14 @@ public class Register extends IndependentEntity {
     }
 
     public String getUpdateClause() {
-        return "name = '" + name + "', account_type = '" + accountType + "', default_view = '" + default_view +
-                "', account_number = '" + accountNumber + "', balance = " + balance + ", skippedAmount = " +
-                skippedAmount + ", financialInstitution = '" + financialInstitution + "', trxImportFileName = '"  +
-                trxImportFileName + "', trxImportFileDirectory = '" + Utility.doubleBackSlashes(trxImportFileDirectory) +
-                "', provisionalTrxFileName = '" + provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
-                Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget
-                + "') where idRegister = uuid_to_bin('" + id + "')";
+        return "name = '" + name + "', nickname = '" + nickname + "', account_type = '" + accountType + "', " +
+                "default_view = '" + default_view + "', account_number = '" + accountNumber + "', balance = " +
+                balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" + financialInstitution +
+                "', trxImportFileName = '"  + trxImportFileName + "', trxImportFileDirectory = '" +
+                Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
+                provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
+                Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+                "where idRegister = uuid_to_bin('" + id + "')";
     }
 
     @Override
@@ -232,6 +177,7 @@ public class Register extends IndependentEntity {
 
                 this.id = UUID.fromString(rs.getString("r.idRegister"));
                 this.name = rs.getString("r.name");
+                this.nickname = rs.getString("r.nickname");
                 this.accountType = rs.getString("r.account_type");
                 this.default_view = rs.getString("r.default_view");
                 this.accountNumber = rs.getString("r.account_number");
@@ -278,6 +224,32 @@ public class Register extends IndependentEntity {
         return true;
     }
 
+    /**
+     * Create a display string for the register.
+     *
+     * @return  Display string for the register object.
+     */
+    @Override
+    public String toString() {
+        return "Register: " + getName() + " (" + getNickname() + ") " +
+                "Account Type: " + getAccountType() + ", " +
+                "Account Number: " + getAccountNumber() + ", " +
+                "Balance: " + Utility.formatDollarAmount(getBalance()) + ", " +
+                "Skipped Amount: " + Utility.formatDollarAmount(getSkippedAmount()) + ", " +
+                "Financial Institution: " + getFinancialInstitution() + ", " +
+                "Transaction Import File Name: " + getTrxImportFileName() + ", " +
+                "Transaction Import File Directory: " + getTrxImportFileDirectory() + ", " +
+                "Provisional Transaction File Name: " + getProvisionalTrxFileName() + ", " +
+                "Provisional Transaction File Directory: " + getProvisionalTrxFileDirectory();
+    }
+
+    // Create a concise display string for the register.
+    public String toStringConcise() {
+        return "Register: " + getName() + " (" + getNickname() + ") " +
+                "Account Type: " + getAccountType() + ", " +
+                "Account Number: " + getAccountNumber() + ", " +
+                "Financial Institution: " + getFinancialInstitution();
+    }
 
     /*
      * Load and save methods:
@@ -309,15 +281,13 @@ public class Register extends IndependentEntity {
         // Find the ID of the named budget:
         PreparedStatement preparedStmt = null;
         ResultSet rs = null;
-        String query = selectQuery + " where r.name = '" + registerName + "'";
+        String query = selectQuery + " where r.name = \"" + registerName + "\"";
         try {
             preparedStmt = Utility.getDbConnection().prepareStatement(query);
             rs = preparedStmt.executeQuery();
-            Register register;
+            Register register = null;
             if (rs != null && rs.next()) {
                 register = new Register(rs);
-            } else {
-                throw new RegisterException("Register named " + registerName + " not found in the database.");
             }
             return register;
         } catch (SQLException e) {

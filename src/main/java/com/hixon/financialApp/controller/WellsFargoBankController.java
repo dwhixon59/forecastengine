@@ -5,7 +5,6 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
-import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.CityStateChecker;
@@ -17,8 +16,8 @@ import org.apache.commons.csv.CSVRecord;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Locale;
+import java.util.*;
+import java.util.regex.Pattern;
 
 /*
  * This class analyzes transactions from a Wells Fargo CSV download file:
@@ -66,8 +65,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
      */
     // Load up a Transaction from a Wells Fargo CSV transaction download file:
     @Override
-    public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws ParseException, RegisterException,
-            SQLException, SkipException, QuitException, CancelException, EntityException {
+    public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws Exception {
 
         Transaction transaction = loadFromCsvRecord(record, importRecordId);
         TransactionHistory.getInstance().add(transaction);
@@ -75,8 +73,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     }
 
     // Load a transaction from a posted transaction CSV record:
-    public Transaction loadFromCsvRecord(CSVRecord record, String importRecordId) throws ParseException,
-            RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
+    public Transaction loadFromCsvRecord(CSVRecord record, String importRecordId) throws Exception {
 
         // Compute the fields of the transaction from the tokens in the record:
         Calendar postDate = Calendar.getInstance();
@@ -128,8 +125,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
 
     // Load a transaction from a CSV provisional transaction record:
     @Override
-    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws ParseException,
-            RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
+    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception {
         String[] tokens;
 
         // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
@@ -177,8 +173,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     }
 
     // Parse out the merchant name from a Wells Fargo CSV transaction download file:
-    public String parseMerchantPayee(Calendar date, double amount, String payee)
-            throws RegisterException, SkipException, QuitException, CancelException, SQLException, EntityException {
+    public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
 
         // Construct the merchant payee string from portions of the bank payee string:
         String merchantPayee;
@@ -304,6 +299,64 @@ public class WellsFargoBankController extends FinancialInstitutionController {
                 break;
         }
         return merchantPayee;
+    }
+
+    private static final Set<String> STOPWORDS = Set.of(
+            "RECURRING", "TRANSFER", "TO", "FROM", "REF", "#",
+            "EVERYDAY", "CHECKING", "SAVINGS", "WAY2SAVE",
+            "ACCOUNT", "JOINT", "BANKING", "BA", "ONLINE"
+    );
+
+    private static final Pattern maskedAccountPattern = Pattern.compile("X{4,}\\d{2,}");
+    private static final Pattern refPrefixPattern = Pattern.compile("^#?[A-Z0-9]{10,}(\\s+ON\\s+\\d{2}/\\d{2}/\\d{2,4})?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern dateOnlyPattern = Pattern.compile("^ON\\s+\\d{2}/\\d{2}/\\d{2,4}$", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Extracts a user description from the raw text of a Wells Fargo CSV transaction description.
+     * @param rawText The transaction description
+     * @return The extracted user description, or null if no valid description could be found
+     */
+    @Override
+    public String extractUserDescription(String rawText) {
+        if (rawText == null || rawText.isBlank()) return null;
+
+        rawText = rawText.trim();
+
+        // Step 1: Remove leading #REFCODE and optional date
+        rawText = refPrefixPattern.matcher(rawText).replaceFirst("").trim();
+
+        // Step 2: Look for the last occurrence of "REF #" and take everything after it
+        int refIndex = rawText.toUpperCase().lastIndexOf("REF #");
+        if (refIndex == -1) return null;
+
+        String afterRef = rawText.substring(refIndex + 5).trim();
+        String[] words = afterRef.split("\\s+");
+
+        List<String> cleaned = new ArrayList<>();
+        for (String word : words) {
+            String upper = word.toUpperCase();
+
+            if (STOPWORDS.contains(upper) || maskedAccountPattern.matcher(upper).matches()) {
+                continue;
+            }
+
+            if (word.matches("^[A-Z]{2}\\d[A-Z0-9]{7,}$")) {
+                continue; // Skip duplicate reference codes
+            }
+
+            cleaned.add(word);
+        }
+
+        if (cleaned.isEmpty()) return null;
+
+        String result = String.join(" ", cleaned);
+
+        // Step 3: Reject if the remaining description is just a date
+        if (dateOnlyPattern.matcher(result.toUpperCase()).matches()) {
+            return null;
+        }
+
+        return result;
     }
 
     public String makePayeeFromTokens(int start) throws SQLException, EntityException {

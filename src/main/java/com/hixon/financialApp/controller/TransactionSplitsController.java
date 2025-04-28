@@ -191,7 +191,7 @@ public class TransactionSplitsController {
                     // Validate that the current amount is indeed a sparse list amount:
                     if (!amounts[i].matches("^[1-9][0-9]*\\s*:(.*)")) {
 
-                        // The user didn't enter "payee_#:".  Inform them and ask them to re-enter the values:
+                        // The user didn't enter "split#:".  Inform them and ask them to re-enter the values:
                         view.say("The amount " + amounts[i] + " does not start with a number followed by " +
                                 "a colon.  Please re-enter the values");
                         done = false;

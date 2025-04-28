@@ -13,6 +13,7 @@ import com.hixon.financialApp.model.merchant.MerchantPayee;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.UserResponse;
@@ -20,6 +21,7 @@ import com.hixon.financialApp.view.base.ViewInt;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
@@ -64,7 +66,7 @@ public class RegisterController {
     }
 
 
-    /**
+    /*
      * Main methods for RegisterController:
      */
 
@@ -75,17 +77,14 @@ public class RegisterController {
      * @throws RegisterException If there are no registers in the database or if no register was selected.
      * @throws SQLException      If there is a database error.
      * @throws EntityException   If there is an error non-database error.
-     * @throws SkipException
-     * @throws QuitException
      */
-    public static Register selectRegister(ViewInt view) throws RegisterException, SQLException, EntityException, SkipException,
-            QuitException {
+    public static Register selectRegister(ViewInt view) throws RegisterException, SQLException, EntityException {
 
         // Get a list of all the registers:
         List<Register> registers = Register.getListOf();
 
         // If there are no registers, throw an exception:
-        if (registers.size() == 0) {
+        if (registers.isEmpty()) {
             throw new RegisterException("There are no registers in the database.");
         }
 
@@ -131,64 +130,114 @@ public class RegisterController {
     /**
      * The account number was not in the payee string, so ask the user for help:
      *
-     * @param date
-     * @param amount
-     * @param payee
-     * @return
-     * @throws RegisterException
-     * @throws SkipException
-     * @throws QuitException
+     * @param date   The date of the transaction.
+     * @param amount The amount of the transaction.
+     * @param payee  The payee string from the transaction.
+     * @return Register The register that was selected by the user.
+     * @throws RegisterException If there is an error with the register.
+     * @throws SkipException     If the user skips the operation.
+     * @throws QuitException     If the user quits the operation.
      */
-    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws RegisterException,
-            SkipException, QuitException, CancelException {
+    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws Exception {
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
-/*
-        // See if there are budget items with a matching amount:
-        List<BudgetItem> budgetItems = BudgetItem.getByAmount(budget, amount);
 
-        // If there is only one budget item with the same amount, ask the user if they want to assign it to that budget item:
-        if (budgetItems.size() == 1) {
-            BudgetItem budgetItem = budgetItems.get(0);
-            view.say("The following budget item matches the amount: " + budgetItem.toString());
-            if (view.getYesOrNo("Do you want to assign this transaction to this budget item?")) {
-                return Register.getByName(budgetItem.getPayee());
+        // Narrow the list of possible registers that this transaction could be in to the ones that are of the same type
+        // as the payee and owned by the same user:
+        List<Pair<Register, User>> registers = Register.getListOfByUserAndType(financialInstitution.extractUser(payee),
+                financialInstitution.extractAccountType(payee));
+        if (registers.size() == 1)
+            Register register = registers.get(0);
+            view.say("The only register of type " + register.getAccountType() " owned by " + register.toStringConcise());
+            if (view.getYesOrNo("Is this the correct register for this transfer?")) {
+                return register;
             }
         }
-        // If there are multiple budget items with the same amount, ask the user if they want to assign it to one of them:
-        else if (budgetItems.size() > 1) {
-            view.say("There are " + budgetItems.size() + " budget items with the same amount.");
-            for (BudgetItem budgetItem : budgetItems) {
-                view.say(budgetItem.toString());
-            }
-            if (view.getYesOrNo("Do you want to assign this transaction to one of these budget items?")) {
-                BudgetItem budgetItem = view.selectByNameFromList("Select a budget item:", budgetItems,
-                        ViewInt.DO_NOT_ALLOW_NONE);
-                if (budgetItem != null) {
-                    return budgetItem.getRegister();
+
+        // Get the merchant from the most recent transaction that used this payee, if there is one, and use that as the
+        // register name if it matches the name of a register and the user approves:
+        Transaction transaction = Transaction.getMostRecentTransactionByPayee(payee);
+        if (transaction != null) {
+            view.say("The most recent transaction with this payee was: " + transaction);
+            Merchant merchant = transaction.getMerchant();
+            if (merchant != null) {
+                Register register = Register.getByName(merchant.getName());
+                if (register != null) {
+                    view.say("The register for this transaction is: " + register.toStringConcise());
+                    if (view.getYesOrNo("Is this the correct register for this transfer?")) {
+                        return register;
+                    }
                 }
             }
         }
 
-        // Extract the description from the payee.  This is the portion of the payee that comes after any of the following
-        // strings: "EVERYDAY CHECKING", "CLEAR ACCESS BA*", "WAY2SAVE SAVINGS":
+        // Extract the memo from the payee using the method for the financial institution that we are dealing with:
+        String userDescription = financialInstitution.extractUserDescription(payee);
+        List<Register> registers;
+        if (userDescription != null) {
 
-        String description = payee;
+            // Tokenize the memo:
+            String[] tokens = userDescription.split("[\\s,]+");
 
-        // See if there is a budget item with a memo that matches the description:
-*/
+            // Get a list of all the registers:
+            registers = Register.getListOf();
 
-        view.say("Select the account to assign this transaction to:  ");
-        List<Register> registers = Register.getListOf();
-        for (int i = 1; i <= registers.size(); i++) {
-            Register register = registers.get(i - 1);
-            view.say("   " + i + ".  " + register.getName() + ", " + register.getAccountType() + ", " +
-                    register.getAccountNumber());
+            // See if any of the tokens in the user description match the nickname of a register:
+            for (String token : tokens) {
+                for (Register register : registers) {
+                    if (register.getNickname().equalsIgnoreCase(token)) {
+                        view.say("The following register matches the token in the memo: " + register);
+                        if (view.getYesOrNo("Is this the correct register for this transfer?")) {
+                            return register;
+                        }
+                    }
+                }
+            }
+
+            // Couldn't match on a register nickname, so do a full text search on the memo and get the most relevant
+            // transactions that match:
+            List<Transaction> transactions = Transaction.getByUserDescriptionFullText(userDescription);
+            List<Transaction> relevantTransactions = new ArrayList<Transaction>();
+            if (!transactions.isEmpty()) {
+
+                // Create a list of registers from the list of transactions:
+                registers.clear();
+                for (Transaction relevantTransaction : transactions) {
+                    Register relevantRegister = Register.getByName(relevantTransaction.getMerchant().getName());
+                    if (relevantRegister != null) {
+                        relevantTransactions.add(relevantTransaction);
+                        registers.add(relevantRegister);
+                    }
+                }
+
+                // Show the user the list of relevant transactions and the register associated with each one:
+                if (!relevantTransactions.isEmpty()) {
+                    for (int i = 1; i <= relevantTransactions.size(); i++) {
+                        Transaction relevantTransaction = relevantTransactions.get(i - 1);
+                        Register associatedRegister = registers.get(i - 1);
+                        view.say(STR."   \{i}.  \{relevantTransaction.getPayee()}, \{associatedRegister.getName()}");
+                    }
+
+                    view.say("The following register matches the token in the memo: " + registers.get(0).toStringConcise());
+                    if (view.getYesOrNo("Is this the correct register for this transfer?")) {
+                        return register;
+                    }
+                }
+            }
         }
 
+        // TODO:  If it is a recurring transfer, then try matching on recurring transfers for the same amount:
+
+        // If we haven't found a match, give up and let the user select a register from a list of all registers:
+        view.say("Select the account to assign this transaction to:  ");
+        registers = Register.getListOf();
+        for (int i = 1; i <= registers.size(); i++) {
+            Register register = registers.get(i - 1);
+            view.say(STR."   \{i}.  \{register.getName()}, \{register.getAccountType()}, \{register.getAccountNumber()}");
+        }
         int selection = view.getNumberBetween("Enter the number of the selection", 1,
-                registers.size(), ViewInt.ALLOW_CANCEL , ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
+                registers.size(), ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
 
         return registers.get(selection - 1);
     }
@@ -208,14 +257,14 @@ public class RegisterController {
     /**
      * The amount of the transaction is significantly different from the planned amount for the current period.
      *
-     * @param transaction
-     * @param split
-     * @param forecastTransaction
-     * @return
-     * @throws BudgetException
-     * @throws SQLException
-     * @throws EntityException
-     * @throws ForecastException
+     * @param transaction         The transaction with the split that has a discrepancy.
+     * @param split               The split that has a discrepancy.
+     * @param forecastTransaction The forecast transaction has a discrepancy.
+     * @return UserResponse The user's response to the discrepancy.
+     * @throws BudgetException   If there is an error retrieving the budget item.
+     * @throws SQLException      If there is a database error.
+     * @throws EntityException   If there is a non-database error.
+     * @throws ForecastException If there is an error retrieving the forecast transaction.
      */
     public UserResponse transactionAmountDiscrepancy(Transaction transaction, TransactionSplit split,
                                                      ForecastTransaction forecastTransaction) throws BudgetException, SQLException, EntityException,
@@ -308,18 +357,16 @@ public class RegisterController {
                 if (merchant == null) {
                     merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                     if (merchant == null) {
-                        ImportController.TerminationCondition terminationCondition =  FOUND;
+                        ImportController.TerminationCondition terminationCondition = FOUND;
                         try {
                             MerchantController merchantController = new MerchantController(view, notificationService);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {
                             terminationCondition = CANCEL;
-                        }
-                        catch (SkipException se) {
+                        } catch (SkipException se) {
                             terminationCondition = SKIP;
-                        }
-                        catch (QuitException qe) {
+                        } catch (QuitException qe) {
                             terminationCondition = QUIT;
                         }
                         if (merchant == null) {
@@ -355,8 +402,7 @@ public class RegisterController {
                 if (budgetItemsForMerchant.isEmpty()) {
                     try {
                         budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
-                    }
-                    catch (SkipException se) {
+                    } catch (SkipException se) {
                         transaction.save(INSERT_ON_DUPLICATE_UPDATE);
                         continue;
                     }
@@ -459,18 +505,16 @@ public class RegisterController {
                 if (merchant == null) {
                     merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                     if (merchant == null) {
-                        ImportController.TerminationCondition terminationCondition =  FOUND;
+                        ImportController.TerminationCondition terminationCondition = FOUND;
                         try {
                             MerchantController merchantController = new MerchantController(view, notificationService);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {
                             terminationCondition = CANCEL;
-                        }
-                        catch (SkipException se) {
+                        } catch (SkipException se) {
                             terminationCondition = SKIP;
-                        }
-                        catch (QuitException qe) {
+                        } catch (QuitException qe) {
                             terminationCondition = QUIT;
                         }
                         if (merchant == null) {
@@ -505,8 +549,7 @@ public class RegisterController {
                 if (budgetItemsForMerchant.isEmpty()) {
                     try {
                         budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
-                    }
-                    catch (SkipException se) {
+                    } catch (SkipException se) {
                         transaction.save(INSERT_ON_DUPLICATE_UPDATE);
                         continue;
                     }

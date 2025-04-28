@@ -657,7 +657,8 @@ public class ForecastController {
                                     dbForecastTransaction.getRemainingAmount()) > 0.50) {
 
                                 overwrite = true;
-                                if (ssForecastTransaction.getVersion().compareTo(dbForecastTransaction.getVersion()) < 0) {
+                                if (Utility.dateOnlyCompare(ssForecastTransaction.getVersion(),
+                                        dbForecastTransaction.getVersion()) < 0) {
                                     // Then ask the user if they want to overwrite the updated database value:
                                     view.say("\nThe amount of an imported forecast transaction has " +
                                             "changed, but the version of the imported forecast transaction is prior to" +
@@ -680,8 +681,9 @@ public class ForecastController {
                                     view.say("New amount is:  " +
                                             Utility.formatDollarAmount(ssForecastTransaction.getRemainingAmount()));
                                     dbForecastTransaction.setRemainingAmount(ssForecastTransaction.getRemainingAmount());
-                                    // TODO:  Set the "override" flag on the forecast transaction to prevent it from
+                                    // Set the "override" flag on the forecast transaction to prevent it from
                                     // being deleted during the forecast update process:
+                                    dbForecastTransaction.setOverridden(true);
                                 }
                             }
 
@@ -826,16 +828,28 @@ public class ForecastController {
         // Delete any expired forecast items that have no linked forecast transactions.
         ForecastItem.deleteExpiredUnusedForecastItems(forecast);
 
-        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones.
+        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones
+        // and any that have been assigned splits:
         String deleteQuery = ForecastTransaction.getDeleteQuery() +
-                "where ForecastItem_idForecastItem " +
-                "in (" +
-                "select idForecastItem " +
-                "from forecast_item " +
-                "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
-                ") " +
-                "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
-                "and not overridden";
+                "where " +
+                    "ForecastItem_idForecastItem in (" +
+                        "select " +
+                            "idForecastItem " +
+                        "from " +
+                            "forecast_item " +
+                        "where " +
+                            "Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                    ") " +
+                    "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
+                    "and not overridden " +
+                    "and not exists (" +
+                        "select 1 " +
+                        "from " +
+                            "forecast_transaction_split " +
+                        "where " +
+                            "forecast_transaction_split.ForecastTransaction_idForecastTransaction = " +
+                                "forecast_transaction.idForecastTransaction" +
+                    ")";
         executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
 

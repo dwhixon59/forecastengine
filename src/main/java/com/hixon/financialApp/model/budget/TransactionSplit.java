@@ -293,12 +293,15 @@ public class TransactionSplit extends DependentEntity {
 
         // Create a query to get the new transactions for the budget item:
         String query =
-                TransactionSplit.getSelectQuery() +
+            "select " +
+                    TransactionSplit.getSelectColumns() + ", " + Transaction.getSelectColumns() +
+            "from " +
+                "transaction_split ts " +
                 "inner join " +
                     "transaction tr on ts.Transaction_idTransaction = tr.idTransaction " +
-                "where " +
-                  "ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "') and " +
-                  "tr.isNew = true";
+            "where " +
+              "ts.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "') and " +
+              "tr.isNew = true";
 
         // Get the transactions for the budget item:
         ResultSet rs = EntityInt.getRS(query, "while trying to get the new transactions for a budget item");

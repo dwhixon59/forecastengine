@@ -14,6 +14,8 @@ import com.hixon.financialApp.view.base.ViewInt;
 
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 /*
  * This class enables the user to manage budget items, e.g. add, update, delete, etc.
@@ -73,17 +75,20 @@ public class DataManagerController {
         // Setup subsidiary controllers:
         budgetController = new BudgetController(register, budget, forecast, view, notificationService);
 
-        /*
         // Create a list of entities that the user can manage:
         List<String> entities = new ArrayList<>();
-        entities.add("Budget Items");
-        entities.add("Envelope Items");
+        entities.add("Budgets");
+        entities.add("Cities");
+        entities.add("Forecasts");
+        entities.add("Registers");
+        entities.add("Transactions");
+        entities.add("Merchants");
+        entities.add("Users");
 
         // Show the user a list of entities that they can manage:
-        view.selectFromNumberedList();
-        String prompt = "What category of data would you like to manage (a-add, d-delete, u-update, q-quit)?";
-        String option = view.selectFromFirstLetterList(prompt, "a,d,u,q");
-        */
+//        view.selectFromNumberedList();
+//        String prompt = "What category of data would you like to manage (a-add, d-delete, u-update, q-quit)?";
+//        String option = view.selectFromFirstLetterList(prompt, "a,d,u,q");
 
         // Confirm for the user what we are up to:
         view.say("MANAGE BUDGET ITEMS:  ");
