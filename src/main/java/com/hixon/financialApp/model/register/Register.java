@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -19,6 +20,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.getView;
@@ -27,7 +29,8 @@ public class Register extends IndependentEntity {
     /*
      * Statics and constants:
      */
-
+    public static final String CHECKING = "Checking";
+    public static final String SAVINGS = "Savings";
 
     /*
      * Fields in the Register class:
@@ -75,6 +78,7 @@ public class Register extends IndependentEntity {
     private List<Transaction> significantEvents = new ArrayList<>();
     protected ViewInt view = null;
     protected NotificationServiceInt notificationService = null;
+
 
 
     /*
@@ -204,6 +208,19 @@ public class Register extends IndependentEntity {
     /*
      * Helper methods:
      */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Register register = (Register) o;
+        return id.equals(register.id); // or however you define identity
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id); // or consistent with equals
+    }
+
     public void addSignificantEvent(Transaction transaction) {
         significantEvents.add(transaction);
     }
@@ -347,7 +364,7 @@ public class Register extends IndependentEntity {
     }
 
     /**
-     * Set the isNew flag for transactions in this register too false to reflect that the transactions have all been
+     * Set the isNew flag for transactions in this register to false to reflect that the transactions have all been
      * reported on already.
      */
     public static void setTransactionsToNotNew(Register register) throws EntityException, RegisterException {
@@ -363,5 +380,29 @@ public class Register extends IndependentEntity {
     public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException, BudgetException,
             RegisterException {
         return Transaction.isSkippedTransactionsWrtForecast(forecast);
+    }
+
+    /**
+     * Get a list of registers that are owned by the user:
+     *
+     * @return List<Entity>  A list of transactions.
+     */
+    public static List<Register> getListOfByUserAndType(User user, String accountType) throws SQLException,
+            EntityException, RegisterException {
+
+        final List<Register> items = new ArrayList<>();
+
+        // Get a result set of the transactions that haven't been reported on before:
+        ResultSet rs = EntityInt.getRS(
+            STR."\{selectQuery} where r.account_type = '\{accountType}' and r.idUser  = uuid_to_bin('\{user.getId()}')",
+                "attempting to retrieve a list of registers by user and type."
+        );
+
+        // Then add each transaction in the result set to the list of new transactions:
+        while (rs.next()) {
+            items.add(new Register(rs));
+        }
+
+        return items;
     }
 }

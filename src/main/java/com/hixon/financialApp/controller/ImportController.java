@@ -19,6 +19,7 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 
 import java.io.*;
@@ -142,11 +143,18 @@ public class ImportController {
             BufferedReader br = Utility.openBufferedFileReader(Transaction.CLEARED_TRANSACTIONS_FILE,
                     clearedTransactionsFilename);
 
-            // Read the records in the file into a list so that we can process them in reverse order:
+            // Use CSVFormat.Builder for better forward compatibility
+            CSVFormat format = CSVFormat.Builder.create(CSVFormat.RFC4180)
+                    .setHeader(Transaction.Headers.class)
+                    .setTrim(true)
+                    .build();
+
             List<CSVRecord> recordList = new ArrayList<>();
-            Iterable<CSVRecord> records = CSVFormat.RFC4180.withHeader(Transaction.Headers.class).parse(br);
-            for (CSVRecord record : records) {
-                recordList.add(record);
+
+            try (CSVParser parser = new CSVParser(br, format)) {
+                for (CSVRecord record : parser) {
+                    recordList.add(record);
+                }
             }
             br.close();
 

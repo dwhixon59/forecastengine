@@ -13,6 +13,13 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * The User class represents an entity for managing user-related data and operations.
+ * It extends the IndependentEntity class, inheriting its properties and behaviors.
+ * This class includes fields to store user attributes, such as username, password, name details,
+ * email, phone number, and other metadata. It also provides methods for creating,
+ * updating, deleting, and retrieving user entities from a database.
+ */
 public class User extends IndependentEntity {
 
 
@@ -30,7 +37,7 @@ public class User extends IndependentEntity {
    String personalFileSystem;
 
 
-   /*
+    /*
     * Getters and Setters:
     */
    public String getUserName() {
@@ -240,6 +247,20 @@ public class User extends IndependentEntity {
               "attempting to retrieve a user by name");
       return new User(rs);
    }
+
+
+   // Get a list of users by last name and first initial:
+   public static List<User> findByLastNameAndFirstInitial(String lastName, String firstInitial) throws EntityException,
+           SQLException {
+      String query = STR."\{User.getSelectQuery()} where u.lastName = '\{lastName}' AND u.firstName LIKE '\{firstInitial}%'";
+      ResultSet rs = EntityInt.getRS(query, "attempting to retrieve a user by last name and first initial");
+      List<User> users = new ArrayList<>();
+      while (rs.next()) {
+         users.add(new User(rs));
+      }
+      return users;
+   }
+
 
    // Get a list of the users:
    public static List<User> getAllUsers() throws EntityException, SQLException {

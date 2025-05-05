@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.CityStateChecker;
 import com.hixon.financialApp.utility.Utility;
@@ -19,10 +20,26 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * The WellsFargoBankController class is responsible for handling and processing
+ * Wells Fargo bank transaction data imported from CSV files. This class extends
+ * FinancialInstitutionController and provides specific implementations for
+ * managing transactions, parsing details, and handling merchant data from
+ * Wells Fargo CSV transaction download files.
+ *
+ */
 /*
  * This class analyzes transactions from a Wells Fargo CSV download file:
  */
 public class WellsFargoBankController extends FinancialInstitutionController {
+
+    /*
+     * Constants for the Wells Fargo download file transaction classifier:
+     */
+    public static final String CHECKING = "Checking";
+    public static final String SAVINGS = "Savings";
+    public static final String[] ACCOUNT_TYPES = {CHECKING, SAVINGS};
+
 
     /*
      * Fields in the Wells Fargo download file transaction classifier:
@@ -57,6 +74,32 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return record.get(Transaction.Headers.TRANSACTION_DATE) + "\t" + record.get(Transaction.Headers.AMOUNT) + "\t" +
                 record.get(Transaction.Headers.CLEARED) + "\t" + record.get(Transaction.Headers.CHECK_NUMBER) + "\t" +
                 record.get(Transaction.Headers.PAYEE);
+    }
+
+    /**
+     * Extracts the account type from the given payee string.
+     * The method checks for specific keywords in the payee string
+     * to determine the account type (e.g., "Checking", "Savings").
+     *
+     * @param payee The input string containing the payee information
+     * @return A string representing the extracted account type
+     */
+    @Override
+    public String extractAccountType(String payee) {
+
+        if (payee == null || payee.isEmpty()) {
+            return null;
+        }
+
+        // Check for specific keywords in the payee string to determine the account type
+        if (payee.toLowerCase().contains("checking")) {
+            return CHECKING;
+        } else if (payee.toLowerCase().contains("savings")) {
+            return SAVINGS;
+        }
+
+        // If no specific keywords are found, return null
+        return null;
     }
 
 
@@ -416,5 +459,41 @@ public class WellsFargoBankController extends FinancialInstitutionController {
                 payeeTokens[i] = "###";
             }
         }
+    }
+
+    /**
+     * Extracts a user based on specific patterns in the given payee string.
+     * The method parses the input string to identify tokens indicating potential
+     * user information, such as "TO" or "FROM", followed by a last name and a first initial.
+     * It attempts to locate a matching User in the database using the provided information.
+     *
+     * @param payee The input string containing the payee information to extract user data from.
+     * @return A User object that matches the extracted information or null if no match is found
+     * or the input does not contain valid user data.
+     */
+    @Override
+    public List<User> extractUsers(String payee) {
+        if (payee == null || payee.isEmpty()) {
+            return null;
+        }
+
+        String[] tokens = payee.split("\\s+");
+        for (int i = 0; i < tokens.length - 1; i++) {
+            if (tokens[i].equalsIgnoreCase("TO") || tokens[i].equalsIgnoreCase("FROM")) {
+                if (i + 2 < tokens.length) {
+                    String lastName = tokens[i + 1];
+                    String firstInitial = tokens[i + 2];
+
+                    if (firstInitial.length() == 1) {
+                        try {
+                            return User.findByLastNameAndFirstInitial(lastName, firstInitial);
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

@@ -5,6 +5,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.merchant.Merchant;
+import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
@@ -14,6 +15,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.List;
 
 public class GenericClassifer implements FinancialInstitutionInt {
 
@@ -126,5 +128,19 @@ public class GenericClassifer implements FinancialInstitutionInt {
     public String extractUserDescription(String payee) {
         return null;
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<User> extractUsers(String payee) {
+        return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String extractAccountType(String payee) {return "";}
 }
 

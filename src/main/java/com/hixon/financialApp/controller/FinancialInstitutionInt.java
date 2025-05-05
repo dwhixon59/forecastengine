@@ -5,11 +5,13 @@ import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.user.User;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.List;
 
 public interface FinancialInstitutionInt {
 
@@ -30,4 +32,21 @@ public interface FinancialInstitutionInt {
 
     // Extract the memo or user description from the raw text of a register entry:
     String extractUserDescription(String payee);
+
+    /**
+     * Extracts the user identification information from the raw text of a register entry.  Then looks up the user and
+     * returns the user object if found.
+     *
+     * @param payee the raw text of the register entry containing user information
+     * @return a User object containing the extracted user data
+     */
+    List<User> extractUsers(String payee);
+
+    /**
+     * Extracts the account type information from the given payee string.
+     *
+     * @param payee the raw text of the payee containing account type information
+     * @return a string representing the extracted account type
+     */
+    String extractAccountType(String payee);
 }

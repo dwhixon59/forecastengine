@@ -13,11 +13,11 @@ import com.hixon.financialApp.model.merchant.MerchantPayee;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
-import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.jetbrains.annotations.Nullable;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -142,19 +142,40 @@ public class RegisterController {
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
+/*
+        // Get a set of all the registers that we will progressively narrow down.  If at any point the list of possible
+        // registers is 1, then return that register:
+        Register relevantRegister;
+        Set<Register> relevantRegisters = new HashSet<>(Register.getListOf());
+
+        // Narrow the list of possible registers by removing the register that we are currently working with:
+        relevantRegisters.remove(register);
+        if (relevantRegisters.size() <= 1) return isTheRegister(new ArrayList<>(relevantRegisters));
 
         // Narrow the list of possible registers that this transaction could be in to the ones that are of the same type
-        // as the payee and owned by the same user:
-        List<Pair<Register, User>> registers = Register.getListOfByUserAndType(financialInstitution.extractUser(payee),
-                financialInstitution.extractAccountType(payee));
-        if (registers.size() == 1)
-            Register register = registers.get(0);
-            view.say("The only register of type " + register.getAccountType() " owned by " + register.toStringConcise());
-            if (view.getYesOrNo("Is this the correct register for this transfer?")) {
-                return register;
+        // as the register in the payee and owned by the same user:
+        Set<Register> registersSameTypeAndUser = new HashSet<>();
+        List<User> users = financialInstitution.extractUsers(payee);
+        if (users.isEmpty()) {
+            view.say(STR."There are no users associated with this payee: \{payee}.");
+        } else {
+            String accountType = financialInstitution.extractAccountType(payee);
+            if (accountType == null) {
+                view.say(STR."There is not a known account type associated with this payee: \{payee}");
+                return null;
             }
+            for (User user : users) {
+                registersSameTypeAndUser.add(
+                        (Register) Register.getListOfByUserAndType(user, accountType));
+            }
+            relevantRegisters.retainAll(registersSameTypeAndUser);
+            if (relevantRegisters.isEmpty()) {
+                view.say(STR."There are no \{accountType} accounts owned by the user \{financialInstitution.extractUsers(payee)}.");
+                return null;
+            }
+            if (relevantRegisters.size() == 1) return isTheRegister(new ArrayList<>(relevantRegisters));
         }
-
+*/
         // Get the merchant from the most recent transaction that used this payee, if there is one, and use that as the
         // register name if it matches the name of a register and the user approves:
         Transaction transaction = Transaction.getMostRecentTransactionByPayee(payee);
@@ -240,6 +261,33 @@ public class RegisterController {
                 registers.size(), ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
 
         return registers.get(selection - 1);
+    }
+
+    /**
+     * If no registers are available, returns null. If only one register exists, prompts the user to confirm
+     * whether it is the correct one before returning it.  If it is not the correct one, returns null.
+     *
+     * @param registers the list of registers to evaluate; must not be null
+     * @return the confirmed register if the user agrees, or null if no registers are available
+     * or the user does not confirm the single register
+     */
+    private @Nullable Register isTheRegister(List<Register> registers) {
+
+        // If there are no registers, return null:
+        if (registers.isEmpty()) {
+            return null;
+        }
+
+        // If there is only one register, confirm with the user that this is the correct register:
+        if (registers.size() == 1) {
+            Register relevantRegister = registers.get(0);
+            //view.say("The only register of type " + relevantRegister.getAccountType() + " owned by " +
+            //relevantRegister.getUser().getName() + " is " + relevantRegister.toStringConcise());
+            if (view.getYesOrNo("Is this the correct register for this transfer?")) {
+                return relevantRegister;
+            }
+        }
+        return null;
     }
 
     /**
