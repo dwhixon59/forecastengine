@@ -221,8 +221,6 @@ public class ImportController {
 
                     // If there wasn't a merchant associated with the transaction payee, then assign or create one:
                     if (merchant == null) {
-                        System.out.println("TODO:  Handle cancel, skip and quit options in Importer.java");
-                        System.out.println("TODO:  Add standardized basic, expert and help options to the resolver.");
                         try {
                             MerchantController merchantController = new MerchantController(view, notificationService);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(), transaction.getPayee(),
@@ -235,7 +233,7 @@ public class ImportController {
                             terminationCondition = QUIT;
                         }
 
-                        // If the user aborted the merchant assignment process then figure out what to do:
+                        // If the user aborted the merchant assignment process, then figure out what to do:
                         if (merchant == null) {
                             switch (terminationCondition) {
 

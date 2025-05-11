@@ -202,16 +202,16 @@ public class BudgetController {
         // If we need to ask the user to enter the splits:
         List<TransactionSplit> splits = new ArrayList<>();
         if (
-                merchant.isAskAlways() || // If this is a merchant that the user wants to be asked about every time,
-                        (
-                                (budgetItemMerchants.size() > 1) && // or there is more then one budget item and
-                                        // they are not fixed amounts:
-                                        ((budgetItemMerchants.get(0).getAmount() == 0) &&
-                                                (budgetItemMerchants.get(0).getPercentage() == 0))
-                        )
+            merchant.isAskAlways() || // If this is a merchant that the user wants to be asked about every time,
+            (
+                // or there is more than one budget item:
+                (budgetItemMerchants.size() > 1) &&
+                // and they are not fixed amounts:
+                ((budgetItemMerchants.get(0).getAmount() == 0) && (budgetItemMerchants.get(0).getPercentage() == 0)))
         ) {
-            // Ask the user to enter the splits:
-            TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget, forecast, view, notificationService);
+            // then ask the user to enter the splits:
+            TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget,
+                    forecast, view, notificationService);
             transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
         }
         else {

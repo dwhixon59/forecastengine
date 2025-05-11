@@ -213,7 +213,7 @@ public class Register extends IndependentEntity {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Register register = (Register) o;
-        return id.equals(register.id); // or however you define identity
+        return id.equals(register.id); // identity defined as the primary keys match.
     }
 
     @Override
@@ -392,11 +392,18 @@ public class Register extends IndependentEntity {
 
         final List<Register> items = new ArrayList<>();
 
+        String query =
+            selectQuery + " " +
+            "INNER JOIN " +
+                "user_register ur ON r.idRegister = ur.register_idRegister " +
+            "INNER JOIN " +
+                "user u ON ur.user_idUser = u.idUser " +
+            "WHERE " +
+                "u.idUser = UUID_TO_BIN('" + user.getId() + "') AND " +
+                "r.account_type = '" + accountType + "'";
+
         // Get a result set of the transactions that haven't been reported on before:
-        ResultSet rs = EntityInt.getRS(
-            STR."\{selectQuery} where r.account_type = '\{accountType}' and r.idUser  = uuid_to_bin('\{user.getId()}')",
-                "attempting to retrieve a list of registers by user and type."
-        );
+        ResultSet rs = EntityInt.getRS(query, "attempting to retrieve a list of registers by user and type.");
 
         // Then add each transaction in the result set to the list of new transactions:
         while (rs.next()) {

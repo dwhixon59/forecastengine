@@ -613,17 +613,19 @@ public class Transaction extends IndependentEntity {
      * @param payee The payee to search for.
      * @return The most recent transaction by payee.  Null if no transaction is found.
      */
-    public static Transaction getMostRecentTransactionByPayee(String payee) throws Exception {
+    public static Transaction getMostRecentTransactionByPayee(String payee, double amount) throws Exception {
 
         // Create the SQL query to get the most recent transaction by payee ignoring the REF #:
         String query =
-        getSelectQuery() + " " +
-        "INNER JOIN merchant m on tr.Merchant_idMerchant = m.idMerchant " +
-        "WHERE " +
-            "tr.payee LIKE '" + payee.replaceAll("REF #\\S+", "REF #%") + "' " +
-        "ORDER BY " +
-            "tr.postDate DESC " +
-        "lIMIT 1";
+            getSelectQuery() + " " +
+                "INNER JOIN merchant m on " +
+                    "tr.Merchant_idMerchant = m.idMerchant " +
+                "WHERE " +
+                    "tr.payee LIKE '" + payee.replaceAll("REF #\\S+", "REF #%" ) + "' " +
+                    "AND tr.amount BETWEEN " + (amount * 0.9) + " AND " + (amount * 1.1) + " " +
+                "ORDER BY " +
+                    "tr.postDate DESC " +
+                "lIMIT 1";
 
         // Execute the query and return the result set:
         ResultSet rs = getRS(query, "attempting to retrieve the most recent transaction by payee.");
@@ -644,15 +646,54 @@ public class Transaction extends IndependentEntity {
 
         // Create the SQL query to get the most similar transactions using a full text search on the payee description:
         String query =
+            "WITH ranked_transactions AS ( " +
+                "SELECT " +
+                    "tr.*, " +
+                    "BIN_TO_UUID(tr.idTransaction) AS uuidTransaction, " +
+                    "BIN_TO_UUID(tr.Register_idRegister) AS uuidRegister, " +
+                    "BIN_TO_UUID(tr.Merchant_idMerchant) AS uuidMerchant, " +
+                    "TRIM( " +
+                        "CONCAT( " +
+                            "SUBSTRING_INDEX(tr.payee, '#', 1), " +
+                            "SUBSTRING(tr.payee, LOCATE(' ', tr.payee, LOCATE('#', tr.payee)) + 1) " +
+                        ") " +
+                    ") AS normalized_payee, " +
+                    "MATCH (user_description) AGAINST ('ALIMONY' IN NATURAL LANGUAGE MODE) AS relevance, " +
+                    "ROW_NUMBER() OVER ( " +
+                        "PARTITION BY " +
+                            "TRIM( " +
+                                "CONCAT( " +
+                                    "SUBSTRING_INDEX(tr.payee, '#', 1), " +
+                                    "SUBSTRING(tr.payee, LOCATE(' ', tr.payee, LOCATE('#', tr.payee)) + 1) " +
+                                " ) " +
+                            "), " +
+                            "tr.amount, " +
+                            "tr.Merchant_idMerchant " +
+                        "ORDER BY " +
+                            "tr.postDate DESC " +
+                    ") AS rn " +
+                "FROM transaction tr " +
+                "WHERE MATCH (user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) " +
+            ") " +
             "SELECT " +
-                selectColumns + ", " +
-                "MATCH(user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) AS relevance " +
-            "FROM " +
-                "transaction tr " +
-            "WHERE " +
-                "MATCH(user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) " +
-            "ORDER BY " +
-                "relevance DESC " +
+                "uuidTransaction AS 'tr.idTransaction', " +
+                "postDate AS 'tr.postDate', " +
+                "authorizationDate AS 'tr.authorizationDate', " +
+                "amount AS 'tr.amount', " +
+                "cleared AS 'tr.cleared', " +
+                "checkNumber AS 'tr.checkNumber', " +
+                "normalized_payee AS 'tr.payee', " +
+                "user_description AS 'tr.user_description', " +
+                "balance AS 'tr.balance', " +
+                "isImproper AS 'tr.isImproper', " +
+                "isNew AS 'tr.isNew', " +
+                "importRecordId AS 'tr.importRecordId', " +
+                "uuidRegister AS 'tr.idRegister', " +
+                "uuidMerchant AS 'tr.idMerchant', " +
+                "relevance " +
+            "FROM ranked_transactions " +
+            "WHERE rn = 1 " +
+            "ORDER BY relevance DESC " +
             "LIMIT 10";
 
         // Execute the query:

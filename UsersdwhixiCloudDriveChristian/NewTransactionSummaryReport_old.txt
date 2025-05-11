@@ -1,0 +1,140 @@
+New transaction summary:
+02-18 Bill Pay Account $800
+    Float $25 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+02-18 Christine Jonas $15
+   *Short term borrowing ($20/$0)
+02-21 Joint Spending Accoun $202
+    Car maintenance ($30/$0)
+	Memo: New tire
+03-05 Danni's Spending Acco $700
+    Travel Envelope ($400/$0)
+03-06 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-07 Danni's Spending Accoun $7
+   *+Savings ($2/$0)
+03-10 Dave's Spending Accou $332
+    Travel Envelope ($400/$0)
+	Memo: Flights in Europe
+03-10 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-11 Danni's Spending Accoun $9
+   *+Savings ($2/$0)
+03-13 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-16 Joint Spending Accoun $810
+    Travel Envelope ($400/$0)
+03-17 Bill Pay Account $800
+   +Float $138 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+03-18 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-20 Danni's Spending Accoun $2
+   *Savings ($2/$0)
+03-21 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-25 Bill Pay Account $4
+    Travel Envelope ($400/$0)
+04-03 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+04-04 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+04-15 Bill Pay Account $800
+   +Float $138 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+05-04 Joint Spending Accoun $125
+    Joint Spending Money ($2,000/$1,216)
+05-04 Joint Spending Account $20
+    Joint Spending Money ($2,000/$1,216)
+05-05 7-Eleven $28
+    Joint Spending Money ($2,000/$1,216)
+	Memo: Gas
+05-05 Express Oil Change &  $189
+   *+Car maintenance ($100/$189)
+	Memo: Diagnostic fees
+05-05 Solera Community Asso $269
+    HOA Fees ($259/$269)
+05-05 Joint Spending Account $30
+    Joint Spending Money ($2,000/$1,216)
+05-05 Joint Spending Account $10
+    Joint Spending Money ($2,000/$1,216)
+05-05 Citibank $181
+    Citibank Card ($180/$181)
+05-05 Joint Spending Account $50
+    Joint Spending Money ($2,000/$1,216)
+05-06 American Express $285
+    American Express - Bonvoy ($281/$285)
+05-06 Shell Service Station $50
+    Joint Spending Money ($2,000/$1,216)
+	Memo: Gas
+05-06 Joint Savings Account $2
+   -Savings ($25/$2,866)
+05-06 Lowe's $132
+   -Home improvement ($145/$132)
+05-06 Christian's Checking  $125
+    Room rental ($250/$125)
+05-06 Bill Pay Envelopes $3,000
+   -Savings ($25/$2,866)
+05-06 Molina Hoy $5
+    Joint Spending Money ($2,000/$1,216)
+	Memo: Retirement gift
+05-06 JPMC Cafeteria $2
+    Joint Spending Money ($2,000/$1,216)
+05-07 Walmart $78
+    Joint Spending Money ($2,000/$1,216)
+	Memo: Groceries
+05-07 Walmart $12
+    Joint Spending Money ($2,000/$1,216)
+	Memo: Groceries
+05-07 Joint Savings Account $200
+   +Mother's day ($300/$520)
+05-07 Walmart $109
+    Joint Spending Money ($2,000/$1,216)
+05-07 Domestic & General $14
+   +Home maintenance ($13/$14)
+05-07 Burger King $4
+    Joint Spending Money ($2,000/$1,216)
+05-07 Joint Savings Account $1
+   -Savings ($25/$2,866) i
+05-07 Dave's Spending Acc $1,625
+    David's support payment ($3,250/$1,605)
+05-08 Mobil Oil $26
+    Joint Spending Money ($2,000/$1,216)
+05-08 Joint Savings Account $4
+   -Savings ($25/$2,866)
+05-08 Joint Spending Account $30
+    Joint Spending Money ($2,000/$1,216)
+05-08 Joint Spending Account $5
+    Joint Spending Money ($2,000/$1,216)
+05-09 Max's Table $34
+    Joint Spending Money ($2,000/$1,216)
+05-09 Joint Spending Accoun $400
+    Joint Spending Money ($2,000/$1,216)
+05-09 Affirm $2,880
+   -Electronics ($169/$2,880)
+05-09 Apple $11
+    AppleTV+ ($11/$11)
+05-09 MySchoolBucks.com $23
+   +School lunches for Justin ($0/$23)
+05-09 Christine Jonas $65
+   *Other ($25/$8) Groceries
+
+Current Balance:  $2,898

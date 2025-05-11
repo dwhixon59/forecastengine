@@ -1,0 +1,81 @@
+New transaction summary:
+02-18 Christine Jonas $15
+   *Short term borrowing ($20/$0)
+02-18 Bill Pay Account $800
+    Float $25 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+02-21 Joint Spending Accoun $202
+    Car maintenance ($30/$0)
+	Memo: New tire
+03-05 Danni's Spending Acco $700
+    Travel Envelope ($400/$0)
+03-06 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-07 Danni's Spending Accoun $7
+   *+Savings ($2/$0)
+03-10 Dave's Spending Accou $332
+    Travel Envelope ($400/$0)
+	Memo: Flights in Europe
+03-10 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-11 Danni's Spending Accoun $9
+   *+Savings ($2/$0)
+03-13 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-16 Joint Spending Accoun $810
+    Travel Envelope ($400/$0)
+03-17 Bill Pay Account $800
+   +Float $138 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+03-18 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-20 Danni's Spending Accoun $2
+   *Savings ($2/$0)
+03-21 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+03-25 Bill Pay Account $4
+    Travel Envelope ($400/$0)
+04-03 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+04-04 Danni's Spending Accoun $1
+   *Savings ($2/$0)
+04-15 Bill Pay Account $800
+   +Float $138 ($25/$0)
+    Justin $50 ($50/$0)
+    Home improvement $50 ($50/$0)
+    Travel Envelope $400 ($400/$0)
+    Veterinarians $20 ($20/$0)
+    Car maintenance $30 ($30/$0)
+    Boat maintenance $50 ($50/$0)
+    Christmas Gifts $63 ($50/$0)
+05-07 Max's Table $40
+    Joint Spending Money ($2,000/$1,007)
+05-09 Bill Pay Envelopes $2,880
+   +Savings ($25/$15)
+05-09 SunPass $10
+   *Tolls ($10/$10)
+05-09 Synchrony Bank $137
+   -Furniture ($145/$137)
+05-09 Joint Spending Accoun $400
+    Joint Spending Money ($2,000/$1,007)
+05-09 Joint Savings Account $1
+   -Savings ($25/$15)
+05-09 Danni's Spending Accou $35
+    Joint Spending Money ($2,000/$1,007)
+	Memo: Oil change
+05-09 Joint Spending Accoun $250
+    Joint Spending Money ($2,000/$1,007)
+
+Current Balance:  $79
