@@ -195,8 +195,7 @@ public class BudgetController {
     }
 
     public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget
-            budget,
-                                                             List<BudgetItemMerchant> budgetItemMerchants)
+            budget, List<BudgetItemMerchant> budgetItemMerchants)
             throws Exception {
 
         // If we need to ask the user to enter the splits:
@@ -405,13 +404,15 @@ public class BudgetController {
      *
      * @param budgetItemMerchants the list of assigned budget items for the merchant
      * @param amount              the amount of the transaction
+     * @param relevancyScores
      * @throws Exception if an error occurs during the display process
      */
-    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, double amount) throws Exception {
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
+                                            double amount) throws Exception {
         view.say("The assigned budget items and amounts (if specified) for this merchant are:");
         int i = 1;
         for (BudgetItemMerchant budgetItemMerchant : budgetItemMerchants) {
-            String line = "   " + i++ + ".  ";
+            String line = "   " + i + ".  ";
             line += budgetItemMerchant.getBudgetItem().getDisplayString();  // Using the new method
             if (budgetItemMerchant.getAmount() > 0) {
                 line += ", " + Utility.formatDollarAmount(budgetItemMerchant.getAmount()) + ", 0";
@@ -420,7 +421,16 @@ public class BudgetController {
                     line += ", 0, " + budgetItemMerchant.getPercentage() + "%";
                 }
             }
+
+            // If relevancy scores are provided, append them to the line.  If the user added a budget item to the list,
+            // then there won't be a relevancy score for it, so we check if the index is valid:
+            // Note: The relevancyScores list is expected to be one less than the budgetItemMerchants list
+            if (relevancyScores != null && (i - 1) < relevancyScores.size() && relevancyScores.get(i - 1) != null) {
+                line += ", Relevancy Score: " + relevancyScores.get(i - 1);
+            }
+
             view.say(line);
+            i++;
         }
     }
 

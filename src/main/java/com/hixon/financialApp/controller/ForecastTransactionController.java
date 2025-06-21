@@ -151,7 +151,7 @@ public class ForecastTransactionController {
                         case VARIABLE_PERIODIC:
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
-                            int variance = Utility.daysBeteween(forecastTransaction.getPlannedDate(),
+                            int variance = Utility.daysBetween(forecastTransaction.getPlannedDate(),
                                     split.getTransaction().getDate());
 
                             // If it is not on or about the planned date, then ask the user what they want to do:
@@ -244,7 +244,7 @@ public class ForecastTransactionController {
                         case UNPLANNED:
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
-                            int variance = Utility.daysBeteween(split.getTransaction().getDate(),
+                            int variance = Utility.daysBetween(split.getTransaction().getDate(),
                                     forecastTransaction.getPlannedDate());
                             if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 

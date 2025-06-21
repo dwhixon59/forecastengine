@@ -3,7 +3,6 @@ package com.hixon.financialApp.model.register;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.IndependentEntity;
-import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
@@ -12,9 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.entity.EntityInt.getRS;
@@ -22,37 +19,57 @@ import static com.hixon.financialApp.model.entity.EntityInt.getRSById;
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 import static com.hixon.financialApp.utility.Utility.stringDateSlashToCalendarDate;
 
-
+/**
+ * Represents a financial transaction in a register.
+ * Handles transaction data, persistence, and utility methods for transaction management.
+ */
 public class Transaction extends IndependentEntity {
 
     /*
      * Statics and Constants:
      */
+    /** File name for cleared transactions. */
     public static final String CLEARED_TRANSACTIONS_FILE = "cleared transactions";
-
+    /** File name for provisional transactions. */
     public static final String PROVISIONAL_TRANSACTIONS_FILE = "provisional transactions";
-
 
     /*
      * Fields of the Transaction class:
      */
+    /** The post date of the transaction. */
     private Calendar postDate = null;
+    /** The authorization date of the transaction. */
     private Calendar authorizationDate;
+    /** Whether the transaction is cleared. */
     private boolean cleared = false;
+    /** The check number associated with the transaction. */
     private int checkNumber = 0;
+    /** The payee for the transaction. */
     private String payee = null;
+    /** The amount of the transaction. */
     private double amount = 0;
+    /** The balance after the transaction. */
     private double balance = 0;
+    /** The UUID of the register associated with the transaction. */
     private UUID idRegister = null;
+    /** The register object associated with the transaction. */
     private Register register = null;
+    /** The UUID of the merchant associated with the transaction. */
     private UUID idMerchant = null;
+    /** The merchant payee string. */
     private String merchantPayee = null;
+    /** Whether the transaction is improper/disputed. */
     private boolean isImproper = false;
+    /** Whether the transaction is new. */
     private boolean isNew = true;
+    /** The import record ID for the transaction. */
     private String importRecordId = null;
+    /** The merchant object associated with the transaction. */
     private Merchant merchant;
 
-
+    /**
+     * Enum for transaction table headers.
+     */
     public enum Headers {
         TRANSACTION_DATE, AMOUNT, CLEARED, CHECK_NUMBER, PAYEE
     }
@@ -64,17 +81,30 @@ public class Transaction extends IndependentEntity {
             "tr.importRecordId as 'tr.importRecordId', bin_to_uuid(tr.Register_idRegister) as 'tr.idRegister', " +
             "bin_to_uuid(tr.Merchant_idMerchant) as 'tr.idMerchant'";
 
+    /**
+     * Returns the columns used in select queries for transactions.
+     * @return SQL select columns string
+     */
     public static String getSelectColumns() {
         return selectColumns;
     }
 
     private static final String selectQuery = "select " + getSelectColumns() + " from transaction tr";
 
+    /**
+     * Returns the SQL select query for transactions.
+     * @return SQL select query string
+     */
     public static String getSelectQuery() {
         return selectQuery;
     }
 
     private static final String countQuery = "select count(*) from transaction tr";
+
+    /**
+     * Returns the SQL count query for transactions.
+     * @return SQL count query string
+     */
     public static String getCountQuery() {
         return countQuery;
     }
@@ -83,6 +113,10 @@ public class Transaction extends IndependentEntity {
             "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
             "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
 
+    /**
+     * Returns the SQL insert query for this transaction.
+     * @return SQL insert query string
+     */
     @Override
     public String getInsertQuery() {
         return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
@@ -91,6 +125,11 @@ public class Transaction extends IndependentEntity {
                 importRecordId + "\", uuid_to_bin('" + getIdRegister() + "'), uuid_to_bin('" + getIdMerchant() + "'))";
     }
 
+    /**
+     * Returns the SQL insert or update query for this transaction.
+     * @return SQL insert or update query string
+     * @throws BudgetException if a budget error occurs
+     */
     @Override
     public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
@@ -104,20 +143,25 @@ public class Transaction extends IndependentEntity {
     private static final String updateQuery =
             "update transaction set ";
 
+    /**
+     * Returns the SQL update query for setting isNew to false by register.
+     * @return SQL update query string
+     */
     public static String getUpdateIsNewQuery() {
         return "update transaction set isNew = false where register_idRegister = uuid_to_bin('";
     }
 
-
     /**
-     * Validate the fields of an object.  Every entity is required to provide a method that validates the contents of
-     * the entity.
-     *
-     * @return true if the object is valid
+     * Validates the fields of the transaction.
+     * @return true if the transaction is valid
      */
     @Override
     public boolean isValid() { return true; }
 
+    /**
+     * Returns the SQL update query for this transaction by ID.
+     * @return SQL update query string
+     */
     @Override
     public String getUpdateByIdQuery() {
         return updateQuery + "postdate = " + Utility.calendarDateToSqlDateString(postDate) + ", authorizationDate = " +
@@ -131,77 +175,144 @@ public class Transaction extends IndependentEntity {
 
     private static final String deleteQuery = "delete from transaction where ";
 
+    /**
+     * Returns the SQL delete query for this transaction by ID.
+     * @return SQL delete query string
+     */
     @Override
     public String getDeleteByIdQuery() {
         return deleteQuery + "idTransaction = uuid_to_bin('" + id + "')";
     }
 
+    /**
+     * Returns the printable type name for this entity.
+     * @return printable type name
+     */
     @Override
     public String getPrintableTypeName() {
         return getPrintableTypeName_static();
     }
 
+    /**
+     * Returns the printable type name for transactions.
+     * @return printable type name
+     */
     public static String getPrintableTypeName_static() {
         return "transaction";
     }
 
-
     /*
      * Getters and setters:
      */
-    public void setIdTransaction(UUID idTransaction) {
 
+    /**
+     * Sets the transaction ID.
+     * @param idTransaction the transaction UUID
+     */
+    public void setIdTransaction(UUID idTransaction) {
         this.id = idTransaction;
     }
 
+    /**
+     * Gets the post date.
+     * @return post date
+     */
     public Calendar getPostDate() {
         return postDate;
     }
 
+    /**
+     * Sets the post date.
+     * @param postDate the post date
+     */
     public void setPostDate(Calendar postDate) {
         this.postDate = postDate;
     }
 
+    /**
+     * Checks if the transaction is cleared.
+     * @return true if cleared
+     */
     public boolean isCleared() {
         return cleared;
     }
 
+    /**
+     * Sets the cleared status.
+     * @param cleared true if cleared
+     */
     public void setCleared(boolean cleared) {
         this.cleared = cleared;
     }
 
+    /**
+     * Gets the check number.
+     * @return check number
+     */
     public int getCheckNumber() {
         return checkNumber;
     }
 
+    /**
+     * Sets the check number.
+     * @param checkNumber the check number
+     */
     public void setCheckNumber(int checkNumber) {
         this.checkNumber = checkNumber;
     }
 
+    /**
+     * Gets the payee.
+     * @return payee
+     */
     public String getPayee() {
         return payee;
     }
 
+    /**
+     * Sets the payee.
+     * @param payee the payee
+     */
     public void setPayee(String payee) {
         this.payee = payee;
     }
 
+    /**
+     * Gets the transaction amount.
+     * @return amount
+     */
     public double getAmount() {
         return amount;
     }
 
+    /**
+     * Sets the transaction amount.
+     * @param amount the amount
+     */
     public void setAmount(double amount) {
         this.amount = amount;
     }
 
+    /**
+     * Gets the balance after the transaction.
+     * @return balance
+     */
     public double getBalance() {
         return balance;
     }
 
+    /**
+     * Sets the balance after the transaction.
+     * @param balance the balance
+     */
     public void setBalance(double balance) {
         this.balance = balance;
     }
 
+    /**
+     * Gets the register UUID.
+     * @return register UUID
+     */
     public UUID getIdRegister() {
         if (idRegister == null) {
             idRegister = register.getId();
@@ -209,10 +320,21 @@ public class Transaction extends IndependentEntity {
         return idRegister;
     }
 
+    /**
+     * Sets the register UUID.
+     * @param idRegister register UUID
+     */
     public void setIdRegister(UUID idRegister) {
         this.idRegister = idRegister;
     }
 
+    /**
+     * Gets the register object.
+     * @return register
+     * @throws EntityException if a database error occurs
+     * @throws SQLException if a SQL error occurs
+     * @throws RegisterException if a register error occurs
+     */
     public Register getRegister() throws EntityException, SQLException, RegisterException {
         if (register == null) {
             register = Register.getById(idRegister);
@@ -220,22 +342,42 @@ public class Transaction extends IndependentEntity {
         return register;
     }
 
+    /**
+     * Sets the register object.
+     * @param register the register
+     */
     public void setRegister(Register register) {
         this.register = register;
     }
 
+    /**
+     * Gets the authorization date.
+     * @return authorization date
+     */
     public Calendar getAuthorizationDate() {
         return authorizationDate;
     }
 
+    /**
+     * Gets the effective date (authorization or post date).
+     * @return effective date
+     */
     public Calendar getDate() {
         return (authorizationDate != null) ? authorizationDate : postDate;
     }
 
+    /**
+     * Sets the authorization date.
+     * @param authorizationDate the authorization date
+     */
     public void setAuthorizationDate(Calendar authorizationDate) {
         this.authorizationDate = authorizationDate;
     }
 
+    /**
+     * Gets the merchant UUID.
+     * @return merchant UUID
+     */
     public UUID getIdMerchant() {
         if (idMerchant == null && merchant != null) {
             idMerchant = merchant.getId();
@@ -243,10 +385,20 @@ public class Transaction extends IndependentEntity {
         return idMerchant;
     }
 
+    /**
+     * Sets the merchant UUID.
+     * @param idMerchant merchant UUID
+     */
     public void setIdMerchant(UUID idMerchant) {
         this.idMerchant = idMerchant;
     }
 
+    /**
+     * Gets the merchant object.
+     * @return merchant
+     * @throws EntityException if a database error occurs
+     * @throws RegisterException if a register error occurs
+     */
     public Merchant getMerchant() throws EntityException, RegisterException {
         if (merchant == null) {
             merchant = Merchant.getById(idMerchant);
@@ -254,47 +406,92 @@ public class Transaction extends IndependentEntity {
         return merchant;
     }
 
+    /**
+     * Sets the merchant object.
+     * @param merchant the merchant
+     */
     public void setMerchant(Merchant merchant) {
         this.merchant = merchant;
     }
 
+    /**
+     * Sets the merchant payee string.
+     * @param merchantPayee merchant payee
+     */
     public void setMerchantPayee(String merchantPayee) {
         this.merchantPayee = merchantPayee;
     }
 
+    /**
+     * Gets the merchant payee string.
+     * @return merchant payee
+     */
     public String getMerchantPayee() {
         return merchantPayee;
     }
 
+    /**
+     * Checks if the transaction is improper/disputed.
+     * @return true if improper
+     */
     public boolean getIsImproper() {
         return isImproper;
     }
 
+    /**
+     * Sets the improper/disputed status.
+     * @param isImproper true if improper
+     */
     public void setIsImproper(boolean isImproper) {
         this.isImproper = isImproper;
     }
 
+    /**
+     * Checks if the transaction is new.
+     * @return true if new
+     */
     public boolean getIsNew() {
-        return false;
+        return isNew;
     }
 
+    /**
+     * Sets the new status.
+     * @param isNew true if new
+     */
     public void setIsNew(boolean isNew) {
         this.isNew = isNew;
     }
 
+    /**
+     * Gets the import record ID.
+     * @return import record ID
+     */
     public String getImportRecordId() {
         return importRecordId;
     }
 
+    /**
+     * Sets the import record ID.
+     * @param importRecordId import record ID
+     */
     public void setImportRecordId(String importRecordId) {
         this.importRecordId = importRecordId;
     }
 
-
     /*
      * Constructors:
      */
-    // Constructor for creating a new transaction from a register transaction CSV record:
+
+    /**
+     * Constructs a new transaction from a register transaction CSV record.
+     * @param register the register
+     * @param postDate the post date
+     * @param payee the payee
+     * @param amount the amount
+     * @param cleared whether cleared
+     * @param checkNumber the check number
+     * @param importRecordId the import record ID
+     */
     public Transaction(Register register, Calendar postDate, String payee, double amount, boolean cleared,
                        int checkNumber, String importRecordId) {
         super(true);
@@ -320,7 +517,11 @@ public class Transaction extends IndependentEntity {
         TransactionHistory.getInstance().add(this);
     }
 
-    // Constructor for creating a transaction from a ResultSet record:
+    /**
+     * Constructs a transaction from a ResultSet record.
+     * @param rs the ResultSet containing transaction data
+     * @throws SQLException if a SQL error occurs
+     */
     public Transaction(ResultSet rs) throws SQLException {
         super(false);
         loadFromResultSet(rs);
@@ -329,7 +530,15 @@ public class Transaction extends IndependentEntity {
         TransactionHistory.getInstance().add(this);
     }
 
-    // Constructor for importing a provisional transaction from a CSV record:
+    /**
+     * Constructs a provisional transaction from a CSV record.
+     * @param register the register
+     * @param postDate the post date string
+     * @param payee the payee
+     * @param amount the amount
+     * @param merchantPayee the merchant payee
+     * @throws ParseException if the date cannot be parsed
+     */
     public Transaction(Register register, String postDate, String payee, double amount, String merchantPayee)
             throws ParseException {
 
@@ -355,15 +564,29 @@ public class Transaction extends IndependentEntity {
         TransactionHistory.getInstance().add(this);
     }
 
-
     /*
      * Load and save methods:
+     */
+
+    /**
+     * Retrieves a transaction by its UUID.
+     * @param idTransaction the transaction UUID
+     * @return the Transaction object
+     * @throws EntityException if a database error occurs
+     * @throws SQLException if a SQL error occurs
      */
     public static Transaction getById(UUID idTransaction) throws EntityException, SQLException {
         return new Transaction(getRSById(getSelectQuery() + " where tr.idTransaction =", idTransaction,
                 "Database error encountered trying to retrieve a transaction."));
     }
 
+    /**
+     * Retrieves a transaction by its import record ID.
+     * @param importRecordId the import record ID
+     * @return the Transaction object, or null if not found
+     * @throws EntityException if a database error occurs
+     * @throws SQLException if a SQL error occurs
+     */
     public static Transaction getByImportRecordId(String importRecordId) throws EntityException, SQLException {
         ResultSet rs = getRS(getSelectQuery() + " where tr.importRecordId = \"" + importRecordId + "\"",
                 "Database error encountered trying to retrieve a transaction by importRecordId.");
@@ -374,8 +597,12 @@ public class Transaction extends IndependentEntity {
         return transaction;
     }
 
+    /**
+     * Loads transaction data from a ResultSet.
+     * @param rs the ResultSet
+     * @throws SQLException if a SQL error occurs
+     */
     public void loadFromResultSet(ResultSet rs) throws SQLException {
-
         id = UUID.fromString(rs.getString("tr.idTransaction"));
         postDate = Utility.localDateToCalendarDate(rs.getObject("tr.postDate", LocalDate.class));
         authorizationDate = Utility.localDateToCalendarDate(rs.getObject("tr.authorizationDate", LocalDate.class));
@@ -391,9 +618,13 @@ public class Transaction extends IndependentEntity {
         idMerchant = UUID.fromString(rs.getString("tr.idMerchant"));
     }
 
-
     /*
      * Helper methods:
+     */
+
+    /**
+     * Returns a summary string representation of the transaction.
+     * @return summary string
      */
     public String toStringSummary() {
         String authDate = (authorizationDate != null) ? "\n\tAuthorization date = " +
@@ -411,6 +642,10 @@ public class Transaction extends IndependentEntity {
         return s;
     }
 
+    /**
+     * Returns a detailed string representation of the transaction.
+     * @return detailed string
+     */
     public String toString() {
         String s = null;
         try {
@@ -437,6 +672,10 @@ public class Transaction extends IndependentEntity {
         return s;
     }
 
+    /**
+     * Returns a concise string representation of the transaction.
+     * @return concise string
+     */
     public String toStringConcise() {
         String checkNumberString = (checkNumber != 0) ? "Check number = " + checkNumber + ", " : "";
         String authDate = (authorizationDate != null) ? ", Authorized = " +
@@ -452,6 +691,11 @@ public class Transaction extends IndependentEntity {
         return s;
     }
 
+    /**
+     * Returns a very concise string representation of the transaction.
+     * @return very concise string
+     * @throws Exception if a database or query error occurs
+     */
     public String toStringVeryConcise() throws Exception {
         String date =
             (authorizationDate != null) ?
@@ -472,6 +716,10 @@ public class Transaction extends IndependentEntity {
         return s;
     }
 
+    /**
+     * Returns a string representation for provisional transactions.
+     * @return provisional transaction string
+     */
     public String provisionalToString() {
         String s = null;
         try {
@@ -495,219 +743,23 @@ public class Transaction extends IndependentEntity {
         return s;
     }
 
-
     /*
      * Main methods:
      */
-    // Find provisional transactions based on the merchant and amount and return the first one found:
-    public static Transaction getFirstProvisionalTransaction(UUID idMerchant, double amount) throws EntityException,
-            SQLException {
-
-        ResultSet rs = getRS(getSelectQuery() + " where tr.Merchant_idMerchant = uuid_to_bin('" + idMerchant +
-                "') and tr.amount = " + amount + " and tr.cleared = false order by tr.postDate asc", "Database error" +
-                " occured while trying to retrieve any provisional transactions that match a merchant and amount.");
-        Transaction transaction = null;
-        if (rs != null) {
-            if (rs.next()) {
-                transaction = new Transaction(rs);
-            }
-        }
-        return transaction;
-    }
-
-
-    // Get a list of transactions that have not been previously reported on:
-    public static ResultSet getNewTransactions(Register register) throws EntityException {
-        String query = getSelectQuery() + " where tr.isNew = true order by tr.authorizationDate asc";
-        return getRS(query, "attempting to retrieve a list of transactions that were not " +
-                "reported on in a previous new transactions report.");
-    }
 
     /**
-     * Find out if there are transactions that were skipped with respect to a particular forecast during the
-     * importRegisterTransactions() process.  We know they were skipped because the transactions have not been
-     * reconciled to the specified forecast.
-     *
-     * @param forecast The forecast that the transactions were skipped in.
-     * @return
-     * @throws EntityException
-     * @throws SQLException
+     * Reconciles this transaction with a provisional transaction if one exists.
+     * @return true if reconciliation was successful, false otherwise
+     * @throws EntityException if a database or entity error occurs
+     * @throws SQLException if a SQL error occurs
      */
-    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, SQLException,
-            BudgetException, RegisterException {
-        Calendar startDate = forecast.getStartDate();
-        Calendar fourMonthsAgo = Calendar.getInstance();
-        fourMonthsAgo.add(Calendar.MONTH, -4);
-        if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
-        String query = getCountQuery() + " " +
-                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
-                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
-                "tr.idTransaction not in " +
-                "(select idTransaction from transaction " +
-                "inner join transaction_split on idTransaction = Transaction_idTransaction " +
-                "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
-                "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
-                ") " +
-                "order by postDate asc";
-
-        ResultSet rs = getRS(query, "attempting to retrieve a count of the transactions that were previously " +
-                "skipped during the import process.");
-        rs.next();
-        int count = rs.getInt(1);
-        return (count > 0) ? true : false;
-    }
-
-    /**
-     * Get a list of transactions that were skipped with respect to a particular forecast during the
-     * importRegisterTransactions() process.  We know they were skipped because the transactions have not been
-     * reconciled to the specified forecast.
-     *
-     * @param forecast The forecast that the transactions were skipped in.
-     * @return
-     * @throws EntityException
-     */
-    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, BudgetException,
-            SQLException, RegisterException {
-        Calendar startDate = forecast.getStartDate();
-        Calendar fourMonthsAgo = Calendar.getInstance();
-        fourMonthsAgo.add(Calendar.MONTH, -4);
-        if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
-        String query = getSelectQuery() + " " +
-                "where tr.postDate >= " + Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
-                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
-                "tr.idTransaction not in " +
-                "(select idTransaction from transaction " +
-                "inner join transaction_split on idTransaction = Transaction_idTransaction " +
-                "inner join forecast_transaction_split on Transaction_idTransaction = Transaction_Split_idTransaction and " +
-                "BudgetItem_idBudgetItem = Transaction_Split_idBudgetitem " +
-                ") " +
-                "order by authorizationDate asc";
-        return getRS(query, "attempting to retrieve a list of transactions that were previously " +
-                "skipped during the import process.");
-    }
-
-
-    // Combine a cleared transaction with an uncleared transaction:
     public Boolean reconcileWithProvisional() throws EntityException, SQLException {
         Boolean result = false;
-        Transaction provisionalTransaction = getFirstProvisionalTransaction(merchant.getId(), amount);
+        Transaction provisionalTransaction = TransactionUtilities.getFirstProvisionalTransaction(merchant.getId(), amount);
         if (provisionalTransaction != null) {
             setId(provisionalTransaction.getId());
             result = true;
         }
         return result;
     }
-
-    // Set a list of transactions to not new:
-    public static void setTransactionsNotNew(List<Transaction> transactions) throws SQLException, EntityException {
-        for (Transaction transaction : transactions
-        ) {
-            transaction.setIsNew(false);
-            transaction.save(SaveMethod.UPDATE);
-        }
-    }
-
-    /**
-     * Get the most recent transaction by payee.
-     *
-     * @param payee The payee to search for.
-     * @return The most recent transaction by payee.  Null if no transaction is found.
-     */
-    public static Transaction getMostRecentTransactionByPayee(String payee, double amount) throws Exception {
-
-        // Create the SQL query to get the most recent transaction by payee ignoring the REF #:
-        String query =
-            getSelectQuery() + " " +
-                "INNER JOIN merchant m on " +
-                    "tr.Merchant_idMerchant = m.idMerchant " +
-                "WHERE " +
-                    "tr.payee LIKE '" + payee.replaceAll("REF #\\S+", "REF #%" ) + "' " +
-                    "AND tr.amount BETWEEN " + (amount * 0.9) + " AND " + (amount * 1.1) + " " +
-                "ORDER BY " +
-                    "tr.postDate DESC " +
-                "lIMIT 1";
-
-        // Execute the query and return the result set:
-        ResultSet rs = getRS(query, "attempting to retrieve the most recent transaction by payee.");
-        if (rs.next()) {
-            return new Transaction(rs);
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Get similar transactions by user entered description.
-     *
-     * @param userDescription The payee to search for.
-     * @return Up to 10 similar transactions.  Null if no transaction is found.
-     */
-    public static List<Transaction> getByUserDescriptionFullText(String userDescription) throws Exception {
-
-        // Create the SQL query to get the most similar transactions using a full text search on the payee description:
-        String query =
-            "WITH ranked_transactions AS ( " +
-                "SELECT " +
-                    "tr.*, " +
-                    "BIN_TO_UUID(tr.idTransaction) AS uuidTransaction, " +
-                    "BIN_TO_UUID(tr.Register_idRegister) AS uuidRegister, " +
-                    "BIN_TO_UUID(tr.Merchant_idMerchant) AS uuidMerchant, " +
-                    "TRIM( " +
-                        "CONCAT( " +
-                            "SUBSTRING_INDEX(tr.payee, '#', 1), " +
-                            "SUBSTRING(tr.payee, LOCATE(' ', tr.payee, LOCATE('#', tr.payee)) + 1) " +
-                        ") " +
-                    ") AS normalized_payee, " +
-                    "MATCH (user_description) AGAINST ('ALIMONY' IN NATURAL LANGUAGE MODE) AS relevance, " +
-                    "ROW_NUMBER() OVER ( " +
-                        "PARTITION BY " +
-                            "TRIM( " +
-                                "CONCAT( " +
-                                    "SUBSTRING_INDEX(tr.payee, '#', 1), " +
-                                    "SUBSTRING(tr.payee, LOCATE(' ', tr.payee, LOCATE('#', tr.payee)) + 1) " +
-                                " ) " +
-                            "), " +
-                            "tr.amount, " +
-                            "tr.Merchant_idMerchant " +
-                        "ORDER BY " +
-                            "tr.postDate DESC " +
-                    ") AS rn " +
-                "FROM transaction tr " +
-                "WHERE MATCH (user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) " +
-            ") " +
-            "SELECT " +
-                "uuidTransaction AS 'tr.idTransaction', " +
-                "postDate AS 'tr.postDate', " +
-                "authorizationDate AS 'tr.authorizationDate', " +
-                "amount AS 'tr.amount', " +
-                "cleared AS 'tr.cleared', " +
-                "checkNumber AS 'tr.checkNumber', " +
-                "normalized_payee AS 'tr.payee', " +
-                "user_description AS 'tr.user_description', " +
-                "balance AS 'tr.balance', " +
-                "isImproper AS 'tr.isImproper', " +
-                "isNew AS 'tr.isNew', " +
-                "importRecordId AS 'tr.importRecordId', " +
-                "uuidRegister AS 'tr.idRegister', " +
-                "uuidMerchant AS 'tr.idMerchant', " +
-                "relevance " +
-            "FROM ranked_transactions " +
-            "WHERE rn = 1 " +
-            "ORDER BY relevance DESC " +
-            "LIMIT 10";
-
-        // Execute the query:
-        ResultSet rs = getRS(query, "attempting to retrieve similar transactions by payee.");
-
-        // Create a list to hold the transactions:
-        List<Transaction> transactions = new ArrayList<>();
-
-        // Loop through the result set and add each transaction to the list:
-        while (rs.next()) {
-            transactions.add(new Transaction(rs));
-        }
-
-        return transactions;
-    }
 }
-

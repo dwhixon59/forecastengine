@@ -1037,7 +1037,7 @@ public abstract class Item extends IndependentEntity {
                 // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
                 // a 14 day period that the on-or-after-date falls.  So take 14 - the remainder, which is the part of a
                 // 14 days period that remains till the next date of this item, and add it to the on-or-after-date.
-                daysTillNextOccurrence = 14 - (Utility.daysBeteween(startDate, onOrAfterDate) % 14);
+                daysTillNextOccurrence = 14 - (Utility.daysBetween(startDate, onOrAfterDate) % 14);
                 Utility.copyDate(onOrAfterDate, nextDate);
                 if (daysTillNextOccurrence != 14) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);
@@ -1078,7 +1078,7 @@ public abstract class Item extends IndependentEntity {
                 // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
                 // a 21-day period that the on-or-after-date falls.  So take 21 - the remainder, which is the part of a
                 // 21-day period that remains till the next date of this item, and add it to the on-or-after-date.
-                daysTillNextOccurrence = 21 - (Utility.daysBeteween(startDate, onOrAfterDate) % 21);
+                daysTillNextOccurrence = 21 - (Utility.daysBetween(startDate, onOrAfterDate) % 21);
                 Utility.copyDate(onOrAfterDate, nextDate);
                 if (daysTillNextOccurrence != 21) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);
@@ -1090,7 +1090,7 @@ public abstract class Item extends IndependentEntity {
                 // the on-or-after-date.  This probably not a whole number.  The remainder represents the portion of
                 // a 28-day period that the on-or-after-date falls.  So take 28 - the remainder, which is the part of a
                 // 28-day period that remains till the next date of this item, and add it to the on-or-after-date.
-                daysTillNextOccurrence = 28 - (Utility.daysBeteween(startDate, onOrAfterDate) % 28);
+                daysTillNextOccurrence = 28 - (Utility.daysBetween(startDate, onOrAfterDate) % 28);
                 Utility.copyDate(onOrAfterDate, nextDate);
                 if (daysTillNextOccurrence != 28) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);

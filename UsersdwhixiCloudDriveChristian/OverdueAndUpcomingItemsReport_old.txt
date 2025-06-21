@@ -1,90 +1,102 @@
+OVERDUE ITEMS:
+-------------
+05-15 Undergrad student loa $305
+05-21 Prescriptions $164
+
 UPCOMING ITEMS:
---------------
-05-15	David's net pay 2    			 $4486	 $4566
-		   JPMORGAN CHASE B PAYROLL 
-05-15	Danni's net pay 				  $3391	  $7957
-		   MCCONNAUGHHAY DU ADP
-05-15	Room rental    				    $125	 $8082
-		   Christian
-05-15	AAdvantage Card - David    	  $-2200	  $5882
-		   Utilities and gym
-05-15	David's support payment    	$-1625	  $4257
-		   Transfer
-05-15	Bill Pay Envelopes    			   $-801	 $3456
-		   Fund envelopes
-05-15	Graduate student loan    		  $-550	 $2906
-05-15	Debt counseling payment    	  $-370	  $2536
-		   FORTH-CLARITY
-05-15	Costco - monthly trip    		  $-350	  $2186
-		   COSTCO
-05-15	Undergrad student loan		  $-305	   $1881
-05-15	Sophia's grooming			   $-105	  $1776
-05-15	Visitations 					    $-50	  $1726
-05-15	Children's allowances    		    $-50	  $1676
-05-15	School lunches for Justin    	    $-45	   $1631
-05-15	LinkedIn    					    $-34	  $1597
-05-15	Spotify						     $-19	  $1578
-05-16	Joint Spending Money    		  $-400	   $1178
-05-16	Savings    					    $-25	   $1153
-05-17	Jasmine's birthday			     $-61	  $1092
-05-18	Life insurance - David    		    $-70	  $1022
-05-19	Furniture    					    $-47	    $975
-		   Bar Stools - Affirm
-05-19	New York Times Cooking    	       $-5	    $970
-05-20	Office 365					     $-13	    $957
-		   Microsoft
-05-21	Prescriptions    				   $-164	    $793
-		   Dave - COMFORT IV
-05-22	The New York Times    		    $-20	    $773
-05-23	Joint Spending Money    		  $-400	    $373
-05-23	iCloud Storage				       $-3	    $370
-05-24	Room rental and utilities		  $1200	  $1570
-		   Christine
-05-25	Amazon Prime Credit Card    	   $-215	  $1355
-		   Chase Credit Card
-05-26	Car payment - Bertha    		  $-554	    $801
-		   Hyundai Motor Finance
-05-27	Groceries					     $-13	    $788
+-------------------
+05-27	Groceries					     $-13	  $-450
 		   Walmart+ Membership
-05-29	Electronics					   $-169	    $618
+05-29	Electronics					   $-169	  $-620
 		   Frame TV
-05-30	Joint Spending Money    		  $-400	    $218
-05-30	Life insurance - Danni    		    $-45	    $173
+05-30	Joint Spending Money    		   $-107	  $-727
+05-30	Life insurance - Danni    		    $-45	  $-772
 		   Banner Life
-05-31	Car insurance    				  $-606	  $-433
+05-31	Car insurance    				  $-606	$-1378
 		   State Farm
-06-01	David's net pay 1    			 $4486	 $4053
+Pay Period Ending Balance ============>		$-1378
+06-01	David's net pay 1    			 $4486	  $3109
 		   JPMORGAN CHASE B PAYROLL 
-06-01	Danni's net pay 				  $3391	 $7444
+06-01	Danni's net pay 				  $3391	 $6500
 		   MCCONNAUGHHAY DU ADP
-06-01	Room rental    				    $125	  $7569
+06-01	Room rental    				    $125	  $6625
 		   Christian
-06-01	Mortgage payment (PITI)    	 $-3731	 $3839
+06-01	Mortgage payment (PITI)    	 $-3731	 $2894
 		   18116 Fattoria Ter
-06-01	David's support payment    	$-1625	  $2214
+06-01	David's support payment    	$-1625	  $1269
 		   Transfer
-06-01	HOA Fees					  $-259	  $1954
+06-01	HOA Fees					  $-259	  $1009
 		   18116 Fattoria Ter
-06-01	Boat Storage    				   $-160	  $1794
-06-01	Children's allowances    		    $-50	  $1744
-06-01	School lunches for Justin    	    $-45	  $1699
-06-01	ChatGPT    					    $-20	  $1679
-06-02	Citibank Card    				   $-180	  $1499
+06-01	Children's allowances    		    $-50	    $959
+06-01	School lunches for Justin    	    $-23	    $936
+06-01	ChatGPT    					    $-20	    $916
+06-02	Citibank Card    				   $-180	    $736
 		   Danni's card
-06-02	Amazon Web Services    		       $-8	   $1491
-06-03	American Express - Bonvoy	   $-281	   $1210
+06-02	Amazon Web Services    		       $-8	    $728
+06-03	American Express - Bonvoy	   $-281	    $447
 		   Dave's card
-06-03	Home improvement			   $-145	  $1065
+06-03	Home improvement			   $-145	    $302
 		   Lowe's card payment
-06-03	Wikipedia					       $-2	  $1063
+06-03	Wikipedia					       $-2	    $300
 		   Donation
-06-04	Happy Bins					    $-24	  $1039
-06-06	Joint Spending Money    		  $-400	    $639
-06-06	Dropbox    					     $-12	    $627
-06-07	Home maintenance			     $-13	    $614
+06-04	Happy Bins					    $-24	    $276
+06-06	Joint Spending Money    		  $-400	   $-124
+06-07	Home maintenance			     $-13	   $-137
 		   Appliance service contract
-06-07	AppleTV+					      $-11	    $603
-06-08	Undergrad student loan		  $-305	    $298
-06-08	Furniture    					   $-145	    $153
+06-07	AppleTV+					      $-11	   $-148
+06-08	Undergrad student loan		  $-305	  $-453
+06-08	Furniture    					   $-145	  $-598
 		   Hudson/Synchrony
-06-13	Joint Spending Money    		  $-400	  $-247
+06-11	Boat Storage    				   $-160	  $-758
+06-13	Joint Spending Money    		  $-400	 $-1158
+Pay Period Ending Balance ============>		 $-1158
+06-15	David's net pay 2    			 $4486	  $3328
+		   JPMORGAN CHASE B PAYROLL 
+06-15	Danni's net pay 				  $3391	  $6719
+		   MCCONNAUGHHAY DU ADP
+06-15	Room rental    				    $125	 $6844
+		   Christian
+06-15	AAdvantage Card - David    	  $-2200	 $4644
+		   Utilities and gym
+06-15	David's support payment    	$-1625	  $3019
+		   Transfer
+06-15	Bill Pay Envelopes    			   $-801	  $2218
+		   Fund envelopes
+06-15	Graduate student loan    		  $-550	  $1668
+06-15	Debt counseling payment    	  $-370	  $1299
+		   FORTH-CLARITY
+06-15	Costco - monthly trip    		  $-350	    $949
+		   COSTCO
+06-15	Danni's Hair    				  $-250	    $699
+06-15	Visitations 					    $-50	    $649
+06-15	Children's allowances    		    $-50	    $599
+06-15	School lunches for Justin    	    $-45	    $554
+06-15	LinkedIn    					    $-34	    $520
+06-15	Spotify						     $-19	    $501
+06-16	Savings    					    $-25	    $476
+06-16	New York Times Cooking    	       $-5	    $471
+06-18	Life insurance - David    		    $-70	    $401
+06-19	Furniture    					    $-47	    $353
+		   Bar Stools - Affirm
+06-19	The New York Times    		    $-20	    $333
+06-20	Joint Spending Money    		  $-400	    $-67
+06-20	Office 365					     $-13	    $-80
+		   Microsoft
+06-21	Prescriptions    				   $-164	  $-244
+		   Dave - COMFORT IV
+06-21	Father's day    				   $-150	  $-394
+06-21	Sophia's grooming			   $-105	  $-499
+06-23	iCloud Storage				       $-3	  $-502
+06-24	Room rental and utilities		  $1200	    $698
+		   Christine
+06-25	Amazon Prime Credit Card    	   $-215	    $483
+		   Chase Credit Card
+06-26	Car payment - Bertha    		  $-554	     $-71
+		   Hyundai Motor Finance
+06-27	Joint Spending Money    		  $-400	   $-471
+06-27	Groceries					     $-13	  $-484
+		   Walmart+ Membership
+06-29	Electronics					   $-169	  $-654
+		   Frame TV
+06-30	Life insurance - Danni    		    $-45	  $-699
+		   Banner Life

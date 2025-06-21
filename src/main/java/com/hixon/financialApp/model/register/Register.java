@@ -80,7 +80,6 @@ public class Register extends IndependentEntity {
     protected NotificationServiceInt notificationService = null;
 
 
-
     /*
      * Getters and setters:
      */
@@ -88,8 +87,13 @@ public class Register extends IndependentEntity {
         return id;
     }
 
-    public String getReportType() {return default_view;}
-    public void setDefaultView(String default_view) {this.default_view = default_view;}
+    public String getReportType() {
+        return default_view;
+    }
+
+    public void setDefaultView(String default_view) {
+        this.default_view = default_view;
+    }
 
     public String getTrxImportFilePath() {
         return getTrxImportFileDirectory() + "\\" + getTrxImportFileName();
@@ -140,7 +144,7 @@ public class Register extends IndependentEntity {
         return "name = '" + name + "', nickname = '" + nickname + "', account_type = '" + accountType + "', " +
                 "default_view = '" + default_view + "', account_number = '" + accountNumber + "', balance = " +
                 balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" + financialInstitution +
-                "', trxImportFileName = '"  + trxImportFileName + "', trxImportFileDirectory = '" +
+                "', trxImportFileName = '" + trxImportFileName + "', trxImportFileDirectory = '" +
                 Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
                 provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
                 Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
@@ -244,7 +248,7 @@ public class Register extends IndependentEntity {
     /**
      * Create a display string for the register.
      *
-     * @return  Display string for the register object.
+     * @return Display string for the register object.
      */
     @Override
     public String toString() {
@@ -350,8 +354,8 @@ public class Register extends IndependentEntity {
 
         final List<Entity> items = new ArrayList<>();
 
-        // Get a results set of the transactions that haven't been reported on before:
-        ResultSet rs = Transaction.getNewTransactions(register);
+        // Get a result set of the transactions that haven't been reported on before:
+        ResultSet rs = TransactionUtilities.getNewTransactions(register);
 
         // Then for each transaction in the result set:
         while (rs.next()) {
@@ -379,7 +383,7 @@ public class Register extends IndependentEntity {
      */
     public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException, BudgetException,
             RegisterException {
-        return Transaction.isSkippedTransactionsWrtForecast(forecast);
+        return TransactionUtilities.isSkippedTransactionsWrtForecast(forecast);
     }
 
     /**
@@ -392,18 +396,30 @@ public class Register extends IndependentEntity {
 
         final List<Register> items = new ArrayList<>();
 
-        String query =
-            selectQuery + " " +
-            "INNER JOIN " +
-                "user_register ur ON r.idRegister = ur.register_idRegister " +
-            "INNER JOIN " +
-                "user u ON ur.user_idUser = u.idUser " +
-            "WHERE " +
-                "u.idUser = UUID_TO_BIN('" + user.getId() + "') AND " +
-                "r.account_type = '" + accountType + "'";
+        StringBuilder query = new StringBuilder(selectQuery);
+
+        if (user != null) {
+            query.append(" INNER JOIN user_register ur ON r.idRegister = ur.register_idRegister")
+                    .append(" INNER JOIN user u ON ur.user_idUser = u.idUser");
+        }
+
+        boolean hasWhere = false;
+        if (user != null || (accountType != null && !accountType.isEmpty())) {
+            query.append(" WHERE");
+            if (user != null) {
+                query.append(" u.idUser = UUID_TO_BIN('").append(user.getId()).append("')");
+                hasWhere = true;
+            }
+            if (accountType != null && !accountType.isEmpty()) {
+                if (hasWhere) {
+                    query.append(" AND");
+                }
+                query.append(" r.account_type = '").append(accountType).append("'");
+            }
+        }
 
         // Get a result set of the transactions that haven't been reported on before:
-        ResultSet rs = EntityInt.getRS(query, "attempting to retrieve a list of registers by user and type.");
+        ResultSet rs = EntityInt.getRS(query.toString(), "attempting to retrieve a list of registers by user and type.");
 
         // Then add each transaction in the result set to the list of new transactions:
         while (rs.next()) {

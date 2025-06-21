@@ -13,6 +13,7 @@ import com.hixon.financialApp.model.merchant.MerchantPayee;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
@@ -154,7 +155,7 @@ public class RegisterController {
         try {
             return evaluateRegisterSet(possibleRegisters);
         } catch (ContinueFilteringException e) {
-            // Continue to next filter.
+            // Continue to the next filter.
         }
 
         // Narrow the list of possible registers that this transaction could be in to the ones that are of the same type
@@ -163,33 +164,45 @@ public class RegisterController {
         List<User> users = financialInstitution.extractUsers(payee);
         if (users.isEmpty()) {
             view.say("There are no users associated with this payee: " + payee + ".");
-        } else {
-            String accountType = financialInstitution.extractAccountType(payee);
-            if (accountType == null) {
-                view.say("There is no account type in this payee: " + payee);
-            } else {
-                for (User user : users) {
-                    registersSameTypeAndUser.addAll(Register.getListOfByUserAndType(user, accountType));
-                }
-                possibleRegisters.retainAll(registersSameTypeAndUser);
-                if (possibleRegisters.isEmpty()) {
-                    view.say("There are no " + accountType + " accounts owned by the user(s) " + users + ".");
-                    return null;
-                }
-
-                // See if we are down to one register:
-                try {
-                    return evaluateRegisterSet(possibleRegisters);
-                } catch (ContinueFilteringException e) {
-                    // Continue to next filter.
-                }
+        }
+        String accountType = financialInstitution.extractAccountType(payee);
+        if (accountType == null) {
+            view.say("There is no account type in this payee: " + payee);
+        }
+        if (!users.isEmpty()) {
+            for (User user : users) {
+                registersSameTypeAndUser.addAll(Register.getListOfByUserAndType(user, accountType));
             }
+        }
+        else {
+            registersSameTypeAndUser.addAll(Register.getListOfByUserAndType(null, accountType));
+        }
+        possibleRegisters.retainAll(registersSameTypeAndUser);
+        if (possibleRegisters.isEmpty()) {
+            // If there were no users:
+            if (users.isEmpty()) {
+                view.say("There are no " + accountType + " accounts.");
+            }
+            else if (accountType == null) {
+                view.say("There are no accounts owned by the user(s) " + users + ".");
+            }
+            else {
+                view.say("There are no " + accountType + " accounts owned by the user(s) " + users + ".");
+            }
+            return null;
+        }
+
+        // See if we are down to one register:
+        try {
+            return evaluateRegisterSet(possibleRegisters);
+        } catch (ContinueFilteringException e) {
+            // Continue to the next filter.
         }
 
         // Registers have nicknames, and users can explicitly name the register being transferred to or from in the memo.
         // Extract the memo from the payee using the method for the financial institution that we are dealing with, and
         // then see if any of the tokens in the memo match the nickname of a possible register.  If we find a match,
-        // then ask the user if this is the correct register:
+        // then return that register:
         String userDescription = financialInstitution.extractUserDescription(payee);
         List<Register> registers;
         if (userDescription != null) {
@@ -202,13 +215,7 @@ public class RegisterController {
                 for (Register possibleRegister : possibleRegisters) {
                     if (possibleRegister.getNickname().equalsIgnoreCase(token)) {
                         view.say("Found a register that matches the token in the memo: " + token);
-                        Set<Register> setWithMatchingToken = new HashSet<>();
-                        setWithMatchingToken.add(possibleRegister);
-                        try {
-                            return evaluateRegisterSet(setWithMatchingToken);
-                        } catch (ContinueFilteringException e) {
-                            possibleRegisters.remove(possibleRegister);
-                        }
+                        return possibleRegister;
                     }
                 }
             }
@@ -217,7 +224,7 @@ public class RegisterController {
         // Try to find the most recent instance of a transaction with the same payee and approximately the same amount 
         // that is also in the list of possible registers.  This transaction will be an almost exact match for the one
         // we are trying to resolve.  If we find one, then ask the user if this is the correct register:
-        Transaction transaction = Transaction.getMostRecentTransactionByPayee(payee, amount);
+        Transaction transaction = TransactionUtilities.getMostRecentTransactionByPayee(payee, amount);
         if (transaction != null) {
             Merchant merchant = transaction.getMerchant();
             if (merchant != null) {
@@ -240,7 +247,7 @@ public class RegisterController {
         if (userDescription != null) {
 
             // Get a list of transactions that match the user description:
-            List<Transaction> relevantTransactions = Transaction.getByUserDescriptionFullText(userDescription);
+            List<Transaction> relevantTransactions = TransactionUtilities.getByUserDescriptionFullText(userDescription);
             if (!relevantTransactions.isEmpty()) {
 
                 // First narrow the list of transactions to only those that are associated with a register that is in the
@@ -306,7 +313,7 @@ public class RegisterController {
 
                         // If the user selected a register, then return it:
                         if (selection > 0) {
-                            return relevantTransactions.get(selection - 1).getRegister();
+                            return Register.getByName(relevantTransactions.get(selection).getMerchant().getName());
                         } else {
                             // Remove the associated registers from the list of possible registers:
                             for (Transaction relevantTransaction : relevantTransactions) {
@@ -326,7 +333,7 @@ public class RegisterController {
         }
 
         // then allow the user to select the correct register from the list of registers:
-        int selection = view.selectFromNumberedList("Select the register associate with this transfer: ",
+        int selection = view.selectFromNumberedList("Select the register associated with this transfer",
                 registerNames, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
         return possibleRegistersList.get(selection);
     }
@@ -444,7 +451,7 @@ public class RegisterController {
                 notificationService);
         try {
             // Retrieve any transactions that were skipped.
-            ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast);
 
             // For each transaction in the result set:
             Transaction transaction;
@@ -593,7 +600,7 @@ public class RegisterController {
         int i = 0;
         try {
             // Retrieve any transactions that were skipped.
-            ResultSet rs = Transaction.getSkippedTransactionsWrtForecast(forecast);
+            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast);
 
             // For each transaction in the result set:
             Transaction transaction;

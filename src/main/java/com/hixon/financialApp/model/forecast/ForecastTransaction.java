@@ -515,7 +515,7 @@ public class ForecastTransaction extends IndependentEntity {
      * @return True if this forecast transaction is considered overdue today.
      */
     private boolean isOverdue() throws BudgetException {
-        int variance = daysBeteween(getPlannedDate(), Calendar.getInstance());
+        int variance = daysBetween(getPlannedDate(), Calendar.getInstance());
         return !forecastItem.isWithinNormalDateVariance(variance);
     }
 

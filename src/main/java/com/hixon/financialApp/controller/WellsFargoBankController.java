@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.CityStateChecker;
@@ -162,7 +163,7 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant merchant) throws SQLException,
             EntityException {
 
-        return Transaction.getFirstProvisionalTransaction(merchant.getId(),
+        return TransactionUtilities.getFirstProvisionalTransaction(merchant.getId(),
                 Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
     }
 

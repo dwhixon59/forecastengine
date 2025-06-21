@@ -60,22 +60,13 @@ New transaction summary:
     Car maintenance $30 ($30/$0)
     Boat maintenance $50 ($50/$0)
     Christmas Gifts $63 ($50/$0)
-05-07 Max's Table $40
-    Joint Spending Money ($2,000/$1,007)
-05-09 Bill Pay Envelopes $2,880
-   +Savings ($25/$15)
-05-09 SunPass $10
-   *Tolls ($10/$10)
-05-09 Synchrony Bank $137
-   -Furniture ($145/$137)
-05-09 Joint Spending Accoun $400
-    Joint Spending Money ($2,000/$1,007)
-05-09 Joint Savings Account $1
-   -Savings ($25/$15)
-05-09 Danni's Spending Accou $35
-    Joint Spending Money ($2,000/$1,007)
-	Memo: Oil change
-05-09 Joint Spending Accoun $250
-    Joint Spending Money ($2,000/$1,007)
+05-24 Cash Deposit $1,150
+    Room rental and utilities ($1,200/$2,300)
+05-27 Amazon Prime Credit C $256
+   *+Amazon Prime Credit Card ($215/$256)
+05-27 Joint Savings Account $2
+   -Savings ($25/$128)
+05-27 Hyundai Motor Finance $554
+    Car payment - Bertha ($0/$554)
 
-Current Balance:  $79
+Current Balance:  $32

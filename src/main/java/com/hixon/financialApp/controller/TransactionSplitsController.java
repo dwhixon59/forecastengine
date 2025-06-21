@@ -63,16 +63,20 @@ public class TransactionSplitsController {
      * @param inquireAllowed         Is the user allowed to send an inquiry for clarification of this transaction?
      * @throws Exception If there is a problem with the input or the database.
      */
-    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget
-                                  budget,
-                          List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed)
-            throws Exception {
+    public void getSplits(Transaction transaction, List<TransactionSplit> splits, Merchant merchant, Budget budget,
+        List<BudgetItemMerchant> budgetItemsForMerchant, Boolean skipAllowed, Boolean inquireAllowed) throws Exception {
 
         // There should be at least one budget item.  If there isn't then throw an error:
         if (budgetItemsForMerchant.isEmpty()) {
             throw new ViewException("Must be at least one budget item assigned to a transaction to be able to get the " +
                     "splits for  it.");
         }
+
+        // Reorder the list of budget items for the transaction so that the most likely budget item is first:
+        BudgetItemMerchantController budgetItemMerchantController = new BudgetItemMerchantController(budget,view,
+                notificationService);
+        List<Double> relevancyScores =
+                budgetItemMerchantController.scoreAndSortListForTransaction(budgetItemsForMerchant, transaction);
 
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
@@ -83,7 +87,7 @@ public class TransactionSplitsController {
             done = true;
 
             // Show the assigned budget items to the user:
-            budgetController.showBudgetItemsForMerchant(budgetItemsForMerchant, transaction.getAmount());
+            budgetController.showBudgetItemsForMerchant(budgetItemsForMerchant, relevancyScores, transaction.getAmount());
 
             /*
              * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the

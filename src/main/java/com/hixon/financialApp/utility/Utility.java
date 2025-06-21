@@ -731,7 +731,7 @@ public class Utility {
      * @return The number of days between the two dates disregarding the time portion.  Positive if second date is after
      * the first date.  Negative if second date is earlier than the first date.
      */
-    public static int daysBeteween(Calendar firstDate, Calendar secondDate) {
+    public static int daysBetween(Calendar firstDate, Calendar secondDate) {
         int oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
         Calendar firstDate2 = Calendar.getInstance();
         firstDate2.setTimeInMillis(firstDate.getTimeInMillis());
@@ -745,7 +745,6 @@ public class Utility {
         secondDate2.clear(Calendar.SECOND);
         return Math.round((secondDate2.getTimeInMillis() - firstDate2.getTimeInMillis()) / (oneDay));
     }
-
     /**
      * Get the number of months between two Calendar dates.
      *
@@ -754,11 +753,23 @@ public class Utility {
      * @return The number of months between the two dates inclusive.  Negative if the second date is earlier than the
      * first date.
      */
-    public static int monthsBetweenDatesInclusive(Calendar startDate, Calendar endDate) {
+    public static int monthsBetween(Calendar startDate, Calendar endDate) {
         int diffYear = endDate.get(Calendar.YEAR) - startDate.get(Calendar.YEAR);
-        int diffMonth = diffYear * 12 + endDate.get(Calendar.MONTH) - startDate.get(Calendar.MONTH);
-        return diffMonth + 1;
+        return diffYear * 12 + endDate.get(Calendar.MONTH) - startDate.get(Calendar.MONTH);
     }
+
+    /**
+     * Get the number of months between two Calendar dates including the starting month.
+     *
+     * @param startDate The first date, presumably the earliest date, though that is not required.
+     * @param endDate   The second date, presumably the later date, though that is not required.
+     * @return The number of months between the two dates inclusive.  Negative if the second date is earlier than the
+     * first date.
+     */
+    public static int monthsBetweenDatesInclusive(Calendar startDate, Calendar endDate) {
+         return monthsBetween(startDate, endDate) + 1;
+    }
+
 
     public static Calendar getLastDayOfMonth(Calendar date) {
         // Create a clone of the provided calendar to avoid modifying the original one
