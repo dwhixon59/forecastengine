@@ -266,7 +266,7 @@ public class MainController {
                         // Update the forecast if necessary:
                         if (!inSync) {
                             forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);1
+                                    notificationService);
 
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
