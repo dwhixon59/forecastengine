@@ -25,6 +25,8 @@ public class BudgetItemMerchantController {
         this.notificationService = notificationService;
     }
 
+    // TODO:  Add in the use of the memo matched against the merchant (e.g. merchant is COSTCO and their exists a budget
+    // item with a memo of COSTCO)
     /**
      * Sorts a list of BudgetItemMerchant entries based on how likely the budget items are the specific budget item that
      * should be associated with the specified transaction.  This considers factors such as:
@@ -40,7 +42,7 @@ public class BudgetItemMerchantController {
      */
     public List<Double> scoreAndSortListForTransaction(
             List<BudgetItemMerchant> budgetItemMerchants,
-            Transaction transaction) throws Exception
+            Transaction transaction)
     {
         if (budgetItemMerchants == null || budgetItemMerchants.isEmpty() || transaction == null) {
             return new ArrayList<>();

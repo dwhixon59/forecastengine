@@ -102,6 +102,19 @@ public class DailyUpdateController {
                     view, notificationService);
             boolean inSync = true;
 
+            // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
+            view.say("\n\n========================================================================");
+            view.say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
+            try {
+                forecastController.updateFromExternalSource();
+            } catch (Exception e) {
+                if (!view.askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
+                        "an external source.")) {
+                    throw e;
+                }
+            }
+            view.say("------------------------------------------------------------------------");
+
             // Process any transactions skipped in previous update runs:
            view.say("\n\n===============================================================" +
                     "=========");
@@ -184,19 +197,6 @@ public class DailyUpdateController {
                     throw e;
                 }
             }
-
-            // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
-           view.say("\n\n========================================================================");
-           view.say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
-            try {
-                forecastController.updateFromExternalSource();
-            } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
-                        "an external source.")) {
-                    throw e;
-                }
-            }
-           view.say("------------------------------------------------------------------------");
 
             // Verify the register balance:
            view.say("\n\n========================================================================");

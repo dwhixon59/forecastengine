@@ -1,5 +1,7 @@
 package com.hixon.financialApp.controller;
 
+import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
@@ -34,6 +36,7 @@ public class SelectionController {
     /*
      * Main methods for SelectionController:
      */
+
     /**
      * Get an entity from the user that is taken from a list of entities retrieved using a full text search on a name
      * that the user provided. The starting name can be passed in, and if it was passed in, then the search will begin
@@ -171,8 +174,7 @@ public class SelectionController {
                     } else {
                         // If there is only one similar entity found, then ask the user if it is the correct entity:
                         if (view.getYesOrNo("Only one similar " + typeName + " found.  Is " +
-                                getDisplayString.apply(entity) + " the correct " + typeName))
-                        {
+                                getDisplayString.apply(entity) + " the correct " + typeName)) {
                             return entity;
                         } else {
                             // If the entity is an exact match, then there is no sense to giving the user the option
@@ -203,9 +205,9 @@ public class SelectionController {
                     // If the user is allowed to create a new entity, then ask them if they want to create one:
                     if (
                             allowCreateInList &&
-                            view.getYesOrNo("Do you want to create a new " + typeName + " called " +
-                                toTitleCase(seedName) + "?", ViewInt.DO_NOT_ALLOW_CANCEL, ViewInt.DO_NOT_ALLOW_QUIT,
-                                ViewInt.DO_NOT_ALLOW_SKIP)
+                                    view.getYesOrNo("Do you want to create a new " + typeName + " called " +
+                                                    toTitleCase(seedName) + "?", ViewInt.DO_NOT_ALLOW_CANCEL, ViewInt.DO_NOT_ALLOW_QUIT,
+                                            ViewInt.DO_NOT_ALLOW_SKIP)
                     ) {
                         return stringEntityCreator.apply(scope, toTitleCase(seedName));
                     }
@@ -220,6 +222,39 @@ public class SelectionController {
         } catch (SQLException e) {
             EntityException ee = new EntityException("Database error occurred.", e);
             throw ee;
+        }
+    }
+
+    /**
+     * Retrieves all entities of a given type for the provided scope (e.g., all budget items for a budget).
+     *
+     * @param <T>             The type of the entity, extending IndependentEntity
+     * @param scope           The scope (e.g., Budget) to filter entities
+     * @param isCancelAllowed Is the user allowed to cancel this operation?
+     * @param isQuitAllowed   Is the user allowed to quit this operation?
+     * @return List of entities of type T
+     * @throws EntityException if a database error occurs
+     */
+    public <T extends IndependentEntity> List<T> getAll(
+            IndependentEntity scope,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed
+    ) throws EntityException {
+        List<T> entities = new ArrayList<>();
+        try {
+            // For BudgetItem, get all items for the budget
+            if (scope instanceof Budget) {
+                String query = BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" + scope.getId() + "')";
+                ResultSet rs = EntityInt.getRS(query, "getting all budget items for budget");
+                while (rs.next()) {
+                    T entity = (T) BudgetItem.createFromResultSet(rs);
+                    entities.add(entity);
+                }
+            }
+            // Add other entity types as needed
+            return entities;
+        } catch (SQLException e) {
+            throw new EntityException("Database error occurred.", e);
         }
     }
 }

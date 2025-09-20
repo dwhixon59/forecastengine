@@ -181,25 +181,27 @@ public interface ViewInt {
      * quit or skip the current operation.  If the user enters a string, then it is returned.  If the user cancels,
      * quits or skips the current operation, then the appropriate exception is thrown.
      *
-     * @param prompt
+     * @param prompt The prompt to display to the user.
      * @return The string entered by the user.
      */
     String getResponseString(String prompt)
             throws CancelException, QuitException, SkipException;
 
     /**
-     * This method outputs a prompt and then gets a string from the user.  The user is also given options to cancel,
-     * quit or skip the current operation.  If the user enters a string, then it is returned.  If the user cancels,
+     * This method outputs a prompt and then gets a string from the user. The user is also given options to cancel,
+     * quit or skip the current operation. If the user enters a string, then it is returned. If the user cancels,
      * quits or skips the current operation, then the appropriate exception is thrown.
      *
-     * @param prompt
+     * @param prompt The prompt to display to the user.
+     * @param allowNone If true, the user is allowed to enter no value (an empty string is accepted as valid input).
+     *                  If false, the user must enter a non-empty string; otherwise, they will be re-prompted.
      * @param isCancelAllowed Is the user allowed to cancel the current operation?
-     * @param isQuitAllowed   Is the user allowed to quit the program at this point?
-     * @param isSkipAllowed   Is the user allowed to skip the current operation?
-     * @return The string entered by the user.
-     * @throws CancelException
-     * @throws QuitException
-     * @throws SkipException
+     * @param isQuitAllowed Is the user allowed to quit the program at this point?
+     * @param isSkipAllowed Is the user allowed to skip the current operation?
+     * @return The string entered by the user (may be empty if allowNone is true).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException If the user chooses to quit.
+     * @throws SkipException If the user chooses to skip.
      */
     String getResponseString(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
                              boolean isSkipAllowed) throws CancelException, QuitException, SkipException;

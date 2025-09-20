@@ -271,14 +271,20 @@ public class WellsFargoBankController extends FinancialInstitutionController {
                 //noinspection StatementWithEmptyBody
                 for (i = 0; i < payeeTokens.length && !payeeTokens[i].matches("^X{4,}[0-9]{4}"); i++) ;
                 Register transferRegister;
-                String accountNumber;
+                String accountNumber = "";
                 if (i == payeeTokens.length) {
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
                     RegisterController registerController = new RegisterController(register, this,
                             budget, forecast, view, notificationService);
                     transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee);
-                    accountNumber = transferRegister.getAccountNumber();
+
+                    // If we were able to determine the register this transaction was transferred to/from:
+                    if (transferRegister != null) {
+
+                        // Then get the account number from the register:
+                        accountNumber = transferRegister.getAccountNumber();
+                    }
                 }
                 else {
                     // The account number is in the payee string, so use it to find the register:

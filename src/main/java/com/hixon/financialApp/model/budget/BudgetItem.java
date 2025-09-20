@@ -35,7 +35,7 @@ public class BudgetItem extends Item {
     /*
      * Statics and constants:
      */
-// Column headers in an import file:
+    // Column headers in an import file:
     public enum Headers {
         ID_BUDGET_ITEM, CATEGORY, PAYEE, MEMO, PERIOD, AMOUNT, RUNNING_BALANCE, MINIMUM_BALANCE, START_DATE,
         NUMBER_OF_PAYMENTS, END_DATE, ITEM_TYPE, HOW_IMPORTANT, HOW_OCCURS, HOW_PAID, ID_BUDGET
@@ -56,7 +56,7 @@ public class BudgetItem extends Item {
         return idBudget;
     }
 
-    private void setIdBudget(UUID idBudget) {
+    public void setIdBudget(UUID idBudget) {
         this.idBudget = idBudget;
         setDirty(true);
     }
@@ -169,6 +169,15 @@ public class BudgetItem extends Item {
     /*
      * Helper methods:
      */
+    // Create a budget item from a result set:
+    public static BudgetItem createFromResultSet(ResultSet rs) {
+        try {
+            return new BudgetItem(rs);
+        } catch (BudgetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public String toStringVeryConcise() {
         return "Budget " + super.toStringShort();
     }
@@ -606,7 +615,7 @@ public class BudgetItem extends Item {
      * @return A result set of all the budget items.
      * @throws EntityException
      */
-    public static ResultSet getAllBudgetItems() throws EntityException {
+    public static ResultSet getAllBudgetItemsRS() throws EntityException {
 
         String query = getSelectQuery() + " order by category, payee";
         return EntityInt.getRS(query, "getting the budget items for a MTD spending report");

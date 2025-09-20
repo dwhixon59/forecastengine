@@ -252,7 +252,7 @@ public class MainController {
                         view.say("------------------------------------------------------------------------");
                         break;
 
-                    case "manageBudgetItems":
+                    case "manageData":
                         view.say("\n\n========================================================================");
 
                         // Set up the objects we need:
@@ -261,12 +261,13 @@ public class MainController {
                         // Manage the budget items:
                         dataManagerController = new DataManagerController(register, budget, forecast, view,
                                 notificationService);
-                        inSync = dataManagerController.manageBudgetItems();
+                        inSync = dataManagerController.manageEntities();
 
                         // Update the forecast if necessary:
                         if (!inSync) {
                             forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);
+                                    notificationService);1
+
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
                         }

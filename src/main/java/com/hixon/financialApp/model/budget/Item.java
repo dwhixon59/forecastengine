@@ -1534,4 +1534,15 @@ public abstract class Item extends IndependentEntity {
         String line = "Item: Category = " + category + ", Payee = " + payee + ", Amount = " + amount;
         return line;
     }
+
+    /**
+     * Checks if the provided category string is valid.
+     * A valid category is non-null, non-empty, and not just whitespace.
+     *
+     * @param category the category string to validate
+     * @return true if the category is valid, false otherwise
+     */
+    public static boolean isValidCategory(String category) {
+        return category != null && !category.trim().isEmpty();
+    }
 }

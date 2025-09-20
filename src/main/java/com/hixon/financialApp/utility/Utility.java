@@ -509,19 +509,21 @@ public class Utility {
 
     // Parse a dollar AMOUNT from a string:
     public static Double parseDollarAmount(String stringAmount) {
-        if (stringAmount.length() > 0) {
+        if (!stringAmount.isEmpty()) {
             stringAmount = stringAmount.replace("$", "");
             stringAmount = stringAmount.replace(",", "");
             return Double.parseDouble(stringAmount);
         } else {
-            return new Double(0);
+            return (double) 0;
         }
     }
 
-    // Print out a dollar AMOUNT in human readable format:
+    // Print out a dollar AMOUNT in human readable format:1
+
     public static String formatDollarAmount(double amount) {
         DecimalFormat decimalFormat = new DecimalFormat("#,##0.00");
         String numberAsString = "$" + decimalFormat.format(amount);
+
         return numberAsString;
     }
 

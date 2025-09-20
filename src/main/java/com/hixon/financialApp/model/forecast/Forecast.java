@@ -23,11 +23,14 @@ import java.util.*;
 import static com.hixon.financialApp.model.entity.EntityInt.getSingletonRS;
 
 
+/**
+ * Forecast class represents a financial forecast for a budget over a specified period of time.
+ * It includes methods to create, save, and manage forecast items and transactions.
+ * It also provides functionality to summarize the forecast and generate significant events.
+ */
 public class Forecast extends IndependentEntity {
 
     //    private static final Logger logger = LogManager.getLogger(Forecast.class);
-    public static final String FORECAST_TRANSACTIONS_FILE = "Forecast transactions";
-    public static final String FORECAST_TRANSACTIONS_FILENAME = "forecast_transactions.csv";
 
     // The types of significant events that can be generated:
     public enum SignificantEvents {daysBelowMinimumBalance}
