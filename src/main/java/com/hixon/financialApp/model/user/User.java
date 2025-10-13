@@ -252,7 +252,7 @@ public class User extends IndependentEntity {
    // Get a list of users by last name and first initial:
    public static List<User> findByLastNameAndFirstInitial(String lastName, String firstInitial) throws EntityException,
            SQLException {
-      String query = STR."\{User.getSelectQuery()} where u.lastName = '\{lastName}' AND u.firstName LIKE '\{firstInitial}%'";
+      String query = User.getSelectQuery() + " where u.lastName = '" + lastName + "' AND u.firstName LIKE '" + firstInitial + "%'";
       ResultSet rs = EntityInt.getRS(query, "attempting to retrieve a user by last name and first initial");
       List<User> users = new ArrayList<>();
       while (rs.next()) {

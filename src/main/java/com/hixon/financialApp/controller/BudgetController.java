@@ -463,21 +463,21 @@ public class BudgetController {
             // Enum validation for Period Type
             String periodType = defaultPeriodType;
             while (true) {
-                String input = view.getResponseString(STR."Period Type [{defaultPeriodType}] ({java.util.Arrays.toString(Item.PeriodType.values())}): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Period Type [" + defaultPeriodType + "] (" + java.util.Arrays.toString(Item.PeriodType.values()) + "): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Item.PeriodType.valueOf(input.toUpperCase());
                     periodType = input.toUpperCase();
                     break;
                 } catch (IllegalArgumentException e) {
-                    view.say(STR."Invalid period type. Allowed: {java.util.Arrays.toString(Item.PeriodType.values())}");
+                    view.say("Invalid period type. Allowed: " + java.util.Arrays.toString(Item.PeriodType.values()));
                 }
             }
 
             // Numeric validation for Amount
             double amount = defaultAmount;
             while (true) {
-                String input = view.getResponseString(STR."Amount [{defaultAmount}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Amount [" + defaultAmount + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     amount = Double.parseDouble(input);
@@ -490,7 +490,7 @@ public class BudgetController {
             // Numeric validation for Running Balance
             double runningBalance = defaultRunningBalance;
             while (true) {
-                String input = view.getResponseString(STR."Running Balance [{defaultRunningBalance}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Running Balance [" + defaultRunningBalance + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     runningBalance = Double.parseDouble(input);
@@ -503,7 +503,7 @@ public class BudgetController {
             // Numeric validation for Minimum Balance
             double minimumBalance = defaultMinimumBalance;
             while (true) {
-                String input = view.getResponseString(STR."Minimum Balance [{defaultMinimumBalance}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Minimum Balance [" + defaultMinimumBalance + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     minimumBalance = Double.parseDouble(input);
@@ -516,7 +516,7 @@ public class BudgetController {
             // Date validation for Start Date
             String startDate = defaultStartDate;
             while (true) {
-                String input = view.getResponseString(STR."Start Date [{defaultStartDate}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Start Date [" + defaultStartDate + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Utility.stringDateDashToCalendarDate(input);
@@ -530,7 +530,7 @@ public class BudgetController {
             // Numeric validation for Number of Payments
             int numberOfPayments = defaultNumberOfPayments;
             while (true) {
-                String input = view.getResponseString(STR."Number of Payments [{defaultNumberOfPayments}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Number of Payments [" + defaultNumberOfPayments + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     numberOfPayments = Integer.parseInt(input);
@@ -543,7 +543,7 @@ public class BudgetController {
             // Date validation for End Date
             String endDate = defaultEndDate;
             while (true) {
-                String input = view.getResponseString(STR."End Date [{defaultEndDate}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("End Date [" + defaultEndDate + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     if (!input.isEmpty()) Utility.stringDateDashToCalendarDate(input);
@@ -557,58 +557,58 @@ public class BudgetController {
             // Enum validation for Item Type
             String itemType = defaultItemType;
             while (true) {
-                String input = view.getResponseString(STR."Item Type [{defaultItemType}] ({java.util.Arrays.toString(Item.ItemType.values())}): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("Item Type [" + defaultItemType + "] (" + java.util.Arrays.toString(Item.ItemType.values()) + "): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Item.ItemType.valueOf(input.toUpperCase());
                     itemType = input.toUpperCase();
                     break;
                 } catch (IllegalArgumentException e) {
-                    view.say(STR."Invalid item type. Allowed: {java.util.Arrays.toString(Item.ItemType.values())}");
+                    view.say("Invalid item type. Allowed: " + java.util.Arrays.toString(Item.ItemType.values()));
                 }
             }
 
             // Enum validation for How Important
             String howImportant = defaultHowImportant;
             while (true) {
-                String input = view.getResponseString(STR."How Important [{defaultHowImportant}] ({java.util.Arrays.toString(Item.HowImportant.values())}): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("How Important [" + defaultHowImportant + "] (" + java.util.Arrays.toString(Item.HowImportant.values()) + "): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Item.HowImportant.valueOf(input.toUpperCase());
                     howImportant = input.toUpperCase();
                     break;
                 } catch (IllegalArgumentException e) {
-                    view.say(STR."Invalid value. Allowed: {java.util.Arrays.toString(Item.HowImportant.values())}");
+                    view.say("Invalid value. Allowed: " + java.util.Arrays.toString(Item.HowImportant.values()));
                 }
             }
 
             // Enum validation for How Occurs
             String howOccurs = defaultHowOccurs;
             while (true) {
-                String input = view.getResponseString(STR."How Occurs [{defaultHowOccurs}] ({java.util.Arrays.toString(Item.HowOccurs.values())}): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("How Occurs [" + defaultHowOccurs + "] (" + java.util.Arrays.toString(Item.HowOccurs.values()) + "): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Item.HowOccurs.valueOf(input.toUpperCase());
                     howOccurs = input.toUpperCase();
                     break;
                 } catch (IllegalArgumentException e) {
-                    view.say(STR."Invalid value. Allowed: {java.util.Arrays.toString(Item.HowOccurs.values())}");
+                    view.say("Invalid value. Allowed: " + java.util.Arrays.toString(Item.HowOccurs.values()));
                 }
             }
 
             // Enum validation for How Paid
             String howPaid = defaultHowPaid;
             while (true) {
-                String input = view.getResponseString(STR."How Paid [{defaultHowPaid}] ({java.util.Arrays.toString(Item.HowPaid.values())}): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+                String input = view.getResponseString("How Paid [" + defaultHowPaid + "] (" + java.util.Arrays.toString(Item.HowPaid.values()) + "): ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
                 if (input.isEmpty()) break;
                 try {
                     Item.HowPaid.valueOf(input.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    view.say(STR."Invalid value. Allowed: {java.util.Arrays.toString(Item.HowPaid.values())}");
+                    view.say("Invalid value. Allowed: " + java.util.Arrays.toString(Item.HowPaid.values()));
                 }
             }
 
-            String budgetName = view.getResponseString(STR."Budget Name [{defaultBudgetName}]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
+            String budgetName = view.getResponseString("Budget Name [" + defaultBudgetName + "]: ", ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP).trim();
             if (budgetName.isEmpty()) budgetName = defaultBudgetName;
 
             // Create BudgetItem
