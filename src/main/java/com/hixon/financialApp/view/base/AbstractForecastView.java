@@ -265,8 +265,10 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 }
 
                 // Record the total debt expense:
-                if (forecastTransaction.getForecastItem().getCategory().substring(0, 4).equalsIgnoreCase("Debt")) {
-                    totalDebtExpense += forecastTransaction.getRemainingAmount();
+                if (forecastTransaction.getForecastItem().getCategory().length()  >= 4) {
+                    if (forecastTransaction.getForecastItem().getCategory().substring(0, 4).equalsIgnoreCase("Debt")) {
+                        totalDebtExpense += forecastTransaction.getRemainingAmount();
+                    }
                 }
             }
 

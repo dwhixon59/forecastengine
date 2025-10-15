@@ -221,7 +221,7 @@ public class MainController {
 
                     case "verifyRegisterBalance":
                         view.say("\n\n========================================================================");
-                        view.say("Verify register balance and update if necessary.");
+                        view.say("VERIFY REGISTER BALANCE");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -238,7 +238,7 @@ public class MainController {
 
                     case "importBudgetItems":
                         view.say("\n\n========================================================================");
-                        view.say("Importing the budget items.");
+                        view.say("IMPORT BUDGET ITEMS");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -254,17 +254,19 @@ public class MainController {
 
                     case "manageData":
                         view.say("\n\n========================================================================");
-
-                        // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        view.say("MANAGE DATA");
 
                         // Manage the budget items:
-                        dataManagerController = new DataManagerController(register, budget, forecast, view,
+                        dataManagerController = new DataManagerController(null, null, null, view,
                                 notificationService);
                         inSync = dataManagerController.manageEntities();
 
                         // Update the forecast if necessary:
                         if (!inSync) {
+                            // Set up the objects we need for forecast update:
+                            if (register == null || budget == null || forecast == null) {
+                                getRegisterBudgetForecast();
+                            }
                             forecastController = new ForecastController(register, budget, forecast, view,
                                     notificationService);
 
@@ -277,7 +279,7 @@ public class MainController {
 
                     case "renderBudgetSummaryReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the Budget Summary Report.");
+                        view.say("RENDER THE BUDGET SUMMARY REPORT.");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -290,7 +292,7 @@ public class MainController {
 
                     case "renderRegister":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the register.");
+                        view.say("RENDER A REGISTER.");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -304,7 +306,7 @@ public class MainController {
 
                     case "renderSpendingReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the spending report.");
+                        view.say("RENDER THE SPENDING REPORT.");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -317,7 +319,7 @@ public class MainController {
 
                     case "renderSpendingReportForMonth":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the spending report.");
+                        view.say("RENDER THE SPENDING REPORT FOR A SPECIFIED MONTH.");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -331,7 +333,7 @@ public class MainController {
 
                     case "createForecast":
                         view.say("\n\n========================================================================");
-                        view.say("Create the forecast.");
+                        view.say("CREATE A FORECAST");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -368,7 +370,7 @@ public class MainController {
 
                     case "saveForecast":
                         view.say("\n\n========================================================================");
-                        view.say("Saving the forecast.");
+                        view.say("SAVE THE FORECAST");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -381,7 +383,7 @@ public class MainController {
 
                     case "updateForecast":
                         view.say("\n\n========================================================================");
-                        view.say("Updating the forecast.");
+                        view.say("UPDATE A FORECAST");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -395,7 +397,7 @@ public class MainController {
 
                     case "renderShortTermForecast":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the short term forecast.");
+                        view.say("REMDER THE SHORT TERM FORECAST.");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -408,7 +410,7 @@ public class MainController {
 
                     case "renderLongTermForecast":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the long term forecast.");
+                        view.say("RENDER A LONG TERM FORECAST");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -421,7 +423,7 @@ public class MainController {
 
                     case "renderEnvelopeReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the Envelope Report.\n");
+                        view.say("RENDER AN ENVELOPE REPORT");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -434,7 +436,7 @@ public class MainController {
 
                     case "renderItemsOfInterestReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the Items of Interest Report.\n");
+                        view.say("RENDER THE ITEMS OF INTEREST REPORT");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -447,7 +449,7 @@ public class MainController {
 
                     case "renderOverdueAndUpcomingItemsReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the Overdue and Upcoming Items Report.");
+                        view.say("RENDER THE OVERDUE AND UPCOMING ITEMS REPORT");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
@@ -460,7 +462,7 @@ public class MainController {
 
                     case "renderNewTransactionSummaryReport":
                         view.say("\n\n========================================================================");
-                        view.say("Rendering the New Transaction Summary Report.");
+                        view.say("RENDER THE NEW TRANSACTION SUMMARY REPORT");
 
                         // Set up the objects we need:
                         getRegisterBudgetForecast();
