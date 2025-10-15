@@ -293,6 +293,46 @@ public class Utility {
         return titleCase.toString();
     }
 
+    /**
+     * Formats an enum name or similar string to a human-readable format.
+     * Converts underscores and dashes to spaces, and capitalizes the first letter of each word.
+     * All other letters are lowercase.
+     *
+     * Examples:
+     * "ON_DEMAND" -> "On Demand"
+     * "MONTHLY_PAYMENT" -> "Monthly Payment"
+     * "some-hyphenated-value" -> "Some Hyphenated Value"
+     *
+     * @param input The string to format (typically an enum name)
+     * @return The formatted string with proper capitalization and spaces
+     */
+    public static String formatEnumName(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        // Replace underscores and dashes with spaces
+        String processed = input.replace('_', ' ').replace('-', ' ');
+
+        // Apply title case formatting
+        StringBuilder result = new StringBuilder();
+        boolean capitalizeNext = true;
+
+        for (char c : processed.toCharArray()) {
+            if (Character.isSpaceChar(c)) {
+                result.append(c);
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                result.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                result.append(Character.toLowerCase(c));
+            }
+        }
+
+        return result.toString();
+    }
+
     // Convert a Java LocalDate to a Java Calendar date:
     public static Calendar localDateToCalendarDate(LocalDate sqlLocalDate) {
         Calendar calendarDate = null;

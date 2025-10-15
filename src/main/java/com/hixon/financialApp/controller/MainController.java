@@ -256,13 +256,19 @@ public class MainController {
                         view.say("\n\n========================================================================");
                         view.say("MANAGE DATA");
 
-                        // Manage the budget items:
+                        // The DataManagerController will prompt for register/budget/forecast only when needed
+                        // based on the type of entity being managed (e.g., transactions need register,
+                        // budget items need budget, but merchants are global)
                         dataManagerController = new DataManagerController(null, null, null, view,
                                 notificationService);
-                        inSync = dataManagerController.manageEntities();
+                        inSync = dataManagerController.manageData();
 
                         // Update the forecast if necessary:
                         if (!inSync) {
+                            // If we need to update the forecast, ensure we have the necessary context
+                            if (register == null) {
+                                getRegisterBudgetForecast();
+                            }
                             // Set up the objects we need for forecast update:
                             if (register == null || budget == null || forecast == null) {
                                 getRegisterBudgetForecast();
@@ -273,7 +279,7 @@ public class MainController {
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
                         }
-                        view.say("Manage budget items complete.");
+                        view.say("Manage entities complete.");
                         view.say("------------------------------------------------------------------------");
                         break;
 

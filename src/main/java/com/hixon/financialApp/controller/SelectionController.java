@@ -81,11 +81,11 @@ public class SelectionController {
 
             // If a starting value for name was not passed in, then ask the user for a name:
             if (seedName == null) {
-                seedName = new String("");
+                seedName = "";
             }
             if (seedName.isEmpty()) {
-                seedName = view.getResponseString("Enter the name of the " + typeName + ":", false, true,
-                        true, true);
+                seedName = view.getResponseString("Enter the name of the " + typeName + ":", (String) null, false, false, true,
+                        true, true, (java.util.function.Supplier<String>) null);
             }
 
             // Create a new entity of type T with the name provided by the user just so that we can call methods on it
@@ -193,8 +193,8 @@ public class SelectionController {
                             } else {
                                 // Since the entity was not found and the user is not allowed to or does not want to
                                 // create a new entity, then ask the user for a new search string:
-                                seedName = view.getResponseString("Enter a new search string:", false,
-                                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
+                                seedName = view.getResponseString("Enter a new search string:", (String) null, false, false,
+                                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP, (java.util.function.Supplier<String>) null);
                             }
                         }
                     }
@@ -214,8 +214,8 @@ public class SelectionController {
 
                     // Since the entity was not found and the user is not allowed to or does not want to create a new entity,
                     // then ask the user for a new search string:
-                    seedName = view.getResponseString("Enter the name of the " + typeName + ":", false, true,
-                            true, true);
+                    seedName = view.getResponseString("Enter the name of the " + typeName + ":", (String) null, false, false, true,
+                            true, true, (java.util.function.Supplier<String>) null);
                 }
                 firstTime = false;
             }

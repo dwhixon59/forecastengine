@@ -27,6 +27,7 @@ import static com.hixon.financialApp.model.entity.EntityInt.getRS;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
 import static com.hixon.financialApp.utility.Utility.*;
 import static com.hixon.financialApp.utility.Utility.StartDateType.*;
+import static com.hixon.financialApp.view.base.ViewInt.*;
 import static java.util.Calendar.DATE;
 import static java.util.Calendar.MONTH;
 
@@ -632,9 +633,11 @@ public class ForecastController {
                                             " the version in the database.");
                                     view.say("Imported " + ssForecastTransaction.toStringConcise());
                                     view.say("Database " + dbForecastTransaction.toStringConcise());
-                                    if (view.selectFromFirstLetterList(
-                                            "Which date do you want to use? (i - imported, d - database)",
-                                            "i,d").equalsIgnoreCase("d")) {
+                                    if (view.selectFromMenu(
+                                            "Which date do you want to use?",
+                                            List.of("imported", "database"),
+                                            DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP)
+                                            .equalsIgnoreCase("d")) {
                                         overwrite = false;
                                     }
                                 }
@@ -665,9 +668,11 @@ public class ForecastController {
                                             " the version in the database.");
                                     view.say("Imported " + ssForecastTransaction.toStringConcise());
                                     view.say("Database " + dbForecastTransaction.toStringConcise());
-                                    if (view.selectFromFirstLetterList(
-                                            "Which amount do you want to use (i - imported, d - database)?",
-                                            "i,d").equalsIgnoreCase("d")) {
+                                    if (view.selectFromMenu(
+                                            "Which amount do you want to use?",
+                                            List.of("imported", "database"),
+                                            DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP)
+                                            .equalsIgnoreCase("d")) {
                                         overwrite = false;
                                     }
                                 }

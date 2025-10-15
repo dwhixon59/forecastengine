@@ -26,6 +26,9 @@ public interface ViewInt {
     public boolean DO_NOT_ALLOW_QUIT = false;
     public boolean ALLOW_SKIP = true;
     public boolean DO_NOT_ALLOW_SKIP = false;
+    public boolean SHOW_CANCEL_QUIT_SKIP = false;
+    public boolean DO_NOT_SHOW_CANCEL_QUIT_SKIP = false;
+    public boolean DO_NOT_ALLOW_NEGATIVE_VALUES = false;
     public String YES = "yes";
 
 
@@ -35,6 +38,32 @@ public interface ViewInt {
     void say();
 
     void say(String s);
+
+    /**
+     * Displays a major section header (H1) with emphasis.
+     * Format: blank line before, ALL CAPS text with equals signs above and below, blank line after.
+     * The length of the decoration adapts to the text length.
+     *
+     * @param s the header text to display
+     */
+    void sayH1(String s);
+
+    /**
+     * Displays a sub-section header (H2) with moderate emphasis.
+     * Format: blank line before, First Letter Capitalized with dashes below.
+     * The length of the decoration adapts to the text length.
+     *
+     * @param s the header text to display
+     */
+    void sayH2(String s);
+
+    /**
+     * Displays a minor header (H3) with subtle emphasis.
+     * Format: blank line before, text with a visual marker (▸).
+     *
+     * @param s the header text to display
+     */
+    void sayH3(String s);
 
     ImportController.TerminationCondition getTerminationCondition();
 
@@ -161,20 +190,59 @@ public interface ViewInt {
     String getResponseString();
 
     /**
-     * This method gets a string from the user.  The user is also given options to cancel, quit or skip the current
-     * operation.  If the user enters a string, then it is returned.  If the user cancels, quits or skips the current
-     * operation, then the appropriate exception is thrown.
+     * This method gets a string from the user with configurable options for showing and allowing cancel, quit, and skip operations.
      *
-     * @param isCancelAllowed Is the user allowed to cancel the current operation?
-     * @param isQuitAllowed   Is the user allowed to quit the program at this point?
-     * @param isSkipAllowed   Is the user allowed to skip the current operation?
-     * @return The string entered by the user.
-     * @throws CancelException
-     * @throws QuitException
-     * @throws SkipException
+     * @param allowNone If true, allows empty input (user just hits enter)
+     * @param showCancelQuitSkip If true, displays the cancel/quit/skip options to the user
+     * @param isCancelAllowed If true, allows the user to cancel by entering 'c'
+     * @param isQuitAllowed If true, allows the user to quit by entering 'q'
+     * @param isSkipAllowed If true, allows the user to skip by entering 's'
+     * @return The string entered by the user
+     * @throws CancelException If the user cancels the operation
+     * @throws QuitException If the user quits the operation
+     * @throws SkipException If the user skips the operation
      */
-    String getResponseString(boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException;
+    String getResponseString(boolean allowNone, boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed,
+         boolean isSkipAllowed) throws CancelException, QuitException, SkipException;
+
+    /**
+     * This method gets a string from the user with configurable options for showing and allowing cancel, quit, and skip operations,
+     * with an optional help callback for providing context-sensitive help.
+     *
+     * @param allowNone If true, allows empty input (user just hits enter)
+     * @param showCancelQuitSkip If true, displays the cancel/quit/skip options to the user
+     * @param isCancelAllowed If true, allows the user to cancel by entering 'c'
+     * @param isQuitAllowed If true, allows the user to quit by entering 'q'
+     * @param isSkipAllowed If true, allows the user to skip by entering 's'
+     * @param helpCallback Optional callback function to provide help text when user requests it.
+     * @return The string entered by the user
+     * @throws CancelException If the user cancels the operation
+     * @throws QuitException If the user quits the operation
+     * @throws SkipException If the user skips the operation
+     */
+    String getResponseString(boolean allowNone, boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed,
+         boolean isSkipAllowed, java.util.function.Supplier<String> helpCallback) throws CancelException, QuitException, SkipException;
+
+    /**
+     * Master method that handles all string input scenarios with prompt, default value, and full option support.
+     * This is the comprehensive implementation that supports all features.
+     *
+     * @param prompt The prompt to display to the user (can be empty)
+     * @param defaultValue The default value to show and return if user hits enter (can be null)
+     * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
+     * @param allowNone If true, allows empty input (user just hits enter)
+     * @param isCancelAllowed If true, allows the user to cancel by entering 'c'
+     * @param isQuitAllowed If true, allows the user to quit by entering 'q'
+     * @param isSkipAllowed If true, allows the user to skip by entering 's'
+     * @param helpCallback Optional callback function to provide help text when user enters 'h'
+     * @return The string entered by the user
+     * @throws CancelException If the user cancels the operation
+     * @throws QuitException If the user quits the operation
+     * @throws SkipException If the user skips the operation
+     */
+    String getResponseString(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
+                             java.util.function.Supplier<String> helpCallback) throws CancelException, QuitException, SkipException;
 
     /**
      * This method outputs a prompt and then gets a string from the user.  The user is also given options to cancel,
@@ -186,6 +254,15 @@ public interface ViewInt {
      */
     String getResponseString(String prompt)
             throws CancelException, QuitException, SkipException;
+
+    /**
+     * This method outputs a prompt and then gets a string from the user with a default value.
+     *
+     * @param prompt The prompt to display to the user.
+     * @param defaultValue The default value to return if the user enters nothing.
+     * @return The string entered by the user, or the default value if nothing was entered.
+     */
+    String getResponseString(String prompt, String defaultValue);
 
     /**
      * This method outputs a prompt and then gets a string from the user. The user is also given options to cancel,
@@ -203,8 +280,28 @@ public interface ViewInt {
      * @throws QuitException If the user chooses to quit.
      * @throws SkipException If the user chooses to skip.
      */
-    String getResponseString(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
-                             boolean isSkipAllowed) throws CancelException, QuitException, SkipException;
+    String getResponseStringMenuSelection(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
+                                          boolean isSkipAllowed) throws CancelException, QuitException, SkipException;
+
+    /**
+     * This method outputs a prompt and then gets a string from the user, with an optional help callback.
+     * The user is also given options to cancel, quit or skip the current operation. If the user enters a string,
+     * then it is returned. If the user cancels, quits or skips the current operation, then the appropriate exception is thrown.
+     *
+     * @param prompt The prompt to display to the user.
+     * @param allowNone If true, the user is allowed to enter no value (an empty string is accepted as valid input).
+     *                  If false, the user must enter a non-empty string; otherwise, they will be re-prompted.
+     * @param isCancelAllowed Is the user allowed to cancel the current operation?
+     * @param isQuitAllowed Is the user allowed to quit the program at this point?
+     * @param isSkipAllowed Is the user allowed to skip the current operation?
+     * @param helpCallback Optional callback function to provide help text when user requests it.
+     * @return The string entered by the user (may be empty if allowNone is true).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException If the user quits the operation.
+     * @throws SkipException If the user skips the operation.
+     */
+    String getResponseStringMenuSelection(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
+                                          boolean isSkipAllowed, java.util.function.Supplier<String> helpCallback) throws CancelException, QuitException, SkipException;
 
     /**
      * This method gets a date from the user in MM-DD-YY format.  If the user enters a valid date, then it is returned.
@@ -255,7 +352,7 @@ public interface ViewInt {
      * @throws SQLException
      * @throws EntityException
      */
-    User getUser(String prompt, List<User> users, boolean allowNull);
+    User getUser(String prompt, List<User> users, boolean allowNull) throws SQLException, EntityException;
 
     /**
      * Have the user select a username from a list of usernames (taken from a list of users):
@@ -270,7 +367,7 @@ public interface ViewInt {
      */
     User getUser(String prompt, List<User> users, boolean allowNull, boolean isCancelAllowed, boolean isQuitAllowed,
                  boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException;
+            throws SQLException, EntityException, CancelException, QuitException, SkipException;
 
     boolean getYesOrNo(String question);
 
@@ -320,6 +417,31 @@ public interface ViewInt {
             throws SQLException, EntityException, CancelException, QuitException, SkipException;
 
     /**
+     * Have the user select an entity from a numbered list of entities by number, with an optional default value.
+     * The getName() method of the IndependentEntityInt is used to get the names of the entities as strings and
+     * then selectFromNumberedList() is used to display the list to the user and get their selection.
+     * If a default value is provided, it will be shown in square brackets and selected if the user presses enter.
+     *
+     * @param prompt    The prompt to display to the user.
+     * @param list      A list of entities to select from.
+     * @param defaultValue The default entity to select (can be null).
+     * @param allowNone
+     * @param isCancelAllowed
+     * @param isQuitAllowed
+     * @param isSkipAllowed
+     * @param <T>       The type of entity to select.
+     * @return The selected item or null if none was selected.
+     * @throws CancelException
+     * @throws QuitException
+     * @throws SkipException
+     * @throws EntityException
+     */
+    <T extends IndependentEntityInt> T selectByNameFromList(String prompt, List<T> list, T defaultValue,
+                                                            boolean allowNone, boolean isCancelAllowed,
+                                                            boolean isQuitAllowed, boolean isSkipAllowed)
+            throws SQLException, EntityException, CancelException, QuitException, SkipException;
+
+    /**
      * Have the user select an entity from a numbered list of entities by number, or enter an arbitrary string.  The
      * string is presumably to indicate that none of the options are what they are looking for and provide instructions
      * on how to regenerate the list.
@@ -335,7 +457,7 @@ public interface ViewInt {
             String prompt,
             List<T> list,
             boolean allowNone, boolean allowCreate)
-            throws EntityException;
+            throws SQLException, EntityException;
 
     /**
      * Have the user select an entity from a numbered list of entities by number, or enter an arbitrary string.  The
@@ -394,27 +516,75 @@ public interface ViewInt {
      * returned.  Otherwise, the error message is displayed and the user is asked to re-enter the double.
      *
      * @param prompt        The prompt to display to the user.
-     * @param defaultAmount The default amount to display to the user.
+     * @param defaultAmount The default amount to display to the user if the user presses enter.
      * @return The amount entered by the user.
      */
     String parseDollarAmount(String prompt, double defaultAmount);
 
     /**
-     * Have the user select a string from a numbered list of strings by number.  If allowed, the user may also specify
-     * cancel, skip or quit.  If cancel, skip or quit is allowed, then the CancelException, SkipException or
-     * QuitException may be thrown.
+     * Prompts the user for a dollar amount, allowing cancel, quit, and skip options.
+     * @param prompt The prompt to display to the user.
+     * @param defaultAmount The default amount to use if the user presses enter.
+     * @param isCancelAllowed Whether cancel is allowed.
+     * @param isQuitAllowed Whether quit is allowed.
+     * @param isSkipAllowed Whether skip is allowed.
+     * @return The entered or default dollar amount as a string.
+     * @throws CancelException If the user cancels.
+     * @throws QuitException If the user quits.
+     * @throws SkipException If the user skips.
+     */
+    String parseDollarAmount(String prompt, double defaultAmount, boolean isCancelAllowed, boolean isQuitAllowed,
+                             boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user to select one option from a menu of options.
+     * This is targeted toward situations where there are a limited number of static (always, or nearly always the same) options.
+     * Each view implementation decides how to present the options (e.g., first-letter menu, dropdown, buttons).
+     * Returns the selected option as a string.
+     *
+     * @param prompt The prompt to display to the user.
+     * @param options The list of option strings to display and select from.
+     * @param allowNone If true, allows the user to select none (empty input or "none" option).
+     * @param isCancelAllowed If true, allows the user to cancel the operation.
+     * @param isQuitAllowed If true, allows the user to quit.
+     * @param isSkipAllowed If true, allows the user to skip.
+     * @return The selected option string from the options list.
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException If the user quits.
+     * @throws SkipException If the user skips.
+     */
+    String selectFromMenu(String prompt, List<String> options, boolean allowNone, boolean isCancelAllowed,
+                       boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Have the user select a string from a list of strings. This is targeted at selecting from a potentially long
+     * list of items typically retrieved from a database or cache.
+     * Each view implementation decides how to present the list (e.g., numbered list, searchable dropdown).
+     * @param prompt
+     * @param items
+     * @return Index of the selected item (0-based).
+     */
+    Integer selectFromList(String prompt, List<String> items);
+
+    /**
+     * Have the user select a string from a list of strings. This is targeted at selecting from a potentially long
+     * list of items typically retrieved from a database or cache.
+     * Each view implementation decides how to present the list (e.g., numbered list, searchable dropdown).
      *
      * @param prompt    The prompt to display to the user.
      * @param items     A list of strings to select from.
      * @param allowNone Is the user allowed to select none of the items?
-     * @return The selected item or null if none was selected.
+     * @return The index of the selected item (0-based), or -1 if none was selected.
      */
-    int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone);
+    Integer selectFromList(String prompt, List<String> items, boolean allowNone);
 
     /**
-     * Have the user select a string from a numbered list of strings by number.  If allowed, the user may also specify
-     * cancel, skip or quit.  If cancel, skip or quit is allowed, then the CancelException, SkipException or
-     * QuitException may be thrown.
+     * Have the user select a string from a list of strings. This is targeted at selecting from a potentially long
+     * list of items typically retrieved from a database or cache.
+     * If allowed, the user may also specify cancel, skip or quit. If cancel, skip or quit is allowed, then the
+     * CancelException, SkipException or QuitException may be thrown.
      *
      * @param prompt          The prompt to display to the user.
      * @param items           A list of strings to select from.
@@ -422,57 +592,66 @@ public interface ViewInt {
      * @param isCancelAllowed Is the user allowed to cancel the current process?
      * @param isQuitAllowed   Is the user allowed to quit the program?
      * @param isSkipAllowed   Is the user allowed to skip this item and not enter an integer?
-     * @return The selected item or null if none was selected.
+     * @return The index of the selected item (0-based), or -1 if none was selected.
      * @throws CancelException
      * @throws QuitException
      * @throws SkipException
      */
-    int selectFromNumberedList(String prompt, List<String> items, Boolean allowNone, boolean isCancelAllowed,
-                               boolean isQuitAllowed, boolean isSkipAllowed) throws CancelException, QuitException,
+    Integer selectFromList(String prompt, List<String> items, boolean allowNone, boolean isCancelAllowed,
+                           boolean isQuitAllowed, boolean isSkipAllowed) throws CancelException, QuitException,
             SkipException;
 
     /**
-     * This method takes a comma separated list of menu options and allows the user to select one of the options.
+     * Have the user select an enum value from a list. This is targeted at selecting from a potentially long
+     * list of items typically retrieved from a database or cache.
      *
-     * @param menuOptionList A comma separated list of menu items.
-     * @return The selected menu item.
+     * @param prompt The prompt to display.
+     * @param defaultValue The default value to use if the user presses Enter.
+     * @param enumType The enum class to display.
+     * @param <T> The enum type.
+     * @return The selected enum value, or defaultValue if Enter is pressed.
+     * @throws CancelException if the user cancels.
+     * @throws QuitException if the user quits.
+     * @throws SkipException if the user skips.
      */
-    String selectFromFirstLetterList(String prompt, String menuOptionList);
+    <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType)
+            throws CancelException, QuitException, SkipException;
 
     /**
-     * Have the user select a string from a numbered list of strings by number, or enter an arbitrary string, presumably
-     * to indicate that none of the options are what they are looking for and provide instructions on how to regenerate
-     * the list.
+     * Have the user select a string from a list, or enter an arbitrary string. This is targeted at selecting from
+     * a potentially long list of items typically retrieved from a database or cache, with the ability to enter a
+     * custom value if none of the options match.
      *
      * @param prompt    The prompt to display to the user.
      * @param items     A list of strings to select from.
      * @param allowNone Is the user allowed to select none of the items?
-     * @return The selected item or null if none was selected.
+     * @return The selected item or null if none was selected, or a custom string entered by the user.
      */
-    NumberOrStringResponse selectFromNumberedListOrString(
+    NumberOrStringResponse selectFromListOrString(
             String prompt,
             List<String> items,
             boolean allowNone);
 
     /**
-     * Have the user select a string from a numbered list of strings by number, or enter an arbitrary string, presumably
-     * to indicate that none of the options are what they are looking for and provide instructions on how to regenerate
-     * the list.  If allowed, the user may also specify cancel, skip or quit.  If cancel, skip or quit is allowed, then
-     * the CancelException, SkipException or QuitException may be thrown.
+     * Have the user select a string from a list, or enter an arbitrary string. This is targeted at selecting from
+     * a potentially long list of items typically retrieved from a database or cache, with the ability to enter a
+     * custom value if none of the options match.
+     * If allowed, the user may also specify cancel, skip or quit. If cancel, skip or quit is allowed, then the
+     * CancelException, SkipException or QuitException may be thrown.
      *
      * @param prompt          The prompt to display to the user.
      * @param items           A list of strings to select from.
      * @param allowNone       Is the user allowed to select none of the items?
-     * @param allowCreate
+     * @param allowCreate     Is the user allowed to create a new item by entering a string?
      * @param isCancelAllowed Is the user allowed to cancel the current process?
      * @param isQuitAllowed   Is the user allowed to quit the program?
      * @param isSkipAllowed   Is the user allowed to skip this item and not enter an integer?
-     * @return The selected item or null if none was selected.
+     * @return The selected item or null if none was selected, or a custom string entered by the user.
      * @throws CancelException
      * @throws QuitException
      * @throws SkipException
      */
-    NumberOrStringResponse selectFromNumberedListOrString(
+    NumberOrStringResponse selectFromListOrString(
             String prompt,
             List<String> items,
             boolean allowNone,
@@ -491,4 +670,207 @@ public interface ViewInt {
      */
     boolean existsFileWithRetry(String fileContent, String filename) throws QuitException;
 
+    /**
+     * Displays a visually distinct prompt (text box style) and gets a string response from the user.
+     * Uses getResponseString for input handling.
+     *
+     * @param prompt The prompt to display to the user.
+     * @param defaultValue The default value to display to the user.
+     * @param showCancelQuitSkip If true, shows options to cancel, quit or skip.
+     * @param allowNone If true, allows the user to enter no value.
+     * @param isCancelAllowed If true, allows the user to cancel.
+     * @param isQuitAllowed If true, allows the user to quit.
+     * @param isSkipAllowed If true, allows the user to skip.
+     * @return The string entered by the user.
+     * @throws CancelException If the user cancels.
+     * @throws QuitException If the user quits.
+     * @throws SkipException If the user skips.
+     */
+    String getResponseStringTextBox(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+        boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+        throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input, with an optional help callback for providing context-sensitive help.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @param helpCallback       Optional callback function to provide help text when user requests it.
+     * @return The string entered by the user.
+     * @throws CancelException If the user cancels.
+     * @throws QuitException If the user quits.
+     * @throws SkipException If the user skips.
+     */
+    String getResponseStringTextBox(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+        boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, java.util.function.Supplier<String> helpCallback)
+        throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a currency amount, allowing for options to enter none, cancel, quit, or skip.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true. The value must be a valid currency (max two decimal digits).
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @return The double value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Double getResponseCurrency(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                               boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a currency amount, with an optional help callback for providing context-sensitive help.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true. The value must be a valid currency (max two decimal digits).
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @param helpCallback       Optional callback function to provide help text when user requests it.
+     * @return The double value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Double getResponseCurrency(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                               boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, java.util.function.Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a double value, allowing for options to enter none, cancel, quit, or skip.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @return The double value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Double getResponseDouble(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a double value, with an optional help callback for providing context-sensitive help.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @param helpCallback       Optional callback function to provide help text when user requests it.
+     * @return The double value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Double getResponseDouble(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, java.util.function.Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for an integer value, allowing for options to enter none, cancel, quit, or skip.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @return The integer value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                           boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for an integer value.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt              The prompt to display to the user.
+     * @param defaultValue        The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip  Whether to show cancel/quit/skip options.
+     * @param allowNone           If true, the user may enter no value (empty string is accepted).
+     * @param allowNegativeValues If true, allows negative values. If false, only positive values are accepted.
+     * @param isCancelAllowed     If true, the user may cancel the operation.
+     * @param isQuitAllowed       If true, the user may quit the operation.
+     * @param isSkipAllowed       If true, the user may skip the operation.
+     * @return The integer value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                           boolean allowNegativeValues, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for an integer value, with an optional help callback for providing context-sensitive help.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted).
+     * @param allowNegativeValues If true, allows negative values. If false, only positive values are accepted.
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @param helpCallback       Optional callback function to provide help text when user requests it.
+     * @return The integer value entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
+                           boolean allowNegativeValues, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
+                           java.util.function.Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException;
 }
+
