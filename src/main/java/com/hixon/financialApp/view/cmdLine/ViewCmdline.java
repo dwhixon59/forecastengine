@@ -366,18 +366,18 @@ public class ViewCmdline implements ViewInt {
      * Master method that handles all string input scenarios with prompt, default value, and full option support.
      * This is the core implementation that all other getResponseString methods delegate to.
      *
-     * @param prompt The prompt to display to the user (can be empty)
-     * @param defaultValue The default value to show and return if user hits enter (can be null)
+     * @param prompt             The prompt to display to the user (can be empty)
+     * @param defaultValue       The default value to show and return if user hits enter (can be null)
      * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
-     * @param allowNone If true, allows empty input (user just hits enter)
-     * @param isCancelAllowed If true, allows the user to cancel by entering 'c'
-     * @param isQuitAllowed If true, allows the user to quit by entering 'q'
-     * @param isSkipAllowed If true, allows the user to skip by entering 's'
-     * @param helpCallback Optional callback function to provide help text when user enters 'h'
+     * @param allowNone          If true, allows empty input (user just hits enter)
+     * @param isCancelAllowed    If true, allows the user to cancel by entering 'c'
+     * @param isQuitAllowed      If true, allows the user to quit by entering 'q'
+     * @param isSkipAllowed      If true, allows the user to skip by entering 's'
+     * @param helpCallback       Optional callback function to provide help text when user enters 'h'
      * @return The string entered by the user
      * @throws CancelException If the user cancels the operation
-     * @throws QuitException If the user quits the operation
-     * @throws SkipException If the user skips the operation
+     * @throws QuitException   If the user quits the operation
+     * @throws SkipException   If the user skips the operation
      */
     @Override
     public String getResponseString(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
@@ -800,7 +800,6 @@ public class ViewCmdline implements ViewInt {
     public String getCancelSkipOrQuitPrompt(boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed) {
         StringBuilder prompt = new StringBuilder();
         if (isCancelAllowed || isQuitAllowed || isSkipAllowed) {
-            prompt.append(", ");
             List<String> options = new ArrayList<>();
             if (isCancelAllowed) options.add("'c' to cancel");
             if (isQuitAllowed) options.add("'q' to quit");
@@ -922,7 +921,7 @@ public class ViewCmdline implements ViewInt {
         String menuOptionList = String.join(",", menuLetters);
         // Build prompt with available commands
         String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-        ask("Enter your choice (" + menuOptionList + cancelSkipOrQuitPrompt + "): ");
+        ask("Enter your choice (" + cancelSkipOrQuitPrompt + "): ");
         // Get response
         while (true) {
             String response = getLine().trim().toLowerCase();
@@ -963,9 +962,24 @@ public class ViewCmdline implements ViewInt {
     }
 
     /**
-     * Select from a numbered list using an enum with a default value.
+     * Select from a numbered list using an enum with a default value. Supports help via 'h' followed by a number
+     * (e.g., 'h 3' for help on option 3).
      */
-    protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType)
+    protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType) {
+        try {
+            return selectFromNumberedList(prompt,defaultValue, enumType, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT,
+                    DO_NOT_ALLOW_SKIP);
+        } catch (CancelException | QuitException | SkipException ignored) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Select from a numbered list using an enum with a default value.
+     * Supports help via 'h' followed by a number (e.g., 'h 3' for help on option 3).
+     */
+    protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType,
+                                           boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
         T[] values = enumType.getEnumConstants();
         List<String> options = new ArrayList<>();
@@ -980,12 +994,25 @@ public class ViewCmdline implements ViewInt {
         for (String option : options) {
             say("\t" + i++ + " - " + option);
         }
+        say("\tEnter 'h' followed by a number (e.g., 'h 3') for help on a specific option.");
+
+        // Build the special options prompt
+        StringBuilder specialOptions = new StringBuilder();
+        if (isCancelAllowed) {
+            specialOptions.append(", 'c' to cancel");
+        }
+        if (isQuitAllowed) {
+            specialOptions.append(", 'q' to quit");
+        }
+        if (isSkipAllowed) {
+            specialOptions.append(", 's' to skip");
+        }
 
         String optionPrompt = "Select an option";
         if (defaultValue != null) {
             optionPrompt += " [" + defaultValue.toString() + "]";
         }
-        optionPrompt += " (1 to " + (i - 1) + "): ";
+        optionPrompt += " (1 to " + (i - 1) + specialOptions + "): ";
 
         while (true) {
             ask(optionPrompt);
@@ -993,6 +1020,61 @@ public class ViewCmdline implements ViewInt {
 
             if (response.isEmpty() && defaultValue != null) {
                 return defaultValue;
+            }
+
+            // Check for cancel, quit, or skip
+            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
+                throw new CancelException("User asked to cancel this operation.");
+            }
+            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
+                throw new QuitException("User asked to abort processing.");
+            }
+            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
+                throw new SkipException("User asked to skip this item.");
+            }
+
+            // Check for help request: 'h' or 'H' followed by optional whitespace and a number
+            if (response.toLowerCase().matches("^h\\s*\\d+$")) {
+                try {
+                    // Extract the number after 'h' and optional whitespace
+                    String numberPart = response.toLowerCase().replaceFirst("^h\\s*", "");
+                    int helpIndex = Integer.parseInt(numberPart);
+
+                    if (helpIndex >= 1 && helpIndex <= values.length) {
+                        T enumValue = values[helpIndex - 1];
+                        String enumClassName = enumType.getSimpleName().toLowerCase();
+                        String enumValueName = enumValue.name().toLowerCase();
+                        String helpKey = enumClassName + "." + enumValueName;
+
+                        // Load help text from properties file
+                        try (InputStream input = getClass().getClassLoader()
+                                .getResourceAsStream("help-text.properties")) {
+                            if (input != null) {
+                                Properties helpProperties = new Properties();
+                                helpProperties.load(input);
+                                String helpText = helpProperties.getProperty(helpKey);
+
+                                if (helpText != null && !helpText.trim().isEmpty()) {
+                                    say("\nHelp for " + enumValue.toString() + ":");
+                                    say(helpText);
+                                    say();
+                                } else {
+                                    say("No help available for " + enumValue.toString() + " (key: " + helpKey + ").");
+                                }
+                            } else {
+                                say("Help text file not found.");
+                            }
+                        } catch (IOException e) {
+                            say("Error loading help text: " + e.getMessage());
+                        }
+                    } else {
+                        say("Please enter a help number between 1 and " + values.length + " (e.g., 'h " + Math.min(3, values.length) + "').");
+                    }
+                    continue; // Stay in the loop for another selection
+                } catch (NumberFormatException e) {
+                    say("Invalid help format. Use 'h' followed by a number (e.g., 'h 3').");
+                    continue;
+                }
             }
 
             try {
@@ -1003,7 +1085,7 @@ public class ViewCmdline implements ViewInt {
                     say("Please enter a number between 1 and " + values.length + ".");
                 }
             } catch (NumberFormatException e) {
-                say("Invalid input. Please enter a number.");
+                say("Invalid input. Please enter a number, or 'h' followed by a number for help.");
             }
         }
     }
@@ -1150,7 +1232,7 @@ public class ViewCmdline implements ViewInt {
     @Override
     public NumberOrStringResponse selectFromListOrString(String prompt, List<String> items, boolean allowNone) {
         try {
-            return selectFromListOrString(prompt, items, allowNone,  false, false, false, false);
+            return selectFromListOrString(prompt, items, allowNone, false, false, false, false);
         } catch (CancelException | QuitException | SkipException ignored) {
             return new NumberOrStringResponse(0);
         }
@@ -1360,23 +1442,6 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType)
-            throws CancelException, QuitException, SkipException {
-        return selectFromNumberedList(prompt, defaultValue, enumType);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public Integer selectFromList(String prompt, List<String> items) {
-        return selectFromList(prompt, items, DO_NOT_ALLOW_NONE);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
     public Integer selectFromList(String prompt, List<String> items, boolean allowNone) {
         try {
             return selectFromList(prompt, items, allowNone, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
@@ -1402,11 +1467,29 @@ public class ViewCmdline implements ViewInt {
     }
 
     /**
+     * @inheritDoc
+     */
+    @Override
+    public <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType) {
+        return selectFromNumberedList(prompt, defaultValue, enumType);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType,
+                                                 boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException {
+        return selectFromNumberedList(prompt, defaultValue, enumType, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+    }
+
+    /**
      * Helper method for selectFromListOrString methods.
      */
     public NumberOrStringResponse selectFromNumberedListOrString(String prompt, List<String> items, boolean allowNone, boolean allowCreate,
                                                                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-        throws CancelException, QuitException, SkipException {
+            throws CancelException, QuitException, SkipException {
         sayH3(prompt);
         for (int i = 0; i < items.size(); i++) {
             say("\t" + (i + 1) + " - " + items.get(i));
@@ -1464,6 +1547,7 @@ public class ViewCmdline implements ViewInt {
     public void beginImportItem(Transaction transaction) {
         // Nothing to do for this type of command line resolver.
     }
+
     /**
      * @inheritDoc
      */

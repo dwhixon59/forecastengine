@@ -547,11 +547,8 @@ public class BudgetController {
 
             // Get the period type, and validate that it is a valid period type:
             Item.PeriodType defaultPeriodTypeEnum = template != null ? template.getPeriod() : Item.PeriodType.MONTHLY;
-            Item.PeriodType selectedPeriodType = view.selectFromList(
-                    "Select period type:",
-                    defaultPeriodTypeEnum,
-                    Item.PeriodType.class
-            );
+            Item.PeriodType selectedPeriodType = view.selectFromList("Select period type:", defaultPeriodTypeEnum,
+                    Item.PeriodType.class, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Get the Amount
             Double defaultAmount = template != null ? template.getAmount() : null;
@@ -602,19 +599,24 @@ public class BudgetController {
 
             // Enum selection for Item Type
             Item.ItemType defaultItemType = template != null ? template.getItemType() : Item.ItemType.EXPENSE;
-            Item.ItemType itemType = view.selectFromList("Select Item Type:", defaultItemType, Item.ItemType.class);
+            Item.ItemType itemType = view.selectFromList("Select Item Type:", defaultItemType, Item.ItemType.class,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Important
-            Item.HowImportant defaultHowImportant = template != null ? template.getHowImportant() : Item.HowImportant.DISCRETIONARY_NONESSENTIAL;
-            Item.HowImportant howImportant = view.selectFromList("Select How Important:", defaultHowImportant, Item.HowImportant.class);
+            Item.HowImportant defaultHowImportant = template != null ? template.getHowImportant() :
+                    Item.HowImportant.DISCRETIONARY_NONESSENTIAL;
+            Item.HowImportant howImportant = view.selectFromList("Select How Important:", defaultHowImportant,
+                    Item.HowImportant.class, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Occurs
             Item.HowOccurs defaultHowOccurs = template != null ? template.getHowOccurs() : Item.HowOccurs.PERIODIC;
-            Item.HowOccurs howOccurs = view.selectFromList("Select How Occurs:", defaultHowOccurs, Item.HowOccurs.class);
+            Item.HowOccurs howOccurs = view.selectFromList("Select How Occurs:", defaultHowOccurs, Item.HowOccurs.class,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Paid
             Item.HowPaid defaultHowPaid = template != null ? template.getHowPaid() : Item.HowPaid.DEBIT_CARD;
-            Item.HowPaid howPaid = view.selectFromList("Select How Paid:", defaultHowPaid, Item.HowPaid.class);
+            Item.HowPaid howPaid = view.selectFromList("Select How Paid:", defaultHowPaid, Item.HowPaid.class,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Create BudgetItem
             BudgetItem budgetItem = new BudgetItem(selectedBudget, payee);

@@ -562,16 +562,6 @@ public interface ViewInt {
      * Have the user select a string from a list of strings. This is targeted at selecting from a potentially long
      * list of items typically retrieved from a database or cache.
      * Each view implementation decides how to present the list (e.g., numbered list, searchable dropdown).
-     * @param prompt
-     * @param items
-     * @return Index of the selected item (0-based).
-     */
-    Integer selectFromList(String prompt, List<String> items);
-
-    /**
-     * Have the user select a string from a list of strings. This is targeted at selecting from a potentially long
-     * list of items typically retrieved from a database or cache.
-     * Each view implementation decides how to present the list (e.g., numbered list, searchable dropdown).
      *
      * @param prompt    The prompt to display to the user.
      * @param items     A list of strings to select from.
@@ -598,8 +588,8 @@ public interface ViewInt {
      * @throws SkipException
      */
     Integer selectFromList(String prompt, List<String> items, boolean allowNone, boolean isCancelAllowed,
-                           boolean isQuitAllowed, boolean isSkipAllowed) throws CancelException, QuitException,
-            SkipException;
+                           boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
 
     /**
      * Have the user select an enum value from a list. This is targeted at selecting from a potentially long
@@ -610,11 +600,29 @@ public interface ViewInt {
      * @param enumType The enum class to display.
      * @param <T> The enum type.
      * @return The selected enum value, or defaultValue if Enter is pressed.
+      */
+    <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType);
+
+    /**
+     * Have the user select an enum value from a list. This is targeted at selecting from a potentially long
+     * list of items typically retrieved from a database or cache.
+     * If allowed, the user may also specify cancel, skip or quit. If cancel, skip or quit is allowed, then the
+     * CancelException, SkipException or QuitException may be thrown.
+     *
+     * @param prompt The prompt to display.
+     * @param defaultValue The default value to use if the user presses Enter.
+     * @param enumType The enum class to display.
+     * @param isCancelAllowed Is the user allowed to cancel the current process?
+     * @param isQuitAllowed Is the user allowed to quit the program?
+     * @param isSkipAllowed Is the user allowed to skip this item?
+     * @param <T> The enum type.
+     * @return The selected enum value, or defaultValue if Enter is pressed.
      * @throws CancelException if the user cancels.
      * @throws QuitException if the user quits.
      * @throws SkipException if the user skips.
      */
-    <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType)
+    <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType, boolean isCancelAllowed,
+                                         boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException;
 
     /**

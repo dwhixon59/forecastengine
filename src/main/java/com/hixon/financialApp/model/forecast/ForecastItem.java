@@ -341,7 +341,12 @@ public class ForecastItem extends Item {
             howOccurs = parseHowOccurs(rs.getString("fi.howOccurs"));
             howPaid = parseHowPaid(rs.getString("fi.howPaid"));
             idForecast = UUID.fromString(rs.getString("fi.idForecast"));
-            idBudgetItem = UUID.fromString(rs.getString("fi.idBudgetItem"));
+            if (rs.getString("fi.idBudgetItem") != null) {
+                idBudgetItem = UUID.fromString(rs.getString("fi.idBudgetItem"));
+            }
+            else {
+                idBudgetItem = null;
+            }
             setDirty(false);
         } catch (SQLException e) {
             ForecastException fe = new ForecastException("Error reading in the forecast item row.\n" + this.toString());
