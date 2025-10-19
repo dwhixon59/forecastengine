@@ -76,7 +76,7 @@ public class AddBudgetItemTest {
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("Weekly shopping");
 
-            when(mockView.selectFromList(eq("Select period type:"), eq(Item.PeriodType.MONTHLY),
+            when(mockView.selectByPositionFromList(eq("Select period type:"), eq(Item.PeriodType.MONTHLY),
                     eq(Item.PeriodType.class)))
                     .thenReturn(Item.PeriodType.WEEKLY);
 
@@ -92,31 +92,31 @@ public class AddBudgetItemTest {
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(0.0);
 
-            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("2025-10-01");
 
             when(mockView.getResponseInt(eq("Number of Payments"), eq(0), anyBoolean(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(52);
 
-            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), isNull(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), isNull(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("2026-09-30");
 
-            when(mockView.selectFromList(eq("Select Item Type:"), eq(Item.ItemType.EXPENSE),
+            when(mockView.selectByPositionFromList(eq("Select Item Type:"), eq(Item.ItemType.EXPENSE),
                     eq(Item.ItemType.class)))
                     .thenReturn(Item.ItemType.EXPENSE);
 
-            when(mockView.selectFromList(eq("Select How Important:"), eq(Item.HowImportant.DISCRETIONARY_NONESSENTIAL),
+            when(mockView.selectByPositionFromList(eq("Select How Important:"), eq(Item.HowImportant.DISCRETIONARY_NONESSENTIAL),
                     eq(Item.HowImportant.class)))
                     .thenReturn(Item.HowImportant.FIXED_ESSENTIAL);
 
-            when(mockView.selectFromList(eq("Select How Occurs:"), eq(Item.HowOccurs.PERIODIC),
+            when(mockView.selectByPositionFromList(eq("Select How Occurs:"), eq(Item.HowOccurs.PERIODIC),
                     eq(Item.HowOccurs.class)))
                     .thenReturn(Item.HowOccurs.PERIODIC);
 
-            when(mockView.selectFromList(eq("Select How Paid:"), eq(Item.HowPaid.DEBIT_CARD),
+            when(mockView.selectByPositionFromList(eq("Select How Paid:"), eq(Item.HowPaid.DEBIT_CARD),
                     eq(Item.HowPaid.class)))
                     .thenReturn(Item.HowPaid.DEBIT_CARD);
 
@@ -154,7 +154,7 @@ public class AddBudgetItemTest {
 
             // User selects second budget
             when(mockView.selectByNameFromList(eq("Select Budget"), anyList(), eq(mockBudget),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
+                    anyBoolean(), true, anyBoolean(), anyBoolean(), anyBoolean(), null))
                     .thenReturn(mockBudget2);
 
             // Setup minimal mock responses for other fields
@@ -167,7 +167,7 @@ public class AddBudgetItemTest {
             assertNotNull(result);
             assertEquals(mockBudget2.getId(), result.getIdBudget());
             verify(mockView).selectByNameFromList(eq("Select Budget"), anyList(), eq(mockBudget),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean());
+                    anyBoolean(), true, anyBoolean(), anyBoolean(), anyBoolean(), null);
         }
     }
 
@@ -267,7 +267,7 @@ public class AddBudgetItemTest {
                         anyBoolean(), anyBoolean(), anyBoolean(), any()))
                         .thenReturn("Original memo");
 
-                when(mockView.selectFromList(eq("Select period type:"), eq(Item.PeriodType.MONTHLY),
+                when(mockView.selectByPositionFromList(eq("Select period type:"), eq(Item.PeriodType.MONTHLY),
                         eq(Item.PeriodType.class)))
                         .thenReturn(Item.PeriodType.MONTHLY);
 
@@ -326,8 +326,8 @@ public class AddBudgetItemTest {
             setupMinimalValidResponses();
 
             // Override end date to be empty
-            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), isNull(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), isNull(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("");
 
             // Act
@@ -353,15 +353,15 @@ public class AddBudgetItemTest {
             BudgetItem result = budgetController.getBudgetItemFromUser();
 
             // Assert - verify selectFromList was called for each enum
-            verify(mockView).selectFromList(eq("Select period type:"), any(Item.PeriodType.class),
+            verify(mockView).selectByPositionFromList(eq("Select period type:"), any(Item.PeriodType.class),
                     eq(Item.PeriodType.class));
-            verify(mockView).selectFromList(eq("Select Item Type:"), any(Item.ItemType.class),
+            verify(mockView).selectByPositionFromList(eq("Select Item Type:"), any(Item.ItemType.class),
                     eq(Item.ItemType.class));
-            verify(mockView).selectFromList(eq("Select How Important:"), any(Item.HowImportant.class),
+            verify(mockView).selectByPositionFromList(eq("Select How Important:"), any(Item.HowImportant.class),
                     eq(Item.HowImportant.class));
-            verify(mockView).selectFromList(eq("Select How Occurs:"), any(Item.HowOccurs.class),
+            verify(mockView).selectByPositionFromList(eq("Select How Occurs:"), any(Item.HowOccurs.class),
                     eq(Item.HowOccurs.class));
-            verify(mockView).selectFromList(eq("Select How Paid:"), any(Item.HowPaid.class),
+            verify(mockView).selectByPositionFromList(eq("Select How Paid:"), any(Item.HowPaid.class),
                     eq(Item.HowPaid.class));
         }
     }
@@ -377,8 +377,8 @@ public class AddBudgetItemTest {
             setupMinimalValidResponses();
 
             // Valid date format MM-dd-yyyy (not yyyy-MM-dd as the prompt suggests)
-            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("10-08-2025");
 
             // Act
@@ -408,7 +408,7 @@ public class AddBudgetItemTest {
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("Test Memo");
 
-        when(mockView.selectFromList(eq("Select period type:"), any(), eq(Item.PeriodType.class)))
+        when(mockView.selectByPositionFromList(eq("Select period type:"), any(), eq(Item.PeriodType.class)))
                 .thenReturn(Item.PeriodType.MONTHLY);
 
         when(mockView.getResponseCurrency(eq("Amount"), any(), anyBoolean(), anyBoolean(),
@@ -427,28 +427,28 @@ public class AddBudgetItemTest {
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(0.0);
 
-        when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+        when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(), anyBoolean(),
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("2025-10-01");
 
         when(mockView.getResponseInt(eq("Number of Payments"), anyInt(), anyBoolean(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(12);
 
-        when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), any(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+        when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), any(), anyBoolean(), anyBoolean(),
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("2026-10-01");
 
-        when(mockView.selectFromList(eq("Select Item Type:"), any(), eq(Item.ItemType.class)))
+        when(mockView.selectByPositionFromList(eq("Select Item Type:"), any(), eq(Item.ItemType.class)))
                 .thenReturn(Item.ItemType.EXPENSE);
 
-        when(mockView.selectFromList(eq("Select How Important:"), any(), eq(Item.HowImportant.class)))
+        when(mockView.selectByPositionFromList(eq("Select How Important:"), any(), eq(Item.HowImportant.class)))
                 .thenReturn(Item.HowImportant.FIXED_ESSENTIAL);
 
-        when(mockView.selectFromList(eq("Select How Occurs:"), any(), eq(Item.HowOccurs.class)))
+        when(mockView.selectByPositionFromList(eq("Select How Occurs:"), any(), eq(Item.HowOccurs.class)))
                 .thenReturn(Item.HowOccurs.PERIODIC);
 
-        when(mockView.selectFromList(eq("Select How Paid:"), any(), eq(Item.HowPaid.class)))
+        when(mockView.selectByPositionFromList(eq("Select How Paid:"), any(), eq(Item.HowPaid.class)))
                 .thenReturn(Item.HowPaid.DEBIT_CARD);
     }
 }

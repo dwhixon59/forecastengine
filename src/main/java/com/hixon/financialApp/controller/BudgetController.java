@@ -96,11 +96,10 @@ public class BudgetController {
         BudgetItem selectedBudgetItem = null;
         boolean done = false;
         while (!done) {
-            view.say();
             String prompt = "What would you like to do?";
             try {
                 String option = view.selectFromMenu(prompt, List.of("add", "copy and update", "delete",
-                    "update", "find", "select"), DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT,
+                    "update", "find", "select"), DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT,
                         DO_NOT_ALLOW_SKIP);
                 switch (option) {
                     case "a":
@@ -502,8 +501,7 @@ public class BudgetController {
             // or creating items for a different budget without switching the main context
             // Default to the template's budget if available, otherwise use the current budget
             Budget defaultBudget = (template != null && template.getIdBudget() != null)
-                    ? Budget.getById(template.getIdBudget())
-                    : budget;
+                    ? Budget.getById(template.getIdBudget()) : budget;
             Budget selectedBudget = defaultBudget;
 
             try {
@@ -517,7 +515,8 @@ public class BudgetController {
                         view.say("Template's budget: " + defaultBudget.getName() + " (will be used as default)");
                     }
                     selectedBudget = view.selectByNameFromList("Select Budget", availableBudgets, defaultBudget,
-                            DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                            DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                            null);
                 }
             } catch (Exception e) {
                 view.say("Error loading budgets, using default budget: " + e.getMessage());
@@ -528,27 +527,28 @@ public class BudgetController {
 
             // Get the category, and validate that it is a valid category:
             String category = view.getResponseString("Category", template != null ? template.getCategory() :
-                    null, DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                    null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.category")).trim();
 
             // Get the payee:
             String defaultPayee = template != null ? template.getPayee() : "";
-            String payee = view.getResponseString("Payee", defaultPayee, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                    DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+            String payee = view.getResponseString("Payee", defaultPayee, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.payee"));
 
             // Get the memo but allow none:
             String defaultMemo = template != null ? template.getMemo() : "";
-            String memo = view.getResponseString("Memo", defaultMemo, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                    ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+            String memo = view.getResponseString("Memo", defaultMemo, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.memo"));
 
             view.sayH2("Schedule and Amount");
 
             // Get the period type, and validate that it is a valid period type:
             Item.PeriodType defaultPeriodTypeEnum = template != null ? template.getPeriod() : Item.PeriodType.MONTHLY;
-            Item.PeriodType selectedPeriodType = view.selectFromList("Select period type:", defaultPeriodTypeEnum,
-                    Item.PeriodType.class, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.PeriodType selectedPeriodType = view.selectByPositionFromList("Select period type:",
+                    defaultPeriodTypeEnum, Item.PeriodType.class, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT,
+                    DO_NOT_ALLOW_SKIP);
 
             // Get the Amount
             Double defaultAmount = template != null ? template.getAmount() : null;
@@ -576,13 +576,13 @@ public class BudgetController {
             String defaultStartDateValue = template != null ? Utility.calendarDateToStringDate(template.getStartDate()) :
                     Utility.calendarDateToStringDate(Calendar.getInstance());
             String startDate = view.getResponseString("Start Date (yyyy-MM-dd)", defaultStartDateValue,
-                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                    DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.startdate"));
 
             // Get the Number of Payments
             Integer defaultNumberOfPaymentsValue = template != null ? template.getNumberOfPayments() : 0;
-            int numberOfPayments = view.getResponseInt("Number of Payments", defaultNumberOfPaymentsValue,
-                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_NEGATIVE_VALUES, ALLOW_CANCEL,
+            int numberOfPayments = view.getResponseNatural("Number of Payments", defaultNumberOfPaymentsValue,
+                    DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL,
                     ALLOW_QUIT, DO_NOT_ALLOW_SKIP, () -> helpText.getProperty("budgetitem.numberofpayments"));
 
             // Get the End Date
@@ -592,31 +592,31 @@ public class BudgetController {
                         template.getEndDate() != null ? Utility.calendarDateToStringDate(template.getEndDate()) : null;
             }
             String endDate = view.getResponseString("End Date (yyyy-MM-dd)", defaultEndDateValue,
-                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                    ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.enddate"));
 
             view.sayH2("Classification");
 
             // Enum selection for Item Type
             Item.ItemType defaultItemType = template != null ? template.getItemType() : Item.ItemType.EXPENSE;
-            Item.ItemType itemType = view.selectFromList("Select Item Type:", defaultItemType, Item.ItemType.class,
-                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.ItemType itemType = view.selectByPositionFromList("Select Item Type:", defaultItemType, Item.ItemType.class,
+                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Important
             Item.HowImportant defaultHowImportant = template != null ? template.getHowImportant() :
                     Item.HowImportant.DISCRETIONARY_NONESSENTIAL;
-            Item.HowImportant howImportant = view.selectFromList("Select How Important:", defaultHowImportant,
-                    Item.HowImportant.class, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.HowImportant howImportant = view.selectByPositionFromList("Select How Important:", defaultHowImportant,
+                    Item.HowImportant.class, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Occurs
             Item.HowOccurs defaultHowOccurs = template != null ? template.getHowOccurs() : Item.HowOccurs.PERIODIC;
-            Item.HowOccurs howOccurs = view.selectFromList("Select How Occurs:", defaultHowOccurs, Item.HowOccurs.class,
-                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.HowOccurs howOccurs = view.selectByPositionFromList("Select How Occurs:", defaultHowOccurs, Item.HowOccurs.class,
+                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Paid
             Item.HowPaid defaultHowPaid = template != null ? template.getHowPaid() : Item.HowPaid.DEBIT_CARD;
-            Item.HowPaid howPaid = view.selectFromList("Select How Paid:", defaultHowPaid, Item.HowPaid.class,
-                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.HowPaid howPaid = view.selectByPositionFromList("Select How Paid:", defaultHowPaid, Item.HowPaid.class,
+                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Create BudgetItem
             BudgetItem budgetItem = new BudgetItem(selectedBudget, payee);
@@ -659,7 +659,7 @@ public class BudgetController {
         month.set(Calendar.DATE, 1);
         while (!done) {
             done = true;
-            String line = view.getResponseString();
+            String line = view.getResponseString("Just enter for this month, 'l' for last month, or Month number for any other month.");
             switch (line) {
                 case "l":
                     month.add(Calendar.MONTH, -1);
@@ -723,7 +723,7 @@ public class BudgetController {
 
             // Show a list of the budget items and ask the user to select one:
             List<String> displayableBudgetItemsList = generateDisplayableBudgetItemList(budgetItems);
-            int index = view.selectFromList("Multiple budget items found.  Please select one:",
+            int index = view.selectByPositionFromList("Multiple budget items found.  Please select one:",
                     displayableBudgetItemsList, false);
             selectedBudgetItem = budgetItems.get(index);
         }
@@ -862,7 +862,8 @@ public class BudgetController {
             try {
                 String choice = view.selectFromMenu(prompt,
                     List.of("accept and save", "update", "cancel"),
-                    DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP);
 
                 switch (choice) {
                     case "a":

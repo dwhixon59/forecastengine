@@ -149,7 +149,7 @@ public class TransactionSplitsController {
             else if (amounts[0].equalsIgnoreCase("d")) {
                 try {
                     // Get the number of the budget item to delete:
-                    int itemNumber = view.getNumberBetween("Enter the number of the budget item to delete:", 1,
+                    int itemNumber = view.getResponseIntBetween("Enter the number of the budget item to delete:", 1,
                             budgetItemsForMerchant.size(), true, true, true);
 
                     BudgetItemMerchant.deleteBudgetItemFromMerchant(budgetItemsForMerchant.get(itemNumber - 1));
@@ -355,7 +355,7 @@ public class TransactionSplitsController {
                 for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
 
                     double enteredAmount = (useEnteredAmounts) ?
-                            view.getDouble(amounts[i], "Must be a dollar amount.") : 0;
+                            view.getResponseDouble(amounts[i]) : 0;
 
                     // Don't create a split if the user entered zero for this budget item:
                     if (!useEnteredAmounts || enteredAmount != 0) {

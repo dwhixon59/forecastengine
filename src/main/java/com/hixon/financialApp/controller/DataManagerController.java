@@ -86,7 +86,7 @@ public class DataManagerController {
                     "Financial institutions"
                 );
                 String option = view.selectFromMenu(prompt, entityOptions, DO_NOT_ALLOW_NONE,
-                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                        SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
                 switch(option) {
                     case "b":
                         // Delegate to BudgetController

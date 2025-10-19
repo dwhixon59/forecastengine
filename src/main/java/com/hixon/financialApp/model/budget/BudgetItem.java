@@ -418,7 +418,7 @@ public class BudgetItem extends Item {
                         } while (rs.next());
 
                         // then let the user select the correct one:
-                        int selection = Utility.getView().selectFromList("Select the correct budget item " +
+                        int selection = Utility.getView().selectByPositionFromList("Select the correct budget item " +
                                         "for " + searchTerm, budgetItemNames, ViewInt.ALLOW_NONE, ViewInt.ALLOW_CANCEL,
                                 ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
 

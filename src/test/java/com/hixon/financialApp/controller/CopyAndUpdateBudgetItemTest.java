@@ -179,7 +179,7 @@ public class CopyAndUpdateBudgetItemTest {
                     .thenReturn(multipleItems);
 
             // Mock user selecting the second item (index 1)
-            when(mockView.selectFromList(eq("Multiple budget items found.  Please select one:"),
+            when(mockView.selectByPositionFromList(eq("Multiple budget items found.  Please select one:"),
                     anyList(), eq(false)))
                     .thenReturn(1);
 
@@ -188,7 +188,7 @@ public class CopyAndUpdateBudgetItemTest {
 
             // Assert
             assertEquals(secondTemplateItem, selected);
-            verify(mockView).selectFromList(eq("Multiple budget items found.  Please select one:"),
+            verify(mockView).selectByPositionFromList(eq("Multiple budget items found.  Please select one:"),
                     anyList(), eq(false));
         }
     }
@@ -207,7 +207,7 @@ public class CopyAndUpdateBudgetItemTest {
             // Assert
             assertEquals(templateItem, selected);
             // Verify that selectFromList was NOT called (auto-selected)
-            verify(mockView, never()).selectFromList(anyString(), anyList(), anyBoolean());
+            verify(mockView, never()).selectByPositionFromList(anyString(), anyList(), anyBoolean());
         }
     }
 
@@ -380,7 +380,7 @@ public class CopyAndUpdateBudgetItemTest {
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("Weekly shopping");
 
-            when(mockView.selectFromList(eq("Select period type:"), eq(Item.PeriodType.WEEKLY),
+            when(mockView.selectByPositionFromList(eq("Select period type:"), eq(Item.PeriodType.WEEKLY),
                     eq(Item.PeriodType.class)))
                     .thenReturn(Item.PeriodType.WEEKLY);
 
@@ -396,16 +396,16 @@ public class CopyAndUpdateBudgetItemTest {
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(100.0);
 
-            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), eq("01-01-2025"), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), eq("01-01-2025"), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("01-01-2025");
 
             when(mockView.getResponseInt(eq("Number of Payments"), eq(52), anyBoolean(), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(52);
 
-            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), eq("12-31-2025"), anyBoolean(),
-                    anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), eq("12-31-2025"), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("12-31-2025");
 
             setupEnumMockResponses();
@@ -530,7 +530,7 @@ public class CopyAndUpdateBudgetItemTest {
 
     // Helper methods
     private void setupMinimalMockResponses(double amount) throws Exception {
-        when(mockView.selectFromList(eq("Select period type:"), any(Item.PeriodType.class),
+        when(mockView.selectByPositionFromList(eq("Select period type:"), any(Item.PeriodType.class),
                 eq(Item.PeriodType.class)))
                 .thenReturn(Item.PeriodType.WEEKLY);
 
@@ -546,36 +546,36 @@ public class CopyAndUpdateBudgetItemTest {
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(0.0);
 
-        when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+        when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(), anyBoolean(),
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("01-01-2025");
 
         when(mockView.getResponseInt(eq("Number of Payments"), anyInt(), anyBoolean(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(52);
 
         // End Date can be null/empty when ALLOW_NONE is specified
-        when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), any(), anyBoolean(),
-                anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+        when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), any(), anyBoolean(), anyBoolean(),
+                anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("");  // Return empty string instead of null
 
         setupEnumMockResponses();
     }
 
     private void setupEnumMockResponses() throws Exception {
-        when(mockView.selectFromList(eq("Select Item Type:"), any(Item.ItemType.class),
+        when(mockView.selectByPositionFromList(eq("Select Item Type:"), any(Item.ItemType.class),
                 eq(Item.ItemType.class)))
                 .thenReturn(Item.ItemType.EXPENSE);
 
-        when(mockView.selectFromList(eq("Select How Important:"), any(Item.HowImportant.class),
+        when(mockView.selectByPositionFromList(eq("Select How Important:"), any(Item.HowImportant.class),
                 eq(Item.HowImportant.class)))
                 .thenReturn(Item.HowImportant.FIXED_ESSENTIAL);
 
-        when(mockView.selectFromList(eq("Select How Occurs:"), any(Item.HowOccurs.class),
+        when(mockView.selectByPositionFromList(eq("Select How Occurs:"), any(Item.HowOccurs.class),
                 eq(Item.HowOccurs.class)))
                 .thenReturn(Item.HowOccurs.PERIODIC);
 
-        when(mockView.selectFromList(eq("Select How Paid:"), any(Item.HowPaid.class),
+        when(mockView.selectByPositionFromList(eq("Select How Paid:"), any(Item.HowPaid.class),
                 eq(Item.HowPaid.class)))
                 .thenReturn(Item.HowPaid.DEBIT_CARD);
     }

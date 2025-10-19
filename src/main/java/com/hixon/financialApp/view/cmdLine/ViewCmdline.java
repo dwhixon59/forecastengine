@@ -148,11 +148,16 @@ public class ViewCmdline implements ViewInt {
      * @param s the header text to display
      */
     public void sayH3(String s) {
+
+        if (s == null || s.isEmpty()) {
+            return; // Do nothing for null or empty strings
+        }
+
         // Only print blank line if not immediately following a higher-level heading
         if (lastHeading != HeadingLevel.H1 && lastHeading != HeadingLevel.H2) {
             System.out.println();
         }
-        System.out.println("▸ " + s);
+        say("▸ " + s);
         lastHeading = HeadingLevel.H3;
     }
 
@@ -218,45 +223,49 @@ public class ViewCmdline implements ViewInt {
     /**
      * @inheritDoc
      */
-    public int getNumberBetween(String prompt, int min, int max) throws CancelException, SkipException, QuitException {
-        return getNumberBetween(prompt, min, max, null, false, false, false);
+    public int getResponseIntBetween(String prompt, int min, int max) {
+        try {
+            return getResponseIntBetween(prompt, min, max, null, false, true, false, false, false, null);
+        } catch (CancelException | QuitException | SkipException ignored) {
+            // This should not happen since we specified that cancel, quit and skip are not allowed.
+            return 0;
+        }
     }
 
     /**
      * @inheritDoc
      */
-    public int getNumberBetween(String prompt, int min, int max, boolean isCancelAllowed, boolean isQuitAllowed,
-                                boolean isSkipAllowed) throws CancelException, QuitException, SkipException {
-        return getNumberBetween(prompt, min, max, null, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+    public int getResponseIntBetween(String prompt, int min, int max, boolean isCancelAllowed, boolean isQuitAllowed,
+                                     boolean isSkipAllowed) throws CancelException, QuitException, SkipException {
+        return getResponseIntBetween(prompt, min, max, null, false, true, isCancelAllowed, isQuitAllowed, isSkipAllowed,
+                null);
     }
 
     /**
      * Enhanced getNumberBetween that supports a default value.
      */
-    public int getNumberBetween(String prompt, int min, int max, Integer defaultValue, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException {
-        int result;
-        String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-        StringBuilder fullPrompt = new StringBuilder(prompt + " (" + min + " to " + max + ")");
-        fullPrompt.append(cancelSkipOrQuitPrompt).append(": ");
-        ask(fullPrompt.toString());
-        boolean allowNone = (defaultValue != null);
-        while (true) {
-            String response = getResponseString("", null, false, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
-            if ((response == null || response.trim().isEmpty()) && defaultValue != null) {
-                return defaultValue;
-            }
-            try {
-                result = Integer.parseInt(response);
-                if (result >= min && result <= max) {
-                    break;
-                }
-                ask("Please enter a number from " + min + " to " + max + cancelSkipOrQuitPrompt + ":");
-            } catch (NumberFormatException numberFormatException) {
-                say("Please enter a number from " + min + " to " + max + cancelSkipOrQuitPrompt + ":");
-            }
+    public int getResponseIntBetween(String prompt, int min, int max, Integer defaultValue, boolean allowNone,
+                boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
+                Supplier<String> helpCallBack)
+            throws CancelException, QuitException, SkipException
+    {
+        Integer response;
+
+        if (min >= max) {
+            throw new IllegalArgumentException("The 'min' value must be less than the 'max' value.");
         }
-        return result;
+
+        while (true) {
+            response = getResponseInt(prompt, defaultValue, allowNone, showCancelQuitSkip,
+                    isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallBack);
+                 if (response >= min && response <= max) {
+                    break;
+                } else {
+                    say("The number you entered is not between " + min + " and " + max + ".");
+                }
+        }
+
+        return response;
     }
 
     /**
@@ -323,7 +332,8 @@ public class ViewCmdline implements ViewInt {
     public String getResponseString(String prompt) {
         String response;
         try {
-            response = getResponseString(prompt, null, false, true, false, false, false, null);
+            response = getResponseString(prompt, null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
         } catch (CancelException | QuitException | SkipException ignored) {
             response = "";
         }
@@ -334,32 +344,10 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public String getResponseString(String prompt, String defaultValue) {
-        try {
-            return getResponseString(prompt, defaultValue, false, true, false, false, false, null);
-        } catch (CancelException | QuitException | SkipException ignored) {
-            return defaultValue != null ? defaultValue : "";
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public String getResponseString(boolean allowNone, boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed,
-                                    boolean isSkipAllowed)
+    public String getResponseString(String prompt, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return getResponseString("", null, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public String getResponseString(boolean allowNone, boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed,
-                                    boolean isSkipAllowed, Supplier<String> helpCallback)
-            throws CancelException, QuitException, SkipException {
-        return getResponseString("", null, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+        return getResponseString(prompt, null, DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, isCancelAllowed,
+                isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -368,8 +356,8 @@ public class ViewCmdline implements ViewInt {
      *
      * @param prompt             The prompt to display to the user (can be empty)
      * @param defaultValue       The default value to show and return if user hits enter (can be null)
-     * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
      * @param allowNone          If true, allows empty input (user just hits enter)
+     * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
      * @param isCancelAllowed    If true, allows the user to cancel by entering 'c'
      * @param isQuitAllowed      If true, allows the user to quit by entering 'q'
      * @param isSkipAllowed      If true, allows the user to skip by entering 's'
@@ -380,9 +368,8 @@ public class ViewCmdline implements ViewInt {
      * @throws SkipException   If the user skips the operation
      */
     @Override
-    public String getResponseString(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                    boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
-                                    Supplier<String> helpCallback)
+    public String getResponseString(String prompt, String defaultValue, boolean allowNone, boolean showCancelQuitSkip,
+                boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
             throws CancelException, QuitException, SkipException {
 
         // Build the full prompt with default value and options
@@ -460,7 +447,7 @@ public class ViewCmdline implements ViewInt {
     @Override
     public String getResponseStringMenuSelection(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
                                                  boolean isSkipAllowed) throws CancelException, QuitException, SkipException {
-        return getResponseString(prompt, null, false, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+        return getResponseString(prompt, null, allowNone, false, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -469,37 +456,30 @@ public class ViewCmdline implements ViewInt {
     @Override
     public String getResponseStringMenuSelection(String prompt, boolean allowNone, boolean isCancelAllowed, boolean isQuitAllowed,
                                                  boolean isSkipAllowed, Supplier<String> helpCallback) throws CancelException, QuitException, SkipException {
-        return getResponseString(prompt, null, false, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+        return getResponseString(prompt, null, allowNone, false, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public double getResponseDouble(String prompt) {
+        try {
+            return getResponseDouble(prompt, null, DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE,
+                    DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+        } catch (CancelException | QuitException | SkipException ignored) {
+            // This should not happen since we specified that cancel, quit and skip are not allowed.
+            return (double) 0.0;
+        }
     }
 
     /**
      * @inheritDoc
      */
     @Override
-    public String getResponseStringTextBox(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                           boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+    public Double getResponseDouble(String prompt, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return getResponseString(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public String getResponseStringTextBox(String prompt, String defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                           boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
-            throws CancelException, QuitException, SkipException {
-        return getResponseString(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public Double getResponseDouble(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                    boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException {
-        return getResponseDouble(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+        return getResponseDouble(prompt, null, SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE, isCancelAllowed,
+                isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -507,73 +487,14 @@ public class ViewCmdline implements ViewInt {
      */
     @Override
     public Double getResponseDouble(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                    boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
+                boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
             throws CancelException, QuitException, SkipException {
-
-        // Build the full prompt with default value and options
-        StringBuilder fullPrompt = new StringBuilder();
-
-        // Add the main prompt
-        if (prompt != null && !prompt.isEmpty()) {
-            fullPrompt.append(prompt);
-        }
-
-        // Add default value in brackets if provided
-        if (defaultValue != null) {
-            fullPrompt.append(" [").append(defaultValue).append("]");
-            allowNone = true; // If there's a default, we must allow empty input
-        }
-
-        // Add cancel/quit/skip options if requested
-        if (showCancelQuitSkip) {
-            String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-            if (!cancelSkipOrQuitPrompt.isEmpty()) {
-                fullPrompt.append(cancelSkipOrQuitPrompt);
-            }
-        }
-
-        // Add colon and space if we have any prompt
-        if (fullPrompt.length() > 0) {
-            fullPrompt.append(":  ");
-            ask(fullPrompt.toString());
-        }
 
         // Input loop
+        String defaultValueStr = (defaultValue != null) ? defaultValue.toString() : null;
         while (true) {
-            String response = getLine();
-
-            // Check for help request
-            if (helpCallback != null && response.equalsIgnoreCase("h")) {
-                say(helpCallback.get());
-                // Redisplay the prompt after help
-                if (fullPrompt.length() > 0) {
-                    ask(fullPrompt.toString());
-                }
-                continue;
-            }
-
-            // Check if response is empty
-            if (response.isEmpty()) {
-                if (defaultValue != null) {
-                    return defaultValue; // Return default value
-                } else if (allowNone) {
-                    return null; // Return null if allowed
-                } else {
-                    ask("Please enter a value:  ");
-                    continue;
-                }
-            }
-
-            // Check for special commands
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
+            String response = getResponseString(prompt, defaultValueStr, allowNone, showCancelQuitSkip, isCancelAllowed,
+                    isQuitAllowed, isSkipAllowed, helpCallback);
 
             // Try to parse as double
             try {
@@ -585,13 +506,25 @@ public class ViewCmdline implements ViewInt {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public double getResponseCurrency(String prompt) {
+        try {
+            return getResponseCurrency(prompt, null, DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE,
+                    DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+        } catch (CancelException | QuitException | SkipException ignored) {
+            return (double) 0.0;
+        }
+    }
+
+    /**
      * @inheritDoc
      */
     @Override
-    public Double getResponseCurrency(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                      boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+    public Double getResponseCurrency(String prompt, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return getResponseCurrency(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+        return getResponseCurrency(prompt, null, SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_NONE, isCancelAllowed,
+                isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -599,77 +532,16 @@ public class ViewCmdline implements ViewInt {
      */
     @Override
     public Double getResponseCurrency(String prompt, Double defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                      boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
+                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
             throws CancelException, QuitException, SkipException {
 
-        // Build the full prompt with default value and options
-        StringBuilder fullPrompt = new StringBuilder();
-
-        // Add the main prompt
-        if (prompt != null && !prompt.isEmpty()) {
-            fullPrompt.append(prompt);
-        }
-
-        // Add default value in brackets if provided
-        if (defaultValue != null) {
-            fullPrompt.append(" [").append(String.format("%.2f", defaultValue)).append("]");
-            allowNone = true; // If there's a default, we must allow empty input
-        }
-
-        // Add cancel/quit/skip options if requested
-        if (showCancelQuitSkip) {
-            String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-            if (!cancelSkipOrQuitPrompt.isEmpty()) {
-                fullPrompt.append(cancelSkipOrQuitPrompt);
-            }
-        }
-
-        // Add colon and space if we have any prompt
-        if (fullPrompt.length() > 0) {
-            fullPrompt.append(":  ");
-            ask(fullPrompt.toString());
-        }
-
-        // Input loop
+        // Until we get a valid currency value, keep asking:
         while (true) {
-            String response = getLine();
-
-            // Check for help request
-            if (helpCallback != null && response.equalsIgnoreCase("h")) {
-                say(helpCallback.get());
-                // Redisplay the prompt after help
-                if (fullPrompt.length() > 0) {
-                    ask(fullPrompt.toString());
-                }
-                continue;
-            }
-
-            // Check if response is empty
-            if (response.isEmpty()) {
-                if (defaultValue != null) {
-                    return defaultValue; // Return default value
-                } else if (allowNone) {
-                    return null; // Return null if allowed
-                } else {
-                    ask("Please enter a value:  ");
-                    continue;
-                }
-            }
-
-            // Check for special commands
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
-
-            // Try to parse as currency (must have at most 2 decimal places)
             try {
-                double value = Double.parseDouble(response);
+                // Try to parse as currency (must have at most 2 decimal places)
+                double value = getResponseDouble(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed,
+                        isQuitAllowed, isSkipAllowed, helpCallback);
+
                 // Validate currency format (max 2 decimal places)
                 String valueStr = String.format("%.2f", value);
                 double roundedValue = Double.parseDouble(valueStr);
@@ -688,107 +560,84 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+    public Integer getResponseInt(String prompt)
             throws CancelException, QuitException, SkipException {
-        return getResponseInt(prompt, defaultValue, showCancelQuitSkip, allowNone, true, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+        return getResponseInt(prompt, null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_CANCEL,
+                DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
     }
 
     /**
      * @inheritDoc
      */
     @Override
-    public Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                  boolean allowNegativeValues, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+    public Integer getResponseInt(String prompt, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return getResponseInt(prompt, defaultValue, showCancelQuitSkip, allowNone, allowNegativeValues, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+        return getResponseInt(prompt, null, DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, isCancelAllowed,
+                isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
      * @inheritDoc
      */
     @Override
-    public Integer getResponseInt(String prompt, Integer defaultValue, boolean showCancelQuitSkip, boolean allowNone,
-                                  boolean allowNegativeValues, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
-                                  Supplier<String> helpCallback)
-            throws CancelException, QuitException, SkipException {
-
-        // Build the full prompt with default value and options
-        StringBuilder fullPrompt = new StringBuilder();
-
-        // Add the main prompt
-        if (prompt != null && !prompt.isEmpty()) {
-            fullPrompt.append(prompt);
-        }
-
-        // Add default value in brackets if provided
-        if (defaultValue != null) {
-            fullPrompt.append(" [").append(defaultValue).append("]");
-            allowNone = true; // If there's a default, we must allow empty input
-        }
-
-        // Add cancel/quit/skip options if requested
-        if (showCancelQuitSkip) {
-            String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-            if (!cancelSkipOrQuitPrompt.isEmpty()) {
-                fullPrompt.append(cancelSkipOrQuitPrompt);
-            }
-        }
-
-        // Add colon and space if we have any prompt
-        if (fullPrompt.length() > 0) {
-            fullPrompt.append(":  ");
-            ask(fullPrompt.toString());
-        }
-
+    public Integer getResponseInt(String prompt, Integer defaultValue, boolean allowNone, boolean showCancelQuitSkip,
+                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException
+    {
         // Input loop
+        String defaultValueStr = (defaultValue != null) ? defaultValue.toString() : null;
         while (true) {
-            String response = getLine();
-
-            // Check for help request
-            if (helpCallback != null && response.equalsIgnoreCase("h")) {
-                say(helpCallback.get());
-                // Redisplay the prompt after help
-                if (fullPrompt.length() > 0) {
-                    ask(fullPrompt.toString());
-                }
-                continue;
-            }
-
-            // Check if response is empty
-            if (response.isEmpty()) {
-                if (defaultValue != null) {
-                    return defaultValue; // Return default value
-                } else if (allowNone) {
-                    return null; // Return null if allowed
-                } else {
-                    ask("Please enter a value:  ");
-                    continue;
-                }
-            }
-
-            // Check for special commands
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
+            String response = getResponseString(prompt, defaultValueStr, allowNone, showCancelQuitSkip,
+                    isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
 
             // Try to parse as integer
             try {
                 int value = Integer.parseInt(response);
-                // Check if negative values are allowed
-                if (!allowNegativeValues && value < 0) {
-                    ask("Negative values are not allowed. Please enter a positive number:  ");
-                    continue;
-                }
                 return value;
             } catch (NumberFormatException e) {
                 ask("Invalid number format. Please enter a valid integer:  ");
+            }
+        }
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public Integer getResponseNatural(String prompt)
+            throws CancelException, QuitException, SkipException
+    {
+        return getResponseNatural(prompt, null, DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_CANCEL,
+                DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public Integer getResponseNatural(String prompt,
+                                      boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException
+    {
+        return getResponseNatural(prompt, null, DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, isCancelAllowed, isQuitAllowed,
+                isSkipAllowed, null);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public Integer getResponseNatural(String prompt, Integer defaultValue, boolean allowNone, boolean showCancelQuitSkip,
+                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException {
+        Integer result;
+        while (true) {
+            result = getResponseInt(prompt, defaultValue, allowNone, showCancelQuitSkip, isCancelAllowed, isQuitAllowed,
+                    isSkipAllowed, helpCallback);
+            if (result != null && result < 0) {
+                say("Negative values aren't allowed. Please enter a non-negative integer.");
+            } else {
+                return result;
             }
         }
     }
@@ -800,11 +649,13 @@ public class ViewCmdline implements ViewInt {
     public String getCancelSkipOrQuitPrompt(boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed) {
         StringBuilder prompt = new StringBuilder();
         if (isCancelAllowed || isQuitAllowed || isSkipAllowed) {
+            prompt.append("(or ");
             List<String> options = new ArrayList<>();
             if (isCancelAllowed) options.add("'c' to cancel");
             if (isQuitAllowed) options.add("'q' to quit");
             if (isSkipAllowed) options.add("'s' to skip");
             prompt.append(String.join(", ", options));
+            prompt.append(")");
         }
         return prompt.toString();
     }
@@ -870,11 +721,13 @@ public class ViewCmdline implements ViewInt {
      * Returns the selected option string, or null if none is selected.
      */
     @Override
-    public String selectFromMenu(String prompt, List<String> options, boolean allowNone, boolean isCancelAllowed,
-                                 boolean isQuitAllowed, boolean isSkipAllowed) throws CancelException, QuitException, SkipException {
-
+    public String selectFromMenu(String prompt, List<String> options, boolean allowNone, boolean showCancelQuitSkip,
+        boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed) throws CancelException, QuitException,
+            SkipException
+    {
         // Delegate to the selectFromFirstLetterList method:
-        return selectFromFirstLetterList(prompt, options, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+        return selectFromFirstLetterList(prompt, options, allowNone, showCancelQuitSkip, isCancelAllowed, isQuitAllowed,
+                isSkipAllowed);
     }
 
     /**
@@ -886,20 +739,21 @@ public class ViewCmdline implements ViewInt {
 
     protected String selectFromFirstLetterList(String prompt, List<String> options, boolean allowNone) {
         try {
-            return selectFromFirstLetterList(prompt, new ArrayList<>(), DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL,
-                    DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            return selectFromFirstLetterList(prompt, new ArrayList<>(), DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
         } catch (CancelException | QuitException | SkipException e) {
             return "";
         }
     }
 
     /**
-     * Enhanced: Presents a list of items with unique letter options and returns the user's selection letter.
-     * Uses findUniqueLetter to assign a unique letter to each option.
+     * Presents a list of items with unique letter options and returns the user's selection letter. Uses findUniqueLetter
+     * to assign a unique letter to each option.
      */
     protected String selectFromFirstLetterList(String prompt, List<String> options, boolean allowNone,
-                                               boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException {
+               boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException
+    {
         // Assign unique letters to each option
         List<String> usedLetters = new ArrayList<>();
         List<String> menuLetters = new ArrayList<>();
@@ -919,29 +773,31 @@ public class ViewCmdline implements ViewInt {
             say("  " + menuLetters.get(i) + " - " + options.get(i));
         }
         String menuOptionList = String.join(",", menuLetters);
+
         // Build prompt with available commands
-        String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-        ask("Enter your choice (" + cancelSkipOrQuitPrompt + "): ");
+        StringBuilder promptBuilder = new StringBuilder("Enter your choice ");
+
         // Get response
         while (true) {
-            String response = getLine().trim().toLowerCase();
-            // Check for special commands
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
+            String response = getResponseString(promptBuilder.toString(), null, allowNone, showCancelQuitSkip,
+                    isCancelAllowed, isQuitAllowed, isSkipAllowed, null).toLowerCase();
+
+            if(response.isEmpty() && allowNone) {
+                return null; // User selected None
             }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
+
             // Check if it's a valid menu option
             for (String option : menuLetters) {
                 if (response.equals(option)) {
                     return option;
                 }
             }
-            ask("Invalid choice. Please enter one of (" + menuOptionList + cancelSkipOrQuitPrompt + "): ");
+
+            // Build error prompt
+            StringBuilder errorPrompt = new StringBuilder("Invalid choice. Please enter one of (");
+            errorPrompt.append(menuOptionList);
+            errorPrompt.append(")");
+            say(errorPrompt.toString());
         }
     }
 
@@ -967,7 +823,7 @@ public class ViewCmdline implements ViewInt {
      */
     protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType) {
         try {
-            return selectFromNumberedList(prompt,defaultValue, enumType, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT,
+            return selectFromNumberedList(prompt,defaultValue, enumType, true, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT,
                     DO_NOT_ALLOW_SKIP);
         } catch (CancelException | QuitException | SkipException ignored) {
             return defaultValue;
@@ -979,12 +835,12 @@ public class ViewCmdline implements ViewInt {
      * Supports help via 'h' followed by a number (e.g., 'h 3' for help on option 3).
      */
     protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType,
-                                           boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+                   boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
         T[] values = enumType.getEnumConstants();
         List<String> options = new ArrayList<>();
         for (T value : values) {
-            options.add(value.toString());
+            options.add(Utility.formatEnumName(value.toString()));
         }
 
         int defaultIndex = defaultValue != null ? defaultValue.ordinal() : -1;
@@ -994,43 +850,22 @@ public class ViewCmdline implements ViewInt {
         for (String option : options) {
             say("\t" + i++ + " - " + option);
         }
-        say("\tEnter 'h' followed by a number (e.g., 'h 3') for help on a specific option.");
 
         // Build the special options prompt
         StringBuilder specialOptions = new StringBuilder();
-        if (isCancelAllowed) {
-            specialOptions.append(", 'c' to cancel");
-        }
-        if (isQuitAllowed) {
-            specialOptions.append(", 'q' to quit");
-        }
-        if (isSkipAllowed) {
-            specialOptions.append(", 's' to skip");
+
+        if (showCancelQuitSkip) {
+            specialOptions.append(getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed));
         }
 
-        String optionPrompt = "Select an option";
-        if (defaultValue != null) {
-            optionPrompt += " [" + defaultValue.toString() + "]";
-        }
-        optionPrompt += " (1 to " + (i - 1) + specialOptions + "): ";
-
+        String optionPrompt = "Enter your choice";
         while (true) {
-            ask(optionPrompt);
-            String response = getLine().trim();
+            String response = getResponseString(optionPrompt, (defaultIndex != -1) ? String.valueOf(defaultIndex + 1) : null,
+                    DO_NOT_ALLOW_NONE, showCancelQuitSkip, isCancelAllowed, isQuitAllowed, isSkipAllowed,
+                    () -> "Enter 'h' followed by a number (e.g., 'h 3') for help on a specific option.");
 
             if (response.isEmpty() && defaultValue != null) {
                 return defaultValue;
-            }
-
-            // Check for cancel, quit, or skip
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
             }
 
             // Check for help request: 'h' or 'H' followed by optional whitespace and a number
@@ -1055,9 +890,8 @@ public class ViewCmdline implements ViewInt {
                                 String helpText = helpProperties.getProperty(helpKey);
 
                                 if (helpText != null && !helpText.trim().isEmpty()) {
-                                    say("\nHelp for " + enumValue.toString() + ":");
+                                    ask("\nHelp for " + Utility.formatEnumName(enumValue.toString()) + ":  ");
                                     say(helpText);
-                                    say();
                                 } else {
                                     say("No help available for " + enumValue.toString() + " (key: " + helpKey + ").");
                                 }
@@ -1122,7 +956,7 @@ public class ViewCmdline implements ViewInt {
             throws SQLException, EntityException, CancelException, QuitException, SkipException {
 
         // Call the new method with null as the default value
-        return selectByNameFromList(prompt, list, null, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+        return selectByNameFromList(prompt, list, null, allowNone, true, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -1134,96 +968,45 @@ public class ViewCmdline implements ViewInt {
             List<T> list,
             T defaultValue,
             boolean allowNone,
+            boolean showCancelQuitSkip,
             boolean isCancelAllowed,
             boolean isQuitAllowed,
-            boolean isSkipAllowed)
+            boolean isSkipAllowed,
+            Supplier<String> helpCallback)
             throws EntityException, CancelException, QuitException, SkipException {
 
-        // A list to store the names
+        // Prepare a list of names from the entity list
         List<String> names = new ArrayList<>();
-
-        // Iterate over the list of objects and add the name of each object to the list of names:
         for (T entity : list) {
-            // Execute the method String getName() for each object and add the name to the list
             names.add(entity.getName());
         }
 
-        // Find the index of the default value in the list if provided
-        int defaultIndex = -1;
+        // Find the default index if a default value is provided:
+        Integer defaultIndex = null;
         if (defaultValue != null) {
             for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).getId().equals(defaultValue.getId())) {
+                if (list.get(i).getId() == defaultValue.getId()) {
                     defaultIndex = i;
                     break;
                 }
             }
-        }
-
-        // Display the prompt as H3 header
-        sayH3(prompt);
-
-        // Display the numbered list
-        if (allowNone) say("\t0 - None");
-        int i = 1;
-        for (String name : names) {
-            say("\t" + i++ + " - " + name);
-        }
-
-        // Build the selection prompt that appears after the list
-        String optionPrompt = "Select an option";
-        if (defaultValue != null && defaultIndex != -1) {
-            optionPrompt += " [" + defaultValue.getName() + "]";
-        } else if (allowNone) {
-            optionPrompt += " (0 to " + (i - 1) + ")";
-        } else {
-            optionPrompt += " (1 to " + (i - 1) + ")";
-        }
-        optionPrompt += ": ";
-
-        // Input loop
-        while (true) {
-            ask(optionPrompt);
-            String response = getLine().trim();
-
-            // Handle empty input (default value)
-            if (response.isEmpty() && defaultValue != null && defaultIndex != -1) {
-                return defaultValue;
-            }
-
-            // Check for cancel/quit/skip
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
-
-            // Try to parse as a number selection
-            try {
-                int selection = Integer.parseInt(response);
-
-                // Handle "none" selection
-                if (selection == 0 && allowNone) {
-                    return null;
-                }
-
-                // Handle valid selection
-                if (selection >= 1 && selection < i) {
-                    return list.get(selection - 1);
-                } else {
-                    if (allowNone) {
-                        say("Please enter a number between 0 and " + (i - 1) + ".");
-                    } else {
-                        say("Please enter a number between 1 and " + (i - 1) + ".");
-                    }
-                }
-            } catch (NumberFormatException e) {
-                say("Invalid input. Please enter a number.");
+            if (defaultIndex == null) {
+                throw new IllegalArgumentException("The provided default value was not found in the list.");
             }
         }
+
+
+        // Call selectFromNumberedList to get the selected index
+        NumberOrStringResponse response = selectFromNumberedListOrString(prompt, names, defaultIndex, allowNone,
+                DO_NOT_ALLOW_CREATE, showCancelQuitSkip, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+
+        // If null or -1 was returned (none selected), return null
+        if (response == null) {
+            return null;
+        }
+
+        // Return the corresponding item from the original entity list
+        return list.get(response.getSelectedIndex());
     }
 
     /**
@@ -1251,14 +1034,8 @@ public class ViewCmdline implements ViewInt {
             boolean isQuitAllowed,
             boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return selectFromNumberedListOrString(prompt, items, allowNone, allowCreate, isCancelAllowed, isQuitAllowed, isSkipAllowed);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public double getDollarAmount() {
-        return getDouble("Please enter the dollar amount:  ", "Invalid dollar amount,");
+        return selectFromNumberedListOrString(prompt, items, allowNone, allowCreate, isCancelAllowed, isQuitAllowed,
+                isSkipAllowed);
     }
 
     /**
@@ -1267,25 +1044,6 @@ public class ViewCmdline implements ViewInt {
     @Override
     public Calendar getStartDate() throws QuitException {
         return parseCalendarDate("Please enter the start date", null);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public double getDouble(String prompt, String errorMessage) {
-        if (!prompt.isEmpty()) {
-            ask(prompt);
-        }
-        double doubleValue;
-        while (true) {
-            try {
-                String doubleString = getLine();
-                doubleValue = Double.parseDouble(doubleString);
-                return doubleValue;
-            } catch (NumberFormatException nfe) {
-                ask(errorMessage + " please re-enter:  ");
-            }
-        }
     }
 
     /**
@@ -1331,7 +1089,7 @@ public class ViewCmdline implements ViewInt {
 
             // Try to parse the amount
             try {
-                double parsedAmount = getDouble(newAmount, "Invalid amount,");
+                double parsedAmount = getResponseDouble(newAmount);
                 return String.valueOf(parsedAmount);
             } catch (Exception e) {
                 say("Invalid amount. Please re-enter" + cancelSkipOrQuitPrompt + ":  ");
@@ -1442,9 +1200,9 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public Integer selectFromList(String prompt, List<String> items, boolean allowNone) {
+    public Integer selectByPositionFromList(String prompt, List<String> items, boolean allowNone) {
         try {
-            return selectFromList(prompt, items, allowNone, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            return selectByPositionFromList(prompt, items, allowNone, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
         } catch (CancelException | QuitException | SkipException ignored) {
             return -1;
         }
@@ -1454,7 +1212,7 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public Integer selectFromList(
+    public Integer selectByPositionFromList(
             String prompt,
             List<String> items,
             boolean allowNone,
@@ -1470,7 +1228,7 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType) {
+    public <T extends Enum<T>> T selectByPositionFromList(String prompt, T defaultValue, Class<T> enumType) {
         return selectFromNumberedList(prompt, defaultValue, enumType);
     }
 
@@ -1478,10 +1236,11 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public <T extends Enum<T>> T selectFromList(String prompt, T defaultValue, Class<T> enumType,
-                                                 boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+    public <T extends Enum<T>> T selectByPositionFromList(String prompt, T defaultValue, Class<T> enumType,
+                      boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return selectFromNumberedList(prompt, defaultValue, enumType, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+        return selectFromNumberedList(prompt, defaultValue, enumType, showCancelQuitSkip, isCancelAllowed, isQuitAllowed,
+                isSkipAllowed);
     }
 
     /**
@@ -1490,35 +1249,51 @@ public class ViewCmdline implements ViewInt {
     public NumberOrStringResponse selectFromNumberedListOrString(String prompt, List<String> items, boolean allowNone, boolean allowCreate,
                                                                  boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
+        return selectFromNumberedListOrString(prompt, items, null, allowNone, allowCreate, SHOW_CANCEL_QUIT_SKIP, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+    }
+
+    /**
+     * Helper method for selectFromListOrString methods.
+     */
+    public NumberOrStringResponse selectFromNumberedListOrString(
+            String prompt,
+            List<String> items,
+            Integer defaultItemIndex,
+            boolean allowNone,
+            boolean allowCreate,
+            boolean showCancelQuitSkipPrompt,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed,
+            Supplier<String> helpSupplier)
+            throws CancelException, QuitException, SkipException {
+
         sayH3(prompt);
-        for (int i = 0; i < items.size(); i++) {
-            say("\t" + (i + 1) + " - " + items.get(i));
+
+        String optionPrompt = "Enter your choice ";
+
+        if (defaultItemIndex != null && defaultItemIndex >= 0 && defaultItemIndex < items.size()) {
+            optionPrompt += " [" + (defaultItemIndex + 1) + "]";
         }
 
-        String optionPrompt = "Select an option (1 to " + items.size() + ")";
         if (allowNone) {
             optionPrompt += ", 0 for none";
         }
+
         if (allowCreate) {
             optionPrompt += ", or enter a new value";
         }
 
-        String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-        optionPrompt += cancelSkipOrQuitPrompt + ": ";
+        // Display the list of items:
+        for (int i = 0; i < items.size(); i++) {
+            say("  " + (i + 1) + " - " + items.get(i));
+        }
 
         while (true) {
-            ask(optionPrompt);
-            String response = getLine().trim();
 
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
-            }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
+            String defaultItemIndexStr = (defaultItemIndex != null) ? defaultItemIndex.toString() : null;
+            String response = getResponseString(optionPrompt, defaultItemIndexStr, allowNone,
+                    showCancelQuitSkipPrompt, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpSupplier);
 
             try {
                 int selection = Integer.parseInt(response);
@@ -1610,27 +1385,12 @@ public class ViewCmdline implements ViewInt {
             userNames.add(user.getName() + " (" + user.getEmail() + ")");
         }
 
-        Integer selection = selectFromList(prompt, userNames, allowNull, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+        Integer selection = selectByPositionFromList(prompt, userNames, allowNull, isCancelAllowed, isQuitAllowed, isSkipAllowed);
         if (selection == null) {
             return null;
         }
 
         return users.get(selection);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    @Override
-    public int parseInt(String intString, String errorMessage) {
-        while (true) {
-            try {
-                return Integer.parseInt(intString.trim());
-            } catch (NumberFormatException e) {
-                say(errorMessage);
-                intString = getResponseString("Please enter a valid integer");
-            }
-        }
     }
 
     /**
@@ -1656,15 +1416,18 @@ public class ViewCmdline implements ViewInt {
     /**
      * @inheritDoc
      */
+    // File: `src/main/java/com/hixon/financialApp/view/cmdLine/ViewCmdline.java`
     @Override
     public <T extends IndependentEntityInt> EntityOrStringResult<T> selectByNameFromListOrString(
             String prompt, List<T> list, Function<T, String> getDisplayString, boolean allowNone, boolean allowCreate,
             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws EntityException, CancelException, QuitException, SkipException {
 
+        // If no items available handle create or report none
         if (list.isEmpty()) {
             if (allowCreate) {
-                String newName = getResponseString("Enter name for new item", null, false, allowNone, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+                String newName = getResponseString("Enter name for new item", null, allowNone, false,
+                        isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
                 return new EntityOrStringResult<>(newName);
             } else {
                 say("No items available.");
@@ -1672,58 +1435,29 @@ public class ViewCmdline implements ViewInt {
             }
         }
 
+        // Build display names list (may throw EntityException)
         List<String> itemNames = new ArrayList<>();
         for (T item : list) {
             itemNames.add(getDisplayString.apply(item));
         }
 
-        sayH3(prompt);
-        for (int i = 0; i < itemNames.size(); i++) {
-            say("\t" + (i + 1) + " - " + itemNames.get(i));
+        // Delegate to the generic numbered-or-string selector
+        NumberOrStringResponse response = selectFromNumberedListOrString(prompt, itemNames, allowNone, allowCreate,
+                isCancelAllowed, isQuitAllowed, isSkipAllowed);
+
+        if (response == null) {
+            return new EntityOrStringResult<>((T) null);
         }
 
-        String optionPrompt = "Select an option (1 to " + itemNames.size() + ")";
-        if (allowNone) {
-            optionPrompt += ", 0 for none";
-        }
-        if (allowCreate) {
-            optionPrompt += ", or enter a new name";
-        }
-
-        String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
-        optionPrompt += cancelSkipOrQuitPrompt + ": ";
-
-        while (true) {
-            ask(optionPrompt);
-            String response = getLine().trim();
-
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
-                throw new CancelException("User asked to cancel this operation.");
+        if (response.isNumber()) {
+            int idx = response.getSelectedIndex();
+            if (idx == -1) {
+                return new EntityOrStringResult<>((T) null);
             }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
-                throw new QuitException("User asked to abort processing.");
-            }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
-                throw new SkipException("User asked to skip this item.");
-            }
-
-            try {
-                int selection = Integer.parseInt(response);
-                if (selection == 0 && allowNone) {
-                    return new EntityOrStringResult<>((T) null);
-                }
-                if (selection >= 1 && selection <= list.size()) {
-                    return new EntityOrStringResult<>(list.get(selection - 1));
-                } else {
-                    say("Please enter a number between " + (allowNone ? "0" : "1") + " and " + list.size() + ".");
-                }
-            } catch (NumberFormatException e) {
-                if (allowCreate && !response.isEmpty()) {
-                    return new EntityOrStringResult<>(response);
-                } else {
-                    say("Invalid input. Please enter a number" + (allowCreate ? " or a name" : "") + ".");
-                }
-            }
+            return new EntityOrStringResult<>(list.get(idx));
+        } else {
+            // When a string was entered (create), return that string as the result
+            return new EntityOrStringResult<>(response.getSearchString());
         }
     }
 
@@ -1738,8 +1472,16 @@ public class ViewCmdline implements ViewInt {
         String defaultDateStr = defaultDate != null ? dateFormat.format(defaultDate.getTime()) : null;
 
         while (true) {
-            String dateInput = getResponseString(prompt, defaultDateStr);
-            if (dateInput.isEmpty() && defaultDate != null) {
+            String dateInput = "";
+            try {
+                dateInput = getResponseString(prompt, defaultDateStr, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+            }
+            catch(CancelException | QuitException | SkipException ignored) {
+                // We shouldn't get here because we specified no cancel, quit or skip.
+            }
+
+            if ((dateInput == null || dateInput.isEmpty()) && defaultDate != null) {
                 return defaultDate;
             }
 

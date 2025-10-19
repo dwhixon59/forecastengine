@@ -118,7 +118,7 @@ public class RegisterController {
         if (view.getYesOrNo("\nThe current balance of the " +
                 register.getName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
                 "  Do you want to update it?")) {
-            double balance = view.getDollarAmount();
+            double balance = view.getResponseCurrency("Please enter the dollar amount:  ");
             register.setBalance(balance);
             register.update();
             wasCorrect = false;
@@ -307,7 +307,7 @@ public class RegisterController {
                     }
                     else {
                         // Allow the user to select the correct register from the list of transactions with register names:
-                        int selection = view.selectFromList("The following transactions match the token in the memo.  " +
+                        int selection = view.selectByPositionFromList("The following transactions match the token in the memo.  " +
                                         "Select a transaction with the same register as the one associated with this transfer",
                                 fullTextTrxsWithRegisterNames, ViewInt.ALLOW_NONE);
 
@@ -333,7 +333,7 @@ public class RegisterController {
         }
 
         // then allow the user to select the correct register from the list of registers:
-        int selection = view.selectFromList("Select the register associated with this transfer",
+        int selection = view.selectByPositionFromList("Select the register associated with this transfer",
                 registerNames, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
         return possibleRegistersList.get(selection);
     }

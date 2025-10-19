@@ -636,7 +636,8 @@ public class ForecastController {
                                     if (view.selectFromMenu(
                                             "Which date do you want to use?",
                                             List.of("imported", "database"),
-                                            DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP)
+                                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_CANCEL,
+                                            DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP)
                                             .equalsIgnoreCase("d")) {
                                         overwrite = false;
                                     }
@@ -671,8 +672,9 @@ public class ForecastController {
                                     if (view.selectFromMenu(
                                             "Which amount do you want to use?",
                                             List.of("imported", "database"),
-                                            DO_NOT_ALLOW_NONE, DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP)
-                                            .equalsIgnoreCase("d")) {
+                                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, DO_NOT_ALLOW_CANCEL,
+                                            DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP
+                                        ).equalsIgnoreCase("d")) {
                                         overwrite = false;
                                     }
                                 }
