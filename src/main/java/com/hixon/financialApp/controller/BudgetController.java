@@ -25,7 +25,6 @@ import java.util.*;
 
 import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
 import static com.hixon.financialApp.model.budget.BudgetItemMerchant.isBudgetItemInList;
-import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 import static com.hixon.financialApp.utility.Utility.stringDateDashToCalendarDate;
 import static com.hixon.financialApp.view.base.ViewInt.*;
 import static java.util.Calendar.YEAR;
@@ -98,7 +97,7 @@ public class BudgetController {
         while (!done) {
             String prompt = "What would you like to do?";
             try {
-                String option = view.selectFromMenu(prompt, List.of("add", "copy and update", "delete",
+                String option = view.selectFromMenu(prompt, List.of("add", "replicate", "delete",
                     "update", "find", "select"), DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT,
                         DO_NOT_ALLOW_SKIP);
                 switch (option) {
@@ -115,19 +114,23 @@ public class BudgetController {
                         }
                         selectedBudgetItem = null;
                         break;
-                    case "c":
-                        List<BudgetItem> allItems = BudgetItemUtilities.getAllUnexpiredBudgetItemsForBudget(budget);
+                    case "r":
+                        // First select which budget to work with
+                        Budget selectedBudgetForReplication = selectBudgetFromUser(null);
+
+                        // Get all unexpired budget items for the selected budget
+                        List<BudgetItem> allItems = BudgetItemUtilities.getAllUnexpiredBudgetItemsForBudget(selectedBudgetForReplication);
                         if (allItems.isEmpty()) {
-                            view.say("No budget items available to copy.");
+                            view.say("No budget items available to replicate in budget: " + selectedBudgetForReplication.getName());
                         } else {
                             BudgetItem template = getUserSelectedBudgetItem(allItems);
                             if (template != null) {
                                 BudgetItem copiedItem = getBudgetItemFromUser(template);
                                 if (copiedItem != null && copiedItem.isValid()) {
-                                    BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "copied");
+                                    BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "replicated");
                                     if (confirmedItem != null) {
                                         confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                                        view.say("Budget item successfully copied and added.");
+                                        view.say("Budget item successfully replicated and added.");
                                     }
                                 } else if (copiedItem != null) {
                                     view.say("Budget item entered by user is invalid.");
@@ -499,29 +502,7 @@ public class BudgetController {
             // Budget selection from numbered list
             // Note: This allows cross-budget operations such as moving items between budgets
             // or creating items for a different budget without switching the main context
-            // Default to the template's budget if available, otherwise use the current budget
-            Budget defaultBudget = (template != null && template.getIdBudget() != null)
-                    ? Budget.getById(template.getIdBudget()) : budget;
-            Budget selectedBudget = defaultBudget;
-
-            try {
-                List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
-                if (availableBudgets.isEmpty()) {
-                    throw new BudgetException("No budgets available. Please create a budget first.");
-                }
-                if (availableBudgets.size() > 1) {
-                    // This supports moving budget items between budgets (e.g., personal to business)
-                    if (template != null && template.getIdBudget() != null && !template.getIdBudget().equals(budget.getId())) {
-                        view.say("Template's budget: " + defaultBudget.getName() + " (will be used as default)");
-                    }
-                    selectedBudget = view.selectByNameFromList("Select Budget", availableBudgets, defaultBudget,
-                            DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
-                            null);
-                }
-            } catch (Exception e) {
-                view.say("Error loading budgets, using default budget: " + e.getMessage());
-                // selectedBudget is already set to defaultBudget
-            }
+            Budget selectedBudget = selectBudgetFromUser(template);
 
             view.sayH2("Basic Information");
 
@@ -599,8 +580,8 @@ public class BudgetController {
 
             // Enum selection for Item Type
             Item.ItemType defaultItemType = template != null ? template.getItemType() : Item.ItemType.EXPENSE;
-            Item.ItemType itemType = view.selectByPositionFromList("Select Item Type:", defaultItemType, Item.ItemType.class,
-                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            Item.ItemType itemType = view.selectByPositionFromList("Select Item Type:", defaultItemType,
+                    Item.ItemType.class, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             // Enum selection for How Important
             Item.HowImportant defaultHowImportant = template != null ? template.getHowImportant() :
@@ -706,6 +687,49 @@ public class BudgetController {
     }
 
     /**
+     * Prompts the user to select a budget from all available budgets.
+     * If only one budget exists, it is automatically selected.
+     * If multiple budgets exist, the user is prompted to choose.
+     *
+     * @param template An optional BudgetItem to determine the default budget (null for current budget)
+     * @return The selected Budget
+     * @throws BudgetException If no budgets are available
+     * @throws SQLException If there's a database error
+     * @throws EntityException If there's an entity error
+     * @throws CancelException If the user cancels the operation
+     * @throws QuitException If the user quits the operation
+     * @throws SkipException If the user skips the operation
+     */
+    private Budget selectBudgetFromUser(BudgetItem template) throws BudgetException, SQLException, EntityException,
+            CancelException, QuitException, SkipException {
+        // Default to the template's budget if available, otherwise use the current budget
+        Budget defaultBudget = (template != null && template.getIdBudget() != null)
+                ? Budget.getById(template.getIdBudget()) : budget;
+        Budget selectedBudget = defaultBudget;
+
+        try {
+            List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
+            if (availableBudgets.isEmpty()) {
+                throw new BudgetException("No budgets available. Please create a budget first.");
+            }
+            if (availableBudgets.size() > 1) {
+                // This supports moving budget items between budgets (e.g., personal to business)
+                if (template != null && template.getIdBudget() != null && !template.getIdBudget().equals(budget.getId())) {
+                    view.say("Template's budget: " + defaultBudget.getName() + " (will be used as default)");
+                }
+                selectedBudget = view.selectByNameFromList("Select Budget", availableBudgets, defaultBudget,
+                        DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                        null);
+            }
+        } catch (Exception e) {
+            view.say("Error loading budgets, using default budget: " + e.getMessage());
+            // selectedBudget is already set to defaultBudget
+        }
+
+        return selectedBudget;
+    }
+
+    /**
      * Prompts the user to select a budget item from a list.
      * Displays the list and returns the selected item, or null if the list is empty.
      *
@@ -740,7 +764,7 @@ public class BudgetController {
         ) {
             String lineEnd = "";
             if (budgetItem.getAmount() > 0) {
-                lineEnd = ", " + formatDollarAmount(budgetItem.getBudgetItem().getAmount()) + ", 0";
+                lineEnd = ", " + Utility.formatDollarAmount(budgetItem.getBudgetItem().getAmount()) + ", 0";
             } else {
                 if (budgetItem.getPercentage() > 0) {
                     lineEnd = ", 0, " + budgetItem.getPercentage() + "%";

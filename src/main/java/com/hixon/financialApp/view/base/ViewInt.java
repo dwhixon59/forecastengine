@@ -295,7 +295,7 @@ public interface ViewInt {
      * @param allowSingleValue       Is the user allowed to enter a single value?
      * @return The response from the user parsed into a string array.
      */
-    String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue);
+    String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue) throws CancelException, QuitException, SkipException;
 
     /**
      * This method returns a standard prompt offering the options to cancel, quit or skip the current operation.  It
@@ -432,7 +432,7 @@ public interface ViewInt {
      * @param prompt           The prompt to display to the user.
      * @param list             A list of entities to select from.
      * @param allowNone        Is the user allowed to select none of the items?
-     * @param allowCreate
+     * @param allowString
      * @param isCancelAllowed  Is the user allowed to cancel the current process?
      * @param isQuitAllowed    Is the user allowed to quit the program?
      * @param isSkipAllowed    Is the user allowed to skip this item and not enter an integer?
@@ -448,7 +448,7 @@ public interface ViewInt {
             List<T> list,
             Function<T, String> getDisplayString,
             boolean allowNone,
-            boolean allowCreate,
+            boolean allowString,
             boolean isCancelAllowed,
             boolean isQuitAllowed,
             boolean isSkipAllowed)

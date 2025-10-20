@@ -1327,9 +1327,33 @@ public class ViewCmdline implements ViewInt {
      * @inheritDoc
      */
     @Override
-    public String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry, boolean allowSingleValue) {
+    public String[] getAndParseCsvLine(String prompt, int numberOfRequiredValues, boolean allowNullEntry,
+                                       boolean allowSingleValue)
+            throws CancelException, QuitException, SkipException
+    {
         while (true) {
-            String input = getResponseString(prompt);
+            String input = getResponseString(prompt, null, allowNullEntry, SHOW_CANCEL_QUIT_SKIP,
+                    DO_NOT_ALLOW_CANCEL, DO_NOT_ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                    () -> {
+                        StringBuilder help = new StringBuilder();
+                        help.append("Enter ").append(numberOfRequiredValues)
+                            .append(" comma-separated value").append(numberOfRequiredValues > 1 ? "s" : "")
+                            .append(".\n");
+                        help.append("Example: value1, value2");
+                        if (numberOfRequiredValues > 2) {
+                            help.append(", value3");
+                            if (numberOfRequiredValues > 3) {
+                                help.append(", ...");
+                            }
+                        }
+                        if (allowSingleValue) {
+                            help.append("\nYou may also enter a single value without commas.");
+                        }
+                        if (allowNullEntry) {
+                            help.append("\nPress Enter without typing anything to skip this entry.");
+                        }
+                        return help.toString();
+                    });
             if (input.isEmpty() && allowNullEntry) {
                 return null;
             }
@@ -1419,13 +1443,13 @@ public class ViewCmdline implements ViewInt {
     // File: `src/main/java/com/hixon/financialApp/view/cmdLine/ViewCmdline.java`
     @Override
     public <T extends IndependentEntityInt> EntityOrStringResult<T> selectByNameFromListOrString(
-            String prompt, List<T> list, Function<T, String> getDisplayString, boolean allowNone, boolean allowCreate,
+            String prompt, List<T> list, Function<T, String> getDisplayString, boolean allowNone, boolean allowString,
             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws EntityException, CancelException, QuitException, SkipException {
 
         // If no items available handle create or report none
         if (list.isEmpty()) {
-            if (allowCreate) {
+            if (allowString) {
                 String newName = getResponseString("Enter name for new item", null, allowNone, false,
                         isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
                 return new EntityOrStringResult<>(newName);
@@ -1442,7 +1466,7 @@ public class ViewCmdline implements ViewInt {
         }
 
         // Delegate to the generic numbered-or-string selector
-        NumberOrStringResponse response = selectFromNumberedListOrString(prompt, itemNames, allowNone, allowCreate,
+        NumberOrStringResponse response = selectFromNumberedListOrString(prompt, itemNames, allowNone, allowString,
                 isCancelAllowed, isQuitAllowed, isSkipAllowed);
 
         if (response == null) {

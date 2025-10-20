@@ -93,12 +93,8 @@ public class SelectionController {
             T entity = (T) stringEntityCreator.apply(scope, toTitleCase(seedName));
 
             // Loop until the user selects an entity or cancels, quits, or skips the operation:
-            boolean allowCreateInList;
+            boolean allowCreateInList = allowCreate;
             while (true) {
-
-                // Each time through the loop reset the flag that allows the user to create a new entity to the value
-                // that was passed in to the method:
-                allowCreateInList = allowCreate && !firstTime;
 
                 // Try to get an entity that is an exact match for the name, this won't work on the first time through
                 // the loop, but it could work on later iterations if the user has entered a new name.  If we find an
@@ -119,8 +115,9 @@ public class SelectionController {
 
                 // If the name contains wildcards, then the name is not suitable for creating a new entity, so turn
                 // off the flag that allows the user to create a new entity:
+                boolean suitableNameForCreate = true;
                 if (MatchQuery.checkStringPattern(seedName)) {
-                    allowCreateInList = false;
+                    suitableNameForCreate = false;
                 }
 
                 // If there is at least one similar entity found:
@@ -136,8 +133,9 @@ public class SelectionController {
 
                         // and if this entity matches the name, then there is no sense to giving the user the option
                         // to create one with that name, so set a flag to prevent the option to create a new entity:
+                        boolean alreadyInLIst = false;
                         if (entity.getName().equalsIgnoreCase(seedName)) {
-                            allowCreateInList = false;
+                            alreadyInLIst = true;
                         }
 
                         // Loop through the result set and create an entity for each row and add the entity to the list of
@@ -149,12 +147,16 @@ public class SelectionController {
                             // and if this entity matches the name, then there is no sense to giving the user the option
                             // to create one with that name, so set a flag to prevent the option to create a new entity:
                             if (entities.get(entities.size() - 1).getName().equalsIgnoreCase(seedName)) {
-                                allowCreateInList = false;
+                                alreadyInLIst = true;
                             }
                         } while (rs.next());
 
-                        // If the user is allowed to create a new entity then add the name to the list of entities:
-                        if (allowCreateInList) {
+                        // The first time through, we don't have a potential entity name, we have a seed name.  Since it
+                        // is not an entity, we don't want to add it to the list of entities and give the user the option
+                        // to create one with that name.  For subsequent iterations of the selection, the user should
+                        // have typed in an entity name on the last iteration, so add it to the list if they are allowed
+                        // to create new ones and it isn't already in the list:
+                        if (allowCreateInList && !firstTime && !alreadyInLIst && suitableNameForCreate) {
                             entities.add(stringEntityCreator.apply(scope, toTitleCase(seedName)));
                         }
 
