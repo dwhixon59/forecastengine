@@ -10,9 +10,6 @@ import com.hixon.financialApp.view.base.ViewInt;
 import java.security.InvalidParameterException;
 import java.util.Calendar;
 
-import static com.hixon.financialApp.utility.Utility.getBudgetView;
-import static com.hixon.financialApp.utility.Utility.getForecastView;
-
 
 public class DailyUpdateController {
 
@@ -24,12 +21,7 @@ public class DailyUpdateController {
     /*
      * Fields:
      */
-    Register register;
-    FinancialInstitutionInt financialInstitution;
-    Budget budget;
-    Forecast forecast;
-    ViewInt view;
-    NotificationServiceInt notificationService;
+    private SessionController sessionController;
 
 
     /*
@@ -40,37 +32,11 @@ public class DailyUpdateController {
     /*
      * Constructors:
      */
-    public DailyUpdateController(Register register, FinancialInstitutionInt financialInstitution, Budget budget,
-                                 Forecast forecast, ViewInt view, NotificationServiceInt notificationService) {
-        if (register != null) {
-            this.register = register;
+    public DailyUpdateController(SessionController sessionController) {
+        if (sessionController != null) {
+            this.sessionController = sessionController;
         } else {
-            throw new InvalidParameterException("Register must not be null.");
-        }
-        if (financialInstitution != null) {
-            this.financialInstitution = financialInstitution;
-        } else {
-            throw new InvalidParameterException("Financial institution must not be null.");
-        }
-        if (budget != null) {
-            this.budget = budget;
-        } else {
-            throw new InvalidParameterException("Budget must not be null.");
-        }
-        if (forecast != null) {
-            this.forecast = forecast;
-        } else {
-            throw new InvalidParameterException("Forecast must not be null.");
-        }
-        if (view != null) {
-            this.view = view;
-        } else {
-            throw new InvalidParameterException("View must not be null.");
-        }
-        if (notificationService != null) {
-            this.notificationService = notificationService;
-        } else {
-            throw new InvalidParameterException("Notification service must not be null.");
+            throw new InvalidParameterException("Session controller must not be null.");
         }
     }
 
@@ -93,6 +59,14 @@ public class DailyUpdateController {
 
         boolean result = true;
         try {
+            // Get session objects for convenience
+            Register register = sessionController.getRegister();
+            Budget budget = sessionController.getBudget();
+            Forecast forecast = sessionController.getForecast();
+            FinancialInstitutionInt financialInstitution = sessionController.getFinancialInstitution();
+            ViewInt view = sessionController.getView();
+            NotificationServiceInt notificationService = sessionController.getNotificationService();
+
             // Setup for the update run:
             ImportController importController = new ImportController(register, financialInstitution, budget, forecast,
                     view, notificationService);
@@ -241,7 +215,7 @@ public class DailyUpdateController {
            view.say("\n\n========================================================================");
            view.say("RENDER THE LONG TERM FORECAST\n");
             try {
-                getForecastView().renderLongTermForecast(forecast);
+                sessionController.getForecastView().renderLongTermForecast(forecast);
                view.say("\nSuccessfully rendered the long term forecast.");
             } catch (QuitException qe) {
                 throw qe;
@@ -256,7 +230,7 @@ public class DailyUpdateController {
             try {
                view.say("\n\n========================================================================");
                view.say("RENDER THE SPENDING REPORT\n");
-               getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
+               sessionController.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
                view.say("The spending report was successfully rendered");
                view.say("------------------------------------------------------------------------");
             } catch (Exception e) {
@@ -310,12 +284,12 @@ public class DailyUpdateController {
         // If an exception during the update process:
         catch (QuitException qe) {
 
-           view.say("\nAborting the daily update process at the user's request.");
+           sessionController.getView().say("\nAborting the daily update process at the user's request.");
             result = false;
 
         } catch (Exception e) {
 
-           view.say("\nAborting the daily update process because an exception occurred.");
+           sessionController.getView().say("\nAborting the daily update process because an exception occurred.");
             throw new RuntimeException(e);
         }
 

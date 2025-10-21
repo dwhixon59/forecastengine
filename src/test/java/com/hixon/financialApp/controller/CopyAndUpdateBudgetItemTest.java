@@ -115,7 +115,7 @@ public class CopyAndUpdateBudgetItemTest {
 
             // Mock confirmation - user accepts
             when(mockView.selectFromMenu(eq("What would you like to do with this budget item?"),
-                    anyList(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
+                    anyList(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                     .thenReturn("a"); // Accept
 
             // Act - This tests the getUserSelectedBudgetItem and getBudgetItemFromUser flow

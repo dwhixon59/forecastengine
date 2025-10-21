@@ -1,27 +1,18 @@
 package com.hixon.financialApp.controller;
 
 
-import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastEngine;
-import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
-import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import com.hixon.financialApp.view.excel.EnvelopeReport;
-import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
-import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
-import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Calendar;
-
-import static com.hixon.financialApp.utility.Utility.getBudgetController;
-import static com.hixon.financialApp.utility.Utility.getBudgetView;
 
 
 /**
@@ -37,10 +28,7 @@ public class MainController {
     /*
      * Member variables:
      */
-    private Register register = null;
-    private Budget budget = null;
-    private Forecast forecast = null;
-    private FinancialInstitutionInt financialInstitution = null;
+    private SessionController sessionController;
     private ViewInt view;
     private NotificationServiceInt notificationService;
 
@@ -54,58 +42,16 @@ public class MainController {
         Utility.setDbConnection(dbConnection);
         Utility.setUser(User.getByName(username));
         Utility.setView(view);
-        Utility.setNotificationService(notificationService);
 
         this.view = view;
         this.notificationService = notificationService;
+        this.sessionController = new SessionController(view, notificationService);
     }
 
 
     /*
      * Helper methods:
      */
-    /**
-     * Get the register, budget, and forecast associated with the selected register that the user wants to work with:
-     *
-     * @throws FinancialAppException Throws any of the app exceptions that can be thrown by the methods called by this.
-     * @throws Exception May throw various low level exceptions like SQLException, etc.
-     */
-    private void getRegisterBudgetForecast() throws FinancialAppException, Exception {
-
-        // If a register has not been selected:
-        if (register == null) {
-
-            // then get the register associated with the selected register that the user wants to work with:
-            register = RegisterController.selectRegister(view);
-            Utility.setRegisterView(new SpreadsheetXmlRegisterView(register));
-
-            // and set the financial institution associated with the selected register
-            financialInstitution = new WellsFargoBankController(register, budget, forecast, view, notificationService);
-
-            // and get the budget associated with the selected register that the user wants to work with:
-            budget = Budget.getById(register.getBudgetID());
-            Utility.setBudgetView(new SpreadsheetXmlBudgetView(budget));
-
-            // and get the forecast associated with the selected register that the user wants to work with:
-            forecast = Forecast.selectForecast(budget);
-            Utility.setForecastView(new SpreadsheetXmlForecastView(forecast));
-        }
-        else {
-            // If the budget is null, then get the budget associated with the selected register the user wants to work
-            // with:
-            if (budget == null) {
-                budget = Budget.getById(register.getBudgetID());
-                Utility.setBudgetView(new SpreadsheetXmlBudgetView(budget));
-            }
-
-            // If the forecast is null, then get the forecast associated with the selected register that the user wants
-            // to work with:
-            if (forecast == null) {
-                forecast = Forecast.selectForecast(budget);
-                Utility.setForecastView(new SpreadsheetXmlForecastView(forecast));
-            }
-        }
-    }
 
     /**
      * Run the app with the given user, database connection, resolver, notification service and goals:
@@ -143,10 +89,12 @@ public class MainController {
                         view.say("REPROCESS UNCATEGORIZED TRANSACTIONS");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        registerController = new RegisterController(register, financialInstitution, budget, forecast,
-                                view, notificationService);
-                        forecastController = new ForecastController(register, budget, forecast, view,
+                        sessionController.getRegisterBudgetForecast();
+                        registerController = new RegisterController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
+                        forecastController = new ForecastController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view,
                                 notificationService);
 
                         // Process the uncategorized transactions:
@@ -163,10 +111,12 @@ public class MainController {
                         view.say("REPROCESS UNRECONCILED TRANSACTIONS");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        registerController = new RegisterController(register, financialInstitution, budget, forecast,
-                                view, notificationService);
-                        forecastController = new ForecastController(register, budget, forecast, view,
+                        sessionController.getRegisterBudgetForecast();
+                        registerController = new RegisterController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
+                        forecastController = new ForecastController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view,
                                 notificationService);
 
                         // Process the unreconciled transactions:
@@ -183,14 +133,16 @@ public class MainController {
                         view.say("IMPORT REGISTER TRANSACTIONS");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        importController = new ImportController(register, financialInstitution, budget, forecast, view,
-                                notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        importController = new ImportController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
 
                         // Import the register transactions:
                         inSync = importController.importCsvRegisterTransactionFile();
                         if (!inSync) {
-                            forecastController = new ForecastController(register, budget, forecast, view,
+                            forecastController = new ForecastController(sessionController.getRegister(),
+                                    sessionController.getBudget(), sessionController.getForecast(), view,
                                     notificationService);
                             forecastController.updateForecast();
                             view.say("\nThe long term forecast was successfully updated.");
@@ -203,15 +155,17 @@ public class MainController {
                         view.say("IMPORT PROVISIONAL TRANSACTIONS");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        importController = new ImportController(register, financialInstitution, budget, forecast, view,
-                                notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        importController = new ImportController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
 
                         // Import the provisional transactions:
                         inSync = importController.importCsvProvisionalTransactionFile();
                         view.say("The provisional transactions were successfully imported.");
                         if (!inSync) {
-                            forecastController = new ForecastController(register, budget, forecast, view,
+                            forecastController = new ForecastController(sessionController.getRegister(),
+                                    sessionController.getBudget(), sessionController.getForecast(), view,
                                     notificationService);
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
@@ -224,13 +178,14 @@ public class MainController {
                         view.say("VERIFY REGISTER BALANCE");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        registerController = new RegisterController(register, financialInstitution, budget, forecast,
-                                view, notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        registerController = new RegisterController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
 
                         // Verify the register balance:
-                        if (!registerController.verifyRegisterBalance(register)) {
-                            view.say("The balance of the register " + register.getName() + " was " +
+                        if (!registerController.verifyRegisterBalance(sessionController.getRegister())) {
+                            view.say("The balance of the register " + sessionController.getRegister().getName() + " was " +
                                     "successfully updated.");
                         }
                         view.say("------------------------------------------------------------------------");
@@ -241,9 +196,10 @@ public class MainController {
                         view.say("IMPORT BUDGET ITEMS");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        importController = new ImportController(register, financialInstitution, budget, forecast, view,
-                                notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        importController = new ImportController(sessionController.getRegister(),
+                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
+                                sessionController.getForecast(), view, notificationService);
 
                         // Import the budget items:
                         importController.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
@@ -266,14 +222,15 @@ public class MainController {
                         // Update the forecast if necessary:
                         if (!inSync) {
                             // If we need to update the forecast, ensure we have the necessary context
-                            if (register == null) {
-                                getRegisterBudgetForecast();
+                            if (!sessionController.hasRegister()) {
+                                sessionController.getRegisterBudgetForecast();
                             }
                             // Set up the objects we need for forecast update:
-                            if (register == null || budget == null || forecast == null) {
-                                getRegisterBudgetForecast();
+                            if (!sessionController.isFullyInitialized()) {
+                                sessionController.getRegisterBudgetForecast();
                             }
-                            forecastController = new ForecastController(register, budget, forecast, view,
+                            forecastController = new ForecastController(sessionController.getRegister(),
+                                    sessionController.getBudget(), sessionController.getForecast(), view,
                                     notificationService);
 
                             forecastController.updateForecast();
@@ -288,10 +245,10 @@ public class MainController {
                         view.say("RENDER THE BUDGET SUMMARY REPORT.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the budget summary report:
-                        getBudgetView().renderBudgetSummaryReport();
+                        sessionController.getBudgetView().renderBudgetSummaryReport();
                         view.say("Successfully rendered the New Budget Summary Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -301,11 +258,11 @@ public class MainController {
                         view.say("RENDER A REGISTER.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the register:
                         startDate = view.getStartDate();
-                        Utility.getRegisterView().renderTransactionReport(startDate);
+                        sessionController.getRegisterView().renderTransactionReport(startDate);
                         view.say("The register was successfully rendered");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -315,10 +272,10 @@ public class MainController {
                         view.say("RENDER THE SPENDING REPORT.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the spending report:
-                        getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
+                        sessionController.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), sessionController.getBudget());
                         view.say("The spending report was successfully rendered");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -328,11 +285,13 @@ public class MainController {
                         view.say("RENDER THE SPENDING REPORT FOR A SPECIFIED MONTH.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
+                        budgetController = new BudgetController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
 
                         // Render the spending report for the specified month
-                        Calendar month = getBudgetController().getSpendingReportMonth();
-                        getBudgetView().renderSpendingReportForMonth(month, budget);
+                        Calendar month = budgetController.getSpendingReportMonth();
+                        sessionController.getBudgetView().renderSpendingReportForMonth(month, sessionController.getBudget());
                         view.say("The spending report was successfully rendered");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -342,17 +301,19 @@ public class MainController {
                         view.say("CREATE A FORECAST");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Create the forecast:
                         ForecastEngine forecastEngine = new ForecastEngine();
-                        forecastController = new ForecastController(register, budget, forecast, view, notificationService);
+                        forecastController = new ForecastController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
                         startDate = forecastController.askStartDate();
                         double startingBalance = 0;
                         int numberOfMonths = 12;
                         int minimumBalance = 1000;
-                        forecast = new Forecast(budget, startDate, numberOfMonths, startingBalance, minimumBalance);
+                        Forecast forecast = new Forecast(sessionController.getBudget(), startDate, numberOfMonths, startingBalance, minimumBalance);
                         forecastEngine.generateForecast(forecast, startDate);
+                        sessionController.setForecast(forecast);
                         view.say("The forecast was successfully generated");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -362,11 +323,12 @@ public class MainController {
                         view.say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        forecastController = new ForecastController(register, budget, forecast, view, notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        forecastController = new ForecastController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
 
                         // Update the forecast from an external source:
-                        if (forecast != null) {
+                        if (sessionController.getForecast() != null) {
                             forecastController.updateFromExternalSource();
                         } else {
                             view.say("There is no forecast to update.");
@@ -379,10 +341,10 @@ public class MainController {
                         view.say("SAVE THE FORECAST");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Save the forecast:
-                        forecast.saveAll();
+                        sessionController.getForecast().saveAll();
                         view.say("The forecast was successfully saved to the database.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -392,8 +354,9 @@ public class MainController {
                         view.say("UPDATE A FORECAST");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        forecastController = new ForecastController(register, budget, forecast, view, notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        forecastController = new ForecastController(sessionController.getRegister(),
+                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
 
                         // Update the forecast:
                         forecastController.updateForecast();
@@ -406,10 +369,10 @@ public class MainController {
                         view.say("REMDER THE SHORT TERM FORECAST.");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the short term forecast:
-                        Utility.getForecastView().renderShortTermForecast(forecast);
+                        sessionController.getForecastView().renderShortTermForecast(sessionController.getForecast());
                         view.say("Successfully rendered the short term forecast.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -419,10 +382,10 @@ public class MainController {
                         view.say("RENDER A LONG TERM FORECAST");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the long term forecast:
-                        Utility.getForecastView().renderLongTermForecast(forecast);
+                        sessionController.getForecastView().renderLongTermForecast(sessionController.getForecast());
                         view.say("\nSuccessfully rendered the long term forecast.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -432,10 +395,10 @@ public class MainController {
                         view.say("RENDER AN ENVELOPE REPORT");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the items of interest report:
-                        notificationService.sendEnvelopeReport(forecast);
+                        notificationService.sendEnvelopeReport(sessionController.getForecast());
                         view.say("Successfully rendered the Envelope Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -445,10 +408,10 @@ public class MainController {
                         view.say("RENDER THE ITEMS OF INTEREST REPORT");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the items of interest report:
-                        notificationService.sendItemsOfInterestReport(forecast);
+                        notificationService.sendItemsOfInterestReport(sessionController.getForecast());
                         view.say("Successfully rendered the Items of Interest Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -458,10 +421,10 @@ public class MainController {
                         view.say("RENDER THE OVERDUE AND UPCOMING ITEMS REPORT");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the overdue and upcoming items report:
-                        notificationService.sendOverdueAndUpcomingItemsReport(forecast);
+                        notificationService.sendOverdueAndUpcomingItemsReport(sessionController.getForecast());
                         view.say("Successfully rendered the Overdue and Upcoming Items Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -471,10 +434,10 @@ public class MainController {
                         view.say("RENDER THE NEW TRANSACTION SUMMARY REPORT");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
+                        sessionController.getRegisterBudgetForecast();
 
                         // Render the new transaction summary report:
-                        notificationService.sendNewTransactionSummaryReport(register);
+                        notificationService.sendNewTransactionSummaryReport(sessionController.getRegister());
                         view.say("Successfully rendered the New Transaction Summary Report.");
                         view.say("------------------------------------------------------------------------");
                         break;
@@ -484,9 +447,8 @@ public class MainController {
                         view.say("PERFORM THE DAILY UPDATE");
 
                         // Set up the objects we need:
-                        getRegisterBudgetForecast();
-                        DailyUpdateController dailyUpdateController = new DailyUpdateController(register,
-                                financialInstitution, budget, forecast, view, notificationService);
+                        sessionController.getRegisterBudgetForecast();
+                        DailyUpdateController dailyUpdateController = new DailyUpdateController(sessionController);
 
                         // Perform the daily update:
                         if (dailyUpdateController.run()) {

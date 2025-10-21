@@ -1,13 +1,6 @@
 package com.hixon.financialApp.utility;
 
-import com.hixon.financialApp.controller.BudgetController;
-import com.hixon.financialApp.controller.ForecastController;
-import com.hixon.financialApp.controller.MerchantController;
 import com.hixon.financialApp.model.user.User;
-import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
-import com.hixon.financialApp.view.base.BudgetViewInt;
-import com.hixon.financialApp.view.base.ForecastViewInt;
-import com.hixon.financialApp.view.base.RegisterViewInt;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
@@ -35,23 +28,14 @@ public class Utility {
     // 1/2 of a cent:
     public static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
 
-    // Common database connection for the App:
+    // Common user for the App:
     private static User user;
 
     // Common database connection for the App:
     private static Connection dbConnection;
 
-    // The configured resolvers:
+    // The configured view resolver:
     public static ViewInt resolver;
-    private static BudgetController budgetController;
-    private static MerchantController merchantController;
-    private static ForecastController forecastController;
-
-    // Configured views for interfacing with external agents:
-    private static RegisterViewInt registerView;
-    private static BudgetViewInt budgetView;
-    private static ForecastViewInt forecastView;
-    private static NotificationServiceInt notificationService;
 
 
     /*
@@ -81,60 +65,6 @@ public class Utility {
         Utility.resolver = resolverParam;
     }
 
-    public static BudgetController getBudgetController() {
-        return budgetController;
-    }
-
-    public static void setBudgetController(BudgetController budgetController) {
-        Utility.budgetController = budgetController;
-    }
-
-    public ForecastController getForecastController() {
-        return forecastController;
-    }
-
-    public static void setForecastController(ForecastController forecastController) {
-        Utility.forecastController = forecastController;
-    }
-    public static MerchantController getMerchantController() {
-        return merchantController;
-    }
-
-    public static void setMerchantController(MerchantController merchantController) {
-        Utility.merchantController = merchantController;
-    }
-
-    public static NotificationServiceInt getNotificationService() {
-        return notificationService;
-    }
-
-    public static void setNotificationService(NotificationServiceInt notificationService) {
-        Utility.notificationService = notificationService;
-    }
-
-    public static RegisterViewInt getRegisterView() {
-        return registerView;
-    }
-
-    public static void setRegisterView(RegisterViewInt registerView) {
-        Utility.registerView = registerView;
-    }
-
-    public static BudgetViewInt getBudgetView() {
-        return budgetView;
-    }
-
-    public static void setBudgetView(BudgetViewInt budgetView) {
-        Utility.budgetView = budgetView;
-    }
-
-    public static ForecastViewInt getForecastView() {
-        return forecastView;
-    }
-
-    public static void setForecastView(ForecastViewInt forecastView) {
-        Utility.forecastView = forecastView;
-    }
 
 
     /*

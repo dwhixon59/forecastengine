@@ -2,6 +2,7 @@ package com.hixon.financialApp.test;
 
 
 import com.hixon.financialApp.controller.FinancialInstitutionInt;
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.controller.WellsFargoBankController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -19,7 +20,7 @@ import java.sql.SQLException;
 
 
 /**
- * Main controller for the command line version of the product:
+ * Test controller for setting up test fixtures with register, budget, and forecast objects.
  */
 public class TestController {
     /*
@@ -31,19 +32,38 @@ public class TestController {
     /*
      * Member variables:
      */
-    private Register register;
-    private Budget budget;
-    private Forecast forecast;
-    private ViewInt view;
-    private NotificationServiceInt notificationService;
-    private FinancialInstitutionInt financialInstitution;
+    private SessionController sessionController;
 
     /*
      * Getters and setters:
      */
 
     public ViewInt getView() {
-        return view;
+        return sessionController.getView();
+    }
+
+    public SessionController getSessionController() {
+        return sessionController;
+    }
+
+    public Register getRegister() {
+        return sessionController.getRegister();
+    }
+
+    public Budget getBudget() {
+        return sessionController.getBudget();
+    }
+
+    public Forecast getForecast() {
+        return sessionController.getForecast();
+    }
+
+    public FinancialInstitutionInt getFinancialInstitution() {
+        return sessionController.getFinancialInstitution();
+    }
+
+    public NotificationServiceInt getNotificationService() {
+        return sessionController.getNotificationService();
     }
 
 
@@ -53,29 +73,35 @@ public class TestController {
     public TestController(String username, String register, String budget, String forecast, ViewInt view,
                           NotificationServiceInt notificationService) throws Exception {
 
-        // Set up the user, the database connection, the view and the notification service:
+        // Set up the user, the database connection, and the view:
         java.sql.Connection dbConnection = DriverManager.getConnection(
                 "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***");
         Utility.setDbConnection(dbConnection);
         Utility.setUser(User.getByName(username));
-        this.view = view;
-        this.notificationService = notificationService;
+        Utility.setView(view);
 
-        // then get the register associated with the selected register under test:
-        this.register = Register.getByName(register);
-        Utility.setRegisterView(new SpreadsheetXmlRegisterView(this.register));
+        // Create the session controller:
+        this.sessionController = new SessionController(view, notificationService);
 
-        // and get the budget associated with the selected register under test:
-        this.budget = Budget.getByName(budget);
-        Utility.setBudgetView(new SpreadsheetXmlBudgetView(this.budget));
+        // Get the register associated with the test:
+        Register testRegister = Register.getByName(register);
+        sessionController.setRegister(testRegister);
+        sessionController.setRegisterView(new SpreadsheetXmlRegisterView(testRegister));
 
-        // and get the forecast associated with the selected register under test:
-        this.forecast = Forecast.getByName(forecast);
-        Utility.setForecastView(new SpreadsheetXmlForecastView(this.forecast));
+        // Get the budget associated with the test:
+        Budget testBudget = Budget.getByName(budget);
+        sessionController.setBudget(testBudget);
+        sessionController.setBudgetView(new SpreadsheetXmlBudgetView(testBudget));
 
-        // and set the financial institution associated with the selected register under test:
-        this.financialInstitution = new WellsFargoBankController(this.register, this.budget, this.forecast, this.view,
-                this.notificationService);
+        // Get the forecast associated with the test:
+        Forecast testForecast = Forecast.getByName(forecast);
+        sessionController.setForecast(testForecast);
+        sessionController.setForecastView(new SpreadsheetXmlForecastView(testForecast));
+
+        // Set the financial institution associated with the test:
+        FinancialInstitutionInt testFinancialInstitution = new WellsFargoBankController(testRegister, testBudget,
+                testForecast, view, notificationService);
+        sessionController.setFinancialInstitution(testFinancialInstitution);
     }
 
 
@@ -89,10 +115,6 @@ public class TestController {
         // Close the connection to the database:
         System.out.println("\nClose the connection to the database.");
         Utility.getDbConnection().close();
-    }
-
-    public NotificationServiceInt getNotificationService() {
-        return Utility.getNotificationService();
     }
 
 }  // End class TestController.

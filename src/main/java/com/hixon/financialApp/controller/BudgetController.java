@@ -118,6 +118,8 @@ public class BudgetController {
                         // First select which budget to work with
                         Budget selectedBudgetForReplication = selectBudgetFromUser(null);
 
+
+
                         // Get all unexpired budget items for the selected budget
                         List<BudgetItem> allItems = BudgetItemUtilities.getAllUnexpiredBudgetItemsForBudget(selectedBudgetForReplication);
                         if (allItems.isEmpty()) {
