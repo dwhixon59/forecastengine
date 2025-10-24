@@ -9,10 +9,13 @@ import com.hixon.financialApp.model.entity.MatchQuery;
 import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.ViewInt;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -23,6 +26,20 @@ public class SelectionController {
     /*
      * Statics and constants:
      */
+    // Help text properties loaded from file
+    private static final Properties helpText = new Properties();
+
+    static {
+        try (InputStream input = SelectionController.class.getClassLoader()
+                .getResourceAsStream("help-text.properties")) {
+            if (input == null) {
+                throw new RuntimeException("Unable to find help-text.properties");
+            }
+            helpText.load(input);
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to load help text properties", ex);
+        }
+    }
 
     /*
      * Member variables:
@@ -43,24 +60,32 @@ public class SelectionController {
      * with that name.  If not, then the user will be prompted for a name before the searching begins. This version
      * allows the caller to specify which of the usual escape exceptions (cancel, quit, and/or skip) they want to be
      * active for the user.
+     * <p>
+     * <b>Search Behavior:</b>
+     * <ul>
+     *   <li>Pressing Enter without typing anything (or entering "*") will display all entities in alphabetical order</li>
+     *   <li>Entering a search term will perform a full-text search and display matching results by relevance</li>
+     *   <li>Users can enter a new search string from the results list to refine their search</li>
+     * </ul>
      *
      * @param <T>                 The type of the entity, extending IndependentEntity
-     * @param seedName            The name provided by the user
+     * @param seedName            The name provided by the user (can be null or empty to prompt for search)
+     * @param scope               The scope entity (e.g., Budget) that constrains the search
      * @param allowNone           Allow the user to not make a choice
      * @param allowCreate         Allow the user to create a new entity
      * @param isCancelAllowed     Is the user allowed to cancel this operation?
      * @param isQuitAllowed       Is the user allowed to quit this operation?
      * @param isSkipAllowed       Is the user allowed to skip this selection?
      * @param typeName            The type name of the entity that the user is selecting
-     * @param getDisplayString    A description of the entity that is suitable for displaying it to the user
-     * @param matchQuery          The query to retrieve the entities from the database
+     * @param getDisplayString    A function that returns a description of the entity suitable for displaying to the user
+     * @param matchQuery          The query to retrieve the entities from the database using full-text search
      * @param rsEntityCreator     A function that creates an instance of T from a ResultSet
      * @param stringEntityCreator A function that creates an instance of T from a string
      * @return The entity that the user selected from a candidate list, or null if the user did not select an entity
-     * @throws EntityException
-     * @throws CancelException
-     * @throws QuitException
-     * @throws SkipException
+     * @throws EntityException if a database error occurs
+     * @throws CancelException if the user cancels the operation
+     * @throws QuitException if the user quits the operation
+     * @throws SkipException if the user skips the operation
      */
     public <T extends IndependentEntity> T getByNameFullText(
             String seedName,
@@ -84,8 +109,10 @@ public class SelectionController {
                 seedName = "";
             }
             if (seedName.isEmpty()) {
-                seedName = view.getResponseString("Enter the name of the " + typeName + ":", (String) null, false, false, true,
-                        true, true, (java.util.function.Supplier<String>) null);
+                String searchPrompt = "Search for " + typeName + " (by " + matchQuery.getSearchableFieldsDescription() + ")";
+                seedName = view.getResponseString(searchPrompt, (String) null, ViewInt.ALLOW_NONE,
+                        ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT,
+                        ViewInt.DO_NOT_ALLOW_SKIP, () -> getSearchHelpText(typeName));
             }
 
             // Create a new entity of type T with the name provided by the user just so that we can call methods on it
@@ -161,9 +188,12 @@ public class SelectionController {
                         }
 
                         // Ask the user to select the correct entity from the list of entities:
+                        // Always allow entering a new search string when showing search results
+                        String selectionPrompt = "Select the correct " + typeName + " for \"" + seedName + "\"" +
+                                (allowCreate ? " (or enter a new search string)" : "");
                         EntityOrStringResult<T> entityOrStringResult = view.selectByNameFromListOrString(
-                                "Select the correct " + typeName + " for " + seedName, entities,
-                                getDisplayString, allowNone, allowCreateInList, isCancelAllowed, isQuitAllowed,
+                                selectionPrompt, entities,
+                                getDisplayString, allowNone, allowCreate, isCancelAllowed, isQuitAllowed,
                                 isSkipAllowed);
 
                         // If the user selected an entity from the list, then return the entity:
@@ -195,8 +225,8 @@ public class SelectionController {
                             } else {
                                 // Since the entity was not found and the user is not allowed to or does not want to
                                 // create a new entity, then ask the user for a new search string:
-                                seedName = view.getResponseString("Enter a new search string:", (String) null, false, false,
-                                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP, (java.util.function.Supplier<String>) null);
+                                seedName = view.getResponseString("Enter a new search string", (String) null, false, false,
+                                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP, () -> getSearchHelpText(typeName));
                             }
                         }
                     }
@@ -216,8 +246,9 @@ public class SelectionController {
 
                     // Since the entity was not found and the user is not allowed to or does not want to create a new entity,
                     // then ask the user for a new search string:
-                    seedName = view.getResponseString("Enter the name of the " + typeName + ":", (String) null, false, false, true,
-                            true, true, (java.util.function.Supplier<String>) null);
+                    String searchPrompt = "Search for " + typeName + " (by " + matchQuery.getSearchableFieldsDescription() + ")";
+                    seedName = view.getResponseString(searchPrompt, (String) null, false, false, true,
+                            true, true, () -> getSearchHelpText(typeName));
                 }
                 firstTime = false;
             }
@@ -225,6 +256,17 @@ public class SelectionController {
             EntityException ee = new EntityException("Database error occurred.", e);
             throw ee;
         }
+    }
+
+    /**
+     * Generates help text explaining the various search options and prefixes available for entity searches.
+     *
+     * @param typeName The type of entity being searched (e.g., "Budget Item", "Merchant")
+     * @return Formatted help text explaining all search options
+     */
+    private String getSearchHelpText(String typeName) {
+        String helpContent = helpText.getProperty("search.help", "No help available");
+        return "Search Help for " + typeName + ":\n\n" + helpContent;
     }
 
     /**

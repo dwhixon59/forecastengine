@@ -97,7 +97,7 @@ public class BudgetController {
         while (!done) {
             String prompt = "What would you like to do?";
             try {
-                String option = view.selectFromMenu(prompt, List.of("add", "replicate", "delete",
+                String option = view.selectFromMenu(prompt, List.of("add", "copy and update", "delete",
                     "update", "find", "select"), DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT,
                         DO_NOT_ALLOW_SKIP);
                 switch (option) {
@@ -114,30 +114,72 @@ public class BudgetController {
                         }
                         selectedBudgetItem = null;
                         break;
-                    case "r":
-                        // First select which budget to work with
-                        Budget selectedBudgetForReplication = selectBudgetFromUser(null);
+                    case "c":
+                        try {
+                            // First select which budget to work with
+                            Budget selectedBudgetForReplication = selectBudgetFromUser(null);
 
+                            // Loop to allow user to search again if they decline an expired item
+                            boolean templateSelected = false;
+                            while (!templateSelected) {
+                                // Use SelectionController for sophisticated search-based selection
+                                // Include both expired and unexpired budget items
+                                SelectionController selectionController = new SelectionController(view);
+                                BudgetItem template = selectionController.getByNameFullText(
+                                        null,  // No seed name - user will search
+                                        selectedBudgetForReplication,
+                                        DO_NOT_ALLOW_NONE,
+                                        ALLOW_CREATE,  // Don't allow creating new items when copying
+                                        ALLOW_CANCEL,
+                                        ALLOW_QUIT,
+                                        DO_NOT_ALLOW_SKIP,
+                                        BudgetItem.getPrintableTypeName_static(),
+                                        BudgetItem::getDisplayString,
+                                        new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
+                                                selectedBudgetForReplication.getId() + "') AND ", "bi.payee",
+                                                "bi.category, bi.payee, bi.memo"),
+                                        rs -> {
+                                            try {
+                                                return new BudgetItem(rs);
+                                            } catch (BudgetException e) {
+                                                throw new RuntimeException(e);
+                                            }
+                                        },
+                                        (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
 
-
-                        // Get all unexpired budget items for the selected budget
-                        List<BudgetItem> allItems = BudgetItemUtilities.getAllUnexpiredBudgetItemsForBudget(selectedBudgetForReplication);
-                        if (allItems.isEmpty()) {
-                            view.say("No budget items available to replicate in budget: " + selectedBudgetForReplication.getName());
-                        } else {
-                            BudgetItem template = getUserSelectedBudgetItem(allItems);
-                            if (template != null) {
-                                BudgetItem copiedItem = getBudgetItemFromUser(template);
-                                if (copiedItem != null && copiedItem.isValid()) {
-                                    BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "replicated");
-                                    if (confirmedItem != null) {
-                                        confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                                        view.say("Budget item successfully replicated and added.");
+                                if (template != null) {
+                                    // Warn user if they selected an expired budget item
+                                    if (template.isExpired(Calendar.getInstance())) {
+                                        view.say("\nWARNING: The selected budget item has expired.");
+                                        view.say("End Date: " + (template.getEndDate() != null ?
+                                                Utility.calendarDateToStringDate(template.getEndDate()) : "None"));
+                                        view.say("This item will NOT appear in forecasts unless you update the end date.");
+                                        if (!view.getYesOrNo("Do you want to continue with this expired item?")) {
+                                            view.say("Please search for a different budget item.");
+                                            continue; // Go back to search again
+                                        }
                                     }
-                                } else if (copiedItem != null) {
-                                    view.say("Budget item entered by user is invalid.");
+
+                                    // User accepted the template (expired or not), proceed with copy
+                                    templateSelected = true;
+                                    BudgetItem copiedItem = getBudgetItemFromUser(template);
+                                    if (copiedItem != null && copiedItem.isValid()) {
+                                        BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "copied");
+                                        if (confirmedItem != null) {
+                                            confirmedItem.save(EntityInt.SaveMethod.INSERT);
+                                            view.say("Budget item successfully copied and added.");
+                                        }
+                                    } else if (copiedItem != null) {
+                                        view.say("Budget item entered by user is invalid.");
+                                    }
+                                } else {
+                                    // User didn't select a template (e.g., cancelled during search)
+                                    templateSelected = true; // Exit the loop
                                 }
                             }
+                        } catch (CancelException e) {
+                            // User cancelled - just return to the menu
+                            view.say("Operation cancelled.");
                         }
                         selectedBudgetItem = null;
                         break;
@@ -155,7 +197,8 @@ public class BudgetController {
                         }
                         break;
                     case "s":
-                        List<BudgetItem> availableItems = BudgetItemUtilities.getAllUnexpiredBudgetItemsForBudget(budget);
+                        // Show all budget items (both expired and unexpired)
+                        List<BudgetItem> availableItems = BudgetItemUtilities.getAllBudgetItemsForBudget(budget);
                         if (availableItems.isEmpty()) {
                             view.say("No budget items available to select.");
                             selectedBudgetItem = null;
@@ -163,6 +206,14 @@ public class BudgetController {
                             selectedBudgetItem = getUserSelectedBudgetItem(availableItems);
                             if (selectedBudgetItem != null) {
                                 view.say("Selected budget item: " + selectedBudgetItem.getDisplayString());
+
+                                // Warn user if they selected an expired budget item
+                                if (selectedBudgetItem.isExpired(Calendar.getInstance())) {
+                                    view.say("\nWARNING: This budget item has expired.");
+                                    view.say("End Date: " + (selectedBudgetItem.getEndDate() != null ?
+                                            Utility.calendarDateToStringDate(selectedBudgetItem.getEndDate()) : "None"));
+                                    view.say("This item will NOT appear in forecasts unless you update the end date.");
+                                }
                             }
                         }
                         break;
@@ -185,17 +236,57 @@ public class BudgetController {
                         }
                         break;
                     case "d":
-                        if (selectedBudgetItem == null) {
-                            view.say("No budget item selected. Use 's-select' first.");
-                        } else {
-                            if (selectedBudgetItem.isValid()) {
-                                selectedBudgetItem.delete();
-                                view.say("Budget item deleted.");
-                            } else {
-                                view.say("Budget item entered by user is invalid.");
+                        try {
+                            // Use SelectionController for sophisticated search-based selection
+                            SelectionController selectionController = new SelectionController(view);
+                            BudgetItem itemToDelete = selectionController.getByNameFullText(
+                                    null,  // No seed name - user will search
+                                    budget,
+                                    DO_NOT_ALLOW_NONE,
+                                    DO_NOT_ALLOW_CREATE,  // Don't allow creating new items when deleting
+                                    ALLOW_CANCEL,
+                                    ALLOW_QUIT,
+                                    DO_NOT_ALLOW_SKIP,
+                                    BudgetItem.getPrintableTypeName_static(),
+                                    BudgetItem::getDisplayString,
+                                    new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
+                                            budget.getId() + "') AND ", "bi.payee",
+                                            "bi.category, bi.payee, bi.memo"),
+                                    rs -> {
+                                        try {
+                                            return new BudgetItem(rs);
+                                        } catch (BudgetException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    },
+                                    (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
+
+                            if (itemToDelete != null) {
+                                // Show details and confirm deletion
+                                view.say("\nYou are about to delete:");
+                                view.say("  " + itemToDelete.getDisplayString());
+
+                                // Warn if it's an active (non-expired) item
+                                if (!itemToDelete.isExpired(Calendar.getInstance())) {
+                                    view.say("\nWARNING: This is an ACTIVE budget item that appears in forecasts.");
+                                }
+
+                                if (view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
+                                    if (itemToDelete.isValid()) {
+                                        itemToDelete.delete();
+                                        view.say("Budget item deleted successfully.");
+                                    } else {
+                                        view.say("Cannot delete: Budget item is invalid.");
+                                    }
+                                } else {
+                                    view.say("Deletion cancelled.");
+                                }
                             }
-                            selectedBudgetItem = null;
+                        } catch (CancelException e) {
+                            // User cancelled - just return to the menu
+                            view.say("Operation cancelled.");
                         }
+                        selectedBudgetItem = null;
                         break;
                     default:
                         throw new InvalidEntryException("selectFromFirstLetterList returned an option that wasn't in the option list.");
@@ -431,7 +522,7 @@ public class BudgetController {
                 line += " ";
             }
             line += Item.generatePeriodType(budgetItem.getPeriod());
-            if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND) {
+            if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND && forecast != null) {
                 line += ", ";
                 line += Utility.calendarDateToStringDate(
                         ForecastTransaction.getApplicableForecastTransaction(
@@ -496,7 +587,7 @@ public class BudgetController {
             // Let the user know what we are going to do:
             view.sayH1("Budget Item Entry");
             view.say("Please enter the details for the budget item.  You can cancel or quit at any time by entering " +
-                    "'c' or 'q'.");
+                    "'C' or 'Q'.");
             view.say("Press <enter> to accept the default value shown in brackets [].");
 
             view.sayH2("Budget Assignment");
@@ -701,34 +792,43 @@ public class BudgetController {
      * @throws CancelException If the user cancels the operation
      * @throws QuitException If the user quits the operation
      * @throws SkipException If the user skips the operation
+     * @throws BudgetException If no budgets are available or budget operations fail
+     * @throws SQLException If a database error occurs
+     * @throws EntityException If an entity error occurs
      */
     private Budget selectBudgetFromUser(BudgetItem template) throws BudgetException, SQLException, EntityException,
             CancelException, QuitException, SkipException {
-        // Default to the template's budget if available, otherwise use the current budget
-        Budget defaultBudget = (template != null && template.getIdBudget() != null)
-                ? Budget.getById(template.getIdBudget()) : budget;
-        Budget selectedBudget = defaultBudget;
-
-        try {
-            List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
-            if (availableBudgets.isEmpty()) {
-                throw new BudgetException("No budgets available. Please create a budget first.");
-            }
-            if (availableBudgets.size() > 1) {
-                // This supports moving budget items between budgets (e.g., personal to business)
-                if (template != null && template.getIdBudget() != null && !template.getIdBudget().equals(budget.getId())) {
-                    view.say("Template's budget: " + defaultBudget.getName() + " (will be used as default)");
-                }
-                selectedBudget = view.selectByNameFromList("Select Budget", availableBudgets, defaultBudget,
-                        DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
-                        null);
-            }
-        } catch (Exception e) {
-            view.say("Error loading budgets, using default budget: " + e.getMessage());
-            // selectedBudget is already set to defaultBudget
+        List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
+        if (availableBudgets.isEmpty()) {
+            throw new BudgetException("No budgets available. Please create a budget first.");
         }
 
-        return selectedBudget;
+        // If only one budget exists, use it
+        if (availableBudgets.size() == 1) {
+            return availableBudgets.get(0);
+        }
+
+        // Determine the default budget: template's budget, current budget, or first available
+        Budget defaultBudget = null;
+        if (template != null && template.getIdBudget() != null) {
+            defaultBudget = Budget.getById(template.getIdBudget());
+        } else if (budget != null) {
+            defaultBudget = budget;
+        } else {
+            // If no current budget is set, default to the first available budget
+            defaultBudget = availableBudgets.get(0);
+        }
+
+        // Multiple budgets exist - prompt user to select
+        // This supports moving budget items between budgets (e.g., personal to business)
+        if (template != null && template.getIdBudget() != null && budget != null &&
+                !template.getIdBudget().equals(budget.getId())) {
+            view.say("Template's budget: " + defaultBudget.getName() + " (will be used as default)");
+        }
+
+        return view.selectByNameFromList("Select Budget", availableBudgets, defaultBudget,
+                DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                () -> helpText.getProperty("budget.selectbudget", "No help available"));
     }
 
     /**

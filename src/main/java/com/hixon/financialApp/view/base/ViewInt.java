@@ -202,9 +202,9 @@ public interface ViewInt {
      * This method gets a string from the user with configurable options for showing and allowing cancel, quit, and skip operations.
      *
      * @param prompt
-     * @param isCancelAllowed If true, allows the user to cancel by entering 'c'
-     * @param isQuitAllowed   If true, allows the user to quit by entering 'q'
-     * @param isSkipAllowed   If true, allows the user to skip by entering 's'
+     * @param isCancelAllowed If true, allows the user to cancel by entering 'C'
+     * @param isQuitAllowed   If true, allows the user to quit by entering 'Q'
+     * @param isSkipAllowed   If true, allows the user to skip by entering 'S'
      * @return The string entered by the user
      */
     String getResponseString(String prompt, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
@@ -218,10 +218,10 @@ public interface ViewInt {
      * @param defaultValue       The default value to show and return if user hits enter (can be null)
      * @param allowNone          If true, allows empty input (user just hits enter)
      * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
-     * @param isCancelAllowed    If true, allows the user to cancel by entering 'c'
-     * @param isQuitAllowed      If true, allows the user to quit by entering 'q'
-     * @param isSkipAllowed      If true, allows the user to skip by entering 's'
-     * @param helpCallback       Optional callback function to provide help text when user enters 'h'
+     * @param isCancelAllowed    If true, allows the user to cancel by entering 'C'
+     * @param isQuitAllowed      If true, allows the user to quit by entering 'Q'
+     * @param isSkipAllowed      If true, allows the user to skip by entering 'S'
+     * @param helpCallback       Optional callback function to provide help text when user enters '?'
      * @return The string entered by the user
      * @throws CancelException If the user cancels the operation
      * @throws QuitException   If the user quits the operation

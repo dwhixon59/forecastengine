@@ -166,6 +166,72 @@ public class ViewCmdline implements ViewInt {
         lastHeading = HeadingLevel.NONE;
     }
 
+    /**
+     * Wraps text to fit within a specified line width for command line display.
+     * Preserves paragraph breaks (double newlines) and respects existing single newlines.
+     * Words longer than the line width are not broken.
+     *
+     * @param text the text to wrap
+     * @param maxLineWidth the maximum width of each line (default: 80 characters)
+     * @return the wrapped text with appropriate line breaks
+     */
+    protected String wrapText(String text, int maxLineWidth) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        StringBuilder result = new StringBuilder();
+        // Split by paragraph (double newline or \n\n)
+        String[] paragraphs = text.split("\\n\\s*\\n");
+
+        for (int p = 0; p < paragraphs.length; p++) {
+            String paragraph = paragraphs[p].trim();
+
+            if (paragraph.isEmpty()) {
+                continue;
+            }
+
+            // Split paragraph into words
+            String[] words = paragraph.split("\\s+");
+            StringBuilder line = new StringBuilder();
+
+            for (String word : words) {
+                // If adding this word would exceed the line width, start a new line
+                if (line.length() > 0 && line.length() + word.length() + 1 > maxLineWidth) {
+                    result.append(line).append("\n");
+                    line = new StringBuilder();
+                }
+
+                if (line.length() > 0) {
+                    line.append(" ");
+                }
+                line.append(word);
+            }
+
+            // Append any remaining content in the line
+            if (line.length() > 0) {
+                result.append(line);
+            }
+
+            // Add paragraph break (but not after the last paragraph)
+            if (p < paragraphs.length - 1) {
+                result.append("\n\n");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Wraps text to fit within 80 characters for command line display.
+     *
+     * @param text the text to wrap
+     * @return the wrapped text with appropriate line breaks
+     */
+    protected String wrapText(String text) {
+        return wrapText(text, 80);
+    }
+
     public boolean getYesOrNo(String question) {
 
         // Call the full version of getYesOrNo() with the false values for the cancel, quit and skip parameters:
@@ -191,17 +257,17 @@ public class ViewCmdline implements ViewInt {
 
             // If the user entered a special value, then throw the appropriate exception:
             if (isCancelAllowed) {
-                if (line.equalsIgnoreCase("c")) {
+                if (line.equals("C")) {
                     throw new CancelException("User asked to cancel this operation.");
                 }
             }
             if (isQuitAllowed) {
-                if (line.equalsIgnoreCase("q")) {
+                if (line.equals("Q")) {
                     throw new QuitException("User asked to abort processing.");
                 }
             }
             if (isSkipAllowed) {
-                if (line.equalsIgnoreCase("s")) {
+                if (line.equals("S")) {
                     throw new SkipException("User asked to skip this item.");
                 }
             }
@@ -301,7 +367,7 @@ public class ViewCmdline implements ViewInt {
             try {
                 ask(fullPrompt);
                 response = getResponseString("", null, false, false, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
-                if (response.equalsIgnoreCase("h")) continue;
+                if (response.equals("?")) continue;
                 int result = Integer.parseInt(response);
                 if (result >= min && result <= max) {
                     return new NumberOrStringResponse(result);
@@ -309,7 +375,7 @@ public class ViewCmdline implements ViewInt {
                     say("The number you entered is not between " + min + " and " + max + ".");
                 }
             } catch (NumberFormatException e) {
-                if (response.equalsIgnoreCase("h")) continue;
+                if (response.equals("?")) continue;
                 return new NumberOrStringResponse(response);
             }
         }
@@ -358,10 +424,10 @@ public class ViewCmdline implements ViewInt {
      * @param defaultValue       The default value to show and return if user hits enter (can be null)
      * @param allowNone          If true, allows empty input (user just hits enter)
      * @param showCancelQuitSkip If true, displays the cancel/quit/skip options in the prompt
-     * @param isCancelAllowed    If true, allows the user to cancel by entering 'c'
-     * @param isQuitAllowed      If true, allows the user to quit by entering 'q'
-     * @param isSkipAllowed      If true, allows the user to skip by entering 's'
-     * @param helpCallback       Optional callback function to provide help text when user enters 'h'
+     * @param isCancelAllowed    If true, allows the user to cancel by entering 'C'
+     * @param isQuitAllowed      If true, allows the user to quit by entering 'Q'
+     * @param isSkipAllowed      If true, allows the user to skip by entering 'S'
+     * @param helpCallback       Optional callback function to provide help text when user enters '?'
      * @return The string entered by the user
      * @throws CancelException If the user cancels the operation
      * @throws QuitException   If the user quits the operation
@@ -405,8 +471,8 @@ public class ViewCmdline implements ViewInt {
             String response = getLine();
 
             // Check for help request
-            if (helpCallback != null && response.equalsIgnoreCase("h")) {
-                say(helpCallback.get());
+            if (helpCallback != null && response.equals("?")) {
+                say(wrapText(helpCallback.get()));
                 // Redisplay the prompt after help
                 if (fullPrompt.length() > 0) {
                     ask(fullPrompt.toString());
@@ -427,13 +493,13 @@ public class ViewCmdline implements ViewInt {
             }
 
             // Check for special commands
-            if (isCancelAllowed && response.equalsIgnoreCase("c")) {
+            if (isCancelAllowed && response.equals("C")) {
                 throw new CancelException("User asked to cancel this operation.");
             }
-            if (isQuitAllowed && response.equalsIgnoreCase("q")) {
+            if (isQuitAllowed && response.equals("Q")) {
                 throw new QuitException("User asked to abort processing.");
             }
-            if (isSkipAllowed && response.equalsIgnoreCase("s")) {
+            if (isSkipAllowed && response.equals("S")) {
                 throw new SkipException("User asked to skip this item.");
             }
 
@@ -649,11 +715,11 @@ public class ViewCmdline implements ViewInt {
     public String getCancelSkipOrQuitPrompt(boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed) {
         StringBuilder prompt = new StringBuilder();
         if (isCancelAllowed || isQuitAllowed || isSkipAllowed) {
-            prompt.append("(or ");
+            prompt.append(" (or ");
             List<String> options = new ArrayList<>();
-            if (isCancelAllowed) options.add("'c' to cancel");
-            if (isQuitAllowed) options.add("'q' to quit");
-            if (isSkipAllowed) options.add("'s' to skip");
+            if (isCancelAllowed) options.add("'C' to cancel");
+            if (isQuitAllowed) options.add("'Q' to quit");
+            if (isSkipAllowed) options.add("'S' to skip");
             prompt.append(String.join(", ", options));
             prompt.append(")");
         }
@@ -818,8 +884,8 @@ public class ViewCmdline implements ViewInt {
     }
 
     /**
-     * Select from a numbered list using an enum with a default value. Supports help via 'h' followed by a number
-     * (e.g., 'h 3' for help on option 3).
+     * Select from a numbered list using an enum with a default value. Supports help via '?' followed by a number
+     * (e.g., '? 3' for help on option 3).
      */
     protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType) {
         try {
@@ -832,7 +898,7 @@ public class ViewCmdline implements ViewInt {
 
     /**
      * Select from a numbered list using an enum with a default value.
-     * Supports help via 'h' followed by a number (e.g., 'h 3' for help on option 3).
+     * Supports help via '?' followed by a number (e.g., '? 3' for help on option 3).
      */
     protected <T extends Enum<T>> T selectFromNumberedList(String prompt, T defaultValue, Class<T> enumType,
                    boolean showCancelQuitSkip, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
@@ -862,17 +928,17 @@ public class ViewCmdline implements ViewInt {
         while (true) {
             String response = getResponseString(optionPrompt, (defaultIndex != -1) ? String.valueOf(defaultIndex + 1) : null,
                     DO_NOT_ALLOW_NONE, showCancelQuitSkip, isCancelAllowed, isQuitAllowed, isSkipAllowed,
-                    () -> "Enter 'h' followed by a number (e.g., 'h 3') for help on a specific option.");
+                    () -> "Enter '?' followed by a number (e.g., '? 3') for help on a specific option.");
 
             if (response.isEmpty() && defaultValue != null) {
                 return defaultValue;
             }
 
-            // Check for help request: 'h' or 'H' followed by optional whitespace and a number
-            if (response.toLowerCase().matches("^h\\s*\\d+$")) {
+            // Check for help request: '?' followed by optional whitespace and a number
+            if (response.matches("^\\?\\s*\\d+$")) {
                 try {
-                    // Extract the number after 'h' and optional whitespace
-                    String numberPart = response.toLowerCase().replaceFirst("^h\\s*", "");
+                    // Extract the number after '?' and optional whitespace
+                    String numberPart = response.replaceFirst("^\\?\\s*", "");
                     int helpIndex = Integer.parseInt(numberPart);
 
                     if (helpIndex >= 1 && helpIndex <= values.length) {
@@ -891,7 +957,7 @@ public class ViewCmdline implements ViewInt {
 
                                 if (helpText != null && !helpText.trim().isEmpty()) {
                                     ask("\nHelp for " + Utility.formatEnumName(enumValue.toString()) + ":  ");
-                                    say(helpText);
+                                    say(wrapText(helpText));
                                 } else {
                                     say("No help available for " + enumValue.toString() + " (key: " + helpKey + ").");
                                 }
@@ -902,11 +968,11 @@ public class ViewCmdline implements ViewInt {
                             say("Error loading help text: " + e.getMessage());
                         }
                     } else {
-                        say("Please enter a help number between 1 and " + values.length + " (e.g., 'h " + Math.min(3, values.length) + "').");
+                        say("Please enter a help number between 1 and " + values.length + " (e.g., '? " + Math.min(3, values.length) + "').");
                     }
                     continue; // Stay in the loop for another selection
                 } catch (NumberFormatException e) {
-                    say("Invalid help format. Use 'h' followed by a number (e.g., 'h 3').");
+                    say("Invalid help format. Use '?' followed by a number (e.g., '? 3').");
                     continue;
                 }
             }
@@ -919,7 +985,7 @@ public class ViewCmdline implements ViewInt {
                     say("Please enter a number between 1 and " + values.length + ".");
                 }
             } catch (NumberFormatException e) {
-                say("Invalid input. Please enter a number, or 'h' followed by a number for help.");
+                say("Invalid input. Please enter a number, or '?' followed by a number for help.");
             }
         }
     }
@@ -985,7 +1051,7 @@ public class ViewCmdline implements ViewInt {
         Integer defaultIndex = null;
         if (defaultValue != null) {
             for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).getId() == defaultValue.getId()) {
+                if (list.get(i).getId().equals(defaultValue.getId())) {
                     defaultIndex = i;
                     break;
                 }
@@ -1072,13 +1138,13 @@ public class ViewCmdline implements ViewInt {
             String newAmount = in.nextLine();
 
             // Check for special commands first
-            if (isCancelAllowed && newAmount.equalsIgnoreCase("c")) {
+            if (isCancelAllowed && newAmount.equals("C")) {
                 throw new CancelException("User asked to cancel this operation.");
             }
-            if (isQuitAllowed && newAmount.equalsIgnoreCase("q")) {
+            if (isQuitAllowed && newAmount.equals("Q")) {
                 throw new QuitException("User asked to abort processing.");
             }
-            if (isSkipAllowed && newAmount.equalsIgnoreCase("s")) {
+            if (isSkipAllowed && newAmount.equals("S")) {
                 throw new SkipException("User asked to skip this item.");
             }
 
@@ -1270,18 +1336,19 @@ public class ViewCmdline implements ViewInt {
 
         sayH3(prompt);
 
-        String optionPrompt = "Enter your choice ";
-
-        if (defaultItemIndex != null && defaultItemIndex >= 0 && defaultItemIndex < items.size()) {
-            optionPrompt += " [" + (defaultItemIndex + 1) + "]";
-        }
+        String optionPrompt = "Enter your choice";
 
         if (allowNone) {
             optionPrompt += ", 0 for none";
         }
 
         if (allowCreate) {
-            optionPrompt += ", or enter a new value";
+            // Check if this is a search/selection context vs. a create new entity context
+            if (prompt.toLowerCase().contains("select") || prompt.toLowerCase().contains("search")) {
+                optionPrompt += ", or enter a new search string";
+            } else {
+                optionPrompt += ", or enter a new value";
+            }
         }
 
         // Display the list of items:
@@ -1291,7 +1358,8 @@ public class ViewCmdline implements ViewInt {
 
         while (true) {
 
-            String defaultItemIndexStr = (defaultItemIndex != null) ? defaultItemIndex.toString() : null;
+            // Convert defaultItemIndex to 1-based for display (getResponseString will add the brackets)
+            String defaultItemIndexStr = (defaultItemIndex != null) ? String.valueOf(defaultItemIndex + 1) : null;
             String response = getResponseString(optionPrompt, defaultItemIndexStr, allowNone,
                     showCancelQuitSkipPrompt, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpSupplier);
 

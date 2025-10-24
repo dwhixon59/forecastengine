@@ -49,39 +49,78 @@ public class MatchQuery {
 
         if (escapedName.startsWith("n:")) {
             // Remove the prefix and create a natural language query
-            String searchString = escapedName.substring(2);
+            String searchString = escapedName.substring(2).trim();
+            // If search string is empty or only wildcards, return all results sorted alphabetically
+            if (searchString.isEmpty() || searchString.replace("*", "").trim().isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
+            }
             return selectQuery.replaceFirst("(?i)FROM", ", MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
                     "\" IN NATURAL LANGUAGE MODE) as relevance FROM") + " MATCH(" + matchColumnList + ") AGAINST(\"" +
                     searchString + "\" IN NATURAL LANGUAGE MODE) ORDER BY relevance DESC";
         } else if (escapedName.startsWith("b:")) {
             // Remove the prefix and create a boolean mode query
-            String searchString = escapedName.substring(2);
+            String searchString = escapedName.substring(2).trim();
+            // If search string is empty, return all results sorted alphabetically
+            if (searchString.isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
+            }
             return selectQuery + " MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
                     "\" IN BOOLEAN MODE)";
         } else if (escapedName.startsWith("e:")) {
             // Remove the prefix and create a regular query
-            String searchString = escapedName.substring(2);
+            String searchString = escapedName.substring(2).trim();
+            // If search string is empty, return all results sorted alphabetically
+            if (searchString.isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
+            }
             return selectQuery + nameColumn + " = \"" + searchString + "\"";
         } else if (escapedName.startsWith("l:")) {
             // For LIKE pattern match, we assume that '%' wildcards are already provided in the input if needed.
-            // Append to the query string 'LIKE' for each column in the matchColumnList with 'AND' in between them:
-            String likeQuery = selectQuery;
-            for (String column : matchColumnList.split(",")) {
-                likeQuery += column + " LIKE " + escapedName.substring(2) + " OR ";
+            String searchString = escapedName.substring(2).trim();
+            // If search string is empty, return all results sorted alphabetically
+            if (searchString.isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
             }
-            return likeQuery.substring(0, likeQuery.length() - 4);
+            // Wrap OR conditions in parentheses to ensure correct precedence
+            StringBuilder likeQuery = new StringBuilder(selectQuery);
+            likeQuery.append("(");
+            String[] columns = matchColumnList.split(",");
+            for (int i = 0; i < columns.length; i++) {
+                if (i > 0) {
+                    likeQuery.append(" OR ");
+                }
+                likeQuery.append(columns[i].trim()).append(" LIKE '").append(searchString).append("'");
+            }
+            likeQuery.append(")");
+            return likeQuery.toString();
         } else if (escapedName.startsWith("s:")) {
-            // Append to the query string 'LIKE' for each column in the matchColumnList with 'AND' in between them:
-            String likeQuery = selectQuery;
-            for (String column : matchColumnList.split(",")) {
-                likeQuery += column + " LIKE '%" + escapedName.substring(2) + "%' OR ";
+            // Search mode - wrap search term with wildcards and group OR conditions in parentheses
+            String searchString = escapedName.substring(2).trim();
+            // If search string is empty, return all results sorted alphabetically
+            if (searchString.isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
             }
-            return likeQuery.substring(0, likeQuery.length() - 4);
+            StringBuilder likeQuery = new StringBuilder(selectQuery);
+            likeQuery.append("(");
+            String[] columns = matchColumnList.split(",");
+            for (int i = 0; i < columns.length; i++) {
+                if (i > 0) {
+                    likeQuery.append(" OR ");
+                }
+                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(searchString).append("%'");
+            }
+            likeQuery.append(")");
+            return likeQuery.toString();
         } else {
-            // Default behavior (could be one of the above or an entirely different default)
+            // Default behavior: natural language mode
+            String searchString = escapedName.trim();
+            // If search string is empty or only wildcards/special chars, return all results sorted alphabetically
+            if (searchString.isEmpty() || searchString.replace("*", "").replace("%", "").trim().isEmpty()) {
+                return selectQuery.replaceAll("(?i)\\s+AND\\s*$", "") + " ORDER BY " + nameColumn + " ASC";
+            }
             return selectQuery.replaceFirst("(?i)FROM", ", MATCH(" + matchColumnList + ") AGAINST(\"" +
-                    escapedName + "\" IN NATURAL LANGUAGE MODE) as relevance FROM") +
-                    " MATCH(" + matchColumnList + ") AGAINST(\"" + escapedName +
+                    searchString + "\" IN NATURAL LANGUAGE MODE) as relevance FROM") +
+                    " MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
                     "\" IN NATURAL LANGUAGE MODE) ORDER BY relevance DESC";
         }
     }
@@ -161,5 +200,54 @@ public class MatchQuery {
         } else {
             return name;
         }
+    }
+
+    /**
+     * Gets the list of columns that are searched in this match query.
+     *
+     * @return The comma-separated list of column names
+     */
+    public String getMatchColumnList() {
+        return matchColumnList;
+    }
+
+    /**
+     * Gets a user-friendly description of the searchable fields.
+     * Converts database column names to readable field names.
+     *
+     * @return A formatted string describing searchable fields (e.g., "name, category, payee, memo")
+     */
+    public String getSearchableFieldsDescription() {
+        if (matchColumnList == null || matchColumnList.isEmpty()) {
+            return "name";
+        }
+
+        // Clean up column names for user display
+        String[] columns = matchColumnList.split(",");
+        StringBuilder description = new StringBuilder();
+
+        for (int i = 0; i < columns.length; i++) {
+            String column = columns[i].trim();
+
+            // Remove table prefixes and convert to user-friendly names
+            if (column.contains(".")) {
+                column = column.substring(column.lastIndexOf(".") + 1);
+            }
+
+            // Convert common column names to user-friendly terms
+            column = column.toLowerCase()
+                    .replace("_", " ")
+                    .replace("budgetitemname", "name")
+                    .replace("merchantname", "name")
+                    .replace("categoryname", "category")
+                    .replace("payeename", "payee");
+
+            if (i > 0) {
+                description.append(", ");
+            }
+            description.append(column);
+        }
+
+        return description.toString();
     }
 }

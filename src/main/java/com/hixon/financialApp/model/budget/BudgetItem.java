@@ -644,6 +644,20 @@ public class BudgetItem extends Item {
     }
 
     /**
+     * Get all budget items for a specific budget, including both expired and unexpired items.
+     *
+     * @param budget The budget to retrieve items for
+     * @return A result set of all budget items for the specified budget.
+     * @throws EntityException if a database error occurs
+     */
+    public static ResultSet getAllBudgetItems(Budget budget) throws EntityException {
+        String query = getSelectQuery() +
+                " where Budget_idBudget = uuid_to_bin('" + budget.getId() + "') " +
+                "order by category, payee";
+        return EntityInt.getRS(query, "getting all budget items for budget");
+    }
+
+    /**
      * Get a list of budget items joined with their splits and transactions that are instances of them.
      *
      * @param startDate The result set will contain only the items that have not expired as of this date and only
