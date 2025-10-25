@@ -601,12 +601,19 @@ public class ViewCmdline implements ViewInt {
                   boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed, Supplier<String> helpCallback)
             throws CancelException, QuitException, SkipException {
 
+        // Format the default value as a dollar amount for display
+        String defaultValueStr = (defaultValue != null) ? Utility.formatDollarAmount(defaultValue) : null;
+
         // Until we get a valid currency value, keep asking:
         while (true) {
             try {
-                // Try to parse as currency (must have at most 2 decimal places)
-                double value = getResponseDouble(prompt, defaultValue, showCancelQuitSkip, allowNone, isCancelAllowed,
-                        isQuitAllowed, isSkipAllowed, helpCallback);
+                // Get the response string with the formatted default value
+                String response = getResponseString(prompt, defaultValueStr, allowNone, showCancelQuitSkip,
+                        isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+
+                // Parse the response, stripping $ and , if present
+                String cleanResponse = response.replace("$", "").replace(",", "");
+                double value = Double.parseDouble(cleanResponse);
 
                 // Validate currency format (max 2 decimal places)
                 String valueStr = String.format("%.2f", value);
