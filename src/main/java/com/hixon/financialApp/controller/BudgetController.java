@@ -6,6 +6,8 @@ import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.entity.MatchQuery;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastItem;
+import com.hixon.financialApp.model.forecast.ForecastItemUtilities;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
@@ -237,11 +239,14 @@ public class BudgetController {
                         break;
                     case "d":
                         try {
+                            // First select which budget to work with
+                            Budget selectedBudgetForDeletion = selectBudgetFromUser(null);
+
                             // Use SelectionController for sophisticated search-based selection
                             SelectionController selectionController = new SelectionController(view);
                             BudgetItem itemToDelete = selectionController.getByNameFullText(
                                     null,  // No seed name - user will search
-                                    budget,
+                                    selectedBudgetForDeletion,
                                     DO_NOT_ALLOW_NONE,
                                     DO_NOT_ALLOW_CREATE,  // Don't allow creating new items when deleting
                                     ALLOW_CANCEL,
@@ -250,7 +255,7 @@ public class BudgetController {
                                     BudgetItem.getPrintableTypeName_static(),
                                     BudgetItem::getDisplayString,
                                     new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
-                                            budget.getId() + "') AND ", "bi.payee",
+                                            selectedBudgetForDeletion.getId() + "') AND ", "bi.payee",
                                             "bi.category, bi.payee, bi.memo"),
                                     rs -> {
                                         try {
@@ -273,8 +278,72 @@ public class BudgetController {
 
                                 if (view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
                                     if (itemToDelete.isValid()) {
-                                        itemToDelete.delete();
-                                        view.say("Budget item deleted successfully.");
+                                        UUID budgetItemIdToDelete = itemToDelete.getId();
+
+                                        // Check for related forecast items BEFORE deleting the budget item
+                                        List<ForecastItem> relatedForecastItems = Collections.emptyList();
+                                        try {
+                                            relatedForecastItems = ForecastItemUtilities.getAllByBudgetItemId(budgetItemIdToDelete);
+                                        } catch (Exception e) {
+                                            view.say("Error checking for related forecast items: " + e.getMessage());
+                                            e.printStackTrace();
+                                        }
+
+                                        // If there are related forecast items, handle them first
+                                        Set<UUID> affectedForecastIds = new HashSet<>();
+                                        if (!relatedForecastItems.isEmpty()) {
+                                            view.say("\nFound " + relatedForecastItems.size() + " forecast item(s) based on this budget item.");
+
+                                            if (view.getYesOrNo("Do you want to delete these forecast items?")) {
+                                                for (ForecastItem forecastItem : relatedForecastItems) {
+                                                    try {
+                                                        affectedForecastIds.add(forecastItem.getForecast().getId());
+                                                        forecastItem.delete();
+                                                    } catch (Exception e) {
+                                                        view.say("Error deleting forecast item: " + e.getMessage());
+                                                    }
+                                                }
+                                                view.say(relatedForecastItems.size() + " forecast item(s) deleted successfully.");
+
+                                                // Offer to regenerate affected forecasts
+                                                if (view.getYesOrNo("\nDo you want to regenerate the affected forecast(s)?")) {
+                                                    view.say("\nRegenerating affected forecasts...");
+
+                                                    // Calculate the first of next month as the default start date
+                                                    Calendar firstOfNextMonth = Calendar.getInstance();
+                                                    firstOfNextMonth.add(Calendar.MONTH, 1);
+                                                    firstOfNextMonth.set(Calendar.DATE, 1);
+
+                                                    for (UUID forecastId : affectedForecastIds) {
+                                                        try {
+                                                            Forecast affectedForecast = Forecast.getById(forecastId);
+                                                            ForecastController forecastController = new ForecastController(
+                                                                    register, selectedBudgetForDeletion, affectedForecast, view, null);
+                                                            // Use the non-interactive version with first of next month
+                                                            forecastController.updateForecast(firstOfNextMonth);
+                                                            view.say("Forecast '" + affectedForecast.getDescription() + "' regenerated successfully.");
+                                                        } catch (Exception e) {
+                                                            view.say("Error regenerating forecast: " + e.getMessage());
+                                                        }
+                                                    }
+
+                                                    view.say("\nAll affected forecasts have been regenerated.");
+                                                } else {
+                                                    view.say("Forecast regeneration skipped. You may need to update forecasts manually.");
+                                                }
+                                            } else {
+                                                view.say("Forecast items were NOT deleted. They will remain in the forecasts.");
+                                            }
+                                        }
+
+                                        // Finally, delete the budget item itself
+                                        try {
+                                            itemToDelete.delete();
+                                            view.say("Budget item deleted successfully.");
+                                        } catch (Exception e) {
+                                            view.say("Error deleting budget item: " + e.getMessage());
+                                            e.printStackTrace();
+                                        }
                                     } else {
                                         view.say("Cannot delete: Budget item is invalid.");
                                     }

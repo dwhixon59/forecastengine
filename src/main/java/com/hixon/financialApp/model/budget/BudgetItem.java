@@ -134,7 +134,7 @@ public class BudgetItem extends Item {
 
     @Override
     public String getDeleteByIdQuery() {
-        return deleteQuery;
+        return deleteQuery + "idBudgetItem = uuid_to_bin('" + id + "')";
     }
 
     @Override

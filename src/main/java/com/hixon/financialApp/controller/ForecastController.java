@@ -783,6 +783,12 @@ public class ForecastController {
      *
      * @throws Exception if there are any errors during the update process.
      */
+    /**
+     * Update the forecast with user interaction to select the start date.
+     * This method prompts the user for the start date and confirmation.
+     *
+     * @throws Exception if an error occurs during the update
+     */
     public void updateForecast() throws Exception {
 
         // Get the starting date of the forecast to update.
@@ -799,6 +805,19 @@ public class ForecastController {
                 done = true;
             }
         }
+
+        // Call the non-interactive version with the user-selected start date
+        updateForecast(updateStartDate);
+    }
+
+    /**
+     * Update the forecast without user interaction using the specified start date.
+     * This method is useful for automated operations like cleanup after deleting budget items.
+     *
+     * @param updateStartDate the date to start the forecast update from
+     * @throws Exception if an error occurs during the update
+     */
+    public void updateForecast(Calendar updateStartDate) throws Exception {
 
         // Update the forecast start date:
         forecast.setStartDate(updateStartDate);
