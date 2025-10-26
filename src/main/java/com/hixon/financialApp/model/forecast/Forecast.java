@@ -318,7 +318,14 @@ public class Forecast extends IndependentEntity {
         }
     }
 
-    private static List<Forecast> getListOf(Budget budget) throws ForecastException {
+    /**
+     * Retrieves all forecasts associated with a given budget.
+     * 
+     * @param budget The budget whose forecasts should be retrieved
+     * @return A list of Forecast objects for the given budget
+     * @throws ForecastException If an error occurs while retrieving forecasts
+     */
+    public static List<Forecast> getListOf(Budget budget) throws ForecastException {
         try (Statement statement = Utility.getDbConnection().createStatement()) {
 
             ResultSet rs;

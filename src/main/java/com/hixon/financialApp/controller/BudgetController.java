@@ -117,6 +117,9 @@ public class BudgetController {
                         if (confirmedItem != null) {
                             confirmedItem.save(EntityInt.SaveMethod.INSERT);
                             view.say("Budget item successfully added.");
+
+                            // Ask if user wants to update associated forecasts
+                            updateAssociatedForecasts(selectedBudget);
                         }
                     } else if (newItem != null) {
                         view.say("Budget item entered by user is invalid.");
@@ -143,6 +146,9 @@ public class BudgetController {
                         if (confirmedItem != null) {
                             confirmedItem.save(EntityInt.SaveMethod.INSERT);
                             view.say("Budget item successfully added.");
+
+                            // Ask if user wants to update associated forecasts
+                            updateAssociatedForecasts(selectedBudget);
                         }
                     } else if (newItem != null) {
                         view.say("Budget item entered by user is invalid.");
@@ -188,6 +194,10 @@ public class BudgetController {
                                     if (confirmedItem != null) {
                                         confirmedItem.save(EntityInt.SaveMethod.INSERT);
                                         view.say("Budget item successfully copied and added.");
+
+                                        // Ask if user wants to update associated forecasts
+                                        updateAssociatedForecasts(selectedBudget);
+
                                         actionComplete = true;
                                     }
                                 } else if (copiedItem != null) {
@@ -203,6 +213,10 @@ public class BudgetController {
                                         confirmedItem.setId(selectedItem.getId()); // Preserve the original ID
                                         confirmedItem.update();
                                         view.say("Budget item successfully updated.");
+
+                                        // Ask if user wants to update associated forecasts
+                                        updateAssociatedForecasts(selectedBudget);
+
                                         actionComplete = true;
                                     }
                                 } else if (updatedItem != null) {
@@ -277,6 +291,11 @@ public class BudgetController {
                                         try {
                                             selectedItem.delete();
                                             view.say("Budget item deleted successfully.");
+
+                                            // Ask if user wants to update other forecasts in this budget
+                                            // (in addition to any that were already regenerated above)
+                                            updateAssociatedForecasts(selectedBudget);
+
                                             actionComplete = true;
                                         } catch (Exception e) {
                                             view.say("Error deleting budget item: " + e.getMessage());
@@ -826,6 +845,112 @@ public class BudgetController {
                     }
                 },
                 (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
+    }
+
+    /**
+     * Prompts the user to select and update forecasts associated with a given budget.
+     * This method retrieves all forecasts for the budget, presents them to the user,
+     * and allows the user to select which ones to regenerate. This is typically called
+     * after adding, copying, or updating budget items to keep forecasts in sync.
+     *
+     * @param budget The budget whose forecasts should be updated
+     * @throws Exception If an error occurs during forecast update
+     */
+    private void updateAssociatedForecasts(Budget budget) throws Exception {
+        // Get all forecasts for this budget
+        List<Forecast> forecasts = Forecast.getListOf(budget);
+
+        if (forecasts.isEmpty()) {
+            view.say("\nNo forecasts are associated with this budget.");
+            return;
+        }
+
+        // Ask if the user wants to update any forecasts
+        if (!view.getYesOrNo("\nDo you want to update any forecasts associated with budget '" +
+                budget.getName() + "'?")) {
+            return;
+        }
+
+        // Present the list of forecasts and let user select which to update
+        view.say("\nForecasts associated with budget '" + budget.getName() + "':");
+
+        // Build a list of forecast display strings
+        List<String> forecastDisplayStrings = new ArrayList<>();
+        for (Forecast forecast : forecasts) {
+            String displayString = forecast.getDescription() +
+                    " (" + Utility.calendarDateToStringDate(forecast.getStartDate()) +
+                    " to " + Utility.calendarDateToStringDate(forecast.getEndDate()) + ")";
+            forecastDisplayStrings.add(displayString);
+        }
+
+        // Allow user to select multiple forecasts
+        boolean updatingForecasts = true;
+        Set<Integer> selectedIndices = new HashSet<>();
+
+        while (updatingForecasts) {
+            view.say("\nSelect a forecast to update (or 'done' when finished):");
+            for (int i = 0; i < forecastDisplayStrings.size(); i++) {
+                String marker = selectedIndices.contains(i) ? "[Selected] " : "";
+                view.say("  " + (i + 1) + " - " + marker + forecastDisplayStrings.get(i));
+            }
+
+            try {
+                String response = view.getResponseString("Enter forecast number or 'done'",
+                        null, ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, DO_NOT_ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP, null);
+
+                if (response.trim().equalsIgnoreCase("done") || response.trim().isEmpty()) {
+                    updatingForecasts = false;
+                } else {
+                    try {
+                        int index = Integer.parseInt(response.trim()) - 1;
+                        if (index >= 0 && index < forecasts.size()) {
+                            if (selectedIndices.contains(index)) {
+                                selectedIndices.remove(index);
+                                view.say("Deselected: " + forecastDisplayStrings.get(index));
+                            } else {
+                                selectedIndices.add(index);
+                                view.say("Selected: " + forecastDisplayStrings.get(index));
+                            }
+                        } else {
+                            view.say("Please enter a number between 1 and " + forecasts.size());
+                        }
+                    } catch (NumberFormatException e) {
+                        view.say("Invalid input. Please enter a number or 'done'.");
+                    }
+                }
+            } catch (CancelException e) {
+                view.say("Forecast update cancelled.");
+                return;
+            }
+        }
+
+        // Update the selected forecasts
+        if (selectedIndices.isEmpty()) {
+            view.say("\nNo forecasts selected for update.");
+            return;
+        }
+
+        view.say("\nUpdating " + selectedIndices.size() + " forecast(s)...");
+
+        // Calculate the first of next month as the default start date
+        Calendar firstOfNextMonth = Calendar.getInstance();
+        firstOfNextMonth.add(Calendar.MONTH, 1);
+        firstOfNextMonth.set(Calendar.DATE, 1);
+
+        for (int index : selectedIndices) {
+            try {
+                Forecast forecastToUpdate = forecasts.get(index);
+                ForecastController forecastController = new ForecastController(
+                        register, budget, forecastToUpdate, view, null);
+                forecastController.updateForecast(firstOfNextMonth);
+                view.say("Forecast '" + forecastToUpdate.getDescription() + "' updated successfully.");
+            } catch (Exception e) {
+                view.say("Error updating forecast: " + e.getMessage());
+            }
+        }
+
+        view.say("\nAll selected forecasts have been updated.");
     }
 
     /**
