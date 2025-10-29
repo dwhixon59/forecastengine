@@ -103,9 +103,9 @@ public class DataManagerController {
                         // Transactions require a register context
                         ensureRegisterContext();
 
-                        // TODO: Delegate to TransactionController
-                        // transactionController.manageTransactions();
-                        view.say("Transaction management not yet implemented.");
+                        // Delegate to TransactionController
+                        TransactionController transactionController = new TransactionController(register, budget, forecast, view, notificationService);
+                        transactionController.manageTransactions();
                         break;
                     case "f":
                         // Forecast transactions require a forecast context (which includes budget)
