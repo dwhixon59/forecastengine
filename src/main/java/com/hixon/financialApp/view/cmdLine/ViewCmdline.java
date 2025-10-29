@@ -232,6 +232,9 @@ public class ViewCmdline implements ViewInt {
         return wrapText(text, 80);
     }
 
+    /**
+     * @inheritDoc
+     */
     public boolean getYesOrNo(String question) {
 
         // Call the full version of getYesOrNo() with the false values for the cancel, quit and skip parameters:
@@ -244,6 +247,9 @@ public class ViewCmdline implements ViewInt {
         }
     }
 
+    /**
+     * @inheritDoc
+     */
     public boolean getYesOrNo(String question, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
 
@@ -251,23 +257,23 @@ public class ViewCmdline implements ViewInt {
         String cancelSkipOrQuitPrompt = getCancelSkipOrQuitPrompt(isCancelAllowed, isQuitAllowed, isSkipAllowed);
         ask(question + " ('y' or 'n'" + cancelSkipOrQuitPrompt + "): ");
         while (true) {
-            String line = getLine();
+            String line = getLine().trim();
             if (line.equalsIgnoreCase("y")) return true;
             if (line.equalsIgnoreCase("n")) return false;
 
             // If the user entered a special value, then throw the appropriate exception:
             if (isCancelAllowed) {
-                if (line.equals("C")) {
+                if (line.equalsIgnoreCase("C")) {
                     throw new CancelException("User asked to cancel this operation.");
                 }
             }
             if (isQuitAllowed) {
-                if (line.equals("Q")) {
+                if (line.equalsIgnoreCase("Q")) {
                     throw new QuitException("User asked to abort processing.");
                 }
             }
             if (isSkipAllowed) {
-                if (line.equals("S")) {
+                if (line.equalsIgnoreCase("S")) {
                     throw new SkipException("User asked to skip this item.");
                 }
             }
@@ -279,7 +285,7 @@ public class ViewCmdline implements ViewInt {
     public boolean askContinue(String prompt) {
         ask(prompt + "  Do you want to continue?  " + "(y/n): ");
         while (true) {
-            String line = getLine();
+            String line = getLine().trim();
             if (line.equalsIgnoreCase("y")) return true;
             if (line.equalsIgnoreCase("n")) return false;
             ask("\nPlease enter 'y' or 'n': ");
