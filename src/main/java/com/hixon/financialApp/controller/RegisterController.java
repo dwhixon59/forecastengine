@@ -234,7 +234,31 @@ public class RegisterController {
                     Set<Register> setWithRecentTransaction = new HashSet<>();
                     setWithRecentTransaction.add(possibleRegister);
                     try {
-                        return evaluateRegisterSet(setWithRecentTransaction);
+                        // There is only one register in this set, so this will either return the register or null:
+                        if (evaluateRegisterSet(setWithRecentTransaction) != null) {
+
+                            // The user confirmed that this is the correct register:
+                            return possibleRegister;
+                        }
+                        else {
+                            // The user said that this is not the correct register, so remove it from the list of possible
+                            // registers:
+                            possibleRegisters.remove(possibleRegister);
+
+                            // If there are no more possible registers, return null:
+                            if (possibleRegisters.isEmpty()) {
+                                view.say("There are no more possible registers.");
+                                return null;
+                            }
+                            else {
+                                // If there is only one possible register left, return it:
+                                try {
+                                    return evaluateRegisterSet(possibleRegisters);
+                                } catch (ContinueFilteringException e) {
+                                    // Continue to the next filter.
+                                }
+                            }
+                        }
                     } catch (ContinueFilteringException e) {
                         possibleRegisters.remove(possibleRegister);
                     }
@@ -529,6 +553,9 @@ public class RegisterController {
                 // If there is a provisional transaction for this transaction, then use the same ID:
                 transaction.reconcileWithProvisional();
 
+                // Tell the user about the bank transaction we are processing:
+                importLog.logImportEvent(transaction);
+
                 // Get the assigned budget items for the merchant:
                 List<BudgetItemMerchant> budgetItemsForMerchant =
                         BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
@@ -542,9 +569,6 @@ public class RegisterController {
                         continue;
                     }
                 }
-
-                // Tell the user about the bank transaction we are processing:
-                importLog.logImportEvent(transaction);
 
                 // Get the splits for the transaction.  Create them if they don't already exist:
                 List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
@@ -676,6 +700,9 @@ public class RegisterController {
                 // If there is a provisional transaction for this transaction, then use the same ID:
                 transaction.reconcileWithProvisional();
 
+                // Tell the user about the bank transaction we are processing:
+                importLog.logImportEvent(transaction);
+
                 // Get the assigned budget items for the merchant:
                 List<BudgetItemMerchant> budgetItemsForMerchant =
                         BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
@@ -690,8 +717,6 @@ public class RegisterController {
                     }
                 }
 
-                // Tell the user about the bank transaction we are processing:
-                importLog.logImportEvent(transaction);
 
                 // Get the splits for the transaction.  Create them if they don't already exist:
                 List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);

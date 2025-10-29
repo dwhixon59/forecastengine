@@ -75,9 +75,6 @@ public interface ViewInt {
      */
     void ask(String question);
 
-    boolean getYesOrNo(String question, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
-            throws CancelException, QuitException, SkipException;
-
     /**
      * Ask the user if they want to continue.  Usually this is asked after a recoverable error has occurred.
      *
@@ -336,7 +333,32 @@ public interface ViewInt {
                  boolean isSkipAllowed)
             throws SQLException, EntityException, CancelException, QuitException, SkipException;
 
+    /**
+     * This method asks the user a yes or no question.  If the user enters 'y' or 'yes', then true is returned.  If the
+     * user enters 'n' or 'no', then false is returned.  If the user enters an invalid response, then the user is
+     * asked to re-enter their response.
+     *
+     * @param question The yes or no question to ask the user.
+     * @return True if the user answers yes, false if the user answers no.
+     */
     boolean getYesOrNo(String question);
+
+    /**
+     * This method asks the user a yes or no question.  If the user enters 'y' or 'yes', then true is returned.  If the
+     * user enters 'n' or 'no', then false is returned.  If the user enters an invalid response, then the user is
+     * asked to re-enter their response.
+     *
+     * @param question The yes or no question to ask the user.
+     * @param isCancelAllowed Is the user allowed to cancel the current process?
+     * @param isQuitAllowed Is the user allowed to quit the program?
+     * @param isSkipAllowed Is the user allowed to skip this item and not enter an integer?
+     * @return True if the user answers yes, false if the user answers no.
+     * @throws CancelException The user cancelled the operation.
+     * @throws QuitException The user wants to abort the program.
+     * @throws SkipException The user wants to skip this item.
+     */
+    boolean getYesOrNo(String question, boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
 
     /**
      * Have the user select an entity from a numbered list of entities by number.  The getName() method of the

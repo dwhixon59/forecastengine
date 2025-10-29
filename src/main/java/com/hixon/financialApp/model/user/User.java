@@ -92,6 +92,25 @@ public class User extends IndependentEntity {
    public String getPersonalFileSystem() { return personalFileSystem; }
    public void setPersonalFileSystem(String personalFileSystem) { this.personalFileSystem = personalFileSystem; }
 
+   /**
+    * Get the full name of the user (firstName + lastName).
+    * Overrides the getName() method from IndependentEntityInt.
+    *
+    * @return The full name of the user
+    */
+   @Override
+   public String getName() {
+      if (firstName != null && lastName != null) {
+         return firstName + " " + lastName;
+      } else if (firstName != null) {
+         return firstName;
+      } else if (lastName != null) {
+         return lastName;
+      } else {
+         return userName != null ? userName : "Unknown User";
+      }
+   }
+
    /*
     * Constructors:
     */

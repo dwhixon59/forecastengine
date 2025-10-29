@@ -228,11 +228,31 @@ public class BudgetController {
                                 view.say("\nYou are about to delete:");
                                 view.say("  " + selectedItem.getDisplayString());
 
+                                // Check for transaction splits associated with this budget item
+                                int transactionSplitCount = 0;
+                                try {
+                                    transactionSplitCount = TransactionSplitUtilities.getTotalItemPastAssociationsCount(selectedItem.getId());
+                                } catch (Exception e) {
+                                    view.say("Error checking for transaction splits: " + e.getMessage());
+                                }
+
+                                boolean proceedWithDelete = true;
+                                if (transactionSplitCount > 0) {
+                                    view.say("\nWARNING: This budget item has " + transactionSplitCount +
+                                            " transaction split(s) associated with it.");
+                                    view.say("Deleting this budget item will CASCADE DELETE all associated transaction splits,");
+                                    view.say("which will remove the categorization from historical transactions in your register.");
+                                    view.say("\nSUGGESTION: Consider EXPIRING this budget item instead of deleting it.");
+                                    view.say("Expiring preserves historical data while preventing it from appearing in future forecasts.");
+
+                                    proceedWithDelete = view.getYesOrNo("\nDo you still want to DELETE (rather than expire) this budget item?");
+                                }
+
                                 if (!selectedItem.isExpired(Calendar.getInstance())) {
                                     view.say("\nWARNING: This is an ACTIVE budget item that appears in forecasts.");
                                 }
 
-                                if (view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
+                                if (proceedWithDelete && view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
                                     if (selectedItem.isValid()) {
                                         UUID budgetItemIdToDelete = selectedItem.getId();
 
@@ -388,6 +408,10 @@ public class BudgetController {
             budgetItemsForMerchant) throws Exception, CancelException, QuitException, SkipException {
 
         try {
+            // Inform the user why they need to select a budget item
+            view.say("\nNo budget items are currently assigned to merchant '" + merchant.getName() + "'.");
+            view.say("Please select a budget item to associate with this merchant.");
+
             boolean firstTime = true;
             boolean done = false;
             int percentage = 0;
