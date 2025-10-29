@@ -10,15 +10,15 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 import static com.hixon.financialApp.view.base.ViewInt.*;
@@ -38,6 +38,21 @@ public class TransactionController {
     private Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
+
+    // Help text properties loaded from file
+    private static final Properties helpText = new Properties();
+
+    static {
+        try (InputStream input = TransactionController.class.getClassLoader()
+                .getResourceAsStream("help-text.properties")) {
+            if (input == null) {
+                throw new RuntimeException("Unable to find help-text.properties");
+            }
+            helpText.load(input);
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to load help text properties", ex);
+        }
+    }
 
     /*
      * Constructors and destructor for the Transaction Controller:
@@ -203,7 +218,8 @@ public class TransactionController {
         // Build search query with filters
         String searchPrompt = "Search for transaction (or use filters: cleared:yes, cleared:no, new:yes, disputed:yes)";
         String searchString = view.getResponseString(searchPrompt, null, ALLOW_NONE,
-                DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                () -> helpText.getProperty("transaction.search", "No help available"));
 
         // Parse search string and filters
         SearchCriteria criteria = parseSearchCriteria(searchString, register);
@@ -225,14 +241,25 @@ public class TransactionController {
             return null;
         }
 
-        // Let user select from the list - use selectByNameFromList which will use Transaction's getName() method
-        return view.selectByNameFromList(
+        // Let user select from the list - use selectByNameFromListOrString with a custom display function
+        // to avoid calling getName() which Transaction doesn't properly override
+        EntityOrStringResult<Transaction> result = view.selectByNameFromListOrString(
                 "Select a transaction (showing " + transactions.size() + " result(s))",
                 transactions,
+                t -> {
+                    try {
+                        return t.toStringVeryConcise();
+                    } catch (Exception e) {
+                        return "Transaction ID: " + t.getId();
+                    }
+                },
                 DO_NOT_ALLOW_NONE,
+                DO_NOT_ALLOW_CREATE,
                 ALLOW_CANCEL,
                 ALLOW_QUIT,
                 DO_NOT_ALLOW_SKIP);
+
+        return result.isEntitySelected() ? result.getSelectedEntity() : null;
     }
 
     /**
@@ -447,6 +474,4 @@ public class TransactionController {
         // This should use TransactionSplitsController to manage the splits
         return false;
     }
-
 }
-
