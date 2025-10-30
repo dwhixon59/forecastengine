@@ -256,37 +256,50 @@ public class ForecastController {
         boolean done = false;
         while (!done) {
             done = true;
-            String line = view.getResponseString();
-            switch (line) {
-                case "l":
-                    response.setStartDate(FIRST_OF_LAST_MONTH);
-                    break;
+            try {
+                String line = view.getResponseString("", null, ViewInt.ALLOW_NONE,
+                        ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.DO_NOT_ALLOW_CANCEL,
+                        ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
 
-                case "t":
-                    response.setStartDate(TODAY);
-                    break;
+                if (line == null) {
+                    line = "";
+                }
 
-                case "f":
-                    response.setStartDate(FIRST_OF_THIS_MONTH);
-                    break;
+                switch (line) {
+                    case "l":
+                        response.setStartDate(FIRST_OF_LAST_MONTH);
+                        break;
 
-                case "o":
-                    response.setStartDate(ONE_MONTH_FROM_TODAY);
-                    break;
+                    case "t":
+                        response.setStartDate(TODAY);
+                        break;
 
-                case "c":
-                    response.setStartDate(ARBITRARY_DATE);
-                    Calendar startDate = Calendar.getInstance();
-                    response.setDate(view.parseCalendarDate("Enter the start date", startDate));
-                    break;
+                    case "f":
+                        response.setStartDate(FIRST_OF_THIS_MONTH);
+                        break;
 
-                default:
-                    if (line.length() == 0) {
+                    case "o":
+                        response.setStartDate(ONE_MONTH_FROM_TODAY);
+                        break;
+
+                    case "c":
+                        response.setStartDate(ARBITRARY_DATE);
+                        Calendar startDate = Calendar.getInstance();
+                        response.setDate(view.parseCalendarDate("Enter the start date", startDate));
+                        break;
+
+                    case "":
                         response.setStartDate(FIRST_OF_NEXT_MONTH);
-                    } else {
+                        break;
+
+                    default:
                         view.say("Please enter l, <enter>, t, f, o, or c.");
                         done = false;
-                    }
+                }
+            } catch (CancelException | SkipException e) {
+                // These shouldn't happen since we don't allow them, but handle gracefully
+                view.say("Please enter l, <enter>, t, f, o, or c.");
+                done = false;
             }
         }
         return response;
