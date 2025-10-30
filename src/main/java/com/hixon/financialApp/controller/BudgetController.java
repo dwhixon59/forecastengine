@@ -104,238 +104,245 @@ public class BudgetController {
                 Budget selectedBudget = selectBudgetFromUser(lastSelectedBudget);
                 lastSelectedBudget = selectedBudget;  // Remember this selection
 
-                // Step 2: Ask whether to search for existing or create new
-                String choice = view.selectFromMenu("What would you like to do?",
-                        List.of("search for existing item", "create new item"),
-                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
-
-                if (choice.equals("c")) {
-                    // User chose to create a new item - go directly to entry form
-                    BudgetItem newItem = getBudgetItemFromUser();
-                    if (newItem != null && newItem.isValid()) {
-                        BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
-                        if (confirmedItem != null) {
-                            confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                            view.say("Budget item successfully added.");
-
-                            // Ask if user wants to update associated forecasts
-                            updateAssociatedForecasts(selectedBudget);
-                        }
-                    } else if (newItem != null) {
-                        view.say("Budget item entered by user is invalid.");
-                    }
-                    continue; // Go back to budget selection
-                }
-
-                // User chose to search - proceed with search (allow creating new if not found)
-                BudgetItem selectedItem = selectBudgetItemFromBudget(selectedBudget, ALLOW_CREATE);
-
-                if (selectedItem == null) {
-                    // User cancelled the search - return to budget selection
-                    continue;
-                }
-
-                // Check if this is a newly created item (has no ID yet)
-                boolean isNewItem = selectedItem.getId() == null;
-
-                if (isNewItem) {
-                    // User chose to create a new item from search - go to entry form
-                    BudgetItem newItem = getBudgetItemFromUser();
-                    if (newItem != null && newItem.isValid()) {
-                        BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
-                        if (confirmedItem != null) {
-                            confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                            view.say("Budget item successfully added.");
-
-                            // Ask if user wants to update associated forecasts
-                            updateAssociatedForecasts(selectedBudget);
-                        }
-                    } else if (newItem != null) {
-                        view.say("Budget item entered by user is invalid.");
-                    }
-                    continue; // Go back to budget selection
-                }
-
-                // User selected an existing item - show action menu
-                {
-                    boolean actionComplete = false;
-                    while (!actionComplete) {
-                        // Display the selected item
-                        view.say();
-                        view.say("Selected budget item:");
-                        view.say("  " + selectedItem.getDisplayString());
-
-                        // Warn if expired
-                        if (selectedItem.isExpired(Calendar.getInstance())) {
-                            view.say("\nNOTE: This budget item has expired.");
-                            view.say("End Date: " + (selectedItem.getEndDate() != null ?
-                                    Utility.calendarDateToStringDate(selectedItem.getEndDate()) : "None"));
-                        }
-
-                        // Step 3: Ask what to do with this item
-                        String action = view.selectFromMenu("What would you like to do with this item?",
-                                List.of("view details", "copy this item", "update this item", "delete this item",
-                                        "search again"),
+                // Step 2: Loop for search/add operations within the selected budget
+                boolean doneBudget = false;
+                while (!doneBudget) {
+                    try {
+                        // Ask whether to search for existing or create new
+                        String choice = view.selectFromMenu("What would you like to do?",
+                                List.of("search for existing item", "create new item"),
                                 DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
-                        switch (action) {
-                            case "v":  // view details
+                        if (choice.equals("c")) {
+                            // User chose to create a new item - go directly to entry form
+                            BudgetItem newItem = getBudgetItemFromUser();
+                            if (newItem != null && newItem.isValid()) {
+                                BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
+                                if (confirmedItem != null) {
+                                    confirmedItem.save(EntityInt.SaveMethod.INSERT);
+                                    view.say("Budget item successfully added.");
+
+                                    // Ask if user wants to update associated forecasts
+                                    updateAssociatedForecasts(selectedBudget);
+                                }
+                            } else if (newItem != null) {
+                                view.say("Budget item entered by user is invalid.");
+                            }
+                            continue; // Go back to search/add menu
+                        }
+
+                        // User chose to search - proceed with search (allow creating new if not found)
+                        BudgetItem selectedItem = selectBudgetItemFromBudget(selectedBudget, ALLOW_CREATE);
+
+                        if (selectedItem == null) {
+                            // User cancelled the search - return to search/add menu
+                            continue;
+                        }
+
+                        // Check if this is a newly created item (has no ID yet)
+                        boolean isNewItem = selectedItem.getId() == null;
+
+                        if (isNewItem) {
+                            // User chose to create a new item from search - go to entry form
+                            BudgetItem newItem = getBudgetItemFromUser();
+                            if (newItem != null && newItem.isValid()) {
+                                BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
+                                if (confirmedItem != null) {
+                                    confirmedItem.save(EntityInt.SaveMethod.INSERT);
+                                    view.say("Budget item successfully added.");
+
+                                    // Ask if user wants to update associated forecasts
+                                    updateAssociatedForecasts(selectedBudget);
+                                }
+                            } else if (newItem != null) {
+                                view.say("Budget item entered by user is invalid.");
+                            }
+                            continue; // Go back to search/add menu
+                        }
+
+                        // User selected an existing item - show action menu
+                        {
+                            boolean actionComplete = false;
+                            while (!actionComplete) {
+                                // Display the selected item
                                 view.say();
-                                view.say("Budget Item Details:");
-                                view.say("──────────────────────────────────────");
-                                displayBudgetItemDetails(selectedItem);
-                                view.say("──────────────────────────────────────");
-                                break;
-
-                            case "c":  // copy this item
-                                BudgetItem copiedItem = getBudgetItemFromUser(selectedItem);
-                                if (copiedItem != null && copiedItem.isValid()) {
-                                    BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "copied");
-                                    if (confirmedItem != null) {
-                                        confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                                        view.say("Budget item successfully copied and added.");
-
-                                        // Ask if user wants to update associated forecasts
-                                        updateAssociatedForecasts(selectedBudget);
-
-                                        actionComplete = true;
-                                    }
-                                } else if (copiedItem != null) {
-                                    view.say("Budget item entered by user is invalid.");
-                                }
-                                break;
-
-                            case "u":  // update this item
-                                BudgetItem updatedItem = getBudgetItemFromUser(selectedItem);
-                                if (updatedItem != null && updatedItem.isValid()) {
-                                    BudgetItem confirmedItem = confirmBudgetItem(updatedItem, "updated");
-                                    if (confirmedItem != null) {
-                                        confirmedItem.setId(selectedItem.getId()); // Preserve the original ID
-                                        confirmedItem.update();
-                                        view.say("Budget item successfully updated.");
-
-                                        // Ask if user wants to update associated forecasts
-                                        updateAssociatedForecasts(selectedBudget);
-
-                                        actionComplete = true;
-                                    }
-                                } else if (updatedItem != null) {
-                                    view.say("Budget item entered by user is invalid.");
-                                }
-                                break;
-
-                            case "d":  // delete this item
-                                view.say("\nYou are about to delete:");
+                                view.say("Selected budget item:");
                                 view.say("  " + selectedItem.getDisplayString());
 
-                                // Check for transaction splits associated with this budget item
-                                int transactionSplitCount = 0;
-                                try {
-                                    transactionSplitCount = TransactionSplitUtilities.getTotalItemPastAssociationsCount(selectedItem.getId());
-                                } catch (Exception e) {
-                                    view.say("Error checking for transaction splits: " + e.getMessage());
+                                // Warn if expired
+                                if (selectedItem.isExpired(Calendar.getInstance())) {
+                                    view.say("\nNOTE: This budget item has expired.");
+                                    view.say("End Date: " + (selectedItem.getEndDate() != null ?
+                                            Utility.calendarDateToStringDate(selectedItem.getEndDate()) : "None"));
                                 }
 
-                                boolean proceedWithDelete = true;
-                                if (transactionSplitCount > 0) {
-                                    view.say("\nWARNING: This budget item has " + transactionSplitCount +
-                                            " transaction split(s) associated with it.");
-                                    view.say("Deleting this budget item will CASCADE DELETE all associated transaction splits,");
-                                    view.say("which will remove the categorization from historical transactions in your register.");
-                                    view.say("\nSUGGESTION: Consider EXPIRING this budget item instead of deleting it.");
-                                    view.say("Expiring preserves historical data while preventing it from appearing in future forecasts.");
+                                // Step 3: Ask what to do with this item
+                                String action = view.selectFromMenu("What would you like to do with this item?",
+                                        List.of("view details", "copy this item", "update this item", "delete this item",
+                                                "search again"),
+                                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
-                                    proceedWithDelete = view.getYesOrNo("\nDo you still want to DELETE (rather than expire) this budget item?");
-                                }
+                                switch (action) {
+                                    case "v":  // view details
+                                        view.say();
+                                        view.say("Budget Item Details:");
+                                        view.say("──────────────────────────────────────");
+                                        displayBudgetItemDetails(selectedItem);
+                                        view.say("──────────────────────────────────────");
+                                        break;
 
-                                if (!selectedItem.isExpired(Calendar.getInstance())) {
-                                    view.say("\nWARNING: This is an ACTIVE budget item that appears in forecasts.");
-                                }
+                                    case "c":  // copy this item
+                                        BudgetItem copiedItem = getBudgetItemFromUser(selectedItem);
+                                        if (copiedItem != null && copiedItem.isValid()) {
+                                            BudgetItem confirmedItem = confirmBudgetItem(copiedItem, "copied");
+                                            if (confirmedItem != null) {
+                                                confirmedItem.save(EntityInt.SaveMethod.INSERT);
+                                                view.say("Budget item successfully copied and added.");
 
-                                if (proceedWithDelete && view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
-                                    if (selectedItem.isValid()) {
-                                        UUID budgetItemIdToDelete = selectedItem.getId();
+                                                // Ask if user wants to update associated forecasts
+                                                updateAssociatedForecasts(selectedBudget);
+                                            }
+                                        } else if (copiedItem != null) {
+                                            view.say("Budget item entered by user is invalid.");
+                                        }
+                                        actionComplete = true;  // Go back to search/add menu
+                                        break;
 
-                                        // Check for related forecast items BEFORE deleting the budget item
-                                        List<ForecastItem> relatedForecastItems = Collections.emptyList();
+                                    case "u":  // update this item
+                                        BudgetItem updatedItem = getBudgetItemFromUser(selectedItem);
+                                        if (updatedItem != null && updatedItem.isValid()) {
+                                            BudgetItem confirmedItem = confirmBudgetItem(updatedItem, "updated");
+                                            if (confirmedItem != null) {
+                                                confirmedItem.setId(selectedItem.getId()); // Preserve the original ID
+                                                confirmedItem.update();
+                                                view.say("Budget item successfully updated.");
+
+                                                // Ask if user wants to update associated forecasts
+                                                updateAssociatedForecasts(selectedBudget);
+                                            }
+                                        } else if (updatedItem != null) {
+                                            view.say("Budget item entered by user is invalid.");
+                                        }
+                                        actionComplete = true;  // Go back to search/add menu
+                                        break;
+
+                                    case "d":  // delete this item
+                                        view.say("\nYou are about to delete:");
+                                        view.say("  " + selectedItem.getDisplayString());
+
+                                        // Check for transaction splits associated with this budget item
+                                        int transactionSplitCount = 0;
                                         try {
-                                            relatedForecastItems = ForecastItemUtilities.getAllByBudgetItemId(budgetItemIdToDelete);
+                                            transactionSplitCount = TransactionSplitUtilities.getTotalItemPastAssociationsCount(selectedItem.getId());
                                         } catch (Exception e) {
-                                            view.say("Error checking for related forecast items: " + e.getMessage());
-                                            e.printStackTrace();
+                                            view.say("Error checking for transaction splits: " + e.getMessage());
                                         }
 
-                                        // Handle related forecast items
-                                        Set<UUID> affectedForecastIds = new HashSet<>();
-                                        if (!relatedForecastItems.isEmpty()) {
-                                            view.say("\nFound " + relatedForecastItems.size() + " forecast item(s) based on this budget item.");
+                                        boolean proceedWithDelete = true;
+                                        if (transactionSplitCount > 0) {
+                                            view.say("\nWARNING: This budget item has " + transactionSplitCount +
+                                                    " transaction split(s) associated with it.");
+                                            view.say("Deleting this budget item will CASCADE DELETE all associated transaction splits,");
+                                            view.say("which will remove the categorization from historical transactions in your register.");
+                                            view.say("\nSUGGESTION: Consider EXPIRING this budget item instead of deleting it.");
+                                            view.say("Expiring preserves historical data while preventing it from appearing in future forecasts.");
 
-                                            if (view.getYesOrNo("Do you want to delete these forecast items?")) {
-                                                for (ForecastItem forecastItem : relatedForecastItems) {
-                                                    try {
-                                                        affectedForecastIds.add(forecastItem.getForecast().getId());
-                                                        forecastItem.delete();
-                                                    } catch (Exception e) {
-                                                        view.say("Error deleting forecast item: " + e.getMessage());
+                                            proceedWithDelete = view.getYesOrNo("\nDo you still want to DELETE (rather than expire) this budget item?");
+                                        }
+
+                                        if (!selectedItem.isExpired(Calendar.getInstance())) {
+                                            view.say("\nWARNING: This is an ACTIVE budget item that appears in forecasts.");
+                                        }
+
+                                        if (proceedWithDelete && view.getYesOrNo("\nAre you sure you want to delete this budget item?")) {
+                                            if (selectedItem.isValid()) {
+                                                UUID budgetItemIdToDelete = selectedItem.getId();
+
+                                                // Check for related forecast items BEFORE deleting the budget item
+                                                List<ForecastItem> relatedForecastItems = Collections.emptyList();
+                                                try {
+                                                    relatedForecastItems = ForecastItemUtilities.getAllByBudgetItemId(budgetItemIdToDelete);
+                                                } catch (Exception e) {
+                                                    view.say("Error checking for related forecast items: " + e.getMessage());
+                                                    e.printStackTrace();
+                                                }
+
+                                                // Handle related forecast items
+                                                Set<UUID> affectedForecastIds = new HashSet<>();
+                                                if (!relatedForecastItems.isEmpty()) {
+                                                    view.say("\nFound " + relatedForecastItems.size() + " forecast item(s) based on this budget item.");
+
+                                                    if (view.getYesOrNo("Do you want to delete these forecast items?")) {
+                                                        for (ForecastItem forecastItem : relatedForecastItems) {
+                                                            try {
+                                                                affectedForecastIds.add(forecastItem.getForecast().getId());
+                                                                forecastItem.delete();
+                                                            } catch (Exception e) {
+                                                                view.say("Error deleting forecast item: " + e.getMessage());
+                                                            }
+                                                        }
+                                                        view.say(relatedForecastItems.size() + " forecast item(s) deleted successfully.");
+
+                                                        if (view.getYesOrNo("\nDo you want to regenerate the affected forecast(s)?")) {
+                                                            view.say("\nRegenerating affected forecasts...");
+                                                            Calendar firstOfNextMonth = Calendar.getInstance();
+                                                            firstOfNextMonth.add(Calendar.MONTH, 1);
+                                                            firstOfNextMonth.set(Calendar.DATE, 1);
+
+                                                            for (UUID forecastId : affectedForecastIds) {
+                                                                try {
+                                                                    Forecast affectedForecast = Forecast.getById(forecastId);
+                                                                    ForecastController forecastController = new ForecastController(
+                                                                            register, selectedBudget, affectedForecast, view, null);
+                                                                    forecastController.updateForecast(firstOfNextMonth);
+                                                                    view.say("Forecast '" + affectedForecast.getDescription() + "' regenerated successfully.");
+                                                                } catch (Exception e) {
+                                                                    view.say("Error regenerating forecast: " + e.getMessage());
+                                                                }
+                                                            }
+                                                            view.say("\nAll affected forecasts have been regenerated.");
+                                                        } else {
+                                                            view.say("Forecast regeneration skipped. You may need to update forecasts manually.");
+                                                        }
+                                                    } else {
+                                                        view.say("Forecast items were NOT deleted. They will remain in the forecasts.");
                                                     }
                                                 }
-                                                view.say(relatedForecastItems.size() + " forecast item(s) deleted successfully.");
 
-                                                if (view.getYesOrNo("\nDo you want to regenerate the affected forecast(s)?")) {
-                                                    view.say("\nRegenerating affected forecasts...");
-                                                    Calendar firstOfNextMonth = Calendar.getInstance();
-                                                    firstOfNextMonth.add(Calendar.MONTH, 1);
-                                                    firstOfNextMonth.set(Calendar.DATE, 1);
+                                                // Delete the budget item itself
+                                                try {
+                                                    selectedItem.delete();
+                                                    view.say("Budget item deleted successfully.");
 
-                                                    for (UUID forecastId : affectedForecastIds) {
-                                                        try {
-                                                            Forecast affectedForecast = Forecast.getById(forecastId);
-                                                            ForecastController forecastController = new ForecastController(
-                                                                    register, selectedBudget, affectedForecast, view, null);
-                                                            forecastController.updateForecast(firstOfNextMonth);
-                                                            view.say("Forecast '" + affectedForecast.getDescription() + "' regenerated successfully.");
-                                                        } catch (Exception e) {
-                                                            view.say("Error regenerating forecast: " + e.getMessage());
-                                                        }
-                                                    }
-                                                    view.say("\nAll affected forecasts have been regenerated.");
-                                                } else {
-                                                    view.say("Forecast regeneration skipped. You may need to update forecasts manually.");
+                                                    // Ask if user wants to update other forecasts in this budget
+                                                    // (in addition to any that were already regenerated above)
+                                                    updateAssociatedForecasts(selectedBudget);
+
+                                                    actionComplete = true;  // Go back to search/add menu
+                                                } catch (Exception e) {
+                                                    view.say("Error deleting budget item: " + e.getMessage());
+                                                    e.printStackTrace();
                                                 }
                                             } else {
-                                                view.say("Forecast items were NOT deleted. They will remain in the forecasts.");
+                                                view.say("Cannot delete: Budget item is invalid.");
                                             }
+                                        } else {
+                                            view.say("Deletion cancelled.");
                                         }
+                                        break;
 
-                                        // Delete the budget item itself
-                                        try {
-                                            selectedItem.delete();
-                                            view.say("Budget item deleted successfully.");
+                                    case "s":  // search again
+                                        actionComplete = true;  // Go back to search/add menu
+                                        break;
 
-                                            // Ask if user wants to update other forecasts in this budget
-                                            // (in addition to any that were already regenerated above)
-                                            updateAssociatedForecasts(selectedBudget);
-
-                                            actionComplete = true;
-                                        } catch (Exception e) {
-                                            view.say("Error deleting budget item: " + e.getMessage());
-                                            e.printStackTrace();
-                                        }
-                                    } else {
-                                        view.say("Cannot delete: Budget item is invalid.");
-                                    }
-                                } else {
-                                    view.say("Deletion cancelled.");
+                                    default:
+                                        throw new InvalidEntryException("Unexpected option returned: " + action);
                                 }
-                                break;
-
-                            case "s":  // search again
-                                actionComplete = true;  // Go back to search
-                                break;
-
-                            default:
-                                throw new InvalidEntryException("Unexpected option returned: " + action);
+                            }
                         }
+                    } catch (CancelException e) {
+                        // User cancelled from search/add menu - go back to budget selection
+                        doneBudget = true;
                     }
                 }
 
@@ -912,6 +919,13 @@ public class BudgetController {
         Set<Integer> selectedIndices = new HashSet<>();
 
         while (updatingForecasts) {
+            // Check if all forecasts are already selected
+            if (selectedIndices.size() == forecasts.size()) {
+                view.say("\nAll forecasts have been selected.");
+                updatingForecasts = false;
+                break;
+            }
+
             view.say("\nSelect a forecast to update (or 'done' when finished):");
             for (int i = 0; i < forecastDisplayStrings.size(); i++) {
                 String marker = selectedIndices.contains(i) ? "[Selected] " : "";
@@ -935,6 +949,12 @@ public class BudgetController {
                             } else {
                                 selectedIndices.add(index);
                                 view.say("Selected: " + forecastDisplayStrings.get(index));
+
+                                // Check if all forecasts are now selected
+                                if (selectedIndices.size() == forecasts.size()) {
+                                    view.say("\nAll forecasts have been selected.");
+                                    updatingForecasts = false;
+                                }
                             }
                         } else {
                             view.say("Please enter a number between 1 and " + forecasts.size());
