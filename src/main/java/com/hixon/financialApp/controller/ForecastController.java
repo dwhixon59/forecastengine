@@ -74,9 +74,10 @@ public class ForecastController {
      * of the time the user wants to render the entire forecast, not just the transactions on or after a certain date.
      *
      * @return The date that the forecast rendering should begin on.
-     * @throws QuitException
+     * @throws QuitException if the user quits the operation
+     * @throws CancelException if the user cancels the operation
      */
-    public Calendar askStartDate() throws QuitException {
+    public Calendar askStartDate() throws QuitException, CancelException {
         // Get the starting date type:
         UserResponse response = getForecastStartDate();
 
@@ -247,7 +248,7 @@ public class ForecastController {
     /**
      * {@inheritDoc}
      */
-    public UserResponse getForecastStartDate() throws QuitException {
+    public UserResponse getForecastStartDate() throws QuitException, CancelException {
         UserResponse response = new UserResponse();
 
         view.say("What date do you want to start on?  (l-first of last month, <enter> first of next month, t-Today, " +
@@ -258,7 +259,7 @@ public class ForecastController {
             done = true;
             try {
                 String line = view.getResponseString("", null, ViewInt.ALLOW_NONE,
-                        ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.DO_NOT_ALLOW_CANCEL,
+                        ViewInt.SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL,
                         ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
 
                 if (line == null) {
@@ -296,8 +297,8 @@ public class ForecastController {
                         view.say("Please enter l, <enter>, t, f, o, or c.");
                         done = false;
                 }
-            } catch (CancelException | SkipException e) {
-                // These shouldn't happen since we don't allow them, but handle gracefully
+            } catch (SkipException e) {
+                // Skip shouldn't happen since we don't allow it, but handle gracefully
                 view.say("Please enter l, <enter>, t, f, o, or c.");
                 done = false;
             }

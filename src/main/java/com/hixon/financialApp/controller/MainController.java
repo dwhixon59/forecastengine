@@ -474,6 +474,12 @@ public class MainController {
             }
             view.say("\nProcessing aborted at user's request.");
 
+        } catch (CancelException ce) {
+            if (Utility.getDbConnection() != null) {
+                Utility.getDbConnection().close();
+            }
+            view.say("\nOperation cancelled by user.");
+
         } catch (Exception e) {
             if (Utility.getDbConnection() != null) {
                 Utility.getDbConnection().close();
