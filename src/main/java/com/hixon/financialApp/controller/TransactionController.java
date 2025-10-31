@@ -272,6 +272,29 @@ public class TransactionController {
 
         // Parse filters from search string
         if (searchString != null && !searchString.isEmpty()) {
+            // Check for date range pattern (YYYY-MM-DD to YYYY-MM-DD)
+            String dateRangePattern = "(\\d{4}-\\d{2}-\\d{2})\\s+to\\s+(\\d{4}-\\d{2}-\\d{2})";
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(dateRangePattern);
+            java.util.regex.Matcher matcher = pattern.matcher(searchString);
+
+            if (matcher.find()) {
+                // Found a date range
+                try {
+                    String startDateStr = matcher.group(1);
+                    String endDateStr = matcher.group(2);
+
+                    criteria.startDate = Utility.sqlDateStringToCalendarDate(startDateStr);
+                    criteria.endDate = Utility.sqlDateStringToCalendarDate(endDateStr);
+
+                    // Remove the date range from search text
+                    searchString = searchString.replaceAll(dateRangePattern, "").trim();
+                    criteria.searchText = searchString;
+                } catch (Exception e) {
+                    view.say("Warning: Could not parse date range. Format should be 'YYYY-MM-DD to YYYY-MM-DD'");
+                }
+            }
+
+            // Parse other filters
             String[] parts = searchString.split("\\s+");
             StringBuilder textParts = new StringBuilder();
 
@@ -296,11 +319,20 @@ public class TransactionController {
                             textParts.append(part).append(" ");
                     }
                 } else {
-                    textParts.append(part).append(" ");
+                    if (!part.isEmpty()) {
+                        textParts.append(part).append(" ");
+                    }
                 }
             }
 
-            criteria.searchText = textParts.toString().trim();
+            // Only update searchText if we have non-date content
+            String finalSearchText = textParts.toString().trim();
+            if (!finalSearchText.isEmpty()) {
+                criteria.searchText = finalSearchText;
+            } else if (criteria.startDate != null) {
+                // If we only have a date range, clear the search text
+                criteria.searchText = "";
+            }
         }
 
         return criteria;
@@ -314,7 +346,15 @@ public class TransactionController {
         query.append(" LEFT JOIN merchant m ON tr.Merchant_idMerchant = m.idMerchant");
         query.append(" WHERE tr.Register_idRegister = uuid_to_bin('").append(criteria.registerId).append("')");
 
-        // Add text search if provided
+        // Add date range search if provided
+        if (criteria.startDate != null) {
+            query.append(" AND tr.postDate >= ").append(Utility.calendarDateToSqlDateString(criteria.startDate));
+        }
+        if (criteria.endDate != null) {
+            query.append(" AND tr.postDate <= ").append(Utility.calendarDateToSqlDateString(criteria.endDate));
+        }
+
+        // Add text search if provided (and not empty after date range extraction)
         if (criteria.searchText != null && !criteria.searchText.isEmpty() && !criteria.searchText.equals("*")) {
             query.append(" AND (tr.payee LIKE '%").append(criteria.searchText).append("%'");
             query.append(" OR m.name LIKE '%").append(criteria.searchText).append("%')");
@@ -461,6 +501,8 @@ public class TransactionController {
         Boolean clearedFilter = null;
         boolean newFilter = false;
         boolean disputedFilter = false;
+        Calendar startDate = null;
+        Calendar endDate = null;
     }
 
     /**
