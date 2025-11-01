@@ -183,7 +183,8 @@ public class TransactionSplit extends DependentEntity {
 
     @Override
     public String getDeleteByIdQuery() {
-        return null;
+        return deleteQuery + "where BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') " +
+                "and Transaction_idTransaction = uuid_to_bin('" + idTransaction + "')";
     }
 
     @Override

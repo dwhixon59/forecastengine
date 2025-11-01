@@ -2,6 +2,7 @@ package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -128,7 +129,8 @@ public class TransactionController {
 
                     // Step 3: Ask what to do with this transaction
                     String action = view.selectFromMenu("What would you like to do with this transaction?",
-                            List.of("view details", "update this transaction", "manage splits/categories",
+                            List.of("view details", "update this transaction", "assign/change merchant",
+                                    "recategorize transaction", "manage splits/categories",
                                     "delete this transaction", "search again"),
                             DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
@@ -147,6 +149,28 @@ public class TransactionController {
                             updatedTransaction.update();
                             view.say("Transaction successfully updated.");
                             selectedTransaction = updatedTransaction; // Update reference for display
+                            break;
+
+                        case "a":  // assign/change merchant
+                            try {
+                                assignMerchantToTransaction(selectedTransaction);
+                                view.say("Merchant successfully assigned.");
+                                // Reload the transaction to show updated merchant info
+                                selectedTransaction = Transaction.getById(selectedTransaction.getId());
+                            } catch (SkipException e) {
+                                view.say("Merchant assignment skipped.");
+                            }
+                            break;
+
+                        case "r":  // recategorize transaction
+                            try {
+                                recategorizeTransaction(selectedTransaction);
+                                view.say("Transaction successfully recategorized.");
+                                // Reload the transaction to show updated splits
+                                selectedTransaction = Transaction.getById(selectedTransaction.getId());
+                            } catch (SkipException e) {
+                                view.say("Recategorization skipped.");
+                            }
                             break;
 
                         case "m":  // manage splits/categories
@@ -506,14 +530,184 @@ public class TransactionController {
     }
 
     /**
-     * Recategorize a transaction by reassigning its budget item splits.
+     * Assigns or changes the merchant for a transaction.
+     * This reuses the merchant assignment logic from the import process.
+     *
+     * @param transaction The transaction to assign a merchant to
+     * @throws Exception if any error occurs during merchant assignment
+     * @throws SkipException if the user skips the merchant assignment
+     */
+    public void assignMerchantToTransaction(Transaction transaction) throws Exception, SkipException {
+        view.say("\n--- Assign/Change Merchant ---");
+
+        Merchant currentMerchant = transaction.getMerchant();
+        if (currentMerchant != null) {
+            view.say("Current merchant: " + currentMerchant.getName());
+        } else {
+            view.say("No merchant currently assigned.");
+        }
+
+        // Use MerchantController to assign a merchant
+        MerchantController merchantController = new MerchantController(view, notificationService);
+
+        // Get or create merchant payee string
+        String merchantPayeeString = transaction.getMerchantPayee() != null ?
+                transaction.getMerchantPayee() : transaction.getPayee();
+
+        Merchant merchant = merchantController.assignMerchant(
+                merchantPayeeString,
+                transaction.getPayee(),
+                transaction.getAmount());
+
+        if (merchant != null) {
+            // Update the transaction with the new merchant
+            transaction.setMerchant(merchant);
+            transaction.setIdMerchant(merchant.getId());
+            transaction.update();
+        }
+    }
+
+    /**
+     * Recategorizes a transaction by deleting existing splits and reprocessing it.
+     * This extracts and reuses the logic from processUnreconciledTransactions.
+     * Uses database transaction management to ensure data integrity - all changes are
+     * rolled back if the user cancels or an error occurs.
      *
      * @param transaction The transaction to recategorize
-     * @return true if recategorization was successful, false otherwise
+     * @throws Exception if any error occurs during recategorization
+     * @throws SkipException if the user skips the recategorization
      */
-    public boolean recategorizeTransaction(Transaction transaction) {
-        // TODO: Implement recategorization logic
-        // This should use TransactionSplitsController to manage the splits
-        return false;
+    public void recategorizeTransaction(Transaction transaction) throws Exception, SkipException {
+        view.say("\n--- Recategorize Transaction ---");
+
+        // Show current splits
+        List<TransactionSplit> currentSplits = getTransactionSplits(transaction);
+        if (!currentSplits.isEmpty()) {
+            view.say("Current categorization:");
+            for (TransactionSplit split : currentSplits) {
+                BudgetItem budgetItem = split.getBudgetItem();
+                view.say("  • " + formatDollarAmount(split.getAmount()) + " → " +
+                        (budgetItem != null ? budgetItem.getDisplayString() : "Unknown budget item"));
+            }
+            view.say();
+        }
+
+        // Start a database transaction to ensure atomicity
+        java.sql.Connection conn = Utility.getDbConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+
+        try {
+            // Disable auto-commit to start transaction
+            conn.setAutoCommit(false);
+
+            // Delete existing splits using SQL (TransactionSplit.delete() returns null query)
+            if (!currentSplits.isEmpty()) {
+                String deleteQuery = "DELETE FROM transaction_split WHERE Transaction_idTransaction = uuid_to_bin('" +
+                        transaction.getId() + "')";
+                EntityInt.executeUpdate(deleteQuery, "deleting transaction splits for recategorization");
+                view.say("Existing splits deleted.");
+            }
+
+            // Process the transaction to create new splits
+            reconcileTransaction(transaction);
+
+            // If we got here without exception, commit the transaction
+            conn.commit();
+            view.say("Transaction recategorization committed successfully.");
+
+        } catch (CancelException | SkipException e) {
+            // User cancelled - rollback all changes
+            conn.rollback();
+            view.say("Recategorization cancelled - all changes have been rolled back.");
+            throw e;
+
+        } catch (Exception e) {
+            // Error occurred - rollback all changes
+            conn.rollback();
+            view.say("Error during recategorization - all changes have been rolled back.");
+            throw e;
+
+        } finally {
+            // Always restore the original auto-commit state
+            conn.setAutoCommit(originalAutoCommit);
+        }
+    }
+
+    /**
+     * Reconciles a single transaction by assigning budget items and creating splits.
+     * This method is extracted from RegisterController.processUnreconciledTransactions() to allow
+     * reuse for recategorizing individual transactions.
+     *
+     * @param transaction The transaction to reconcile
+     * @throws Exception if any error occurs during reconciliation
+     * @throws SkipException if the user skips the reconciliation
+     */
+    public void reconcileTransaction(Transaction transaction) throws Exception, SkipException {
+        BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+
+        Merchant merchant = transaction.getMerchant();
+
+        // If no merchant assigned, we need to assign one first
+        if (merchant == null || merchant.getName().equalsIgnoreCase(Merchant.UNKNOWN)) {
+            view.say("This transaction needs a merchant assigned before categorization.");
+            assignMerchantToTransaction(transaction);
+            merchant = transaction.getMerchant();
+
+            // If still no merchant, we can't proceed
+            if (merchant == null) {
+                throw new SkipException("Cannot categorize transaction without a merchant.");
+            }
+        }
+
+        // Get the assigned budget items for the merchant
+        List<BudgetItemMerchant> budgetItemsForMerchant =
+                BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+
+        // If we couldn't find any matching items, get some help from the user
+        if (budgetItemsForMerchant.isEmpty()) {
+            budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+        }
+
+        // Get or create the splits for the transaction
+        List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
+        if (splits == null || splits.isEmpty()) {
+            splits = budgetController.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItemsForMerchant);
+        }
+
+        // Mark the transaction as new so it appears in the new transaction report
+        transaction.setIsNew(true);
+
+        // Save the transaction and associated splits
+        transaction.save(EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE);
+        if (splits != null && !splits.isEmpty()) {
+            for (TransactionSplit split : splits) {
+                split.save();
+            }
+
+            // Ask the user if they want to reconcile with a forecast
+            if (view.getYesOrNo("Do you want to reconcile this transaction with a forecast?")) {
+                Forecast forecastToUse = forecast;
+
+                // If no forecast in context, or user wants to choose a different one, let them select
+                if (forecastToUse == null) {
+                    // Let user select a forecast for the budget
+                    forecastToUse = Forecast.selectForecast(budget);
+                } else if (view.getYesOrNo("Current forecast: " + forecastToUse.getName() +
+                        ". Do you want to select a different forecast?")) {
+                    // Let user select a different forecast for the budget
+                    forecastToUse = Forecast.selectForecast(budget);
+                }
+
+                if (forecastToUse != null) {
+                    ForecastController forecastController = new ForecastController(register, budget, forecastToUse, view, notificationService);
+                    forecastController.reconcile(transaction, splits);
+                    view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");
+                } else {
+                    view.say("Transaction categorized (no forecast selected for reconciliation).");
+                }
+            } else {
+                view.say("Transaction categorized (forecast reconciliation skipped).");
+            }
+        }
     }
 }
