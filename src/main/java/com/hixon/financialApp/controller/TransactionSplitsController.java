@@ -107,7 +107,7 @@ public class TransactionSplitsController {
                                 "percentages:", budgetItemsForMerchant.size(), true, true);
             } else {
                 // the amounts are not pre-established, so ask the user to enter them:
-                amounts = view.getAndParseCsvLine(prompt + ":  ", 0, false, true);
+                amounts = view.getAndParseCsvLine(prompt + ": ", 0, false, true);
             }
 
             // Create the splits.  Process any user requests to edit the assigned budget items at the same time:
@@ -349,6 +349,18 @@ public class TransactionSplitsController {
                     splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
                             transaction, null));
                 }
+            } else if (!amounts[0].matches("^-?[0-9]+(\\.[0-9]+)?$")) {
+                // Invalid input - not a valid command or number
+                view.say("Invalid input: '" + amounts[0] + "'. Valid options are:");
+                view.say("  • a - add a new budget item");
+                view.say("  • d - delete a budget item");
+                view.say("  • i - inquire (send for review)");
+                view.say("  • s - skip this transaction");
+                view.say("  • A number (1-" + budgetItemsForMerchant.size() + ") to select a budget item");
+                view.say("  • Number:amount (e.g., '1:-50.00') to assign specific amounts");
+                view.say("  • Comma-separated amounts to split across all budget items");
+                view.say("Please try again.");
+                done = false;
             } else {
                 // Allocate the splits as directed:
                 boolean useEnteredAmounts = amounts.length != 1 || amounts[0].length() != 0;

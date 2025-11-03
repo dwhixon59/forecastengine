@@ -122,16 +122,24 @@ public class MatchQuery {
             likeQuery.append(")");
             return likeQuery.toString();
         } else {
-            // Default behavior: natural language mode
+            // Default behavior: simple search mode (wrap search term with wildcards)
             String searchString = escapedName.trim();
             // If search string is empty or only wildcards/special chars, return all results sorted alphabetically
             if (searchString.isEmpty() || searchString.replace("*", "").replace("%", "").trim().isEmpty()) {
                 return getAllResultsSortedByName();
             }
-            return selectQuery.replaceFirst("(?i)FROM", ", MATCH(" + matchColumnList + ") AGAINST(\"" +
-                    searchString + "\" IN NATURAL LANGUAGE MODE) as relevance FROM") +
-                    " MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
-                    "\" IN NATURAL LANGUAGE MODE) ORDER BY relevance DESC";
+            // Build simple LIKE query with wildcards (same as s: prefix)
+            StringBuilder likeQuery = new StringBuilder(selectQuery);
+            likeQuery.append("(");
+            String[] columns = matchColumnList.split(",");
+            for (int i = 0; i < columns.length; i++) {
+                if (i > 0) {
+                    likeQuery.append(" OR ");
+                }
+                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(searchString).append("%'");
+            }
+            likeQuery.append(")");
+            return likeQuery.toString();
         }
     }
 
@@ -204,9 +212,13 @@ public class MatchQuery {
         } else if (name.startsWith("e:")) {
             return name.substring(2);
         } else if (name.startsWith("l:")) {
-            name = name.replace("%", "");
-            name = name.replace("_", "");
-            return name.substring(2);
+            // For LIKE queries, strip the prefix and any surrounding quotes, but keep wildcards (% and _)
+            String cleaned = name.substring(2);
+            // Remove surrounding quotes if present
+            if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() > 1) {
+                cleaned = cleaned.substring(1, cleaned.length() - 1);
+            }
+            return cleaned;
         } else {
             return name;
         }

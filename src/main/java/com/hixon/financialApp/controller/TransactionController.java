@@ -234,8 +234,7 @@ public class TransactionController {
         view.say("You can search by:");
         view.say("  • Payee or merchant name");
         view.say("  • Date range (e.g., '2024-01-01 to 2024-12-31')");
-        view.say("  • Amount or amount range");
-        view.say("  • Budget item/category");
+        view.say("  • Filters: cleared:yes, cleared:no, new:yes, disputed:yes");
         view.say("  • Or press Enter to see all transactions");
         view.say();
 
@@ -318,6 +317,49 @@ public class TransactionController {
                 }
             }
 
+            // Check for amount range pattern (12.34 to 56.78)
+            String amountRangePattern = "(\\d+\\.\\d{2})\\s+to\\s+(\\d+\\.\\d{2})";
+            java.util.regex.Pattern amountPattern = java.util.regex.Pattern.compile(amountRangePattern);
+            java.util.regex.Matcher amountMatcher = amountPattern.matcher(searchString);
+
+            if (amountMatcher.find()) {
+                // Found an amount range
+                try {
+                    String minAmountStr = amountMatcher.group(1);
+                    String maxAmountStr = amountMatcher.group(2);
+
+                    criteria.minAmount = Double.parseDouble(minAmountStr);
+                    criteria.maxAmount = Double.parseDouble(maxAmountStr);
+
+                    // Remove the amount range from search text
+                    searchString = searchString.replaceAll(amountRangePattern, "").trim();
+                    criteria.searchText = searchString;
+                } catch (Exception e) {
+                    view.say("Warning: Could not parse amount range. Format should be '10.00 to 50.00'");
+                }
+            } else {
+                // Check for single amount pattern (12.34)
+                String singleAmountPattern = "\\b(\\d+\\.\\d{2})\\b";
+                java.util.regex.Pattern singlePattern = java.util.regex.Pattern.compile(singleAmountPattern);
+                java.util.regex.Matcher singleMatcher = singlePattern.matcher(searchString);
+
+                if (singleMatcher.find()) {
+                    // Found a single amount - search for exact match
+                    try {
+                        String amountStr = singleMatcher.group(1);
+                        Double amount = Double.parseDouble(amountStr);
+                        criteria.minAmount = amount;
+                        criteria.maxAmount = amount;
+
+                        // Remove the amount from search text
+                        searchString = searchString.replaceAll(singleAmountPattern, "").trim();
+                        criteria.searchText = searchString;
+                    } catch (Exception e) {
+                        view.say("Warning: Could not parse amount. Format should be '25.00'");
+                    }
+                }
+            }
+
             // Parse other filters
             String[] parts = searchString.split("\\s+");
             StringBuilder textParts = new StringBuilder();
@@ -382,6 +424,18 @@ public class TransactionController {
         if (criteria.searchText != null && !criteria.searchText.isEmpty() && !criteria.searchText.equals("*")) {
             query.append(" AND (tr.payee LIKE '%").append(criteria.searchText).append("%'");
             query.append(" OR m.name LIKE '%").append(criteria.searchText).append("%')");
+        }
+
+        // Add amount search if provided
+        if (criteria.minAmount != null && criteria.maxAmount != null) {
+            if (criteria.minAmount.equals(criteria.maxAmount)) {
+                // Exact amount match
+                query.append(" AND ABS(tr.amount) = ").append(Math.abs(criteria.minAmount));
+            } else {
+                // Amount range
+                query.append(" AND ABS(tr.amount) >= ").append(Math.abs(criteria.minAmount));
+                query.append(" AND ABS(tr.amount) <= ").append(Math.abs(criteria.maxAmount));
+            }
         }
 
         // Add filter conditions
@@ -527,6 +581,8 @@ public class TransactionController {
         boolean disputedFilter = false;
         Calendar startDate = null;
         Calendar endDate = null;
+        Double minAmount = null;
+        Double maxAmount = null;
     }
 
     /**

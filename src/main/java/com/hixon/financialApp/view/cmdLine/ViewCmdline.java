@@ -478,7 +478,14 @@ public class ViewCmdline implements ViewInt {
 
             // Check for help request
             if (helpCallback != null && response.equals("?")) {
-                say(wrapText(helpCallback.get()));
+                String helpText = helpCallback.get();
+                // Don't wrap help text if it contains bullet points or explicit formatting
+                // (indicated by presence of bullet character or multiple newlines)
+                if (helpText.contains("\u2022") || helpText.contains("  \u2022") || helpText.contains("\n\n")) {
+                    say(helpText);
+                } else {
+                    say(wrapText(helpText));
+                }
                 // Redisplay the prompt after help
                 if (fullPrompt.length() > 0) {
                     ask(fullPrompt.toString());
