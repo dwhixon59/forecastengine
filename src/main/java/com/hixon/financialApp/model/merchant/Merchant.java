@@ -114,7 +114,19 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
 
     @Override
     public String getInsertQuery() throws BudgetException, ForecastException {
-        return null;
+        StringBuilder query = new StringBuilder(insertQuery);
+        query.append("uuid_to_bin('").append(id).append("'), ");
+        query.append("\"").append(name).append("\", ");
+        query.append(askAlways);
+
+        if (idUser != null) {
+            query.append(", uuid_to_bin('").append(idUser).append("')");
+        } else {
+            query.append(", null");
+        }
+
+        query.append(")");
+        return query.toString();
     }
 
     @Override
@@ -124,7 +136,18 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return null;
+        StringBuilder query = new StringBuilder("UPDATE merchant SET ");
+        query.append("name = \"").append(name).append("\", ");
+        query.append("askAlways = ").append(askAlways);
+
+        if (idUser != null) {
+            query.append(", User_idUser = uuid_to_bin('").append(idUser).append("')");
+        } else {
+            query.append(", User_idUser = null");
+        }
+
+        query.append(" WHERE idMerchant = uuid_to_bin('").append(id).append("')");
+        return query.toString();
     }
 
     @Override
@@ -284,20 +307,34 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
 
     // Save this merchant if dirty, and any dirty merchant-payees:
     public void save() throws RegisterException, EntityException {
+        try {
+            // Determine if this is a new merchant or an existing one
+            // New merchants will have isDirty() true and typically come from constructors
+            // We can check if the merchant exists in the database by checking if we can load it
+            boolean exists = false;
+            if (id != null) {
+                try {
+                    Merchant.getById(id);
+                    exists = true;
+                } catch (Exception e) {
+                    // Merchant doesn't exist, so it's new
+                    exists = false;
+                }
+            }
 
-        // Save the merchant:
-        if (idUser != null) {
-            super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
-                            ", uuid_to_bin('" + idUser + "'))",
-                    "Problem with Insert of merchant.  Returned row count not equal to 1.");
-        } else {
-            super.executeQueryForThis(insertQuery + "uuid_to_bin('" + id + "'), \"" + name + "\", " + askAlways +
-                    ", null)", "Problem with Insert of merchant.  Returned row count not equal to 1.");
-        }
+            // Use the appropriate save method
+            if (exists) {
+                save(SaveMethod.UPDATE);
+            } else {
+                save(SaveMethod.INSERT);
+            }
 
-        // Save the merchant payees:
-        for (MerchantPayee merchantPayee : merchantPayees) {
-            merchantPayee.save();
+            // Save the merchant payees:
+            for (MerchantPayee merchantPayee : merchantPayees) {
+                merchantPayee.save();
+            }
+        } catch (SQLException e) {
+            throw new RegisterException("Error saving merchant", e);
         }
     }
 

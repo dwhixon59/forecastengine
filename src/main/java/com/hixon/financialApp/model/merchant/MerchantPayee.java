@@ -4,6 +4,8 @@ import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.register.RegisterException;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.lang3.NotImplementedException;
 
 import java.sql.ResultSet;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@Getter
 public class MerchantPayee extends DependentEntity {
 
     /*
@@ -19,8 +22,9 @@ public class MerchantPayee extends DependentEntity {
      */
     private static final String insertQuery = "insert into merchant_payee (Merchant_idMerchant, payee) " +
             "values (";
+    @Setter
     private UUID idMerchant;
-    private String payee = null;
+    private String payee;
 
     public static void deleteByName(String merchantPayeeString) {
         // Delete any instance of the merchantPayeeString from the merchant_payee table:
@@ -32,16 +36,15 @@ public class MerchantPayee extends DependentEntity {
         }
     }
 
-    /*
-     * Getters and setters for MerchantPayee:
+    /**
+     * Sets the payee and marks the entity as dirty.
+     * Custom setter needed to track changes for save operations.
      */
-    public UUID getIdMerchant() {
-        return idMerchant;
+    public void setPayee(String payee) {
+        this.payee = payee;
+        setDirty(true);
     }
 
-    public void setIdMerchant(UUID idMerchant) {
-        this.idMerchant = idMerchant;
-    }
 
     @Override
     public String getInsertQuery() {

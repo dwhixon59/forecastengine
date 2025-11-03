@@ -8,7 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
 
-/// This class contains utility methods for handling transaction splits and associations
+// This class contains utility methods for handling transaction splits and associations
 public class TransactionSplitUtilities {
 
     // Get the number of past associations between a budget item and a merchant. This method should return the number of

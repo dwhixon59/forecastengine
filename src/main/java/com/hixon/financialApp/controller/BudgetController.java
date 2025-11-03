@@ -27,6 +27,7 @@ import java.util.*;
 
 import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
 import static com.hixon.financialApp.model.budget.BudgetItemMerchant.isBudgetItemInList;
+import static com.hixon.financialApp.model.budget.BudgetUtilities.getAllBudgets;
 import static com.hixon.financialApp.utility.Utility.stringDateDashToCalendarDate;
 import static com.hixon.financialApp.view.base.ViewInt.*;
 import static java.util.Calendar.YEAR;
@@ -179,7 +180,7 @@ public class BudgetController {
                                 // Step 3: Ask what to do with this item
                                 String action = view.selectFromMenu("What would you like to do with this item?",
                                         List.of("view details", "copy this item", "update this item", "delete this item",
-                                                "search again"),
+                                                "report spending on this item", "search again"),
                                         DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
                                 switch (action) {
@@ -328,6 +329,15 @@ public class BudgetController {
                                             }
                                         } else {
                                             view.say("Deletion cancelled.");
+                                        }
+                                        break;
+
+                                    case "r":  // report spending on this item
+                                        try {
+                                            reportSpendingOnBudgetItem(selectedItem);
+                                        } catch (Exception e) {
+                                            view.say("Error generating spending report: " + e.getMessage());
+                                            e.printStackTrace();
                                         }
                                         break;
 
@@ -1016,7 +1026,7 @@ public class BudgetController {
      */
     private Budget selectBudgetFromUser(BudgetItem template) throws BudgetException, SQLException, EntityException,
             CancelException, QuitException, SkipException {
-        List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
+        List<Budget> availableBudgets = getAllBudgets();
         if (availableBudgets.isEmpty()) {
             throw new BudgetException("No budgets available. Please create a budget first.");
         }
@@ -1065,7 +1075,7 @@ public class BudgetController {
      */
     private Budget selectBudgetFromUser(Budget defaultBudget) throws BudgetException, SQLException, EntityException,
             CancelException, QuitException, SkipException {
-        List<Budget> availableBudgets = BudgetUtilities.getAllBudgets();
+        List<Budget> availableBudgets = getAllBudgets();
         if (availableBudgets.isEmpty()) {
             throw new BudgetException("No budgets available. Please create a budget first.");
         }
@@ -1311,5 +1321,152 @@ public class BudgetController {
         view.say("How Important: " + (budgetItem.getHowImportant() != null ? budgetItem.getHowImportant() : ""));
         view.say("How Occurs: " + (budgetItem.getHowOccurs() != null ? budgetItem.getHowOccurs() : ""));
         view.say("How Paid: " + (budgetItem.getHowPaid() != null ? budgetItem.getHowPaid() : ""));
+    }
+
+    /**
+     * Generates a spending report for a budget item over a user-selected date range.
+     * Shows all transaction splits associated with the budget item and calculates the total.
+     *
+     * @param budgetItem the BudgetItem to generate a report for
+     * @throws Exception if an error occurs while generating the report
+     */
+    private void reportSpendingOnBudgetItem(BudgetItem budgetItem) throws Exception {
+        view.say();
+        view.say("──── Spending Report ────");
+        view.say("Budget Item: " + budgetItem.getDisplayString());
+        view.say();
+
+        // Ask user to select date range
+        String dateRangeChoice = view.selectFromMenu("Select date range for report:",
+                List.of("this month", "last 30 days", "last 90 days", "last 6 months",
+                        "last 12 months", "year to date", "custom date range", "all time"),
+                DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+        // Calculate start and end dates based on user selection
+        Calendar startDate = Calendar.getInstance();
+        Calendar endDate = Calendar.getInstance();
+
+        switch (dateRangeChoice) {
+            case "t":  // this month
+                startDate.set(Calendar.DATE, 1);
+                startDate.set(Calendar.HOUR_OF_DAY, 0);
+                startDate.set(Calendar.MINUTE, 0);
+                startDate.set(Calendar.SECOND, 0);
+                startDate.set(Calendar.MILLISECOND, 0);
+                endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
+                endDate.set(Calendar.HOUR_OF_DAY, 23);
+                endDate.set(Calendar.MINUTE, 59);
+                endDate.set(Calendar.SECOND, 59);
+                break;
+
+            case "l":  // last 30 days
+                startDate.add(Calendar.DATE, -30);
+                break;
+
+            case "9":  // last 90 days
+                startDate.add(Calendar.DATE, -90);
+                break;
+
+            case "6":  // last 6 months
+                startDate.add(Calendar.MONTH, -6);
+                break;
+
+            case "1":  // last 12 months
+                startDate.add(Calendar.MONTH, -12);
+                break;
+
+            case "y":  // year to date
+                startDate.set(Calendar.MONTH, Calendar.JANUARY);
+                startDate.set(Calendar.DATE, 1);
+                startDate.set(Calendar.HOUR_OF_DAY, 0);
+                startDate.set(Calendar.MINUTE, 0);
+                startDate.set(Calendar.SECOND, 0);
+                startDate.set(Calendar.MILLISECOND, 0);
+                break;
+
+            case "c":  // custom date range
+                try {
+                    String startDateStr = view.getResponseString("Enter start date (MM-DD-YYYY):", 
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    startDate = stringDateDashToCalendarDate(startDateStr);
+                    
+                    // Get today's date formatted as MM-DD-YYYY for the default
+                    Calendar today = Calendar.getInstance();
+                    String todayFormatted = String.format("%02d-%02d-%04d",
+                            today.get(Calendar.MONTH) + 1,
+                            today.get(Calendar.DATE),
+                            today.get(Calendar.YEAR));
+
+                    String endDateStr = view.getResponseString("Enter end date (MM-DD-YYYY):",
+                            todayFormatted, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                    endDate = stringDateDashToCalendarDate(endDateStr);
+                } catch (ParseException e) {
+                    view.say("Invalid date format. Using default range (last 30 days).");
+                    startDate = Calendar.getInstance();
+                    startDate.add(Calendar.DATE, -30);
+                    endDate = Calendar.getInstance();
+                }
+                break;
+
+            case "a":  // all time
+                // Use a very old date as start
+                startDate.set(Calendar.YEAR, 2000);
+                startDate.set(Calendar.MONTH, Calendar.JANUARY);
+                startDate.set(Calendar.DATE, 1);
+                break;
+
+            default:
+                view.say("Invalid choice. Using last 30 days.");
+                startDate.add(Calendar.DATE, -30);
+        }
+
+        // Get splits for the date range
+        List<TransactionSplit> splits = TransactionSplit.getSplitsListForBudgetItemInPeriod(
+                budgetItem, startDate, endDate);
+
+        // Display the report
+        view.say();
+        view.say("Date Range: " + Utility.calendarDateToStringDate(startDate) +
+                " to " + Utility.calendarDateToStringDate(endDate));
+        view.say();
+
+        if (splits == null || splits.isEmpty()) {
+            view.say("No transactions found for this budget item in the selected date range.");
+        } else {
+            view.say(String.format("%-12s  %-30s  %-30s  %12s",
+                    "Date", "Merchant", "Memo", "Amount"));
+            view.say("─".repeat(90));
+
+            double total = 0.0;
+            for (TransactionSplit split : splits) {
+                Transaction transaction = split.getTransaction();
+                String dateStr = Utility.calendarDateToStringDate(transaction.getDate());
+                String merchantName = transaction.getMerchant() != null ?
+                        transaction.getMerchant().getName() : transaction.getPayee();
+                String memo = split.getMemo() != null ? split.getMemo() : "";
+                String amountStr = Utility.formatDollarAmount(split.getAmount());
+
+                // Truncate long strings to fit in columns
+                if (merchantName.length() > 30) {
+                    merchantName = merchantName.substring(0, 27) + "...";
+                }
+                if (memo.length() > 30) {
+                    memo = memo.substring(0, 27) + "...";
+                }
+
+                view.say(String.format("%-12s  %-30s  %-30s  %12s",
+                        dateStr, merchantName, memo, amountStr));
+                total += split.getAmount();
+            }
+
+            view.say("─".repeat(90));
+            view.say(String.format("%-12s  %-30s  %-30s  %12s",
+                    "", "", "TOTAL:", Utility.formatDollarAmount(total)));
+            view.say();
+            view.say("Transaction count: " + splits.size());
+        }
+
+        view.say();
     }
 }

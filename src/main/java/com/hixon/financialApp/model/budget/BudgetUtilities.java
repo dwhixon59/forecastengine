@@ -9,27 +9,35 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Utility class for operations on collections of Budget objects.
+ * Utility class for budget-related operations.
+ * Provides helper methods for working with budgets across controllers.
  */
-public class BudgetUtilities {
+public final class BudgetUtilities {
+
+    private BudgetUtilities() {
+        // Private constructor to prevent instantiation
+    }
 
     /**
-     * Get all budgets from the database.
+     * Retrieves all budgets from the database.
      *
-     * @return A list of all Budget objects
-     * @throws BudgetException if a budget error occurs
-     * @throws EntityException if an entity error occurs
-     * @throws SQLException if a database error occurs
+     * @return List of all Budget objects
+     * @throws EntityException if there's a database error
+     * @throws SQLException if there's a SQL error
+     * @throws BudgetException if there's an error creating Budget objects
      */
-    public static List<Budget> getAllBudgets() throws BudgetException, EntityException, SQLException {
-        String selectQuery = "select bin_to_uuid(idBudget) as idbudget, name from budget ";
-        ResultSet rs = EntityInt.getRS(selectQuery + "order by name", "get all budgets");
+    public static List<Budget> getAllBudgets() throws EntityException, SQLException, BudgetException {
+        String selectQuery = "select bin_to_uuid(idBudget) as idbudget, name from budget";
+        ResultSet rs = EntityInt.getRS(selectQuery, "retrieving all budgets");
+
         List<Budget> budgets = new ArrayList<>();
         if (rs != null) {
             while (rs.next()) {
                 budgets.add(new Budget(rs));
             }
         }
+
         return budgets;
     }
 }
+

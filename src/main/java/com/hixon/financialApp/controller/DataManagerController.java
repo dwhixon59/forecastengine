@@ -95,9 +95,8 @@ public class DataManagerController {
                         break;
                     case "m":
                         // Merchants are global entities - no specific context needed
-                        // TODO: Delegate to MerchantController
-                        // merchantController.manageMerchants();
-                        view.say("Merchant management not yet implemented.");
+                        MerchantController merchantController = new MerchantController(view, notificationService);
+                        merchantController.manageMerchants();
                         break;
                     case "t":
                         // Transactions require a register context
