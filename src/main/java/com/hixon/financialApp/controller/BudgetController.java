@@ -865,6 +865,14 @@ public class BudgetController {
     private BudgetItem selectBudgetItemFromBudget(Budget budget, boolean allowCreate)
             throws CancelException, QuitException, SkipException, SQLException, EntityException {
         SelectionController selectionController = new SelectionController(view);
+
+        // Create processor to enable cross-budget searching with "ba:" or "budget:all:" prefix
+        com.hixon.financialApp.model.entity.SearchQualifierProcessor processor =
+                new com.hixon.financialApp.model.entity.BudgetSearchQualifierProcessor(
+                    budget.getId(),
+                    "bi.Budget_idBudget"
+                );
+
         return selectionController.getByNameFullText(
                 null,  // No seed name - user will search
                 budget,
@@ -877,7 +885,7 @@ public class BudgetController {
                 BudgetItem::getDisplayString,
                 new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
                         budget.getId() + "') AND ", "bi.payee",
-                        "bi.category, bi.payee, bi.memo"),
+                        "bi.category, bi.payee, bi.memo", "", processor),
                 rs -> {
                     try {
                         return new BudgetItem(rs);

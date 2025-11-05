@@ -1218,9 +1218,17 @@ public abstract class Item extends IndependentEntity {
         }
 
         // Check post-conditions:
+        // The next date must be on or after the date passed in:
         if (nextDate != null && nextDate.compareTo(onOrAfterDateParm) < 0) {
             throw new ForecastException("Next date (" + Utility.calendarDateToStringDate(nextDate) + ") must be on or " +
                     "after the specified date (" + Utility.calendarDateToStringDate(onOrAfterDateParm) + ").  " +
+                    "item is:  " + this.toString());
+        }
+
+        // The next date must be on or after the start date of this item:
+        if (nextDate != null && nextDate.compareTo(startDate) < 0) {
+            throw new ForecastException("Next date (" + Utility.calendarDateToStringDate(nextDate) + ") must be on or " +
+                    "after the item start date (" + Utility.calendarDateToStringDate(startDate) + ").  " +
                     "item is:  " + this.toString());
         }
 

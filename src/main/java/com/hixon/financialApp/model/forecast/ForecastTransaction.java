@@ -191,6 +191,21 @@ public class ForecastTransaction extends IndependentEntity {
         this.firstOccurrence = firstOccurrence;
     }
 
+    @Override
+    public String getName() throws EntityException {
+        try {
+            if (forecastItem != null) {
+                return forecastItem.getCategory() + " - " + forecastItem.getPayee();
+            } else if (idForecastItem != null) {
+                ForecastItem item = ForecastItem.getById(idForecastItem);
+                return item.getCategory() + " - " + item.getPayee();
+            }
+            return "";
+        } catch (Exception e) {
+            throw new EntityException("Error getting name for forecast transaction", e);
+        }
+    }
+
 
     /*
      * Constructors:
@@ -650,8 +665,27 @@ public class ForecastTransaction extends IndependentEntity {
     public String toStringCompact() {
         String s;
         try {
-            s = calendarDateToMonthDayStringDate(this.getPlannedDate()) + ", " + this.getForecastItem().getPayee() +
-                    ", " + formatDollarAmount(remainingAmount);
+            ForecastItem item = this.getForecastItem();
+            StringBuilder sb = new StringBuilder();
+
+            // Date with year
+            sb.append(calendarDateToStringDate(this.getPlannedDate()));
+
+            // Category - Payee
+            sb.append(", ").append(item.getCategory()).append(" - ").append(item.getPayee());
+
+            // Memo (if present)
+            if (item.getMemo() != null && !item.getMemo().isEmpty()) {
+                sb.append(", ").append(item.getMemo());
+            }
+
+            // Budgeted amount
+            sb.append(", Budgeted: ").append(formatDollarAmount(item.getAmount()));
+
+            // Remaining amount
+            sb.append(", Remaining: ").append(formatDollarAmount(remainingAmount));
+
+            s = sb.toString();
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }

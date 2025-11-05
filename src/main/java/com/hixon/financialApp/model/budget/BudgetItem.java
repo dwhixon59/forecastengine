@@ -61,6 +61,21 @@ public class BudgetItem extends Item {
         setDirty(true);
     }
 
+    /**
+     * Gets the Budget that this BudgetItem belongs to.
+     *
+     * @return The Budget object
+     * @throws BudgetException if budget cannot be loaded
+     * @throws EntityException if database error occurs
+     * @throws SQLException if SQL error occurs
+     */
+    public Budget getBudget() throws BudgetException, EntityException, SQLException {
+        if (idBudget == null) {
+            throw new BudgetException("Budget ID is null for BudgetItem: " + this.getId());
+        }
+        return Budget.getById(idBudget);
+    }
+
     @Override
     public String getName() throws EntityException {
         return payee;

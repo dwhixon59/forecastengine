@@ -110,9 +110,10 @@ public class DataManagerController {
                         // Forecast transactions require a forecast context (which includes budget)
                         ensureForecastContext();
 
-                        // TODO: Delegate to ForecastTransactionController
-                        // forecastTransactionController.manageForecastTransactions();
-                        view.say("Forecast transaction management not yet implemented.");
+                        // Delegate to ForecastTransactionController
+                        ForecastTransactionController forecastTransactionController =
+                                new ForecastTransactionController(register, budget, forecast, view, notificationService);
+                        forecastTransactionController.manageForecastTransactions();
                         break;
                     case "i":
                         // Financial institutions are global entities - no specific context needed
