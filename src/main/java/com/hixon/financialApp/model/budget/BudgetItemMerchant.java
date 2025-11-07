@@ -270,6 +270,48 @@ public class BudgetItemMerchant extends DependentEntity {
       }
    }
 
+   /**
+    * Get a list of merchants that are assigned to the specified budget item.
+    *
+    * @param budgetItem The budget item
+    * @return List of BudgetItemMerchant associations for the budget item
+    * @throws BudgetException if a database error occurs
+    */
+   public static List<BudgetItemMerchant> getAssignedMerchantsForBudgetItem(BudgetItem budgetItem) throws
+           BudgetException {
+
+      // Find out what merchants are associated with the given budget item:
+      String query = "select " +
+              "bin_to_uuid(bm.BudgetItem_idBudgetItem) as 'bm.idBudgetItem', " +
+              "bin_to_uuid(bm.Merchant_idMerchant) as 'bm.idMerchant', " +
+              "bm.amount as 'bm.amount', " +
+              "bm.percentage as 'bm.percentage' " +
+              "from budgetitem_merchant bm " +
+              "where bm.BudgetItem_idBudgetItem = uuid_to_bin('" + budgetItem.getId() + "')";
+
+      try {
+         try (Statement statement = Utility.getDbConnection().createStatement()) {
+            ResultSet rs = statement.executeQuery(query);
+            List<BudgetItemMerchant> merchants = new ArrayList<>();
+            while (rs.next()) {
+               UUID merchantId = UUID.fromString(rs.getString("bm.idMerchant"));
+               merchants.add(new BudgetItemMerchant(
+                       budgetItem,
+                       Merchant.getById(merchantId),
+                       rs.getDouble("bm.amount"),
+                       rs.getInt("bm.percentage")));
+            }
+            return merchants;
+         }
+
+      } catch (SQLException | EntityException | RegisterException e) {
+         BudgetException be = new BudgetException("Database error occurred trying to get the merchants for " +
+                 "budget item ID " + budgetItem.getId());
+         be.initCause(e);
+         throw be;
+      }
+   }
+
    // Get a list of budget items in the specified budget that are assigned to the specified merchant:
    public static List<BudgetItemMerchant> getAssignedUnexpiredBudgetItems(Budget budget, Merchant merchant) throws
            BudgetException {
@@ -342,6 +384,31 @@ public class BudgetItemMerchant extends DependentEntity {
            BudgetException be = new BudgetException("Database error occurred trying to delete the budget item " +
            BudgetItem.getById(budgetItemMerchant.getIdBudgetItem()).getPayee() + " from merchant " +
                    Merchant.getById(budgetItemMerchant.getIdMerchant()));
+           be.initCause(e);
+           throw be;
+        }
+   }
+
+   /**
+    * Delete the association between a budget item and a merchant.
+    *
+    * @param budgetItem The budget item
+    * @param merchant The merchant
+    * @throws BudgetException if a database error occurs
+    * @throws EntityException if a database error occurs
+    * @throws RegisterException if a database error occurs
+    */
+   public static void deleteByItemAndMerchant(BudgetItem budgetItem, Merchant merchant)
+           throws BudgetException, EntityException, RegisterException {
+        try {
+             String query = getDeleteQuery() + budgetItem.getId() + "') and Merchant_idMerchant = " +
+                     "uuid_to_bin('" + merchant.getId() + "')";
+            try (Statement statement = Utility.getDbConnection().createStatement()) {
+                statement.executeUpdate(query);
+            }
+        } catch (SQLException e) {
+           BudgetException be = new BudgetException("Database error occurred trying to delete the association between budget item " +
+                   budgetItem.getPayee() + " and merchant " + merchant.getName());
            be.initCause(e);
            throw be;
         }

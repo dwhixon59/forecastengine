@@ -48,6 +48,7 @@ public class BudgetController {
     Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
+    private SessionController sessionController; // Added field for SessionController
 
     // Help text properties loaded from file
     private static final Properties helpText = new Properties();
@@ -76,6 +77,17 @@ public class BudgetController {
         this.forecast = forecast;
         this.view = view;
         this.notificationService = notificationService;
+    }
+
+    /**
+     * Constructor for BudgetController with SessionController (for accessing user budgets).
+     * Used by controllers that need to work across multiple budgets.
+     */
+    public BudgetController(SessionController sessionController, ViewInt view) {
+        terminationCondition = QUIT;
+        this.sessionController = sessionController;
+        this.view = view;
+        this.notificationService = null;
     }
 
 
@@ -180,7 +192,7 @@ public class BudgetController {
                                 // Step 3: Ask what to do with this item
                                 String action = view.selectFromMenu("What would you like to do with this item?",
                                         List.of("view details", "copy this item", "update this item", "delete this item",
-                                                "report spending on this item", "search again"),
+                                                "report spending on this item", "manage merchants", "search again"),
                                         DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
                                 switch (action) {
@@ -337,6 +349,17 @@ public class BudgetController {
                                             reportSpendingOnBudgetItem(selectedItem);
                                         } catch (Exception e) {
                                             view.say("Error generating spending report: " + e.getMessage());
+                                            e.printStackTrace();
+                                        }
+                                        break;
+
+                                    case "m":  // manage merchants
+                                        try {
+                                            BudgetItemMerchantController bimController =
+                                                new BudgetItemMerchantController(sessionController, view, notificationService);
+                                            bimController.manageBudgetItemMerchants(selectedItem);
+                                        } catch (Exception e) {
+                                            view.say("Error managing merchants: " + e.getMessage());
                                             e.printStackTrace();
                                         }
                                         break;
@@ -849,54 +872,6 @@ public class BudgetController {
     }
 
     /**
-     * Selects a budget item from a specified budget using full-text search.
-     * This method uses SelectionController to provide sophisticated search capabilities
-     * across category, payee, and memo fields.
-     *
-     * @param budget The budget to search within
-     * @param allowCreate Whether to allow creating new budget items if none match
-     * @return The selected BudgetItem, or null if user cancels
-     * @throws CancelException If the user cancels the operation
-     * @throws QuitException If the user quits the operation
-     * @throws SkipException If the user skips the operation
-     * @throws SQLException If there's a database error
-     * @throws EntityException If there's an entity error
-     */
-    private BudgetItem selectBudgetItemFromBudget(Budget budget, boolean allowCreate)
-            throws CancelException, QuitException, SkipException, SQLException, EntityException {
-        SelectionController selectionController = new SelectionController(view);
-
-        // Create processor to enable cross-budget searching with "ba:" or "budget:all:" prefix
-        com.hixon.financialApp.model.entity.SearchQualifierProcessor processor =
-                new com.hixon.financialApp.model.entity.BudgetSearchQualifierProcessor(
-                    budget.getId(),
-                    "bi.Budget_idBudget"
-                );
-
-        return selectionController.getByNameFullText(
-                null,  // No seed name - user will search
-                budget,
-                DO_NOT_ALLOW_NONE,
-                allowCreate,
-                ALLOW_CANCEL,
-                ALLOW_QUIT,
-                DO_NOT_ALLOW_SKIP,
-                BudgetItem.getPrintableTypeName_static(),
-                BudgetItem::getDisplayString,
-                new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
-                        budget.getId() + "') AND ", "bi.payee",
-                        "bi.category, bi.payee, bi.memo", "", processor),
-                rs -> {
-                    try {
-                        return new BudgetItem(rs);
-                    } catch (BudgetException e) {
-                        throw new RuntimeException(e);
-                    }
-                },
-                (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
-    }
-
-    /**
      * Prompts the user to select and update forecasts associated with a given budget.
      * This method retrieves all forecasts for the budget, presents them to the user,
      * and allows the user to select which ones to regenerate. This is typically called
@@ -1013,6 +988,64 @@ public class BudgetController {
         }
 
         view.say("\nAll selected forecasts have been updated.");
+    }
+
+    /**
+     * Public method to select a budget item from a budget.
+     * This is used by other controllers (like MerchantController) that need to select budget items.
+     *
+     * @param budget The budget to select from
+     * @return The selected BudgetItem, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    public BudgetItem selectBudgetItem(Budget budget) throws Exception {
+        try {
+            return selectBudgetItemFromBudget(budget, DO_NOT_ALLOW_CREATE);
+        } catch (CancelException | QuitException | SkipException e) {
+            return null;  // User cancelled
+        }
+    }
+
+    /**
+     * Select a budget item from the specified budget using search.
+     *
+     * @param budget The budget to select from
+     * @param allowCreate Whether to allow creating a new budget item if not found
+     * @return The selected BudgetItem, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    private BudgetItem selectBudgetItemFromBudget(Budget budget, boolean allowCreate)
+            throws CancelException, QuitException, SkipException, SQLException, EntityException {
+        SelectionController selectionController = new SelectionController(view);
+
+        // Create processor to enable cross-budget searching with "ba:" or "budget:all:" prefix
+        com.hixon.financialApp.model.entity.SearchQualifierProcessor processor =
+                new com.hixon.financialApp.model.entity.BudgetSearchQualifierProcessor(
+                    budget.getId(),
+                    "bi.Budget_idBudget"
+                );
+
+        return selectionController.getByNameFullText(
+                null,  // No seed name - user will search
+                budget,
+                DO_NOT_ALLOW_NONE,
+                allowCreate,
+                ALLOW_CANCEL,
+                ALLOW_QUIT,
+                DO_NOT_ALLOW_SKIP,
+                BudgetItem.getPrintableTypeName_static(),
+                BudgetItem::getDisplayString,
+                new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
+                        budget.getId() + "') AND ", "bi.payee",
+                        "bi.category, bi.payee, bi.memo", "", processor),
+                rs -> {
+                    try {
+                        return new BudgetItem(rs);
+                    } catch (BudgetException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
     }
 
     /**

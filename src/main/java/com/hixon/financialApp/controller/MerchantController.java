@@ -23,11 +23,25 @@ import static com.hixon.financialApp.view.base.ViewInt.*;
 @Setter
 public class MerchantController {
 
+    private SessionController sessionController;
     private ViewInt view;
     private NotificationServiceInt notificationService;
 
     /**
      * Constructor for MerchantController.
+     *
+     * @param sessionController The session controller for accessing user and budget information
+     * @param view The view interface for user interaction
+     * @param notificationService The notification service for sending notifications
+     */
+    public MerchantController(SessionController sessionController, ViewInt view, NotificationServiceInt notificationService) {
+        this.sessionController = sessionController;
+        this.view = view;
+        this.notificationService = notificationService;
+    }
+
+    /**
+     * Constructor for MerchantController (backwards compatibility).
      *
      * @param view The view interface for user interaction
      * @param notificationService The notification service for sending notifications
@@ -163,7 +177,7 @@ public class MerchantController {
                     // Ask what to do with this merchant
                     String action = view.selectFromMenu("What would you like to do with this merchant?",
                             List.of("view details", "update this merchant", "delete this merchant",
-                                    "manage payees", "search again"),
+                                    "manage payees", "manage budget items", "search again"),
                             DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
                     switch (action) {
@@ -182,6 +196,12 @@ public class MerchantController {
 
                         case "m":  // manage payees
                             managePayees(selectedMerchant);
+                            break;
+
+                        case "b":  // manage budget items
+                            BudgetItemMerchantController bimController =
+                                new BudgetItemMerchantController(sessionController, view, notificationService);
+                            bimController.manageBudgetItemMerchants(selectedMerchant);
                             break;
 
                         case "s":  // search again
@@ -205,6 +225,18 @@ public class MerchantController {
                 throw e;
             }
         }
+    }
+
+    /**
+     * Search for and select a merchant using the SelectionController.
+     * Public method for use by other controllers.
+     *
+     * @param allowCreate Whether to allow creating a new merchant if not found
+     * @return The selected Merchant, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    public Merchant selectMerchantPublic(boolean allowCreate) throws Exception {
+        return selectMerchant(allowCreate);
     }
 
     /**
@@ -628,6 +660,7 @@ public class MerchantController {
         }
     }
 
+
     /**
      * Select a user from all available users.
      *
@@ -665,5 +698,4 @@ public class MerchantController {
                 (scope, newName) -> null);  // Don't allow creating users from this interface
     }
 }
-
 

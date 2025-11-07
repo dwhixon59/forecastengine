@@ -1,188 +1,679 @@
 package com.hixon.financialApp.controller;
 
-import com.hixon.financialApp.model.budget.*;
-import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.ViewInt;
-import org.jetbrains.annotations.NotNull;
+import lombok.Getter;
+import lombok.Setter;
 
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
-import java.util.Map;
 
+import static com.hixon.financialApp.view.base.ViewInt.*;
+
+/**
+ * Controller for managing the association between budget items and merchants.
+ * Provides bidirectional management:
+ * - From a merchant: manage which budget items are associated
+ * - From a budget item: manage which merchants are associated
+ */
+@Getter
+@Setter
 public class BudgetItemMerchantController {
 
-    private final Budget budget;
-    private final ViewInt view;
-    private final NotificationServiceInt notificationService;
-    private static final double AMOUNT_MATCH_THRESHOLD = 0.05; // 5% threshold
+    private SessionController sessionController;
+    private ViewInt view;
+    private NotificationServiceInt notificationService;
 
-    public BudgetItemMerchantController(Budget budget, ViewInt view, NotificationServiceInt notificationService) {
-        this.budget = budget;
+    /**
+     * Constructor for BudgetItemMerchantController.
+     *
+     * @param sessionController The session controller for accessing user and budget information
+     * @param view The view interface for user interaction
+     * @param notificationService The notification service for sending notifications
+     */
+    public BudgetItemMerchantController(SessionController sessionController, ViewInt view,
+                                        NotificationServiceInt notificationService) {
+        this.sessionController = sessionController;
         this.view = view;
         this.notificationService = notificationService;
     }
 
-    // TODO:  Add in the use of the memo matched against the merchant (e.g. merchant is COSTCO and their exists a budget
-    // item with a memo of COSTCO)
     /**
-     * Sorts a list of BudgetItemMerchant entries based on how likely the budget items are the specific budget item that
-     * should be associated with the specified transaction.  This considers factors such as:
-     * - Transaction amount is within 5% of any fixed amounts specified
-     * - Transaction date falls within the budget item's valid period
-     * - Budget item is currently active
-     * - How frequently the budget item has been associated with the merchant in the past compared with other budget items.
-     * - When the budget item is used, how frequently the budget item is associated with the merchant for the transaction.
+     * Manage budget items associated with a merchant.
+     * Shows list of associated budget items and allows user to view, update, remove, or add.
      *
-     * @param budgetItemMerchants List of BudgetItemMerchant entries to filter
-     * @param transaction         The transaction to check against
-     * @return List of relevance scores for each budget item merchant
+     * @param merchant The merchant whose budget items to manage
+     * @throws Exception if any error occurs
      */
-    public List<Double> scoreAndSortListForTransaction(
-            List<BudgetItemMerchant> budgetItemMerchants,
-            Transaction transaction)
-    {
-        if (budgetItemMerchants == null || budgetItemMerchants.isEmpty() || transaction == null) {
-            return new ArrayList<>();
-        }
+    public void manageBudgetItemMerchants(Merchant merchant) throws Exception {
+        boolean done = false;
 
-        // Create a ranked list of budget items with scores based on their relevance to the transaction:
-        @NotNull List<Map.Entry<BudgetItemMerchant, Double>> budgetItemsWithRelevancy = budgetItemMerchants.stream()
-                .map(bim -> {
-                    try {
-                        return Map.entry(bim, scoreTransactionRelevance(bim, transaction));
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+        while (!done) {
+            try {
+                view.say();
+                view.say("──── Manage Budget Items for " + merchant.getName() + " ────");
+
+                // Get all budget items associated with this merchant across all user budgets
+                List<Budget> budgets = sessionController.getUserBudgets();
+                List<BudgetItemMerchant> allBudgetItemMerchants = new ArrayList<>();
+
+                for (Budget budget : budgets) {
+                    List<BudgetItemMerchant> budgetItemsForBudget =
+                        BudgetItemMerchant.getAssignedBudgetItems(budget, merchant);
+                    allBudgetItemMerchants.addAll(budgetItemsForBudget);
+                }
+
+                // Handle empty list
+                if (allBudgetItemMerchants.isEmpty()) {
+                    view.say("No budget items currently associated with this merchant.");
+                    view.say();
+
+                    String choice = view.selectFromMenu("What would you like to do?",
+                            List.of("add budget item", "return"),
+                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+                    if (choice.equals("a")) {
+                        addBudgetItemToMerchant(merchant);
+                    } else {
+                        done = true;
                     }
-                })
-//                .filter(entry -> entry.getValue() > 0)
-                .sorted((e1, e2) -> Double.compare(e2.getValue(), e1.getValue()))
-                .toList();
+                    continue;
+                }
 
-        // Recreate the passed in list of budget items based from the ranked list:
-        budgetItemMerchants.clear();
-        for (Map.Entry<BudgetItemMerchant, Double> entry : budgetItemsWithRelevancy) {
-            budgetItemMerchants.add(entry.getKey());
+                // Ask what to do
+                view.say();
+                String choice = view.selectFromMenu("What would you like to do?",
+                        List.of("select existing budget item", "add budget item", "done"),
+                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+                if (choice.equals("a")) {
+                    addBudgetItemToMerchant(merchant);
+                    continue;
+                } else if (choice.equals("d")) {
+                    done = true;
+                    continue;
+                }
+
+                // User chose to select an existing budget item
+                BudgetItemMerchant selectedBim = selectBudgetItemMerchant(allBudgetItemMerchants, merchant);
+                if (selectedBim == null) {
+                    continue;  // User cancelled or invalid selection
+                }
+
+                // Show action menu for the selected budget item
+                manageSingleBudgetItemMerchant(merchant, selectedBim);
+
+            } catch (CancelException e) {
+                done = true;
+            }
         }
-
-        // Return a list of relevance scores for each budget item merchant:
-        return budgetItemsWithRelevancy.stream()
-                .map(Map.Entry::getValue)
-                .toList();
     }
 
     /**
-     * Scores the budget item in the given BudgetItemMerchant object based on its relevance to the provided transaction.
-     * The score is calculated based on: 
-     * 1. Past associations (0-40 points)
-     * 2. Ratio of past associations to this particular merchant (0-10 points)
-     * 2. Amount similarity (0-30 points)
-     * 3. Date proximity (0-30 points)
+     * Manage merchants associated with a budget item.
+     * Shows list of associated merchants and allows user to view, update, remove, or add.
      *
-     * If there is a budget item that scores well on amount similarity, and date proximity, it is probably the most
-     * likely candidate for the transaction.  If not, then the budget item with the most past associations is probably
-     * the most likely.  If the past associations ratio is low, then the budget item is only rarely associated with this
-     * merchant and is probably not the best candidate for the transaction.  Finally, the memo from the transaction can
-     * be used to help identify the budget item.  If the memo contains a keyword associated with a budget item, then
-     * that budget item is probably the best candidate for the transaction.
-     *
-     * @param budgetItemMerchant The BudgetItemMerchant object containing the budget item and its associated details.
-     * @param transaction The transaction to evaluate relevance against the budget item.
-     * @return A double representing the computed relevance score between 0 and 100.
+     * @param budgetItem The budget item whose merchants to manage
+     * @throws Exception if any error occurs
      */
-    // Score the budget item in the budgetItemMerchant based on its relevance to the transaction. 
-    private double scoreTransactionRelevance(BudgetItemMerchant budgetItemMerchant, Transaction transaction)
-            throws Exception {
+    public void manageBudgetItemMerchants(BudgetItem budgetItem) throws Exception {
+        boolean done = false;
 
-        // If the transaction date is before the budget item's start date, it's not relevant:
-        if (budgetItemMerchant.getBudgetItem().getStartDate() != null &&
-                budgetItemMerchant.getBudgetItem().getStartDate().after(transaction.getDate())) {
-            return 0;
-        }
+        while (!done) {
+            try {
+                view.say();
+                view.say("──── Manage Merchants for " + budgetItem.getDisplayString() + " ────");
 
-        // Calculate relevance score (0-100) based on:
-        double score = 0;
+                // Get all merchants associated with this budget item
+                List<BudgetItemMerchant> allMerchantAssociations =
+                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
 
-        // 1. What percentage of the time does a transaction from this merchant end up being associated with this budget
-        //    item (0-30 points)?
-        int itemPastAssociationsToMerchant =
-                TransactionSplitUtilities.getItemPastAssociationsToMerchantCount(
-                    budgetItemMerchant.getIdBudgetItem(),
-                    budgetItemMerchant.getIdMerchant()
-                );
-        int totalPastAssociationsToMerchant =
-                TransactionSplitUtilities.getTotalPastAssociationsToMerchant(budgetItemMerchant.getIdMerchant());
-        if (totalPastAssociationsToMerchant > 0) {
-            score += ((double) itemPastAssociationsToMerchant / totalPastAssociationsToMerchant) * 30;
-//            System.out.println("\n\tRelative frequency of past associations of merchant " +
-//                    Merchant.getById(budgetItemMerchant.getIdMerchant()).getName() + "with budget item " +
-//                    BudgetItem.getById(budgetItemMerchant.getIdBudgetItem()).getPayee() + " is " + score);
-        }
+                // Handle empty list
+                if (allMerchantAssociations.isEmpty()) {
+                    view.say("No merchants currently associated with this budget item.");
+                    view.say();
 
-        // 2. What percentage of the time when this budget item is used, is it associated with merchant (0-10 points)?:
-        int totalItemPastAssociationsCount =
-                TransactionSplitUtilities.getTotalItemPastAssociationsCount(budgetItemMerchant.getIdBudgetItem());
-        if (totalItemPastAssociationsCount > 0) {
-            double associationRatio = (double) itemPastAssociationsToMerchant / totalItemPastAssociationsCount;
-            score += 10 * associationRatio;
-//            System.out.println("\n\tRelative frequency of past associations of budget item " +
-//                    BudgetItem.getById(budgetItemMerchant.getIdBudgetItem()).getPayee() + " to the merchant " +
-//                    Merchant.getById(budgetItemMerchant.getIdMerchant()).getName() + " out of all association is " + score);
-        }
+                    String choice = view.selectFromMenu("What would you like to do?",
+                            List.of("add merchant", "return"),
+                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
-        // 3. Amount similarity (0-30 points)
-        double amount = (budgetItemMerchant.getAmount() > 0) ? budgetItemMerchant.getAmount() :
-                Math.abs(budgetItemMerchant.getBudgetItem().getAmount());
-        if (amount > 0) {
-            double amountDiff = Math.abs(1 - (Math.abs(transaction.getAmount() / amount)));
-            if (amountDiff <= AMOUNT_MATCH_THRESHOLD) {
-                score += 30 * (1 - (amountDiff / AMOUNT_MATCH_THRESHOLD));
-//                System.out.println("\tAmount similarity score: " + 40 * (1 - (amountDiff / AMOUNT_MATCH_THRESHOLD)) +
-//                        " (budget amount: " + amount + ", transaction amount: " + Math.abs(transaction.getAmount()) + ")");
+                    if (choice.equals("a")) {
+                        addMerchantToBudgetItem(budgetItem);
+                    } else {
+                        done = true;
+                    }
+                    continue;
+                }
+
+                // Ask what to do
+                view.say();
+                String choice = view.selectFromMenu("What would you like to do?",
+                        List.of("select existing merchant", "add merchant", "done"),
+                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+                if (choice.equals("a")) {
+                    addMerchantToBudgetItem(budgetItem);
+                    continue;
+                } else if (choice.equals("d")) {
+                    done = true;
+                    continue;
+                }
+
+                // User chose to select an existing merchant
+                BudgetItemMerchant selectedBim = selectMerchantAssociation(allMerchantAssociations, budgetItem);
+                if (selectedBim == null) {
+                    continue;  // User cancelled or invalid selection
+                }
+
+                // Show action menu for the selected merchant
+                manageSingleMerchantForBudgetItem(budgetItem, selectedBim);
+
+            } catch (CancelException e) {
+                done = true;
             }
         }
-
-        // 4. Date proximity (0-30 points)
-        Calendar closestOccurrence = ItemUtilities.getClosestOccurrence(
-                BudgetItem.getById(budgetItemMerchant.getIdBudgetItem()), Calendar.getInstance());
-        if (closestOccurrence != null) {
-            long daysDiff = Math.abs(ChronoUnit.DAYS.between(
-                    transaction.getDate().toInstant(),
-                    closestOccurrence.toInstant()
-            ));
-            if (daysDiff <= 30) {
-                score += 30 * (1 - (daysDiff / 30.0));
-//                System.out.println("\tDate proximity score: " + 20 * (1 - (daysDiff / 30.0)) +
-//                        " (closest occurrence: " + closestOccurrence.getTime() +
-//                        ", days difference: " + daysDiff + ")");
-            }
-        }
-//        System.out.println("\tTotal score: " + score);
-
-        return score;
     }
 
+    /**
+     * Manage a single budget item-merchant association (from merchant side).
+     *
+     * @param merchant The merchant
+     * @param bim The budget item-merchant association
+     * @throws Exception if any error occurs
+     */
+    private void manageSingleBudgetItemMerchant(Merchant merchant, BudgetItemMerchant bim) throws Exception {
+        boolean actionComplete = false;
+        BudgetItem item = bim.getBudgetItem();
 
+        while (!actionComplete) {
+            view.say();
+            view.say("Selected budget item:");
+            displayBudgetItemMerchantSummary(bim);
 
-//    public List<Map.Entry<BudgetItem, Double>> filterBudgetItemsFromDatabaseForTransaction(Transaction transaction)
-//            throws EntityException {
-//
-//        if (transaction == null) {
-//            return new ArrayList<>();
-//        }
-//
-//        // Get all unexpired budget items from the database as a result set:
-//        ResultSet resultSet = BudgetItem.getAllUnexpiredBudgetItems(Calendar.getInstance(), budget);
-//
-//        //
-//        return budgetItems.stream()
-//                .map(bim -> Map.entry(bim, scoreTransactionRelevance(bim, transaction)))
-//                .filter(entry -> entry.getValue() > 0)
-//                .sorted((e1, e2) -> Double.compare(e2.getValue(), e1.getValue()))
-//                .limit(10)
-//                .collect(Collectors.toList());
-//    }
+            String action = view.selectFromMenu("What would you like to do with this budget item?",
+                    List.of("view details", "update amount/percentage",
+                            "remove association", "select another item"),
+                    DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+            switch (action) {
+                case "v":  // view details
+                    viewBudgetItemDetails(bim);
+                    break;
+
+                case "u":  // update amount/percentage
+                    updateAssociation(merchant, null, bim);
+                    actionComplete = true;
+                    break;
+
+                case "r":  // remove association
+                    removeAssociation(merchant, null, bim);
+                    actionComplete = true;
+                    break;
+
+                case "s":  // select another item
+                case "c":  // cancel
+                    actionComplete = true;
+                    break;
+
+                default:
+                    throw new InvalidEntryException("Unexpected menu option: " + action);
+            }
+        }
+    }
+
+    /**
+     * Manage a single merchant-budget item association (from budget item side).
+     *
+     * @param budgetItem The budget item
+     * @param bim The budget item-merchant association
+     * @throws Exception if any error occurs
+     */
+    private void manageSingleMerchantForBudgetItem(BudgetItem budgetItem, BudgetItemMerchant bim) throws Exception {
+        boolean actionComplete = false;
+
+        while (!actionComplete) {
+            view.say();
+            view.say("Selected merchant:");
+            displayMerchantAssociationSummary(bim);
+
+            String action = view.selectFromMenu("What would you like to do with this merchant?",
+                    List.of("view details", "update amount/percentage",
+                            "remove association", "select another merchant"),
+                    DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+            switch (action) {
+                case "v":  // view details
+                    viewMerchantDetails(bim);
+                    break;
+
+                case "u":  // update amount/percentage
+                    updateAssociation(null, budgetItem, bim);
+                    actionComplete = true;
+                    break;
+
+                case "r":  // remove association
+                    removeAssociation(null, budgetItem, bim);
+                    actionComplete = true;
+                    break;
+
+                case "s":  // select another merchant
+                case "c":  // cancel
+                    actionComplete = true;
+                    break;
+
+                default:
+                    throw new InvalidEntryException("Unexpected menu option: " + action);
+            }
+        }
+    }
+
+    /**
+     * Select a budget item-merchant association from a list.
+     *
+     * @param associations List of associations
+     * @param merchant The merchant (for display context)
+     * @return The selected association, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    private BudgetItemMerchant selectBudgetItemMerchant(List<BudgetItemMerchant> associations,
+                                                        Merchant merchant) throws Exception {
+        view.say();
+        view.say("Budget items associated with " + merchant.getName() + ":");
+        for (int i = 0; i < associations.size(); i++) {
+            BudgetItemMerchant bim = associations.get(i);
+            BudgetItem item = bim.getBudgetItem();
+            String displayStr = (i + 1) + " - " + item.getDisplayString();
+            if (bim.getAmount() != 0.0) {
+                displayStr += " [Amount: $" + bim.getAmount() + "]";
+            }
+            if (bim.getPercentage() != 0) {
+                displayStr += " [Percentage: " + bim.getPercentage() + "%]";
+            }
+            view.say(displayStr);
+        }
+        view.say();
+
+        Integer selection = view.getResponseInt("Enter the number of the budget item:",
+                null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+        if (selection == null || selection < 1 || selection > associations.size()) {
+            view.say("Invalid selection.");
+            return null;
+        }
+
+        return associations.get(selection - 1);
+    }
+
+    /**
+     * Select a merchant association from a list.
+     *
+     * @param associations List of associations
+     * @param budgetItem The budget item (for display context)
+     * @return The selected association, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    private BudgetItemMerchant selectMerchantAssociation(List<BudgetItemMerchant> associations,
+                                                         BudgetItem budgetItem) throws Exception {
+        view.say();
+        view.say("Merchants associated with " + budgetItem.getPayee() + ":");
+        for (int i = 0; i < associations.size(); i++) {
+            BudgetItemMerchant bim = associations.get(i);
+            Merchant merchant = Merchant.getById(bim.getIdMerchant());
+            String displayStr = (i + 1) + " - " + merchant.getName();
+            if (bim.getAmount() != 0.0) {
+                displayStr += " [Amount: $" + bim.getAmount() + "]";
+            }
+            if (bim.getPercentage() != 0) {
+                displayStr += " [Percentage: " + bim.getPercentage() + "%]";
+            }
+            view.say(displayStr);
+        }
+        view.say();
+
+        Integer selection = view.getResponseInt("Enter the number of the merchant:",
+                null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+        if (selection == null || selection < 1 || selection > associations.size()) {
+            view.say("Invalid selection.");
+            return null;
+        }
+
+        return associations.get(selection - 1);
+    }
+
+    /**
+     * Display a summary of a budget item-merchant association.
+     *
+     * @param bim The association
+     */
+    private void displayBudgetItemMerchantSummary(BudgetItemMerchant bim) {
+        BudgetItem item = bim.getBudgetItem();
+        String displayStr = "  " + item.getDisplayString();
+        if (bim.getAmount() != 0.0) {
+            displayStr += " [Amount: $" + bim.getAmount() + "]";
+        }
+        if (bim.getPercentage() != 0) {
+            displayStr += " [Percentage: " + bim.getPercentage() + "%]";
+        }
+        view.say(displayStr);
+    }
+
+    /**
+     * Display a summary of a merchant association.
+     *
+     * @param bim The association
+     * @throws Exception if any error occurs
+     */
+    private void displayMerchantAssociationSummary(BudgetItemMerchant bim) throws Exception {
+        Merchant merchant = Merchant.getById(bim.getIdMerchant());
+        String displayStr = "  " + merchant.getName();
+        if (bim.getAmount() != 0.0) {
+            displayStr += " [Amount: $" + bim.getAmount() + "]";
+        }
+        if (bim.getPercentage() != 0) {
+            displayStr += " [Percentage: " + bim.getPercentage() + "%]";
+        }
+        view.say(displayStr);
+    }
+
+    /**
+     * View details of a budget item in an association.
+     *
+     * @param bim The budget item-merchant association
+     * @throws Exception if any error occurs
+     */
+    private void viewBudgetItemDetails(BudgetItemMerchant bim) throws Exception {
+        BudgetItem item = bim.getBudgetItem();
+
+        view.say();
+        view.say("──── Budget Item Details ────");
+        view.say("Category: " + item.getCategory());
+        view.say("Payee: " + item.getPayee());
+        view.say("Memo: " + (item.getMemo() != null && !item.getMemo().isEmpty() ? item.getMemo() : "(none)"));
+        view.say("Amount: $" + item.getAmount() + " " + item.getPeriod());
+        view.say("Budget: " + item.getBudget().getName());
+        if (bim.getAmount() != 0.0) {
+            view.say("Assigned Amount for this Merchant: $" + bim.getAmount());
+        }
+        if (bim.getPercentage() != 0) {
+            view.say("Assigned Percentage for this Merchant: " + bim.getPercentage() + "%");
+        }
+        view.say();
+    }
+
+    /**
+     * View details of a merchant in an association.
+     *
+     * @param bim The budget item-merchant association
+     * @throws Exception if any error occurs
+     */
+    private void viewMerchantDetails(BudgetItemMerchant bim) throws Exception {
+        Merchant merchant = Merchant.getById(bim.getIdMerchant());
+
+        view.say();
+        view.say("──── Merchant Details ────");
+        view.say("Name: " + merchant.getName());
+        view.say("Ask Always: " + (merchant.isAskAlways() ? "yes" : "no"));
+        if (bim.getAmount() != 0.0) {
+            view.say("Assigned Amount for this Budget Item: $" + bim.getAmount());
+        }
+        if (bim.getPercentage() != 0) {
+            view.say("Assigned Percentage for this Budget Item: " + bim.getPercentage() + "%");
+        }
+        view.say();
+    }
+
+    /**
+     * Update the amount or percentage for an association.
+     *
+     * @param merchant The merchant (if managing from merchant side)
+     * @param budgetItem The budget item (if managing from budget item side)
+     * @param bim The association
+     * @throws Exception if any error occurs
+     */
+    private void updateAssociation(Merchant merchant, BudgetItem budgetItem,
+                                   BudgetItemMerchant bim) throws Exception {
+        view.say();
+        view.say("Current Amount: " + (bim.getAmount() != 0.0 ? "$" + bim.getAmount() : "not set"));
+        view.say("Current Percentage: " + (bim.getPercentage() != 0 ? bim.getPercentage() + "%" : "not set"));
+        view.say();
+
+        String choice = view.selectFromMenu("What would you like to update?",
+                List.of("amount", "percentage", "both", "clear both"),
+                DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+        double newAmount = bim.getAmount();
+        int newPercentage = bim.getPercentage();
+
+        switch (choice) {
+            case "a":  // amount
+                String amountStr = view.getResponseString("Enter amount (or 0 to clear):",
+                        String.valueOf(bim.getAmount()), ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                newAmount = Double.parseDouble(amountStr);
+                break;
+
+            case "p":  // percentage
+                newPercentage = view.getResponseNatural("Enter percentage (or 0 to clear):",
+                        bim.getPercentage(), ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                if (newPercentage > 100) {
+                    view.say("Percentage cannot exceed 100. Setting to 100.");
+                    newPercentage = 100;
+                }
+                break;
+
+            case "b":  // both
+                amountStr = view.getResponseString("Enter amount (or 0 to clear):",
+                        String.valueOf(bim.getAmount()), ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                newAmount = Double.parseDouble(amountStr);
+
+                newPercentage = view.getResponseNatural("Enter percentage (or 0 to clear):",
+                        bim.getPercentage(), ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                if (newPercentage > 100) {
+                    view.say("Percentage cannot exceed 100. Setting to 100.");
+                    newPercentage = 100;
+                }
+                break;
+
+            case "c":  // clear both
+                newAmount = 0.0;
+                newPercentage = 0;
+                break;
+
+            default:
+                return;  // Cancelled
+        }
+
+        // Get the item and merchant for the update
+        BudgetItem item = bim.getBudgetItem();
+        if (merchant == null) {
+            merchant = Merchant.getById(bim.getIdMerchant());
+        }
+
+        // Delete old association and create new one with updated values
+        BudgetItemMerchant.deleteByItemAndMerchant(item, merchant);
+        BudgetItemMerchant newBim = new BudgetItemMerchant(item, merchant, newAmount, newPercentage);
+        newBim.save();
+        view.say("Association successfully updated.");
+    }
+
+    /**
+     * Remove an association.
+     *
+     * @param merchant The merchant (if managing from merchant side)
+     * @param budgetItem The budget item (if managing from budget item side)
+     * @param bim The association
+     * @throws Exception if any error occurs
+     */
+    private void removeAssociation(Merchant merchant, BudgetItem budgetItem,
+                                   BudgetItemMerchant bim) throws Exception {
+        BudgetItem item = bim.getBudgetItem();
+        if (merchant == null) {
+            merchant = Merchant.getById(bim.getIdMerchant());
+        }
+
+        view.say();
+        view.say("You are about to remove the association between:");
+        view.say("  Budget Item: " + item.getDisplayString());
+        view.say("  Merchant: " + merchant.getName());
+        view.say();
+
+        if (view.getYesOrNo("Are you sure you want to remove this association?")) {
+            BudgetItemMerchant.deleteByItemAndMerchant(item, merchant);
+            view.say("Association successfully removed.");
+        } else {
+            view.say("Removal cancelled.");
+        }
+    }
+
+    /**
+     * Add a budget item to a merchant.
+     *
+     * @param merchant The merchant
+     * @throws Exception if any error occurs
+     */
+    private void addBudgetItemToMerchant(Merchant merchant) throws Exception {
+        view.say();
+        view.say("──── Add Budget Item to " + merchant.getName() + " ────");
+
+        // Get a budget to search in
+        Budget selectedBudget = sessionController.getBudgetFromUser();
+        if (selectedBudget == null) {
+            return;  // User cancelled
+        }
+
+        // Use BudgetController's method to select a budget item
+        BudgetController budgetController = new BudgetController(sessionController, view);
+        BudgetItem selectedItem = budgetController.selectBudgetItem(selectedBudget);
+
+        if (selectedItem == null) {
+            return;  // User cancelled
+        }
+
+        // Check if already associated
+        BudgetItemMerchant existing = BudgetItemMerchant.getByItemAndMerchant(selectedItem, merchant);
+        if (existing != null) {
+            view.say("This budget item is already associated with this merchant.");
+            return;
+        }
+
+        // Get amount/percentage if desired
+        double amount = 0.0;
+        int percentage = 0;
+        boolean setAmountOrPercentage = view.getYesOrNo(
+            "Do you want to assign a fixed amount or percentage to this budget item when associated with this merchant?");
+
+        if (setAmountOrPercentage) {
+            Object[] result = getAmountAndPercentage();
+            amount = (Double) result[0];
+            percentage = (Integer) result[1];
+        }
+
+        // Create and save the association
+        BudgetItemMerchant newBim = new BudgetItemMerchant(selectedItem, merchant, amount, percentage);
+        newBim.save();
+        view.say("Budget item successfully added to merchant.");
+    }
+
+    /**
+     * Add a merchant to a budget item.
+     *
+     * @param budgetItem The budget item
+     * @throws Exception if any error occurs
+     */
+    private void addMerchantToBudgetItem(BudgetItem budgetItem) throws Exception {
+        view.say();
+        view.say("──── Add Merchant to " + budgetItem.getPayee() + " ────");
+
+        // Use MerchantController's method to select a merchant
+        MerchantController merchantController = new MerchantController(sessionController, view, notificationService);
+        Merchant selectedMerchant = merchantController.selectMerchantPublic(ALLOW_CREATE);
+
+        if (selectedMerchant == null) {
+            return;  // User cancelled
+        }
+
+        // Check if already associated
+        BudgetItemMerchant existing = BudgetItemMerchant.getByItemAndMerchant(budgetItem, selectedMerchant);
+        if (existing != null) {
+            view.say("This merchant is already associated with this budget item.");
+            return;
+        }
+
+        // Get amount/percentage if desired
+        double amount = 0.0;
+        int percentage = 0;
+        boolean setAmountOrPercentage = view.getYesOrNo(
+            "Do you want to assign a fixed amount or percentage to this merchant when associated with this budget item?");
+
+        if (setAmountOrPercentage) {
+            Object[] result = getAmountAndPercentage();
+            amount = (Double) result[0];
+            percentage = (Integer) result[1];
+        }
+
+        // Create and save the association
+        BudgetItemMerchant newBim = new BudgetItemMerchant(budgetItem, selectedMerchant, amount, percentage);
+        newBim.save();
+        view.say("Merchant successfully added to budget item.");
+    }
+
+    /**
+     * Get amount and/or percentage from the user.
+     *
+     * @return Array with [amount (Double), percentage (Integer)]
+     * @throws Exception if any error occurs
+     */
+    private Object[] getAmountAndPercentage() throws Exception {
+        double amount = 0.0;
+        int percentage = 0;
+
+        String choice = view.selectFromMenu("What would you like to set?",
+                List.of("amount", "percentage", "both"),
+                DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+        switch (choice) {
+            case "a":  // amount
+                String amountStr = view.getResponseString("Enter amount:",
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                amount = Double.parseDouble(amountStr);
+                break;
+
+            case "p":  // percentage
+                percentage = view.getResponseNatural("Enter percentage:",
+                        0, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                if (percentage > 100) {
+                    view.say("Percentage cannot exceed 100. Setting to 100.");
+                    percentage = 100;
+                }
+                break;
+
+            case "b":  // both
+                amountStr = view.getResponseString("Enter amount:",
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                amount = Double.parseDouble(amountStr);
+
+                percentage = view.getResponseNatural("Enter percentage:",
+                        0, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                if (percentage > 100) {
+                    view.say("Percentage cannot exceed 100. Setting to 100.");
+                    percentage = 100;
+                }
+                break;
+        }
+
+        return new Object[]{amount, percentage};
+    }
 }
 

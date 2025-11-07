@@ -13,6 +13,8 @@ import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
 
+import java.util.List;
+
 /**
  * SessionController manages the shared application state including register, budget, and forecast objects.
  * This controller provides centralized access to these core model objects and ensures they are properly
@@ -283,5 +285,45 @@ public class SessionController {
      */
     public boolean isFullyInitialized() {
         return register != null && budget != null && forecast != null;
+    }
+
+    /**
+     * Gets all budgets available to the current user.
+     * This method retrieves all budgets from the database.
+     *
+     * @return List of all Budget objects
+     * @throws Exception if an error occurs retrieving budgets
+     */
+    public List<Budget> getUserBudgets() throws Exception {
+        return com.hixon.financialApp.model.budget.BudgetUtilities.getAllBudgets();
+    }
+
+    /**
+     * Prompts the user to select a budget from available budgets.
+     * Uses the view interface to present budget options to the user.
+     *
+     * @return The selected Budget, or null if cancelled
+     * @throws Exception if an error occurs during budget selection
+     */
+    public Budget getBudgetFromUser() throws Exception {
+        try {
+            List<Budget> budgets = getUserBudgets();
+            if (budgets.isEmpty()) {
+                view.say("No budgets available.");
+                return null;
+            }
+
+            if (budgets.size() == 1) {
+                return budgets.get(0);
+            }
+
+            Budget defaultBudget = budget != null ? budget : budgets.get(0);
+            return view.selectByNameFromList("Select Budget", budgets, defaultBudget,
+                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP,
+                    () -> "Select a budget to work with");
+        } catch (CancelException | QuitException e) {
+            return null;
+        }
     }
 }

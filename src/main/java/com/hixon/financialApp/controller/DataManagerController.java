@@ -37,7 +37,8 @@ public class DataManagerController {
     private ViewInt view;
     private NotificationServiceInt notificationService;
     private BudgetController budgetController;
-    
+    private SessionController sessionController;
+
     
     /*
      * Constructors and destructor for the data manager controller:
@@ -59,6 +60,7 @@ public class DataManagerController {
         this.forecast = forecast;
         this.view = view;
         this.notificationService = notificationService;
+        this.sessionController = new SessionController(register, budget, forecast, view, notificationService);
     }
     
     
@@ -95,7 +97,7 @@ public class DataManagerController {
                         break;
                     case "m":
                         // Merchants are global entities - no specific context needed
-                        MerchantController merchantController = new MerchantController(view, notificationService);
+                        MerchantController merchantController = new MerchantController(sessionController, view, notificationService);
                         merchantController.manageMerchants();
                         break;
                     case "t":

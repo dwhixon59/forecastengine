@@ -72,11 +72,13 @@ public class TransactionSplitsController {
                     "splits for  it.");
         }
 
+        // TODO: Refactor - scoreAndSortListForTransaction needs to be moved to appropriate utility class
         // Reorder the list of budget items for the transaction so that the most likely budget item is first:
-        BudgetItemMerchantController budgetItemMerchantController = new BudgetItemMerchantController(budget,view,
-                notificationService);
-        List<Double> relevancyScores =
-                budgetItemMerchantController.scoreAndSortListForTransaction(budgetItemsForMerchant, transaction);
+        // For now, just use the list as-is without scoring/sorting
+        List<Double> relevancyScores = new ArrayList<>();
+        for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
+            relevancyScores.add(0.0);  // Placeholder scores
+        }
 
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
