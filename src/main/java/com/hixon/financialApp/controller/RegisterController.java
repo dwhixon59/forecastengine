@@ -118,7 +118,7 @@ public class RegisterController {
 
                     // Ask what to do with this register
                     String action = view.selectFromMenu("What would you like to do with this register?",
-                            List.of("view details", "update balance", "select another register"),
+                            List.of("view details", "update this register", "delete this register", "select another register"),
                             ViewInt.DO_NOT_ALLOW_NONE, ViewInt.SHOW_CANCEL_QUIT_SKIP,
                             ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP);
 
@@ -131,8 +131,38 @@ public class RegisterController {
                             view.say("──────────────────────────────────────");
                             break;
 
-                        case "u":  // update balance
-                            verifyRegisterBalance(selectedRegister);
+                        case "u":  // update this register
+                            Register updatedRegister = getRegisterFromUser(selectedRegister);
+                            if (updatedRegister != null && updatedRegister.isValid()) {
+                                Register confirmedRegister = confirmRegister(updatedRegister, "updated");
+                                if (confirmedRegister != null) {
+                                    confirmedRegister.setId(selectedRegister.getId()); // Preserve the original ID
+                                    confirmedRegister.update();
+                                    view.say("Register successfully updated.");
+
+                                    // Update the selected register reference for the next iteration
+                                    selectedRegister = confirmedRegister;
+                                }
+                            } else if (updatedRegister != null) {
+                                view.say("Register entered by user is invalid.");
+                            }
+                            break;
+
+                        case "d":  // delete this register
+                            view.say("\nYou are about to delete:");
+                            view.say("  " + selectedRegister.toStringConcise());
+
+                            if (view.getYesOrNo("Are you sure you want to delete this register? This action cannot be undone.")) {
+                                try {
+                                    selectedRegister.delete();
+                                    view.say("Register successfully deleted.");
+                                    actionComplete = true;  // Exit to register selection
+                                } catch (Exception e) {
+                                    view.say("Error deleting register: " + e.getMessage());
+                                }
+                            } else {
+                                view.say("Deletion cancelled.");
+                            }
                             break;
 
                         case "s":  // select another register
@@ -870,6 +900,152 @@ public class RegisterController {
         return forecast.getInSync();
 
     } // End processSkippedTransactions().
+
+    /**
+     * Get register information from the user interactively.
+     * If a template register is provided, use its values as defaults.
+     *
+     * @param template Optional template register to pre-fill values (can be null)
+     * @return Register object populated with user input, or null if cancelled
+     * @throws Exception if any error occurs during input collection
+     */
+    private Register getRegisterFromUser(Register template) throws Exception {
+        try {
+            // Let the user know what we are going to do:
+            view.sayH1("Register Entry");
+            view.say("Please enter the details for the register. You can cancel or quit at any time by entering 'C' or 'Q'.");
+            view.say("Press <enter> to accept the default value shown in brackets [].");
+
+            view.sayH2("Basic Information");
+
+            // Get the register name
+            String defaultName = template != null ? template.getName() : "";
+            String name = view.getResponseString("Register Name", defaultName, ViewInt.DO_NOT_ALLOW_NONE,
+                    ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get the nickname
+            String defaultNickname = template != null ? template.getNickname() : "";
+            String nickname = view.getResponseString("Nickname", defaultNickname, ViewInt.DO_NOT_ALLOW_NONE,
+                    ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get the account type
+            String defaultAccountType = template != null ? template.getAccountType() : Register.CHECKING;
+            view.say("Account types: 1-" + Register.CHECKING + ", 2-" + Register.SAVINGS + ", 3-Credit Card, 4-Investment, 5-Other");
+            String accountTypeResponse = view.getResponseString("Select Account Type (or enter account type name)",
+                    defaultAccountType, ViewInt.DO_NOT_ALLOW_NONE,
+                    ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Parse the response - could be a number or a name
+            String accountType;
+            try {
+                int selection = Integer.parseInt(accountTypeResponse);
+                switch (selection) {
+                    case 1: accountType = Register.CHECKING; break;
+                    case 2: accountType = Register.SAVINGS; break;
+                    case 3: accountType = "Credit Card"; break;
+                    case 4: accountType = "Investment"; break;
+                    case 5: accountType = "Other"; break;
+                    default: accountType = accountTypeResponse; break;
+                }
+            } catch (NumberFormatException e) {
+                accountType = accountTypeResponse;
+            }
+
+            // Get the account number
+            String defaultAccountNumber = template != null ? template.getAccountNumber() : "";
+            String accountNumber = view.getResponseString("Account Number", defaultAccountNumber, ViewInt.ALLOW_NONE,
+                    ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get the financial institution
+            String defaultFinancialInstitution = template != null ? template.getFinancialInstitution() : "";
+            String financialInstitution = view.getResponseString("Financial Institution", defaultFinancialInstitution,
+                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            view.sayH2("Balance Information");
+
+            // Get the balance
+            Double defaultBalance = template != null ? template.getBalance() : 0.0;
+            double balance = view.getResponseCurrency("Current Balance", defaultBalance, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get the skipped amount
+            Double defaultSkippedAmount = template != null ? template.getSkippedAmount() : 0.0;
+            double skippedAmount = view.getResponseCurrency("Skipped Amount", defaultSkippedAmount, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            view.sayH2("Import File Configuration");
+
+            // Get transaction import file name
+            String defaultTrxImportFileName = template != null ? template.getTrxImportFileName() : "";
+            String trxImportFileName = view.getResponseString("Transaction Import File Name", defaultTrxImportFileName,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get transaction import file directory
+            String defaultTrxImportFileDirectory = template != null ? template.getTrxImportFileDirectory() : "";
+            String trxImportFileDirectory = view.getResponseString("Transaction Import File Directory", defaultTrxImportFileDirectory,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get provisional transaction file name
+            String defaultProvisionalTrxFileName = template != null ? template.getProvisionalTrxFileName() : "";
+            String provisionalTrxFileName = view.getResponseString("Provisional Transaction File Name", defaultProvisionalTrxFileName,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Get provisional transaction file directory
+            String defaultProvisionalTrxFileDirectory = template != null ? template.getProvisionalTrxFileDirectory() : "";
+            String provisionalTrxFileDirectory = view.getResponseString("Provisional Transaction File Directory", defaultProvisionalTrxFileDirectory,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Create Register object
+            Register register = new Register();
+            register.setId(UUID.randomUUID());
+            register.setName(name);
+            register.setNickname(nickname);
+            register.setAccountType(accountType);
+            register.setAccountNumber(accountNumber);
+            register.setFinancialInstitution(financialInstitution);
+            register.setBalance(balance);
+            register.setSkippedAmount(skippedAmount);
+            register.setTrxImportFileName(trxImportFileName);
+            register.setTrxImportFileDirectory(trxImportFileDirectory);
+            register.setProvisionalTrxFileName(provisionalTrxFileName);
+            register.setProvisionalTrxFileDirectory(provisionalTrxFileDirectory);
+
+            // Copy over the budget ID if updating
+            if (template != null) {
+                register.setIdBudget(template.getIdBudget());
+            }
+
+            return register;
+
+        } catch (CancelException e) {
+            view.say("Operation cancelled by user.");
+            return null;
+        } catch (QuitException e) {
+            throw e;
+        }
+    }
+
+    /**
+     * Display register details and ask user to confirm before saving.
+     *
+     * @param register The register to confirm
+     * @param action   Description of the action (e.g., "updated", "created")
+     * @return The confirmed register, or null if user cancels
+     */
+    private Register confirmRegister(Register register, String action) {
+        view.say();
+        view.say("Please review the register details:");
+        view.say("──────────────────────────────────────");
+        displayRegisterDetails(register);
+        view.say("──────────────────────────────────────");
+
+        if (view.getYesOrNo("Is this information correct? The register will be " + action + ".")) {
+            return register;
+        } else {
+            view.say("Operation cancelled.");
+            return null;
+        }
+    }
 
     /**
      * Display detailed information about a register in vertical format.

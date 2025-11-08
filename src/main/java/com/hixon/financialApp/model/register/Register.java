@@ -39,6 +39,7 @@ public class Register extends IndependentEntity {
     @Setter
     private String name = null;
     @Getter
+    @Setter
     private String nickname = null;
     @Getter
     @Setter
