@@ -1354,6 +1354,15 @@ public class ViewCmdline implements ViewInt {
             Supplier<String> helpSupplier)
             throws CancelException, QuitException, SkipException {
 
+        // If there's only one item in the list, automatically select it
+        if (items.size() == 1) {
+            sayH3(prompt);
+            say("  Only one option available: " + items.get(0));
+            say("  Automatically selected.");
+            say();
+            return new NumberOrStringResponse(0); // Return index 0 (the only item)
+        }
+
         sayH3(prompt);
 
         String optionPrompt = "Enter your choice";

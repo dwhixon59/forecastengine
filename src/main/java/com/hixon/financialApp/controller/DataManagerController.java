@@ -85,7 +85,7 @@ public class DataManagerController {
                     "Merchants",
                     "Transactions",
                     "Forecast transactions",
-                    "Financial institutions"
+                    "Registers"
                 );
                 String option = view.selectFromMenu(prompt, entityOptions, DO_NOT_ALLOW_NONE,
                         SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
@@ -117,11 +117,10 @@ public class DataManagerController {
                                 new ForecastTransactionController(register, budget, forecast, view, notificationService);
                         forecastTransactionController.manageForecastTransactions();
                         break;
-                    case "i":
-                        // Financial institutions are global entities - no specific context needed
-                        // TODO: Delegate to FinancialInstitutionController
-                        // financialInstitutionController.manageFinancialInstitutions();
-                        view.say("Financial institution management not yet implemented.");
+                    case "r":
+                        // Registers are global entities - no specific context needed
+                        RegisterController registerController = new RegisterController(sessionController, view, notificationService);
+                        registerController.manageRegisters();
                         break;
                     case "q":
                         done = true;

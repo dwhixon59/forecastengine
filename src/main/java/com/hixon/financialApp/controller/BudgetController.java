@@ -1014,7 +1014,7 @@ public class BudgetController {
      * @return The selected BudgetItem, or null if cancelled
      * @throws Exception if any error occurs
      */
-    private BudgetItem selectBudgetItemFromBudget(Budget budget, boolean allowCreate)
+    public BudgetItem selectBudgetItemFromBudget(Budget budget, boolean allowCreate)
             throws CancelException, QuitException, SkipException, SQLException, EntityException {
         SelectionController selectionController = new SelectionController(view);
 

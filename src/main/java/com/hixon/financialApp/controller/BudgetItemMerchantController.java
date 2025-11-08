@@ -281,32 +281,44 @@ public class BudgetItemMerchantController {
      */
     private BudgetItemMerchant selectBudgetItemMerchant(List<BudgetItemMerchant> associations,
                                                         Merchant merchant) throws Exception {
-        view.say();
-        view.say("Budget items associated with " + merchant.getName() + ":");
-        for (int i = 0; i < associations.size(); i++) {
-            BudgetItemMerchant bim = associations.get(i);
+        // Sort associations by budget item payee name alphabetically
+        associations.sort((a, b) -> {
+            BudgetItem itemA = a.getBudgetItem();
+            BudgetItem itemB = b.getBudgetItem();
+            return itemA.getPayee().compareToIgnoreCase(itemB.getPayee());
+        });
+
+        // Build display strings for each budget item
+        List<String> displayStrings = new ArrayList<>();
+        for (BudgetItemMerchant bim : associations) {
             BudgetItem item = bim.getBudgetItem();
-            String displayStr = (i + 1) + " - " + item.getDisplayString();
+            String displayStr = item.getDisplayString();
             if (bim.getAmount() != 0.0) {
                 displayStr += " [Amount: $" + bim.getAmount() + "]";
             }
             if (bim.getPercentage() != 0) {
                 displayStr += " [Percentage: " + bim.getPercentage() + "%]";
             }
-            view.say(displayStr);
+            displayStrings.add(displayStr);
         }
-        view.say();
 
-        Integer selection = view.getResponseInt("Enter the number of the budget item:",
-                null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+        try {
+            Integer selectedIndex = view.selectByPositionFromList(
+                    "Budget items associated with " + merchant.getName() + ":",
+                    displayStrings,
+                    DO_NOT_ALLOW_NONE,
+                    ALLOW_CANCEL,
+                    ALLOW_QUIT,
+                    DO_NOT_ALLOW_SKIP);
 
-        if (selection == null || selection < 1 || selection > associations.size()) {
-            view.say("Invalid selection.");
+            if (selectedIndex == null) {
+                return null;
+            }
+
+            return associations.get(selectedIndex);
+        } catch (CancelException | QuitException | SkipException e) {
             return null;
         }
-
-        return associations.get(selection - 1);
     }
 
     /**
@@ -319,32 +331,48 @@ public class BudgetItemMerchantController {
      */
     private BudgetItemMerchant selectMerchantAssociation(List<BudgetItemMerchant> associations,
                                                          BudgetItem budgetItem) throws Exception {
-        view.say();
-        view.say("Merchants associated with " + budgetItem.getPayee() + ":");
-        for (int i = 0; i < associations.size(); i++) {
-            BudgetItemMerchant bim = associations.get(i);
+        // Sort associations by merchant name alphabetically
+        associations.sort((a, b) -> {
+            try {
+                Merchant merchantA = Merchant.getById(a.getIdMerchant());
+                Merchant merchantB = Merchant.getById(b.getIdMerchant());
+                return merchantA.getName().compareToIgnoreCase(merchantB.getName());
+            } catch (Exception e) {
+                return 0;
+            }
+        });
+
+        // Build display strings for each merchant
+        List<String> displayStrings = new ArrayList<>();
+        for (BudgetItemMerchant bim : associations) {
             Merchant merchant = Merchant.getById(bim.getIdMerchant());
-            String displayStr = (i + 1) + " - " + merchant.getName();
+            String displayStr = merchant.getName();
             if (bim.getAmount() != 0.0) {
                 displayStr += " [Amount: $" + bim.getAmount() + "]";
             }
             if (bim.getPercentage() != 0) {
                 displayStr += " [Percentage: " + bim.getPercentage() + "%]";
             }
-            view.say(displayStr);
+            displayStrings.add(displayStr);
         }
-        view.say();
 
-        Integer selection = view.getResponseInt("Enter the number of the merchant:",
-                null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+        try {
+            Integer selectedIndex = view.selectByPositionFromList(
+                    "Merchants associated with " + budgetItem.getPayee() + ":",
+                    displayStrings,
+                    DO_NOT_ALLOW_NONE,
+                    ALLOW_CANCEL,
+                    ALLOW_QUIT,
+                    DO_NOT_ALLOW_SKIP);
 
-        if (selection == null || selection < 1 || selection > associations.size()) {
-            view.say("Invalid selection.");
+            if (selectedIndex == null) {
+                return null;
+            }
+
+            return associations.get(selectedIndex);
+        } catch (CancelException | QuitException | SkipException e) {
             return null;
         }
-
-        return associations.get(selection - 1);
     }
 
     /**

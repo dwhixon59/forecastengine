@@ -40,6 +40,7 @@ public class RegisterController {
     protected Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
+    private SessionController sessionController;
 
 
     /*
@@ -64,10 +65,118 @@ public class RegisterController {
         this.notificationService = notificationService;
     }
 
+    /**
+     * Constructor for RegisterController with SessionController.
+     * Used for managing registers across multiple users and budgets.
+     *
+     * @param sessionController The session controller for accessing user and budget information
+     * @param view The view interface for user interaction
+     * @param notificationService The notification service for sending notifications
+     */
+    public RegisterController(SessionController sessionController, ViewInt view, NotificationServiceInt notificationService) {
+        terminationCondition = QUIT;
+        this.sessionController = sessionController;
+        this.financialInstitution = null;
+        this.view = view;
+        this.notificationService = notificationService;
+    }
+
 
     /*
      * Main methods for RegisterController:
      */
+
+    /**
+     * Allows the user to manage registers interactively.
+     * The workflow is:
+     * 1. Select a register from all available registers
+     * 2. Choose what to do with it (view details, update balance, or select another)
+     *
+     * @throws Exception if any error occurs during management operations
+     */
+    public void manageRegisters() throws Exception {
+        boolean done = false;
+
+        while (!done) {
+            try {
+                // Step 1: Select a register from all available registers
+                Register selectedRegister = selectRegisterForManagement();
+
+                if (selectedRegister == null) {
+                    // User cancelled - exit
+                    done = true;
+                    continue;
+                }
+
+                // Step 2: Show action menu for the selected register
+                boolean actionComplete = false;
+                while (!actionComplete) {
+                    // Display the selected register
+                    view.say();
+                    view.say("Selected register:");
+                    view.say("  " + selectedRegister.toStringConcise());
+
+                    // Ask what to do with this register
+                    String action = view.selectFromMenu("What would you like to do with this register?",
+                            List.of("view details", "update balance", "select another register"),
+                            ViewInt.DO_NOT_ALLOW_NONE, ViewInt.SHOW_CANCEL_QUIT_SKIP,
+                            ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP);
+
+                    switch (action) {
+                        case "v":  // view details
+                            view.say();
+                            view.say("Register Details:");
+                            view.say("──────────────────────────────────────");
+                            displayRegisterDetails(selectedRegister);
+                            view.say("──────────────────────────────────────");
+                            break;
+
+                        case "u":  // update balance
+                            verifyRegisterBalance(selectedRegister);
+                            break;
+
+                        case "s":  // select another register
+                            actionComplete = true;  // Exit to register selection
+                            break;
+
+                        case "q":
+                            actionComplete = true;
+                            done = true;
+                            break;
+
+                        default:
+                            throw new InvalidEntryException("selectFromMenu returned an option that wasn't in the option list.");
+                    }
+                }
+
+            } catch (CancelException e) {
+                view.say("Operation cancelled by user.");
+                done = true;
+            } catch (QuitException e) {
+                done = true;
+            }
+        }
+    }
+
+    /**
+     * Select a register from all available registers in the system.
+     *
+     * @return The selected Register, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    private Register selectRegisterForManagement() throws Exception {
+        // Get all registers
+        List<Register> allRegisters = Register.getListOf();
+
+        if (allRegisters.isEmpty()) {
+            view.say("No registers found in the system.");
+            return null;
+        }
+
+        // Let user select from the list
+        return view.selectByNameFromList("Select a register:", allRegisters, null, ViewInt.DO_NOT_ALLOW_NONE,
+                ViewInt.SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+    }
 
     /**
      * Select a register by name from a list of all the registers in the database.
@@ -221,7 +330,7 @@ public class RegisterController {
             }
         }
 
-        // Try to find the most recent instance of a transaction with the same payee and approximately the same amount 
+        // Try to find the most recent instance of a transaction with the same payee and approximately the same amount
         // that is also in the list of possible registers.  This transaction will be an almost exact match for the one
         // we are trying to resolve.  If we find one, then ask the user if this is the correct register:
         Transaction transaction = TransactionUtilities.getMostRecentTransactionByPayee(payee, amount);
@@ -761,4 +870,23 @@ public class RegisterController {
         return forecast.getInSync();
 
     } // End processSkippedTransactions().
+
+    /**
+     * Display detailed information about a register in vertical format.
+     *
+     * @param register The register to display details for
+     */
+    private void displayRegisterDetails(Register register) {
+        view.say("Register: " + register.getName());
+        view.say("Nickname: " + (register.getNickname() != null ? register.getNickname() : "(none)"));
+        view.say("Account Type: " + (register.getAccountType() != null ? register.getAccountType() : "(none)"));
+        view.say("Account Number: " + (register.getAccountNumber() != null ? register.getAccountNumber() : "(none)"));
+        view.say("Balance: " + Utility.formatDollarAmount(register.getBalance()));
+        view.say("Skipped Amount: " + Utility.formatDollarAmount(register.getSkippedAmount()));
+        view.say("Financial Institution: " + (register.getFinancialInstitution() != null ? register.getFinancialInstitution() : "(none)"));
+        view.say("Transaction Import File Name: " + (register.getTrxImportFileName() != null ? register.getTrxImportFileName() : "(none)"));
+        view.say("Transaction Import File Directory: " + (register.getTrxImportFileDirectory() != null ? register.getTrxImportFileDirectory() : "(none)"));
+        view.say("Provisional Transaction File Name: " + (register.getProvisionalTrxFileName() != null ? register.getProvisionalTrxFileName() : "(none)"));
+        view.say("Provisional Transaction File Directory: " + (register.getProvisionalTrxFileDirectory() != null ? register.getProvisionalTrxFileDirectory() : "(none)"));
+    }
 }
