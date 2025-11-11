@@ -413,21 +413,21 @@ public class TransactionSplitsController {
             double score = 0.0;
             BudgetItem budgetItem = budgetItemMerchant.getBudgetItem();
 
-            // 1. Amount Similarity Score (0-50 points)
+            // 1. Amount Similarity Score (0-60 points) - increased weight
             double budgetItemAmount = Math.abs(budgetItem.getAmount());
             if (budgetItemAmount > 0) {
                 double amountDifference = Math.abs(transactionAmount - budgetItemAmount);
                 double percentDifference = amountDifference / Math.max(transactionAmount, budgetItemAmount);
 
-                // Perfect match = 50 points, decreasing as difference increases
-                // 0% difference = 50, 10% = 45, 25% = 37.5, 50% = 25, 100%+ = 0
-                score += Math.max(0, 50 * (1 - percentDifference));
+                // Perfect match = 60 points, decreasing as difference increases
+                // 0% difference = 60, 10% = 54, 25% = 45, 50% = 30, 100%+ = 0
+                score += Math.max(0, 60 * (1 - percentDifference));
             } else {
-                // On-demand items get a baseline score of 25
-                score += 25;
+                // On-demand items get a baseline score of 30
+                score += 30;
             }
 
-            // 2. Period/Date Proximity Score (0-30 points)
+            // 2. Period/Date Proximity Score (0-20 points) - decreased weight, frequency-adjusted
             if (budgetItem.getPeriod() != null && budgetItem.getStartDate() != null) {
                 try {
                     // Calculate days since the budget item's start date
@@ -443,21 +443,35 @@ public class TransactionSplitsController {
                         long daysSinceLastPeriod = daysSinceStart % periodDays;
 
                         // Score higher if transaction is near the expected date
-                        // Within 7 days = 30 points, scaling down to 0 at half-period
+                        // Within 7 days = full points, scaling down to 0 at half-period
                         double daysFromExpected = Math.min(daysSinceLastPeriod, periodDays - daysSinceLastPeriod);
                         double proximityRatio = 1 - (daysFromExpected / (periodDays / 2.0));
-                        score += Math.max(0, 30 * proximityRatio);
+
+                        // Apply frequency multiplier - more frequent items get higher scores
+                        // Daily/Weekly = 1.0x, Biweekly = 0.9x, Monthly = 0.8x, Quarterly = 0.5x, Annual = 0.3x
+                        double frequencyMultiplier = 1.0;
+                        if (periodDays >= 365) {  // Annual
+                            frequencyMultiplier = 0.3;
+                        } else if (periodDays >= 90) {  // Quarterly
+                            frequencyMultiplier = 0.5;
+                        } else if (periodDays >= 28) {  // Monthly
+                            frequencyMultiplier = 0.8;
+                        } else if (periodDays >= 14) {  // Biweekly
+                            frequencyMultiplier = 0.9;
+                        }
+
+                        score += Math.max(0, 20 * proximityRatio * frequencyMultiplier);
                     } else {
                         // On-demand items get baseline score
-                        score += 15;
+                        score += 10;
                     }
                 } catch (Exception e) {
                     // If date calculation fails, give neutral score
-                    score += 15;
+                    score += 10;
                 }
             } else {
                 // Items without period info get baseline score
-                score += 15;
+                score += 10;
             }
 
             // 3. Category Priority Score (0-20 points)

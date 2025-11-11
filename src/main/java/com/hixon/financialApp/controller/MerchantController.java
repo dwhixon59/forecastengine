@@ -99,9 +99,9 @@ public class MerchantController {
                 throw new CancelException("User cancelled merchant assignment");
             }
 
-            // Check if this is a newly created merchant
-            if (merchant.getId() == null) {
-                // This is a new merchant - save it first
+            // Check if this is a newly created or modified merchant
+            if (merchant.isDirty()) {
+                // This merchant needs to be saved to the database first
                 merchant.save();
             }
 

@@ -175,6 +175,9 @@ public class ImportController {
                 // Get the transaction for this import record ID:
                 transaction = Transaction.getByImportRecordId(importRecordId);
 
+                // Track whether this is a new transaction (not previously imported)
+                boolean isNewTransaction = (transaction == null);
+
                 // Get the merchant and splits for this transaction if we found one:
                 List<TransactionSplit> splits = null;
                 if (transaction != null) {
@@ -290,9 +293,11 @@ public class ImportController {
 
                         // and get the splits if there are any for the provisional transaction:
                         splits = TransactionSplit.getSplitsForTransaction(transaction);
-                    } else {
-                        // Since there is no provisional transaction, the amount has not yet been deducted from the register
-                        // balance, so deduct it now:
+                    } else if (isNewTransaction) {
+                        // Only update the balance if this is a NEW transaction (not previously imported)
+                        // AND there is no provisional transaction.
+                        // If the transaction was already imported in a previous run (isNewTransaction=false),
+                        // the balance was already updated, so don't update it again.
                         register.setBalance(register.getBalance() + transaction.getAmount());
                         register.update();
                     }

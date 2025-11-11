@@ -257,7 +257,7 @@ public class RegisterController {
         if (view.getYesOrNo("\nThe current balance of the " +
                 register.getName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
                 "  Do you want to update it?")) {
-            double balance = view.getResponseCurrency("Please enter the dollar amount:  ");
+            double balance = view.getResponseCurrency("Please enter the dollar amount");
             register.setBalance(balance);
             register.update();
             wasCorrect = false;
