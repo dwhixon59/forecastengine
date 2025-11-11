@@ -2,6 +2,7 @@ package com.hixon.financialApp.view.excel;
 
 import com.hixon.financialApp.controller.ControllerException;
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -13,8 +14,8 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
-import com.hixon.financialApp.view.text.EnvelopeReport;
 import com.hixon.financialApp.view.text.*;
+import com.hixon.financialApp.view.text.EnvelopeReport;
 import lombok.Getter;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -43,7 +44,7 @@ public class ExcelForecastView extends AbstractForecastView {
     private CsvForecastView csvForecastView = null;
     private Workbook workbook;
     private Sheet sheet;
-    String[] headers = {"Date", "Category", "Payee", "Memo", "Credit", "Debit", "Balance", "", "ID", "Version"};
+    String[] headers = {"Date", "Category", "Payee", "Memo", "Credit", "Debit", "Balance", "", "Imp", "Occ", "Transaction ID", "Version", "Amt"};
 
 
     public String getLongTermForecastFilename() {
@@ -170,7 +171,22 @@ public class ExcelForecastView extends AbstractForecastView {
         Font font = workbook.createFont();
         font.setBold(true);
         style.setFont(font);
-        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        return style;
+    }
+
+    /**
+     * Creates a cell style for currency formatting (USD, no decimals, red for negatives).
+     * Format: $#,##0;[Red]-$#,##0
+     *
+     * @param workbook the workbook to create the style in
+     * @return the configured cell style
+     */
+    private static CellStyle getCurrencyCellStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        DataFormat format = workbook.createDataFormat();
+        // Format string: positive as $#,##0 and negative as [Red]-$#,##0
+        style.setDataFormat(format.getFormat("$#,##0;[Red]-$#,##0"));
         return style;
     }
 
@@ -194,14 +210,52 @@ public class ExcelForecastView extends AbstractForecastView {
     @Override
     public void renderLongTermForecastMonthHeader(String reportType, Calendar plannedDate, double runningBalance) {
 
-        // Header row
+        // Month title row (e.g., "November - 2025")
+        Row titleRow = sheet.createRow(sheet.getLastRowNum() + 1);
+
+        // Set row height to 1.5 times the default (default is 15 points = 300 units in POI)
+        titleRow.setHeightInPoints(22.5f); // 15 * 1.5 = 22.5
+
+        String monthYear = new java.text.SimpleDateFormat("MMMM - yyyy").format(plannedDate.getTime());
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue(monthYear);
+        Font titleFont = workbook.createFont();
+        titleFont.setBold(true);
+        titleFont.setFontHeightInPoints((short) 16);
+        CellStyle titleStyle = workbook.createCellStyle();
+        titleStyle.setFont(titleFont);
+        titleCell.setCellStyle(titleStyle);
+
+        // Display starting balance in the same row with the same font style
+        Cell startingBalanceCell = titleRow.createCell(6);
+        startingBalanceCell.setCellValue(runningBalance);
+        CellStyle balanceStyle = workbook.createCellStyle();
+        balanceStyle.setFont(titleFont);
+        DataFormat format = workbook.createDataFormat();
+        balanceStyle.setDataFormat(format.getFormat("$#,##0;[Red]-$#,##0"));
+        startingBalanceCell.setCellStyle(balanceStyle);
+
+        // Header row with column names
         Row headerRow = sheet.createRow(sheet.getLastRowNum() + 1);
 
-        for (int i = 0; i < headers.length; i++) {
+        // Create a font for column headers (12 point, bold)
+        Font headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerFont.setFontHeightInPoints((short) 12);
+        CellStyle headerStyle = workbook.createCellStyle();
+        headerStyle.setFont(headerFont);
+        headerStyle.setAlignment(HorizontalAlignment.LEFT);
+
+        // Only show the first 7 columns (Date through Balance) - hide ID and Version
+        for (int i = 0; i < 7; i++) {
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(headers[i]);
-            cell.setCellStyle(getHeaderCellStyle(workbook));
+            cell.setCellStyle(headerStyle);
         }
+
+
+        // Reset the firstItemInMonth flag for this new month
+        firstItemInMonth = true;
     }
 
     @Override
@@ -242,35 +296,56 @@ public class ExcelForecastView extends AbstractForecastView {
         row.createCell(3).setCellValue(memo);
 
         // The amount for an income item (credit):
-        row.createCell(4).setCellValue(credit);
+        Cell creditCell = row.createCell(4);
+        creditCell.setCellValue(credit);
+        creditCell.setCellStyle(getCurrencyCellStyle(workbook));
 
         // The amount for an expense item (debit):
-        row.createCell(5).setCellValue(debit);
+        Cell debitCell = row.createCell(5);
+        debitCell.setCellValue(debit);
+        debitCell.setCellStyle(getCurrencyCellStyle(workbook));
 
         // The running balance:
+        int currentRow = row.getRowNum() + 1; // Excel rows are 1-based
+        Cell balanceCell = row.createCell(6);
         if (firstItem) {
-            row.createCell(6).setCellFormula("=R[-2]C+RC[-2]-RC[-1]");
+            // Very first item in the entire forecast: reference starting balance 2 rows above (title row) + credit - debit
+            balanceCell.setCellFormula("G" + (currentRow - 2) + "+E" + currentRow + "-F" + currentRow);
             firstItem = false;
             firstItemInMonth = false;
         } else {
             if (firstItemInMonth) {
-                row.createCell(6).setCellFormula("=R[-3]C+RC[-2]-RC[-1]");
+                // First item in a new month: reference balance 3 rows above (skipping title and header) + credit - debit
+                balanceCell.setCellFormula("G" + (currentRow - 3) + "+E" + currentRow + "-F" + currentRow);
                 firstItemInMonth = false;
             } else {
-                row.createCell(6).setCellFormula("=R[-1]C+RC[-2]-RC[-1]");
+                // Regular item: reference previous row's balance + credit - debit
+                balanceCell.setCellFormula("G" + (currentRow - 1) + "+E" + currentRow + "-F" + currentRow);
             }
         }
+        balanceCell.setCellStyle(getCurrencyCellStyle(workbook));
 
         // A blank column to separate a right justified column from a left justified column:
         row.createCell(7).setCellValue("");
 
+        // The importance (discretionary, essential, etc.):
+        row.createCell(8).setCellValue(Item.generateHowImportant(
+                forecastTransaction.getForecastItem().getHowImportant()));
+
+        // How the transactions occur (periodic, collection, etc.):
+        row.createCell(9).setCellValue(Item.generateHowOccurs(
+                forecastTransaction.getForecastItem().getHowOccurs()));
+
         // Unique ID for round trip forecast transaction matching:
-        row.createCell(8).setCellValue(forecastTransaction.getId().toString());
+        row.createCell(10).setCellValue(forecastTransaction.getId().toString());
 
         // The version for round trip forecast transaction matching:
-        row.createCell(9).setCellValue(Utility.calendarDateToLongStringDate(forecastTransaction.getVersion()));
-        writer.println("\t\t\t<Cell><Data ss:Type=\"String\">" +
-                Utility.calendarDateToLongStringDate(forecastTransaction.getVersion()) + "</Data></Cell>");
+        row.createCell(11).setCellValue(Utility.calendarDateToLongStringDate(forecastTransaction.getVersion()));
+
+        // The amount of the transaction for short form reporting:
+        Cell amountCell = row.createCell(12);
+        amountCell.setCellFormula("E" + currentRow + "-F" + currentRow);
+        amountCell.setCellStyle(getCurrencyCellStyle(workbook));
 
         return 0;
     }
@@ -278,9 +353,19 @@ public class ExcelForecastView extends AbstractForecastView {
     @Override
     protected void renderLongTermForecastBackMatter(String reportType) throws IOException {
 
-        // Auto-size columns
-        for (int i = 0; i < headers.length; i++) {
+        // Set the first column (Date) width to just fit the header "Date"
+        // Width is in units of 1/256th of a character width
+        // Approximate width for "Date" (4 characters) plus a bit of padding
+        sheet.setColumnWidth(0, 256 * 6);  // ~6 character widths
+
+        // Auto-size the remaining visible columns (Category through Balance)
+        for (int i = 1; i < 7; i++) {
             sheet.autoSizeColumn(i);
+        }
+
+        // Hide columns 8-12 (Imp, Occ, Transaction ID, Version, Amt)
+        for (int i = 8; i <= 12; i++) {
+            sheet.setColumnHidden(i, true);
         }
 
         // Write the workbook to the output file:

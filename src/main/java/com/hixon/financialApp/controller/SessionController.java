@@ -9,6 +9,7 @@ import com.hixon.financialApp.view.base.BudgetViewInt;
 import com.hixon.financialApp.view.base.ForecastViewInt;
 import com.hixon.financialApp.view.base.RegisterViewInt;
 import com.hixon.financialApp.view.base.ViewInt;
+import com.hixon.financialApp.view.excel.ExcelForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
@@ -221,7 +222,8 @@ public class SessionController {
 
             // and get the forecast associated with the selected register that the user wants to work with:
             forecast = Forecast.selectForecast(budget);
-            forecastView = new SpreadsheetXmlForecastView(forecast);
+            //forecastView = new SpreadsheetXmlForecastView(forecast);
+            forecastView = new ExcelForecastView(forecast);
         }
         else {
             // If the budget is null, then get the budget associated with the selected register the user wants to work

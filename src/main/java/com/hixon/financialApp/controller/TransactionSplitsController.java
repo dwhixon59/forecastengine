@@ -1,8 +1,6 @@
 package com.hixon.financialApp.controller;
 
-import com.hixon.financialApp.model.budget.Budget;
-import com.hixon.financialApp.model.budget.BudgetItemMerchant;
-import com.hixon.financialApp.model.budget.TransactionSplit;
+import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
@@ -13,6 +11,7 @@ import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.ViewInt;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 import static com.hixon.financialApp.controller.ImportController.TerminationCondition.*;
@@ -72,13 +71,11 @@ public class TransactionSplitsController {
                     "splits for  it.");
         }
 
-        // TODO: Refactor - scoreAndSortListForTransaction needs to be moved to appropriate utility class
-        // Reorder the list of budget items for the transaction so that the most likely budget item is first:
-        // For now, just use the list as-is without scoring/sorting
-        List<Double> relevancyScores = new ArrayList<>();
-        for (int i = 0; i < budgetItemsForMerchant.size(); i++) {
-            relevancyScores.add(0.0);  // Placeholder scores
-        }
+        // Calculate relevancy scores for each budget item based on the transaction
+        List<Double> relevancyScores = calculateRelevancyScores(budgetItemsForMerchant, transaction);
+
+        // Sort budget items by relevancy score in descending order (highest scores first)
+        sortByRelevancyScore(budgetItemsForMerchant, relevancyScores);
 
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
@@ -392,6 +389,187 @@ public class TransactionSplitsController {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Calculate relevancy scores for budget items based on how well they match the transaction.
+     * Scores are based on:
+     * 1. Amount similarity (0-50 points): How close the transaction amount is to the budget item amount
+     * 2. Period match (0-30 points): Whether the transaction date aligns with the budget item's period
+     * 3. Category priority (0-20 points): Based on item importance and type
+     *
+     * @param budgetItemsForMerchant List of budget items to score
+     * @param transaction The transaction to match against
+     * @return List of relevancy scores (0.0 to 100.0) corresponding to each budget item
+     */
+    private List<Double> calculateRelevancyScores(List<BudgetItemMerchant> budgetItemsForMerchant,
+                                                    Transaction transaction) {
+        List<Double> scores = new ArrayList<>();
+        double transactionAmount = Math.abs(transaction.getAmount());
+        Calendar transactionDate = transaction.getDate();
+
+        for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
+            double score = 0.0;
+            BudgetItem budgetItem = budgetItemMerchant.getBudgetItem();
+
+            // 1. Amount Similarity Score (0-50 points)
+            double budgetItemAmount = Math.abs(budgetItem.getAmount());
+            if (budgetItemAmount > 0) {
+                double amountDifference = Math.abs(transactionAmount - budgetItemAmount);
+                double percentDifference = amountDifference / Math.max(transactionAmount, budgetItemAmount);
+
+                // Perfect match = 50 points, decreasing as difference increases
+                // 0% difference = 50, 10% = 45, 25% = 37.5, 50% = 25, 100%+ = 0
+                score += Math.max(0, 50 * (1 - percentDifference));
+            } else {
+                // On-demand items get a baseline score of 25
+                score += 25;
+            }
+
+            // 2. Period/Date Proximity Score (0-30 points)
+            if (budgetItem.getPeriod() != null && budgetItem.getStartDate() != null) {
+                try {
+                    // Calculate days since the budget item's start date
+                    long transactionTime = transactionDate.getTimeInMillis();
+                    long startTime = budgetItem.getStartDate().getTimeInMillis();
+                    long daysSinceStart = (transactionTime - startTime) / (1000 * 60 * 60 * 24);
+
+                    // Determine the period length in days
+                    int periodDays = getPeriodDays(budgetItem.getPeriod());
+
+                    if (periodDays > 0) {
+                        // Calculate how many periods have passed
+                        long daysSinceLastPeriod = daysSinceStart % periodDays;
+
+                        // Score higher if transaction is near the expected date
+                        // Within 7 days = 30 points, scaling down to 0 at half-period
+                        double daysFromExpected = Math.min(daysSinceLastPeriod, periodDays - daysSinceLastPeriod);
+                        double proximityRatio = 1 - (daysFromExpected / (periodDays / 2.0));
+                        score += Math.max(0, 30 * proximityRatio);
+                    } else {
+                        // On-demand items get baseline score
+                        score += 15;
+                    }
+                } catch (Exception e) {
+                    // If date calculation fails, give neutral score
+                    score += 15;
+                }
+            } else {
+                // Items without period info get baseline score
+                score += 15;
+            }
+
+            // 3. Category Priority Score (0-20 points)
+            // More important items rank higher
+            if (budgetItem.getHowImportant() != null) {
+                switch (budgetItem.getHowImportant()) {
+                    case VARIABLE_ESSENTIAL:
+                        score += 20;
+                        break;
+                    case FIXED_ESSENTIAL:
+                        score += 18;
+                        break;
+                    case DISCRETIONARY_ESSENTIAL:
+                        score += 15;
+                        break;
+                    case VARIABLE_NONESSENTIAL:
+                        score += 12;
+                        break;
+                    case FIXED_NONESSENTIAL:
+                        score += 8;
+                        break;
+                    case DISCRETIONARY_NONESSENTIAL:
+                        score += 5;
+                        break;
+                    default:
+                        score += 10;
+                }
+            } else {
+                score += 10;
+            }
+
+            // Ensure score is in valid range
+            score = Math.max(0, Math.min(100, score));
+            scores.add(score);
+        }
+
+        return scores;
+    }
+
+    /**
+     * Sort budget items by their relevancy scores in descending order (highest scores first).
+     * Sorts both the budget items list and scores list in parallel to maintain correspondence.
+     *
+     * @param budgetItemsForMerchant List of budget items to sort
+     * @param scores List of relevancy scores corresponding to the budget items
+     */
+    private void sortByRelevancyScore(List<BudgetItemMerchant> budgetItemsForMerchant, List<Double> scores) {
+        // Create a list of indices for sorting
+        List<Integer> indices = new ArrayList<>();
+        for (int i = 0; i < scores.size(); i++) {
+            indices.add(i);
+        }
+
+        // Sort indices by scores in descending order
+        indices.sort((i1, i2) -> Double.compare(scores.get(i2), scores.get(i1)));
+
+        // Create temporary lists with sorted order
+        List<BudgetItemMerchant> sortedItems = new ArrayList<>();
+        List<Double> sortedScores = new ArrayList<>();
+        for (Integer index : indices) {
+            sortedItems.add(budgetItemsForMerchant.get(index));
+            sortedScores.add(scores.get(index));
+        }
+
+        // Replace original lists with sorted versions
+        budgetItemsForMerchant.clear();
+        budgetItemsForMerchant.addAll(sortedItems);
+        scores.clear();
+        scores.addAll(sortedScores);
+    }
+
+    /**
+     * Get the number of days in a period type.
+     *
+     * @param period The period type
+     * @return Number of days, or 0 for on-demand
+     */
+    private int getPeriodDays(Item.PeriodType period) {
+        if (period == null) return 0;
+
+        switch (period) {
+            case DAILY:
+                return 1;
+            case WEEKLY:
+                return 7;
+            case BIWEEKLY:
+                return 14;
+            case THREE_WEEKS:
+                return 21;
+            case FOUR_WEEKS:
+                return 28;
+            case SEMIMONTHLY:
+                return 15;
+            case SCHOOL_YEAR_SEMIMONTHLY:
+                return 15;
+            case MONTHLY:
+                return 30;
+            case SIX_WEEKS:
+                return 42;
+            case BIMONTHLY:
+                return 60;
+            case QUARTERLY:
+                return 90;
+            case FOUR_MONTHS:
+                return 120;
+            case SEMIANNUALLY:
+                return 182;
+            case ANNUALLY:
+                return 365;
+            case ON_DEMAND:
+            default:
+                return 0;
         }
     }
 }
