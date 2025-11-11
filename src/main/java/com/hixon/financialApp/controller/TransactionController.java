@@ -11,7 +11,7 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
-import com.hixon.financialApp.view.base.EntityOrStringResult;
+import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
@@ -100,19 +100,9 @@ public class TransactionController {
                     }
                 }
 
-                // Step 2: Search for a transaction
+                // Step 2: Search for and select a transaction
+                // (selectTransactionFromRegister loops internally if user cancels from selection list)
                 Transaction selectedTransaction = selectTransactionFromRegister(lastSelectedRegister);
-
-                if (selectedTransaction == null) {
-                    // User cancelled the search - ask if they want to select a different register or quit
-                    if (view.getYesOrNo("Do you want to select a different register?")) {
-                        lastSelectedRegister = null;
-                        continue;
-                    } else {
-                        done = true;
-                        continue;
-                    }
-                }
 
                 // User selected a transaction - show action menu
                 boolean actionComplete = false;
@@ -223,66 +213,108 @@ public class TransactionController {
     /**
      * Selects a transaction from a specified register using a flexible search interface.
      * Allows searching by payee, merchant, date range, amount range, and filter options.
+     * If user cancels from selection list, loops back to search prompt.
+     * Only throws CancelException if user cancels from the search prompt itself.
      *
      * @param register The register to search within
-     * @return The selected Transaction, or null if user cancels
+     * @return The selected Transaction, or null if no results found
      * @throws Exception if any error occurs during selection
+     * @throws CancelException if the user cancels from the search prompt
      */
-    private Transaction selectTransactionFromRegister(Register register) throws Exception {
+    private Transaction selectTransactionFromRegister(Register register) throws Exception, CancelException {
 
-        view.say("\n--- Transaction Search ---");
-        view.say("You can search by:");
-        view.say("  • Payee or merchant name");
-        view.say("  • Date range (e.g., '2024-01-01 to 2024-12-31')");
-        view.say("  • Filters: cleared:yes, cleared:no, new:yes, disputed:yes");
-        view.say("  • Or press Enter to see all transactions");
-        view.say();
+        String searchString = null; // Track search string across loop iterations
 
-        // Build search query with filters
-        String searchPrompt = "Search for transaction (or use filters: cleared:yes, cleared:no, new:yes, disputed:yes)";
-        String searchString = view.getResponseString(searchPrompt, null, ALLOW_NONE,
-                DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
-                () -> helpText.getProperty("transaction.search", "No help available"));
+        while (true) {
+            // Show search menu only if we don't already have a search string from a previous iteration
+            if (searchString == null) {
+                view.say("\n--- Transaction Search ---");
+                view.say("You can search by:");
+                view.say("  • Payee or merchant name");
+                view.say("  • Date range (e.g., '2024-01-01 to 2024-12-31')");
+                view.say("  • Amount (e.g., '25.00' for exact match)");
+                view.say("  • Amount range (e.g., '10.00 to 50.00')");
+                view.say("  • Filters: cleared:yes, cleared:no, new:yes, disputed:yes");
+                view.say("  • Or press Enter to see all transactions");
+                view.say();
 
-        // Parse search string and filters
-        SearchCriteria criteria = parseSearchCriteria(searchString, register);
+                // Build search query with filters
+                // Note: If user cancels here, CancelException will bubble up to caller
+                String searchPrompt = "Search for transaction (payee, date range, amount, amount range or filters)";
+                try {
+                    searchString = view.getResponseString(searchPrompt, null, ALLOW_NONE,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                            () -> helpText.getProperty("transaction.search", "No help available"));
+                } catch (CancelException e) {
+                    // User cancelled from search prompt - bubble up to exit to entity management menu
+                    throw e;
+                }
+            }
 
-        // Build the query based on criteria
-        String query = buildTransactionSearchQuery(criteria);
+            // Parse search string and filters
+            SearchCriteria criteria = parseSearchCriteria(searchString, register);
 
-        // Execute the query
-        ResultSet rs = EntityInt.getRS(query, "trying to search for transactions");
+            // Build the query based on criteria
+            String query = buildTransactionSearchQuery(criteria);
 
-        // Build list of matching transactions
-        List<Transaction> transactions = new ArrayList<>();
-        while (rs.next()) {
-            transactions.add(new Transaction(rs));
-        }
+            // Execute the query
+            ResultSet rs = EntityInt.getRS(query, "trying to search for transactions");
 
-        if (transactions.isEmpty()) {
-            view.say("No transactions found matching your search criteria.");
-            return null;
-        }
+            // Build list of matching transactions
+            List<Transaction> transactions = new ArrayList<>();
+            while (rs.next()) {
+                transactions.add(new Transaction(rs));
+            }
 
-        // Let user select from the list - use selectByNameFromListOrString with a custom display function
-        // to avoid calling getName() which Transaction doesn't properly override
-        EntityOrStringResult<Transaction> result = view.selectByNameFromListOrString(
-                "Select a transaction (showing " + transactions.size() + " result(s))",
-                transactions,
-                t -> {
-                    try {
-                        return t.toStringVeryConcise();
-                    } catch (Exception e) {
-                        return "Transaction ID: " + t.getId();
+            if (transactions.isEmpty()) {
+                view.say("No transactions found matching your search criteria.");
+                // Reset search string and loop back to search prompt
+                searchString = null;
+                continue;
+            }
+
+            // Build display strings for the transactions
+            List<String> transactionDisplayStrings = new ArrayList<>();
+            for (Transaction t : transactions) {
+                try {
+                    transactionDisplayStrings.add(t.toStringVeryConcise());
+                } catch (Exception e) {
+                    transactionDisplayStrings.add("Transaction ID: " + t.getId());
+                }
+            }
+
+            // Let user select from the list or enter a new search string
+            try {
+                NumberOrStringResponse result = view.selectFromListOrString(
+                        "Select a transaction (showing " + transactions.size() + " result(s)) or enter a new search string",
+                        transactionDisplayStrings,
+                        DO_NOT_ALLOW_NONE,
+                        ALLOW_CREATE, // Allow entering a new search string
+                        ALLOW_CANCEL,
+                        ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP);
+
+                if (result.isNumber()) {
+                    // User selected a transaction by number
+                    int index = result.getSelectedIndex() - 1; // Convert 1-based to 0-based
+                    if (index >= 0 && index < transactions.size()) {
+                        return transactions.get(index);
+                    } else {
+                        view.say("Invalid selection. Please try again.");
+                        searchString = null; // Reset and go back to search prompt
+                        continue;
                     }
-                },
-                DO_NOT_ALLOW_NONE,
-                DO_NOT_ALLOW_CREATE,
-                ALLOW_CANCEL,
-                ALLOW_QUIT,
-                DO_NOT_ALLOW_SKIP);
-
-        return result.isEntitySelected() ? result.getSelectedEntity() : null;
+                } else {
+                    // User entered a new search string - use it for the next iteration
+                    searchString = result.getSearchString();
+                    // Loop back to execute the new search
+                    continue;
+                }
+            } catch (CancelException e) {
+                // User cancelled from the selection list - exit to entity management menu
+                throw e;
+            }
+        }
     }
 
     /**
