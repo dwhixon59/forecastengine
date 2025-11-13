@@ -28,7 +28,7 @@ public interface FinancialInstitutionInt {
     Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception;
 
     // Get a provisional transaction from an import record:
-    Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException;
+    Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException, java.text.ParseException, Exception;
 
     // Extract the memo or user description from the raw text of a register entry:
     String extractUserDescription(String payee);

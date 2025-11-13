@@ -1,6 +1,7 @@
 package com.hixon.financialApp.model.entity;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.utility.Utility;
 
 import java.util.UUID;
 
@@ -19,7 +20,7 @@ public class BudgetItemMatchQuery extends MatchQuery {
         // Generate the SQL query
         return BudgetItem.getSelectQuery() +
                 "WHERE `Budget_idBudget` = uuid_to_bin('" + budget_idBudget + "')" +
-                "AND MATCH(`bi,category`, `bi.payee`, 'bi.memo') AGAINST ('" + escapeSQL(name) + "' IN NATURAL LANGUAGE MODE);";
+                "AND MATCH(`bi,category`, `bi.payee`, 'bi.memo') AGAINST ('" + Utility.escapeSqlString(name) + "' IN NATURAL LANGUAGE MODE);";
     }
 }
 

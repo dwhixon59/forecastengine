@@ -71,6 +71,20 @@ public class Utility {
      * Helper methods:
      */
 
+    /**
+     * Escapes single quotes in a string for use in SQL statements.
+     * This prevents SQL injection by doubling any single quotes in the input.
+     *
+     * @param input The string to escape
+     * @return The escaped string safe for use in SQL, or null if input is null
+     */
+    public static String escapeSqlString(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replace("'", "''");
+    }
+
     // Copy one java Calendar object to another:
     public static void copyDate(Calendar fromDate, Calendar toDate) {
         toDate.set(fromDate.get(YEAR), fromDate.get(MONTH), fromDate.get(DATE));

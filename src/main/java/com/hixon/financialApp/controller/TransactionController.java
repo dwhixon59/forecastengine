@@ -454,8 +454,10 @@ public class TransactionController {
 
         // Add text search if provided (and not empty after date range extraction)
         if (criteria.searchText != null && !criteria.searchText.isEmpty() && !criteria.searchText.equals("*")) {
-            query.append(" AND (tr.payee LIKE '%").append(criteria.searchText).append("%'");
-            query.append(" OR m.name LIKE '%").append(criteria.searchText).append("%')");
+            // Escape single quotes by doubling them to prevent SQL syntax errors
+            String escapedSearchText = Utility.escapeSqlString(criteria.searchText);
+            query.append(" AND (tr.payee LIKE '%").append(escapedSearchText).append("%'");
+            query.append(" OR m.name LIKE '%").append(escapedSearchText).append("%')");
         }
 
         // Add amount search if provided

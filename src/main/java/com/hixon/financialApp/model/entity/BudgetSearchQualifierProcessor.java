@@ -1,5 +1,7 @@
 package com.hixon.financialApp.model.entity;
 
+import com.hixon.financialApp.utility.Utility;
+
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -196,33 +198,23 @@ public class BudgetSearchQualifierProcessor implements SearchQualifierProcessor 
         // Add category filter before the final AND
         // This assumes query ends with "AND " for additional conditions
         if (query.trim().toUpperCase().endsWith("AND")) {
-            return query + "bi.category = '" + escapeSql(categoryName) + "' AND ";
+            return query + "bi.category = '" + Utility.escapeSqlString(categoryName) + "' AND ";
         } else if (query.trim().toUpperCase().endsWith("WHERE")) {
-            return query + " bi.category = '" + escapeSql(categoryName) + "' AND ";
+            return query + " bi.category = '" + Utility.escapeSqlString(categoryName) + "' AND ";
         } else {
             // Query doesn't end with AND or WHERE, append with AND
-            return query + " AND bi.category = '" + escapeSql(categoryName) + "' AND ";
+            return query + " AND bi.category = '" + Utility.escapeSqlString(categoryName) + "' AND ";
         }
     }
 
     /**
      * Escapes special regex characters in a column name.
      *
-     * @param text The text to escape
-     * @return The escaped text safe for use in regex patterns
+     * @param columnName The column name to escape
+     * @return The escaped column name safe for regex
      */
-    private String escapeRegex(String text) {
-        return text.replace(".", "\\.");
-    }
-
-    /**
-     * Escapes single quotes for SQL safety.
-     *
-     * @param text The text to escape
-     * @return The escaped text safe for SQL
-     */
-    private String escapeSql(String text) {
-        return text.replace("'", "''");
+    private String escapeRegex(String columnName) {
+        return columnName.replace(".", "\\.");
     }
 }
 

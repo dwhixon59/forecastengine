@@ -10,6 +10,7 @@ import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -67,7 +68,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     public static void deleteByName(String merchantPayeeString) {
         try {
             Statement statement = getDbConnection().createStatement();
-            statement.executeUpdate("delete from merchant where name = \"" + merchantPayeeString + "\"");
+            String escapedName = Utility.escapeSqlString(merchantPayeeString);
+            statement.executeUpdate("delete from merchant where name = '" + escapedName + "'");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -116,7 +118,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     public String getInsertQuery() throws BudgetException, ForecastException {
         StringBuilder query = new StringBuilder(insertQuery);
         query.append("uuid_to_bin('").append(id).append("'), ");
-        query.append("\"").append(name).append("\", ");
+        String escapedName = Utility.escapeSqlString(name);
+        query.append("'").append(escapedName).append("', ");
         query.append(askAlways);
 
         if (idUser != null) {
@@ -137,7 +140,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
         StringBuilder query = new StringBuilder("UPDATE merchant SET ");
-        query.append("name = \"").append(name).append("\", ");
+        String escapedName = Utility.escapeSqlString(name);
+        query.append("name = '").append(escapedName).append("', ");
         query.append("askAlways = ").append(askAlways);
 
         if (idUser != null) {
@@ -219,7 +223,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     public boolean loadByName(IndependentEntity scope, String name) throws EntityException {
 
         // Find the ID of the merchant that uses the passed in name:
-        String query = selectQuery + " where m.name = \"" + name + "\"";
+        String escapedName = Utility.escapeSqlString(name);
+        String query = selectQuery + " where m.name = '" + escapedName + "'";
         try {
             Statement statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);
@@ -255,7 +260,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     public static Merchant getByPayee(String payee) throws RegisterException {
 
         // Find the ID of the merchant that uses the passed in payee:
-        String query = selectJoinPayeeQuery + "where mp.payee = \"" + payee + "\"";
+        String escapedPayee = Utility.escapeSqlString(payee);
+        String query = selectJoinPayeeQuery + "where mp.payee = '" + escapedPayee + "'";
         try {
             Statement statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);
@@ -274,7 +280,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
     public static Merchant getByName(String name) throws RegisterException {
 
         // Find the ID of the merchant that uses the passed in name:
-        String query = selectQuery + " where m.name = \"" + name + "\"";
+        String escapedName = Utility.escapeSqlString(name);
+        String query = selectQuery + " where m.name = '" + escapedName + "'";
         try {
             Statement statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);

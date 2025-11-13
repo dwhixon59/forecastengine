@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.entity.DependentEntity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.utility.Utility;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.lang3.NotImplementedException;
@@ -29,7 +30,8 @@ public class MerchantPayee extends DependentEntity {
     public static void deleteByName(String merchantPayeeString) {
         // Delete any instance of the merchantPayeeString from the merchant_payee table:
         try {
-            EntityInt.executeUpdate("delete from merchant_payee where payee = '" + merchantPayeeString + "'",
+            String escapedPayee = Utility.escapeSqlString(merchantPayeeString);
+            EntityInt.executeUpdate("delete from merchant_payee where payee = '" + escapedPayee + "'",
                     "deleting a merchant payee from the database.");
         } catch (EntityException e) {
             throw new RuntimeException(e);
@@ -48,7 +50,8 @@ public class MerchantPayee extends DependentEntity {
 
     @Override
     public String getInsertQuery() {
-        return insertQuery + "uuid_to_bin('" + idMerchant + "'), \"" + payee + "\")";
+        String escapedPayee = Utility.escapeSqlString(payee);
+        return insertQuery + "uuid_to_bin('" + idMerchant + "'), '" + escapedPayee + "')";
     }
 
     @Override
@@ -108,13 +111,15 @@ public class MerchantPayee extends DependentEntity {
      * Load and save methods for MerchantPayee:
      */
     public void save() throws RegisterException, EntityException {
-        super.executeQueryForThis(insertQuery + "uuid_to_bin('" + idMerchant + "'), \"" + payee + "\")",
+        String escapedPayee = Utility.escapeSqlString(payee);
+        super.executeQueryForThis(insertQuery + "uuid_to_bin('" + idMerchant + "'), '" + escapedPayee + "')",
                 "Databsae error occurred inserting MerchantPayee into the database.");
     }
 
     public static void deleteByMerchantAndPayee(Merchant merchant, String merchantPayeeString) throws EntityException, RegisterException {
-        EntityInt.executeUpdate("delete from merchant_payee where Merchant_idMerchant = uuid_to_bin(\"" + merchant.getId() +
-                "\") and payee = \"" + merchantPayeeString + "\"", "deleting a merchant payee from the database.");
+        String escapedPayee = Utility.escapeSqlString(merchantPayeeString);
+        EntityInt.executeUpdate("delete from merchant_payee where Merchant_idMerchant = uuid_to_bin('" + merchant.getId() +
+                "') and payee = '" + escapedPayee + "'", "deleting a merchant payee from the database.");
     }
 
 

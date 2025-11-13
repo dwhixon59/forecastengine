@@ -1,0 +1,313 @@
+@startuml View Package Class Diagram
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' Main Interface
+interface ViewInt {
+  +say(String s)
+  +ask(String question)
+  +getYesOrNo()
+  +selectByNameFromList()
+  +selectByPositionFromList()
+  +selectFromMenu()
+  +displayDetails()
+  .. constants ..
+  +ALLOW_NONE : boolean
+  +ALLOW_CANCEL : boolean
+  +ALLOW_QUIT : boolean
+  +ALLOW_SKIP : boolean
+}
+
+' Specialized View Interfaces
+interface ForecastViewInt {
+  +displayForecast()
+  +updateForecast()
+}
+
+interface RegisterViewInt {
+  +displayRegister()
+  +updateRegister()
+}
+
+interface BudgetViewInt {
+  +displayBudget()
+  +updateBudget()
+}
+
+interface ReportRendererInt {
+  +render()
+  +export()
+}
+
+' Abstract Base Classes
+abstract class AbstractView {
+  #register : Register
+  #budget : Budget
+  #forecast : Forecast
+  #user : User
+  +{abstract} initialize()
+}
+
+abstract class AbstractForecastView {
+  +displayForecast()
+  +updateForecast()
+}
+
+abstract class AbstractRegisterView {
+  +displayRegister()
+  +updateRegister()
+}
+
+abstract class AbstractBudgetView {
+  +displayBudget()
+  +updateBudget()
+}
+
+abstract class AbstractReportView {
+  +render()
+  +export()
+}
+
+' Concrete Implementation - Command Line
+class ViewCmdline {
+  -scanner : Scanner
+  +say(String s)
+  +ask(String question)
+  +getYesOrNo()
+  +selectByNameFromList()
+  +selectByPositionFromList()
+  +displayDetails()
+}
+
+' Text Report Classes
+class TextReport {
+  #outputPath : String
+  +render()
+  +writeToFile()
+}
+
+class ForecastReport {
+  +renderForecastItems()
+}
+
+class RegisterReport {
+  +renderTransactions()
+}
+
+class NewTransactionSummaryReport {
+  +renderNewTransactions()
+}
+
+class OverdueItemsReport {
+  +renderOverdueItems()
+}
+
+class UpcomingItemsReport {
+  +renderUpcomingItems()
+}
+
+class UpcomingItemsOfInterestReport {
+  +renderItemsOfInterest()
+}
+
+class TrackingItemsOfInterestReport {
+  +renderTrackingItems()
+}
+
+class EnvelopeReport {
+  +renderEnvelopes()
+}
+
+' Text View Classes
+class "text.ForecastView" as TextForecastView {
+  +displayForecast()
+}
+
+class "text.RegisterView" as TextRegisterView {
+  +displayRegister()
+}
+
+' Spreadsheet XML View Classes
+class SpreadsheetXmlForecastView {
+  +displayForecast()
+  +generateXml()
+}
+
+class SpreadsheetXmlRegisterView {
+  +displayRegister()
+  +generateXml()
+}
+
+class SpreadsheetXmlBudgetView {
+  +displayBudget()
+  +generateXml()
+}
+
+' Excel View Classes
+class ExcelForecastView {
+  -workbook : XSSFWorkbook
+  +displayForecast()
+  +createWorkbook()
+}
+
+class "excel.EnvelopeReport" as ExcelEnvelopeReport {
+  +renderEnvelopes()
+  +createExcelSheet()
+}
+
+' CSV View Classes
+class CsvForecastView {
+  +displayForecast()
+  +writeCsv()
+}
+
+class ForecastTransactionView {
+  +displayTransaction()
+}
+
+' Exception Class
+class ViewException {
+  +ViewException(String message)
+  +ViewException(String message, Throwable cause)
+}
+
+' Helper Classes
+class NumberOrStringResponse {
+  +number : Integer
+  +string : String
+  +isNumber : boolean
+}
+
+class EntityOrStringResult {
+  +entity : T
+  +string : String
+  +isEntity : boolean
+}
+
+class UserResponse {
+  +value : String
+  +type : ResponseType
+}
+
+class ReportRow {
+  +columns : List<String>
+}
+
+class BudgetItemReportRow {
+  +budgetItem : BudgetItem
+}
+
+class BudgetCategoryReportRow {
+  +category : BudgetCategory
+}
+
+class BudgetTotalsReportRow {
+  +totals : Map<String, Double>
+}
+
+class TransactionSplitReportRow {
+  +split : TransactionSplit
+}
+
+class RowTransactionPair {
+  +row : ReportRow
+  +transaction : Transaction
+}
+
+class ReportRenderer {
+  +render()
+  +formatRow()
+}
+
+class TransactionHistory {
+  +transactions : List<Transaction>
+}
+
+class IndependentEntityHistory {
+  +entities : List<IndependentEntityInt>
+}
+
+' Relationships - Interface Hierarchy
+ForecastViewInt --|> ViewInt
+RegisterViewInt --|> ViewInt
+BudgetViewInt --|> ViewInt
+
+' Relationships - Abstract Classes
+AbstractForecastView --|> AbstractView
+AbstractRegisterView --|> AbstractView
+AbstractBudgetView --|> AbstractView
+AbstractReportView --|> AbstractView
+
+AbstractForecastView ..|> ForecastViewInt
+AbstractRegisterView ..|> RegisterViewInt
+AbstractBudgetView ..|> BudgetViewInt
+AbstractReportView ..|> ReportRendererInt
+
+' Relationships - ViewCmdline
+ViewCmdline ..|> ViewInt
+
+' Relationships - Text Views
+TextForecastView --|> AbstractForecastView
+TextRegisterView --|> AbstractRegisterView
+
+' Relationships - Spreadsheet XML Views
+SpreadsheetXmlForecastView --|> AbstractForecastView
+SpreadsheetXmlRegisterView --|> AbstractRegisterView
+SpreadsheetXmlBudgetView --|> AbstractBudgetView
+
+' Relationships - Excel Views
+ExcelForecastView --|> AbstractForecastView
+
+' Relationships - CSV Views
+CsvForecastView --|> AbstractForecastView
+
+' Relationships - Report Classes
+TextReport --|> AbstractReportView
+ForecastReport --|> TextReport
+RegisterReport --|> TextReport
+
+NewTransactionSummaryReport --|> RegisterReport
+OverdueItemsReport --|> ForecastReport
+UpcomingItemsReport --|> ForecastReport
+UpcomingItemsOfInterestReport --|> ForecastReport
+TrackingItemsOfInterestReport --|> ForecastReport
+EnvelopeReport --|> ForecastReport
+
+' Relationships - Report Rows
+BudgetItemReportRow --|> ReportRow
+BudgetCategoryReportRow --|> ReportRow
+BudgetTotalsReportRow --|> ReportRow
+TransactionSplitReportRow --|> ReportRow
+
+' Associations
+ViewInt ..> NumberOrStringResponse : uses
+ViewInt ..> EntityOrStringResult : uses
+ViewInt ..> UserResponse : uses
+AbstractReportView ..> ReportRow : uses
+AbstractReportView ..> ReportRenderer : uses
+
+note top of ViewInt
+  Main interface for all view implementations.
+  Defines methods for user interaction,
+  selection, and display.
+end note
+
+note top of AbstractView
+  Base class providing common functionality
+  for all view types. Holds references to
+  key model objects (Register, Budget, Forecast).
+end note
+
+note right of ViewCmdline
+  Command-line implementation of ViewInt.
+  Used for interactive terminal sessions.
+end note
+
+note bottom of TextReport
+  Base class for text-based reports.
+  Handles file output and formatting.
+end note
+
+@enduml
+

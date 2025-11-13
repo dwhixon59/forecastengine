@@ -291,8 +291,33 @@ public class ImportController {
                         transaction.setIsImproper(provisionalTransaction.getIsImproper());
                         transaction.setIsNew(provisionalTransaction.getIsNew());
 
-                        // and get the splits if there are any for the provisional transaction:
+                        // Check if there's a tip (cleared amount differs from provisional amount)
+                        double tipAmount = transaction.getAmount() - provisionalTransaction.getAmount();
+                        boolean hasTip = Math.abs(tipAmount) > 0.01; // More than 1 cent difference
+
+                        // Get the splits for the provisional transaction:
                         splits = TransactionSplit.getSplitsForTransaction(transaction);
+
+                        // If there's a tip, we need to handle the balance adjustment and potentially update splits
+                        if (hasTip) {
+                            // Adjust the register balance by the tip amount (difference between cleared and provisional)
+                            register.setBalance(register.getBalance() + tipAmount);
+                            register.update();
+
+                            // Log the tip for the user
+                            view.say(String.format("Tip detected: %s (Provisional: %s, Cleared: %s)",
+                                    formatDollarAmount(tipAmount),
+                                    formatDollarAmount(provisionalTransaction.getAmount()),
+                                    formatDollarAmount(transaction.getAmount())));
+
+                            // If splits exist, we need to adjust them to account for the tip
+                            // The tip will be added to the first split (typically the meal/service charge)
+                            if (splits != null && !splits.isEmpty()) {
+                                TransactionSplit firstSplit = splits.get(0);
+                                firstSplit.setAmount(firstSplit.getAmount() + tipAmount);
+                                // Mark for re-save later
+                            }
+                        }
                     } else if (isNewTransaction) {
                         // Only update the balance if this is a NEW transaction (not previously imported)
                         // AND there is no provisional transaction.

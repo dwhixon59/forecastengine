@@ -45,10 +45,27 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     /*
      * Fields in the Wells Fargo download file transaction classifier:
      */
-    //TODO:  Had to remove UT because it clashed with the abbreviation for "utilities".
+
+    /**
+     * A pipe-delimited string containing all U.S. state abbreviations used for parsing
+     * city/state information from transaction descriptions. Used to identify and remove
+     * location data from merchant names.
+     *
+     * Note: UT (Utah) was removed because it clashed with the abbreviation for "utilities".
+     */
     private static final String states = "|AL|AK|AS|AZ|AR|CA|CO|CT|DE|DC|FM|FL|GA|GU|HI|ID|IL|IN|IA|KS|KY|LA|ME|MH|MD|MA|MI|" +
             "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|VT|VA|WA|WV|WI|WY|";
+
+    /**
+     * Date formatter for parsing transaction dates from Wells Fargo CSV files.
+     * Wells Fargo uses the format "M/dd/yyyy" (e.g., "1/15/2025" or "11/3/2024").
+     */
     private final SimpleDateFormat sdf = new SimpleDateFormat("M/dd/yyyy", Locale.ENGLISH);
+
+    /**
+     * Array of tokens extracted from the payee string during transaction parsing.
+     * Used to analyze and extract merchant names, dates, and other transaction details.
+     */
     private String[] payeeTokens;
 
 
@@ -60,6 +77,16 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     /*
      * Constructors for the Wells Fargo download file transaction classifier:
      */
+
+    /**
+     * Constructs a new WellsFargoBankController for processing Wells Fargo transactions.
+     *
+     * @param register The register (bank account) associated with this controller
+     * @param budget The budget to use for categorizing transactions
+     * @param forecast The forecast for planning future transactions
+     * @param view The view interface for user interaction (following MVC pattern)
+     * @param notificationService The service for sending asynchronous notifications to users
+     */
     public WellsFargoBankController(Register register, Budget budget, Forecast forecast, ViewInt view,
                                     NotificationServiceInt notificationService) {
 
@@ -69,6 +96,16 @@ public class WellsFargoBankController extends FinancialInstitutionController {
 
     /*
      * Helper methods:
+     */
+
+    /**
+     * Generates a base name for a register import record using fields from the Wells Fargo CSV record.
+     * The base name is used to uniquely identify and track imported transactions, helping to prevent
+     * duplicate imports.
+     *
+     * @param record The CSV record containing Wells Fargo transaction data
+     * @return A tab-separated string containing: transaction date, amount, cleared status,
+     *         check number, and payee information
      */
     @Override
     public String getRegisterImportRecordBaseName(CSVRecord record) {
@@ -107,7 +144,17 @@ public class WellsFargoBankController extends FinancialInstitutionController {
     /*
      * Main methods for the Wells Fargo download file transaction classifier:
      */
-    // Load up a Transaction from a Wells Fargo CSV transaction download file:
+
+    /**
+     * Creates a Transaction object from a Wells Fargo CSV record and adds it to the transaction history.
+     * This is the main entry point for importing posted transactions from Wells Fargo CSV files.
+     *
+     * @param record The CSV record containing the Wells Fargo transaction data
+     * @param importRecordId A unique identifier for this import operation, used to track which
+     *                       transactions were imported together
+     * @return The newly created Transaction object
+     * @throws Exception If an error occurs during transaction creation or parsing
+     */
     @Override
     public Transaction createFromCSVRecord(CSVRecord record, String importRecordId) throws Exception {
 
@@ -116,7 +163,21 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return transaction;
     }
 
-    // Load a transaction from a posted transaction CSV record:
+    /**
+     * Loads a Transaction object from a Wells Fargo CSV record (posted transaction format).
+     * This method parses the CSV record fields, extracts the transaction date, amount, payee,
+     * and other details, then creates a Transaction object with the parsed data.
+     *
+     * The method also:
+     * - Extracts the authorization date if present in the payee string
+     * - Parses the merchant name from the complex Wells Fargo payee format
+     * - Tokenizes the payee string for further analysis
+     *
+     * @param record The CSV record from a Wells Fargo transaction download file
+     * @param importRecordId A unique identifier for tracking this import batch
+     * @return The loaded Transaction object with all fields populated
+     * @throws Exception If an error occurs during date parsing, amount parsing, or merchant extraction
+     */
     public Transaction loadFromCsvRecord(CSVRecord record, String importRecordId) throws Exception {
 
         // Compute the fields of the transaction from the tokens in the record:
@@ -159,15 +220,72 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return transaction;
     }
 
+    /**
+     * Finds a matching provisional transaction for the given CSV record and merchant.
+     * Provisional transactions are pending transactions that have been entered manually
+     * or imported from a provisional transaction file before the actual transaction posts.
+     *
+     * This method uses improved fuzzy matching that accounts for:
+     * - Date differences between provisional and posted transactions (±5 days)
+     * - Payee string differences (Wells Fargo formats differ between provisional and posted)
+     * - Merchant matching when available
+     *
+     * @param record The CSV record containing the posted transaction data
+     * @param merchant The merchant associated with the transaction
+     * @return The matching provisional Transaction if found, or null if no match exists
+     * @throws SQLException If a database error occurs during the search
+     * @throws EntityException If an entity-related error occurs
+     * @throws ParseException If date parsing fails
+     * @throws Exception If merchant payee parsing fails
+     */
     @Override
     public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant merchant) throws SQLException,
-            EntityException {
+            EntityException, ParseException, Exception {
 
-        return TransactionUtilities.getFirstProvisionalTransaction(merchant.getId(),
-                Double.parseDouble(record.get(Transaction.Headers.AMOUNT)));
+        // Parse the post date from the CSV record
+        Calendar postDate = Calendar.getInstance();
+        postDate.setTime(sdf.parse(record.get(Transaction.Headers.TRANSACTION_DATE)));
+
+        // Get the amount
+        double amount = Double.parseDouble(record.get(Transaction.Headers.AMOUNT));
+
+        // Parse the merchant payee from the record to use for fuzzy matching
+        String merchantPayee = parseMerchantPayee(postDate, amount, record.get(Transaction.Headers.PAYEE));
+
+        // Try the improved fuzzy matching first
+        Transaction provisionalTransaction = TransactionUtilities.findMatchingProvisionalTransaction(
+                register.getId(),
+                amount,
+                postDate,
+                merchantPayee,
+                merchant != null ? merchant.getId() : null
+        );
+
+        // If no match found with fuzzy matching and merchant is assigned, fall back to old method
+        if (provisionalTransaction == null && merchant != null) {
+            provisionalTransaction = TransactionUtilities.getFirstProvisionalTransaction(merchant.getId(), amount);
+        }
+
+        return provisionalTransaction;
     }
 
-    // Load a transaction from a CSV provisional transaction record:
+    /**
+     * Loads a provisional transaction from a CSV-formatted text line.
+     * Provisional transactions are transactions that have not yet posted to the account
+     * but are expected (e.g., pending transactions, scheduled payments).
+     *
+     * This method handles two CSV formats:
+     * - Short version: Starts with a date
+     * - Long version: Starts with descriptive text, followed by date in second column
+     *
+     * The method extracts the transaction amount from either the credit or debit column,
+     * parses the merchant name, and creates a provisional Transaction object.
+     *
+     * @param line A tab-separated line containing provisional transaction data
+     * @param register The register (bank account) to associate with this transaction
+     * @return A new provisional Transaction object
+     * @throws Exception If the line format is invalid, required fields are missing, or parsing fails
+     */
     @Override
     public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception {
         String[] tokens;
@@ -216,7 +334,32 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
     }
 
-    // Parse out the merchant name from a Wells Fargo CSV transaction download file:
+    /**
+     * Parses the merchant name from a Wells Fargo CSV transaction description.
+     * Wells Fargo transaction descriptions contain various metadata including authorization dates,
+     * location information, reference numbers, and the actual merchant name. This method extracts
+     * just the merchant name by analyzing the transaction type and parsing patterns.
+     *
+     * Supported transaction types:
+     * - Purchase transactions (PURCHASE AUTHORIZED ON, PURCHASE WITH CASH, etc.)
+     * - Recurring payments
+     * - Transfers between accounts (ONLINE TRANSFER TO/FROM, ATM TRANSFER, etc.)
+     * - Interest payments
+     * - Overdraft fees
+     * - ATM cash deposits
+     * - Checks
+     * - Bill payments
+     * - One-time online payments
+     *
+     * For transfer transactions, this method attempts to identify the destination/source register
+     * by matching the last 4 digits of the account number, or prompts the user if needed.
+     *
+     * @param date The transaction date (used for identifying transfer register if needed)
+     * @param amount The transaction amount (used for identifying transfer register if needed)
+     * @param payee The raw payee string from the Wells Fargo CSV file
+     * @return A cleaned merchant name suitable for display and matching
+     * @throws Exception If an error occurs during parsing or register lookup
+     */
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
 
         // Construct the merchant payee string from portions of the bank payee string:
@@ -351,19 +494,48 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return merchantPayee;
     }
 
+    /**
+     * Set of common stopwords to filter out when extracting user descriptions from transaction text.
+     * These words are typically bank-related terminology that don't contribute to meaningful
+     * user-provided descriptions.
+     */
     private static final Set<String> STOPWORDS = Set.of(
             "RECURRING", "TRANSFER", "TO", "FROM", "REF", "#",
             "EVERYDAY", "CHECKING", "SAVINGS", "WAY2SAVE",
             "ACCOUNT", "JOINT", "BANKING", "BA", "ONLINE"
     );
 
+    /**
+     * Pattern to match masked account numbers in Wells Fargo transaction descriptions.
+     * Format: Multiple X's followed by 2 or more digits (e.g., "XXXX1234").
+     */
     private static final Pattern maskedAccountPattern = Pattern.compile("X{4,}\\d{2,}");
+
+    /**
+     * Pattern to match and remove reference codes at the start of transaction descriptions.
+     * Matches alphanumeric codes (10+ characters) optionally followed by "ON" and a date.
+     * Example: "#ABC1234567890 ON 11/13/2024"
+     */
     private static final Pattern refPrefixPattern = Pattern.compile("^#?[A-Z0-9]{10,}(\\s+ON\\s+\\d{2}/\\d{2}/\\d{2,4})?", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Pattern to match standalone date expressions like "ON 11/13/2024".
+     * Used to reject descriptions that contain only a date after cleaning.
+     */
     private static final Pattern dateOnlyPattern = Pattern.compile("^ON\\s+\\d{2}/\\d{2}/\\d{2,4}$", Pattern.CASE_INSENSITIVE);
 
     /**
-     * Extracts a user description from the raw text of a Wells Fargo CSV transaction description.
-     * @param rawText The transaction description
+     * Extracts a user-provided description from the raw Wells Fargo CSV transaction description.
+     * Wells Fargo transactions often include user-provided notes or memo fields embedded in the
+     * payee string, typically after "REF #" markers. This method attempts to extract and clean
+     * those user descriptions by:
+     *
+     * 1. Removing leading reference codes and dates
+     * 2. Finding text after the last "REF #" marker
+     * 3. Filtering out bank terminology, account numbers, and duplicate reference codes
+     * 4. Rejecting results that are only dates
+     *
+     * @param rawText The raw transaction description from Wells Fargo CSV
      * @return The extracted user description, or null if no valid description could be found
      */
     @Override
@@ -409,6 +581,22 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return result;
     }
 
+    /**
+     * Constructs a merchant payee string from the payee tokens starting at the specified index.
+     * This method cleans the token list by removing location data and extraneous information,
+     * then concatenates relevant tokens to form a clean merchant name.
+     *
+     * The method:
+     * 1. Cleans the payee token list (removes city/state, "RECURRING", etc.)
+     * 2. Skips over purely numeric tokens
+     * 3. Concatenates alphabetic tokens and short numbers (e.g., "PIER 1")
+     * 4. Stops when encountering longer numeric sequences or special patterns
+     *
+     * @param start The index in payeeTokens array to start building the merchant name from
+     * @return A cleaned merchant name string
+     * @throws SQLException If a database error occurs during city/state validation
+     * @throws EntityException If an entity-related error occurs
+     */
     public String makePayeeFromTokens(int start) throws SQLException, EntityException {
         int i;
         StringBuilder merchantPayee;
@@ -436,7 +624,15 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return merchantPayee.toString();
     }
 
-    // Remove any serial number, etc. from a token:
+    /**
+     * Removes serial numbers and other extraneous characters from a payee token.
+     * Many Wells Fargo payee tokens contain asterisks (*) as separators between the
+     * merchant name and serial numbers or reference codes. This method extracts just
+     * the merchant name portion.
+     *
+     * @param payeeToken The token to clean (e.g., "WALMART*12345" becomes "WALMART")
+     * @return The cleaned token with serial numbers and extra data removed
+     */
     private String addCleanToken(String payeeToken) {
         String[] tokens = payeeToken.split("\\*");
         String token;
@@ -450,7 +646,19 @@ public class WellsFargoBankController extends FinancialInstitutionController {
         return token;
     }
 
-    // Remove city, state and the word "RECURRING" from a token list:
+    /**
+     * Removes extraneous data from the payee token list to clean up merchant names.
+     * This method modifies the payeeTokens array in place by replacing unwanted tokens
+     * with "###" markers.
+     *
+     * Removed elements include:
+     * - City and state combinations (e.g., "TAMPA FL" is removed if validated as a real city/state)
+     * - The word "RECURRING" which appears in many transaction descriptions
+     *
+     * @param start The index in the payeeTokens array to start cleaning from
+     * @throws SQLException If a database error occurs during city/state validation
+     * @throws EntityException If an entity-related error occurs
+     */
     private void cleanPayeeTokenList(int start) throws SQLException, EntityException {
         for (int i = start; i < payeeTokens.length; i++) {
             // Remove city followed by state from the merchant payee:

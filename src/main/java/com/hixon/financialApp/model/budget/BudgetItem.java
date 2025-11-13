@@ -370,7 +370,7 @@ public class BudgetItem extends Item {
         // Get the budget items for the specified payee that are not expired:
         String query =
                 getSelectQuery() + " " +
-                        "where payee = '" + payee.replace("'", "''") + "' and " +
+                        "where payee = '" + Utility.escapeSqlString(payee) + "' and " +
                         "Budget_idBudget = uuid_to_bin('" + budget.getId() + "') and " +
                         "(" +
                         "endDate is null or " +

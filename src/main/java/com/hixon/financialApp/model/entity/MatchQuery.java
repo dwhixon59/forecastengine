@@ -1,5 +1,7 @@
 package com.hixon.financialApp.model.entity;
 
+import com.hixon.financialApp.utility.Utility;
+
 public class MatchQuery {
 
     // Fields for MatchQuery
@@ -70,11 +72,6 @@ public class MatchQuery {
         this.qualifierProcessor = qualifierProcessor != null ? qualifierProcessor : SearchQualifierProcessor.IDENTITY;
     }
 
-    // Helper method to escape SQL characters to prevent SQL injection
-    protected String escapeSQL(String input) {
-        return input.replace("'", "''");
-    }
-
     /**
      * Helper method to remove trailing AND or WHERE clauses from a SQL query and return all results
      * sorted alphabetically by the name column.
@@ -96,10 +93,9 @@ public class MatchQuery {
      */
     public String getQuery(String name) {
 
-        String escapedName = escapeSQL(name); // Escape SQL characters
-
         // Process qualifiers FIRST (e.g., "budget:all:", "category:")
-        SearchContext context = qualifierProcessor.process(escapedName, selectQuery);
+        // Do NOT escape here - escape within each branch when constructing SQL
+        SearchContext context = qualifierProcessor.process(name, selectQuery);
         String searchTerm = context.getCleanedSearchTerm();
         String modifiedQuery = context.getModifiedQuery();
 
@@ -111,9 +107,10 @@ public class MatchQuery {
             if (searchString.isEmpty() || searchString.replace("*", "").trim().isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
-            return modifiedQuery.replaceFirst("(?i)FROM", ", MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
+            String escapedSearchString = Utility.escapeSqlString(searchString);
+            return modifiedQuery.replaceFirst("(?i)FROM", ", MATCH(" + matchColumnList + ") AGAINST(\"" + escapedSearchString +
                     "\" IN NATURAL LANGUAGE MODE) as relevance FROM") + " MATCH(" + matchColumnList + ") AGAINST(\"" +
-                    searchString + "\" IN NATURAL LANGUAGE MODE) ORDER BY relevance DESC" +
+                    escapedSearchString + "\" IN NATURAL LANGUAGE MODE) ORDER BY relevance DESC" +
                     (selectQueryAfterMatch.isEmpty() ? "" : ", " + selectQueryAfterMatch.replaceFirst("(?i)^ORDER BY\\s+", ""));
         } else if (searchTerm.startsWith("b:")) {
             // Remove the prefix and create a boolean mode query
@@ -122,7 +119,8 @@ public class MatchQuery {
             if (searchString.isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
-            return modifiedQuery + " MATCH(" + matchColumnList + ") AGAINST(\"" + searchString +
+            String escapedSearchString = Utility.escapeSqlString(searchString);
+            return modifiedQuery + " MATCH(" + matchColumnList + ") AGAINST(\"" + escapedSearchString +
                     "\" IN BOOLEAN MODE)" + addAfterMatchClause();
         } else if (searchTerm.startsWith("e:")) {
             // Remove the prefix and create a regular query
@@ -131,7 +129,8 @@ public class MatchQuery {
             if (searchString.isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
-            return modifiedQuery + nameColumn + " = \"" + searchString + "\"" + addAfterMatchClause();
+            String escapedSearchString = Utility.escapeSqlString(searchString);
+            return modifiedQuery + nameColumn + " = \"" + escapedSearchString + "\"" + addAfterMatchClause();
         } else if (searchTerm.startsWith("l:")) {
             // For LIKE pattern match, we assume that '%' wildcards are already provided in the input if needed.
             String searchString = searchTerm.substring(2).trim();
@@ -139,6 +138,8 @@ public class MatchQuery {
             if (searchString.isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
+            // Escape single quotes by doubling them to prevent SQL syntax errors
+            String escapedSearchString = Utility.escapeSqlString(searchString);
             // Wrap OR conditions in parentheses to ensure correct precedence
             StringBuilder likeQuery = new StringBuilder(modifiedQuery);
             likeQuery.append("(");
@@ -147,7 +148,7 @@ public class MatchQuery {
                 if (i > 0) {
                     likeQuery.append(" OR ");
                 }
-                likeQuery.append(columns[i].trim()).append(" LIKE '").append(searchString).append("'");
+                likeQuery.append(columns[i].trim()).append(" LIKE '").append(escapedSearchString).append("'");
             }
             likeQuery.append(")");
             likeQuery.append(addAfterMatchClause());
@@ -159,6 +160,8 @@ public class MatchQuery {
             if (searchString.isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
+            // Escape single quotes by doubling them to prevent SQL syntax errors
+            String escapedSearchString = Utility.escapeSqlString(searchString);
             StringBuilder likeQuery = new StringBuilder(modifiedQuery);
             likeQuery.append("(");
             String[] columns = matchColumnList.split(",");
@@ -166,7 +169,7 @@ public class MatchQuery {
                 if (i > 0) {
                     likeQuery.append(" OR ");
                 }
-                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(searchString).append("%'");
+                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(escapedSearchString).append("%'");
             }
             likeQuery.append(")");
             likeQuery.append(addAfterMatchClause());
@@ -178,6 +181,8 @@ public class MatchQuery {
             if (searchString.isEmpty() || searchString.replace("*", "").replace("%", "").trim().isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
+            // Escape single quotes by doubling them to prevent SQL syntax errors
+            String escapedSearchString = Utility.escapeSqlString(searchString);
             // Build simple LIKE query with wildcards (same as s: prefix)
             StringBuilder likeQuery = new StringBuilder(modifiedQuery);
             likeQuery.append("(");
@@ -186,7 +191,7 @@ public class MatchQuery {
                 if (i > 0) {
                     likeQuery.append(" OR ");
                 }
-                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(searchString).append("%'");
+                likeQuery.append(columns[i].trim()).append(" LIKE '%").append(escapedSearchString).append("%'");
             }
             likeQuery.append(")");
             likeQuery.append(addAfterMatchClause());

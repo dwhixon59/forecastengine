@@ -244,7 +244,7 @@ public class RegisterController {
     }
 
     public boolean verifyRegisterBalance(Register register) throws EntityException, SQLException, BudgetException,
-            RegisterException {
+            RegisterException, CancelException, QuitException, SkipException {
         boolean wasCorrect = true;
         Register dbRegister = Register.getById(register.getId());
 
@@ -254,11 +254,14 @@ public class RegisterController {
                     register.getBalance()) + ".  You should update it.");
         }
 
-        if (view.getYesOrNo("\nThe current balance of the " +
-                register.getName() + " is " + Utility.formatDollarAmount(register.getBalance()) +
-                "  Do you want to update it?")) {
-            double balance = view.getResponseCurrency("Please enter the dollar amount");
-            register.setBalance(balance);
+        view.say("\nThe current balance of the " + register.getName() + " is " +
+                Utility.formatDollarAmount(register.getBalance()));
+
+        Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
+                register.getBalance(), true, true, false, false, false, null);
+
+        if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
+            register.setBalance(newBalance);
             register.update();
             wasCorrect = false;
         }
