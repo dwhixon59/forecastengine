@@ -177,10 +177,9 @@ public class BudgetController {
                         {
                             boolean actionComplete = false;
                             while (!actionComplete) {
-                                // Display the selected item
+                                // Display the selected item with full details
                                 view.say();
-                                view.say("Selected budget item:");
-                                view.say("  " + selectedItem.getDisplayString());
+                                displayBudgetItemDetails(selectedItem);
 
                                 // Warn if expired
                                 if (selectedItem.isExpired(Calendar.getInstance())) {
@@ -198,10 +197,7 @@ public class BudgetController {
                                 switch (action) {
                                     case "v":  // view details
                                         view.say();
-                                        view.say("Budget Item Details:");
-                                        view.say("──────────────────────────────────────");
                                         displayBudgetItemDetails(selectedItem);
-                                        view.say("──────────────────────────────────────");
                                         break;
 
                                     case "c":  // copy this item
@@ -1338,6 +1334,9 @@ public class BudgetController {
      * @throws Exception if an error occurs while getting budget item details
      */
     private void displayBudgetItemDetails(BudgetItem budgetItem) throws Exception {
+        view.say("Budget Item Details:");
+        view.say("──────────────────────────────────────");
+
         // Get budget name directly using Budget.getById().getName()
         String budgetName = "(none)";
         if (budgetItem.getIdBudget() != null) {
@@ -1362,6 +1361,8 @@ public class BudgetController {
         view.say("How Important: " + (budgetItem.getHowImportant() != null ? budgetItem.getHowImportant() : ""));
         view.say("How Occurs: " + (budgetItem.getHowOccurs() != null ? budgetItem.getHowOccurs() : ""));
         view.say("How Paid: " + (budgetItem.getHowPaid() != null ? budgetItem.getHowPaid() : ""));
+
+        view.say("──────────────────────────────────────");
     }
 
     /**
