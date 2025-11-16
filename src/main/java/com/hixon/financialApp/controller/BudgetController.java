@@ -472,20 +472,6 @@ public class BudgetController {
                     ) {
                         firstTime = false;
 
-                        // then if the user wants to assign a fixed amount, or percentage, to this budget item when
-                        // associated with this particular merchant:
-                        boolean resp = view.getYesOrNo("Do you want to assign a fixed amount, or percentage, " +
-                                "to this budget item when it is associated with this particular merchant");
-                        if (resp) {
-                            String input = view.getResponseString("Enter the fixed amount or percentage (e.g. 100 " +
-                                    "or 10%):");
-                            if (input.endsWith("%")) {
-                                budgetItemMerchant.setPercentage(Integer.parseInt(input.substring(0, input.length() - 1)));
-                            } else {
-                                budgetItemMerchant.setAmount(Double.parseDouble(input));
-                            }
-                        }
-
                         // Associate the budget item with the merchant in the database:
                         budgetItemMerchant.save();
                     }
@@ -498,8 +484,8 @@ public class BudgetController {
                             "associated with the merchant \"" + merchant.getName() + "\".");
                 }
 
-                // Ask the user if they are done:
-                done = !view.getYesOrNo("Assign another budget item to merchant " + merchant.getName());
+                // User is done after selecting one budget item
+                done = true;
 
             } // End while there are budget items to enter.
 
