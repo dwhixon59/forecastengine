@@ -1,6 +1,8 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
+import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
@@ -214,7 +216,7 @@ public class SessionController {
             registerView = new SpreadsheetXmlRegisterView(register);
 
             // and set the financial institution associated with the selected register
-            financialInstitution = new WellsFargoBankController(register, budget, forecast, view, notificationService);
+            financialInstitution = new WellsFargoBank(register, budget, forecast, view, notificationService);
 
             // and get the budget associated with the selected register that the user wants to work with:
             budget = Budget.getById(register.getBudgetID());

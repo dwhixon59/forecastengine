@@ -1,10 +1,10 @@
 package com.hixon.financialApp.test;
 
 
-import com.hixon.financialApp.controller.FinancialInstitutionInt;
 import com.hixon.financialApp.controller.SessionController;
-import com.hixon.financialApp.controller.WellsFargoBankController;
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
+import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.user.User;
@@ -99,7 +99,7 @@ public class TestController {
         sessionController.setForecastView(new SpreadsheetXmlForecastView(testForecast));
 
         // Set the financial institution associated with the test:
-        FinancialInstitutionInt testFinancialInstitution = new WellsFargoBankController(testRegister, testBudget,
+        FinancialInstitutionInt testFinancialInstitution = new WellsFargoBank(testRegister, testBudget,
                 testForecast, view, notificationService);
         sessionController.setFinancialInstitution(testFinancialInstitution);
     }

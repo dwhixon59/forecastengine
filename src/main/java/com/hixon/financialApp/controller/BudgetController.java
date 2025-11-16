@@ -753,7 +753,7 @@ public class BudgetController {
                 defaultEndDateValue =
                         template.getEndDate() != null ? Utility.calendarDateToStringDate(template.getEndDate()) : null;
             }
-            String endDate = view.getResponseString("End Date (MM-dd-yyyy)", defaultEndDateValue,
+            String endDate = view.getResponseString("End Date (MM-dd-yyyy) [enter 'none' to clear]", defaultEndDateValue,
                     ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                     () -> helpText.getProperty("budgetitem.enddate"));
 
@@ -791,8 +791,11 @@ public class BudgetController {
             budgetItem.setMinimumBalance(minimumBalance);
             budgetItem.setStartDate(Utility.stringDateDashToCalendarDate(startDate));
             budgetItem.setNumberOfPayments(numberOfPayments);
-            if (endDate != null && !endDate.isEmpty()) {
+            // Set end date - if user enters empty string or "none", leave it null (no end date)
+            if (endDate != null && !endDate.trim().isEmpty() && !endDate.trim().equalsIgnoreCase("none")) {
                 budgetItem.setEndDate(Utility.stringDateDashToCalendarDate(endDate));
+            } else {
+                budgetItem.setEndDate(null);  // Explicitly set to null for ongoing items
             }
             budgetItem.setItemType(itemType);
             budgetItem.setHowImportant(howImportant);

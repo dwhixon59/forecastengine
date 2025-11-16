@@ -106,7 +106,7 @@ public class TransactionSplitsController {
                                 "percentages:", budgetItemsForMerchant.size(), true, true);
             } else {
                 // the amounts are not pre-established, so ask the user to enter them:
-                amounts = view.getAndParseCsvLine(prompt + ": ", 0, false, true);
+                amounts = view.getAndParseCsvLine(prompt, 0, false, true);
             }
 
             // Create the splits.  Process any user requests to edit the assigned budget items at the same time:

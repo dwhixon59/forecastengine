@@ -166,17 +166,23 @@ public class TransactionSplit extends DependentEntity {
 
     @Override
     public String getInsertQuery() throws BudgetException, ForecastException {
-        return null;
+        return insertQuery;
     }
 
     @Override
     public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
-        return null;
+        String memoString = (memo != null) ? "\"" + memo + "\"" : "null";
+        return insertQuery + amount + ", uuid_to_bin('" + idBudgetItem + "'), " +
+                "uuid_to_bin('" + idTransaction + "'), " + memoString + ") " +
+                "ON DUPLICATE KEY UPDATE amount = " + amount + ", memo = " + memoString;
     }
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return null;
+        String memoString = (memo != null) ? "\"" + memo + "\"" : "null";
+        return "update transaction_split set amount = " + amount + ", memo = " + memoString +
+                " where BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') " +
+                "and Transaction_idTransaction = uuid_to_bin('" + idTransaction + "')";
     }
 
     private static final String deleteQuery = "delete from transaction_split ";

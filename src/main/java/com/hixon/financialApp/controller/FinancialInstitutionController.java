@@ -1,44 +1,25 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitution;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.ViewInt;
 
-public abstract class FinancialInstitutionController implements FinancialInstitutionInt {
+/**
+ * @deprecated This class is deprecated. Use {@link FinancialInstitution} directly instead.
+ * This class remains for backward compatibility only.
+ */
+@Deprecated
+public abstract class FinancialInstitutionController extends FinancialInstitution {
 
-   /*
-    * Fields in the Wells Fargo download file transaction classifier:
+   /**
+    * @deprecated Use {@link FinancialInstitution#FinancialInstitution(Register, Budget, Forecast, ViewInt, NotificationServiceInt)} instead
     */
-   protected Register register;
-   protected Budget budget;
-   protected Forecast forecast;
-   protected ViewInt view;
-   protected NotificationServiceInt notificationService;
-
-
-
-   /*
-    * Getters and setters for the Wells Fargo download file transaction classifier:
-    */
-
-
-   /*
-    * Constructors:
-    */
+   @Deprecated
    FinancialInstitutionController(Register register, Budget budget, Forecast forecast, ViewInt view,
                                   NotificationServiceInt notificationService) {
-
-      // Set the fields:
-      this.register = register;
-      this.budget = budget;
-      this.forecast = forecast;
-      this.view = view;
-      this.notificationService = notificationService;
+      super(register, budget, forecast, view, notificationService);
    }
-
-   /*
-    * Main methods for the Wells Fargo download file transaction classifier:
-    */
 }

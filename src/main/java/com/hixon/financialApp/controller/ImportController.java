@@ -3,6 +3,7 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
@@ -145,7 +146,7 @@ public class ImportController {
 
             // Use CSVFormat.Builder for better forward compatibility
             CSVFormat format = CSVFormat.Builder.create(CSVFormat.RFC4180)
-                    .setHeader(Transaction.Headers.class)
+                    .setHeader(financialInstitution.getCsvHeadersClass())
                     .setTrim(true)
                     .build();
 
@@ -265,7 +266,7 @@ public class ImportController {
                                     continue;
 
                                 case QUIT:
-                                    break;
+                                    throw new QuitException("User quit during merchant assignment");
 
                                 default:
                                     throw new ControllerException("Invalid termination condition " +
@@ -281,48 +282,25 @@ public class ImportController {
                     /*
                      * Phase 2:  Reconcile the transaction with any existing provisional transactions
                      */
-                    // If there is a provisional transaction for this transaction, then use the same ID.  Also, if there
-                    // is a provisional transaction, then the amount of this transaction has already been deducted from
-                    // the register balance, so no need to do that:
-                    Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(record,
+                    // Get matching provisional transaction and reconcile it with the cleared transaction.
+                    // The financial institution class handles all the details including tip detection
+                    // and balance adjustments.
+                    Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(transaction,
                             merchant);
+
+                    // Get the splits for the provisional transaction if one exists
+                    boolean reconciledWithProvisional = false;
                     if (provisionalTransaction != null) {
-                        transaction.setId(provisionalTransaction.getId());
-                        transaction.setIsImproper(provisionalTransaction.getIsImproper());
-                        transaction.setIsNew(provisionalTransaction.getIsNew());
+                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransaction);
 
-                        // Check if there's a tip (cleared amount differs from provisional amount)
-                        double tipAmount = transaction.getAmount() - provisionalTransaction.getAmount();
-                        boolean hasTip = Math.abs(tipAmount) > 0.01; // More than 1 cent difference
+                        // Let the financial institution reconcile the provisional with cleared transaction
+                        reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
+                                transaction, provisionalTransaction, register, splits);
+                    }
 
-                        // Get the splits for the provisional transaction:
-                        splits = TransactionSplit.getSplitsForTransaction(transaction);
-
-                        // If there's a tip, we need to handle the balance adjustment and potentially update splits
-                        if (hasTip) {
-                            // Adjust the register balance by the tip amount (difference between cleared and provisional)
-                            register.setBalance(register.getBalance() + tipAmount);
-                            register.update();
-
-                            // Log the tip for the user
-                            view.say(String.format("Tip detected: %s (Provisional: %s, Cleared: %s)",
-                                    formatDollarAmount(tipAmount),
-                                    formatDollarAmount(provisionalTransaction.getAmount()),
-                                    formatDollarAmount(transaction.getAmount())));
-
-                            // If splits exist, we need to adjust them to account for the tip
-                            // The tip will be added to the first split (typically the meal/service charge)
-                            if (splits != null && !splits.isEmpty()) {
-                                TransactionSplit firstSplit = splits.get(0);
-                                firstSplit.setAmount(firstSplit.getAmount() + tipAmount);
-                                // Mark for re-save later
-                            }
-                        }
-                    } else if (isNewTransaction) {
-                        // Only update the balance if this is a NEW transaction (not previously imported)
-                        // AND there is no provisional transaction.
-                        // If the transaction was already imported in a previous run (isNewTransaction=false),
-                        // the balance was already updated, so don't update it again.
+                    // If no provisional transaction was found and this is a new transaction,
+                    // update the register balance
+                    if (!reconciledWithProvisional && isNewTransaction) {
                         register.setBalance(register.getBalance() + transaction.getAmount());
                         register.update();
                     }
@@ -331,7 +309,7 @@ public class ImportController {
                     transaction.save(INSERT_ON_DUPLICATE_UPDATE);
 
                     // Tell the user what we just did:
-                    importLog.logImportEvent(transaction);
+                    importLog.logImportEvent(transaction, isNewTransaction);
 
                     /*
                      * Phase 3:  Get the assigned budget items for this merchant:
@@ -397,7 +375,7 @@ public class ImportController {
                                     continue;
 
                                 case QUIT:
-                                    break;
+                                    throw new QuitException("User quit during split assignment");
 
                                 default:
                                     throw new ControllerException("Invalid termination condition " +
@@ -407,9 +385,9 @@ public class ImportController {
 
                         // If the user entered any splits:
                         if (splits != null) {
-                            // then they are now complete, so save them off
+                            // Save the splits using INSERT_ON_DUPLICATE_UPDATE to handle both new and existing splits
                             for (TransactionSplit split : splits) {
-                                split.save();
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
                             }
                         }
                     } else {
@@ -418,7 +396,7 @@ public class ImportController {
                 } else {
 
                     // Tell the user what we just did:
-                    importLog.logImportEvent(transaction);
+                    importLog.logImportEvent(transaction, false);
                 }
 
                 /*
@@ -742,6 +720,8 @@ public class ImportController {
                                         continue;
 
                                     case QUIT:
+                                        throw new QuitException("User quit during provisional transaction split assignment");
+
                                     case RESTART:
                                         break;
 

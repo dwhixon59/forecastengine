@@ -1,6 +1,7 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
@@ -287,7 +288,8 @@ public class DailyUpdateController {
            sessionController.getView().say("\nAborting the daily update process at the user's request.");
             result = false;
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
 
            sessionController.getView().say("\nAborting the daily update process because an exception occurred.");
             throw new RuntimeException(e);

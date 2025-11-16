@@ -34,6 +34,10 @@ public class ImportLog {
      */
 
     public void logImportEvent(Transaction transaction) throws EntityException, RegisterException {
+        logImportEvent(transaction, true);
+    }
+
+    public void logImportEvent(Transaction transaction, boolean isNewTransaction) throws EntityException, RegisterException {
 
         // Save the transaction in case the user wants to change the assigned category of the transaction later:
         importedTransactions.add(transaction);
@@ -48,7 +52,10 @@ public class ImportLog {
         } else {
             creditOrDebitString = "debit to ";
         }
-        getView().say("\nImported a " + creditOrDebitString + transaction.getMerchant().getName() + " for " +
+
+        String importStatus = isNewTransaction ? "Imported a " : "Already imported: ";
+
+        getView().say("\n" + importStatus + creditOrDebitString + transaction.getMerchant().getName() + " for " +
                 formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
                 ((transaction.getAuthorizationDate() != null) ?
                         calendarDateToStringDate(transaction.getAuthorizationDate()) :

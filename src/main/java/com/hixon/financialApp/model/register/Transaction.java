@@ -67,12 +67,6 @@ public class Transaction extends IndependentEntity {
     /** The merchant object associated with the transaction. */
     private Merchant merchant;
 
-    /**
-     * Enum for transaction table headers.
-     */
-    public enum Headers {
-        TRANSACTION_DATE, AMOUNT, CLEARED, CHECK_NUMBER, PAYEE
-    }
 
     private static final String selectColumns = "bin_to_uuid(tr.idTransaction) as 'tr.idTransaction', " +
             "tr.postDate as 'tr.postDate', tr.authorizationDate as 'tr.authorizationDate', tr.amount as 'tr.amount', " +

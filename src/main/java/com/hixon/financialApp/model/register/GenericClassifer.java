@@ -1,9 +1,9 @@
 package com.hixon.financialApp.model.register;
 
-import com.hixon.financialApp.controller.FinancialInstitutionInt;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
@@ -100,6 +100,12 @@ public class GenericClassifer implements FinancialInstitutionInt {
     }
 
     @Override
+    public Class<? extends Enum<?>> getCsvHeadersClass() {
+        // Generic classifier doesn't have specific CSV headers
+        return null;
+    }
+
+    @Override
     public String getRegisterImportRecordBaseName(CSVRecord record) {
         return null;
     }
@@ -120,8 +126,17 @@ public class GenericClassifer implements FinancialInstitutionInt {
     }
 
     @Override
-    public Transaction getMatchingProvisionalTransaction(CSVRecord record, Merchant transaction) throws RegisterException, SQLException, EntityException {
+    public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction, Merchant merchant) throws RegisterException, SQLException, EntityException {
         return null;
+    }
+
+    @Override
+    public boolean reconcileProvisionalTransaction(Transaction clearedTransaction,
+                                                   Transaction provisionalTransaction,
+                                                   Register register,
+                                                   List<com.hixon.financialApp.model.budget.TransactionSplit> splits) throws Exception {
+        // Generic classifier doesn't support provisional transactions
+        return false;
     }
 
     @Override

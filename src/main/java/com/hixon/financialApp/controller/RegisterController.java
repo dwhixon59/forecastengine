@@ -5,6 +5,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;

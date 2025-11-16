@@ -16,9 +16,9 @@ Visit: https://simplemaps.com/data/us-cities
 ## Project Structure
 
 - `src/main/java/com/hixon/financialApp/controller/`: Contains the controller classes for handling the business logic.
-    - `WellsFargoBankController.java`: Handles specific logic for Wells Fargo bank transactions.
     - `ImportLog.java`: Manages the logging of imported transactions.
 - `src/main/java/com/hixon/financialApp/model/`: Contains the model classes representing the application's data.
+    - `model/financialinstitution/WellsFargoBank.java`: Handles specific logic for Wells Fargo bank transaction parsing and processing.
 - `src/main/java/com/hixon/financialApp/utility/`: Contains utility classes and methods used across the application.
 
 ## How to Build
