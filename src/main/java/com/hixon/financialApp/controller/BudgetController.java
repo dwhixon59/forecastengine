@@ -42,7 +42,7 @@ public class BudgetController {
     /*
      * Fields for BudgetController:
      */
-    private final ImportController.TerminationCondition terminationCondition;
+    private ImportController.TerminationCondition terminationCondition;
     Register register;
     Budget budget;
     Forecast forecast;
@@ -94,6 +94,17 @@ public class BudgetController {
     /**
      * Main methods for BudgetController:
      */
+
+    /**
+     * Gets the current termination condition from the last split assignment operation.
+     * Used by ImportController to determine how to proceed after assignAmountsToBudgetItems().
+     *
+     * @return the current termination condition (SKIP, QUIT, CANCEL, etc.)
+     */
+    public ImportController.TerminationCondition getTerminationCondition() {
+        return terminationCondition;
+    }
+
     /**
      * Allows the user to manage budget items interactively using a unified search-based interface.
      * The workflow is:
@@ -529,6 +540,8 @@ public class BudgetController {
             TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget,
                     forecast, view, notificationService);
             transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
+            // Capture the termination condition so ImportController can check it
+            terminationCondition = transactionSplitsController.getTerminationCondition();
         } else {
             // Track the total of the splits so that we can ensure they splits balance in the end:
             double transactionAmount = transaction.getAmount();
@@ -567,6 +580,8 @@ public class BudgetController {
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
                 TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget, forecast, view, notificationService);
                 transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
+                // Capture the termination condition so ImportController can check it
+                terminationCondition = transactionSplitsController.getTerminationCondition();
             }
         }
         return (splits.isEmpty()) ? null : splits;

@@ -696,7 +696,7 @@ public class ImportController {
                                     merchant, budget, budgetItemMerchants);
 
                             if (splits == null || splits.isEmpty()) {
-                                switch (view.getTerminationCondition()) {
+                                switch (budgetController.getTerminationCondition()) {
                                     case INQUIRE:
                                         List<User> users = User.getAllUsers();
                                         User user = view.getUser("Select the user to send the notification to",
@@ -730,7 +730,7 @@ public class ImportController {
 
                                     default:
                                         throw new ControllerException("Invalid termination condition " +
-                                                view.getTerminationCondition() + " during transaction import");
+                                                budgetController.getTerminationCondition() + " during transaction import");
                                 }
                             }
                         }
