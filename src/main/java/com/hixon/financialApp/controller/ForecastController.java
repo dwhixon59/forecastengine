@@ -306,31 +306,6 @@ public class ForecastController {
         return response;
     }
 
-    /**
-     * Attempts to find a matching forecast transaction for a cleared transaction based on date and amount proximity.
-     *
-     * @deprecated Use {@link com.hixon.financialApp.utility.ForecastTransactionMatcher#findMatchingForecastTransaction(Transaction, Forecast, List, int, int)} instead.
-     * This method delegates to the utility class.
-     *
-     * @param transaction The cleared transaction to match
-     * @param possibleMerchants List of possible merchants (null = no merchant filtering,
-     *                          empty = no merchants match, 1+ = filter to these merchants)
-     * @param daysBefore Number of days before transaction date to search
-     * @param daysAfter Number of days after transaction date to search
-     * @return The best matching ForecastTransaction if found with sufficient confidence, null otherwise
-     * @throws Exception if database or other errors occur
-     */
-    @Deprecated
-    public ForecastTransaction findMatchingForecastTransaction(
-            Transaction transaction,
-            List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants,
-            int daysBefore,
-            int daysAfter) throws Exception {
-
-        return com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
-                transaction, forecast, possibleMerchants, daysBefore, daysAfter);
-    }
-
     // Reconcile a register transaction with a forecast transaction:
     public void reconcile(Transaction transaction, List<TransactionSplit> splits)
             throws Exception {
