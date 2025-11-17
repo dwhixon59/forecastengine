@@ -738,6 +738,44 @@ public class ImportController {
                         // Get the splits for the transaction:
                         splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
 
+                        /*
+                         * Phase 2.5: Try to match with forecast transactions directly (bypassing manual budget item selection)
+                         */
+                        // If we don't have splits yet, try forecast matching
+                        if (splits == null) {
+                            // Get possible merchants from the transaction payee (0, 1, or more matches)
+                            List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants =
+                                com.hixon.financialApp.model.merchant.MerchantUtilities.getPossibleMerchantsByPayee(
+                                    provisionalTransactions.get(provTrxIndex).getMerchantPayee());
+
+                            // Try to find a matching forecast transaction within ±5 days
+                            ForecastTransaction matchedForecast =
+                                com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                    provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
+
+                            // If we found a confident match
+                            if (matchedForecast != null) {
+                                // Get the budget item from the forecast transaction
+                                UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
+
+                                // Create the split automatically
+                                splits = new ArrayList<>();
+                                splits.add(new TransactionSplit(provisionalTransactions.get(provTrxIndex).getAmount(),
+                                        idBudgetItem, provisionalTransactions.get(provTrxIndex).getId(), null));
+
+                                // Inform the user about the auto-match
+                                view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+
+                                // If we found a merchant from the payee, use it
+                                if (possibleMerchants != null && possibleMerchants.size() == 1) {
+                                    provisionalTransactions.get(provTrxIndex).setMerchant(possibleMerchants.get(0));
+                                } else if (merchant != null) {
+                                    // Use the merchant we already identified
+                                    provisionalTransactions.get(provTrxIndex).setMerchant(merchant);
+                                }
+                            }
+                        }
+
                         // If we couldn't find any matching items, get some help from the user:
                         if (splits == null) {
                             splits = budgetController.assignAmountsToBudgetItems(provisionalTransactions.get(provTrxIndex),
