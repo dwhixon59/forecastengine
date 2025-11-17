@@ -559,21 +559,11 @@ public class ImportController {
                     // Get the merchant for this transaction:
                     Merchant merchant = Merchant.getByPayee(transaction.getMerchantPayee());
 
-                    // If we couldn't find a merchant for the transaction, get some help from the user to create one:
+                    // If we couldn't find a merchant by exact payee match, assign UNKNOWN for now
+                    // Phase 2.5 forecast matching will try to determine the correct merchant
+                    // Only if that fails will we ask the user
                     if (merchant == null) {
-                        try {
-                            MerchantController merchantController = new MerchantController(view, notificationService);
-                            merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
-                                    transaction.getPayee(), transaction.getAmount());
-                        } catch (CancelException ce) {
-                            terminationCondition = CANCEL;
-                            continue;
-                        } catch (SkipException se) {
-                            transaction.setMerchant(merchant.getByName(Merchant.UNKNOWN));
-                            transaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                            terminationCondition = SKIP;
-                            continue;
-                        }
+                        merchant = Merchant.getByName(Merchant.UNKNOWN);
                     }
                     transaction.setMerchant(merchant);
 
@@ -778,6 +768,29 @@ public class ImportController {
 
                         // If we couldn't find any matching items, get some help from the user:
                         if (splits == null) {
+                            // If Phase 2.5 didn't find a forecast match and we still have UNKNOWN merchant,
+                            // now is the time to ask the user to identify the merchant
+                            if (merchant.getName().equals(Merchant.UNKNOWN)) {
+                                try {
+                                    MerchantController merchantController = new MerchantController(view, notificationService);
+                                    Merchant assignedMerchant = merchantController.assignMerchant(
+                                            provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
+                                            provisionalTransactions.get(provTrxIndex).getPayee(),
+                                            provisionalTransactions.get(provTrxIndex).getAmount());
+
+                                    if (assignedMerchant != null) {
+                                        merchant = assignedMerchant;
+                                        provisionalTransactions.get(provTrxIndex).setMerchant(merchant);
+                                        // Refresh budget item merchants list for the newly identified merchant
+                                        budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                                    }
+                                } catch (CancelException ce) {
+                                    // User cancelled, continue with UNKNOWN merchant
+                                } catch (SkipException se) {
+                                    // User skipped, continue with UNKNOWN merchant
+                                }
+                            }
+
                             splits = budgetController.assignAmountsToBudgetItems(provisionalTransactions.get(provTrxIndex),
                                     merchant, budget, budgetItemMerchants);
 
