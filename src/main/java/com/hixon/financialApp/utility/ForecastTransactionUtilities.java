@@ -13,7 +13,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
 
-import static com.hixon.financialApp.utility.Utility.calendarDateToStringDate;
+import static com.hixon.financialApp.utility.Utility.calendarDateToSqlDateString;
 
 /**
  * Utility class for forecast transaction operations that don't belong in the core ForecastTransaction entity class.
@@ -44,8 +44,8 @@ public class ForecastTransactionUtilities {
         String selectQuery = ForecastTransaction.getSelectQuery() + " " +
                 "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
                 "where fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "') " +
-                "and ft.plannedDate >= '" + calendarDateToStringDate(startDate) + "' " +
-                "and ft.plannedDate <= '" + calendarDateToStringDate(endDate) + "' " +
+                "and ft.plannedDate >= " + calendarDateToSqlDateString(startDate) + " " +
+                "and ft.plannedDate <= " + calendarDateToSqlDateString(endDate) + " " +
                 "order by ft.plannedDate asc";
 
         ResultSet rs = EntityInt.getRS(selectQuery, "Database error occurred attempting to " +
