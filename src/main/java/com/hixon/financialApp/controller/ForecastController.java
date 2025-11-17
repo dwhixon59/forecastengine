@@ -16,7 +16,6 @@ import com.hixon.financialApp.view.csv.CsvForecastView;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
@@ -309,16 +308,9 @@ public class ForecastController {
 
     /**
      * Attempts to find a matching forecast transaction for a cleared transaction based on date and amount proximity.
-     * This method provides automatic matching for planned transactions without requiring merchant identification
-     * or budget item selection from the user.
      *
-     * <p>The matching process:
-     * <ol>
-     *   <li>Retrieves forecast transactions within the date window (daysBefore to daysAfter)</li>
-     *   <li>Filters by possible merchants if provided (null = no filtering)</li>
-     *   <li>Scores remaining forecast transactions based on date and amount similarity</li>
-     *   <li>Returns the best match if confidence is high enough (70%+), otherwise null</li>
-     * </ol>
+     * @deprecated Use {@link com.hixon.financialApp.utility.ForecastTransactionMatcher#findMatchingForecastTransaction(Transaction, Forecast, List, int, int)} instead.
+     * This method delegates to the utility class.
      *
      * @param transaction The cleared transaction to match
      * @param possibleMerchants List of possible merchants (null = no merchant filtering,
@@ -328,91 +320,15 @@ public class ForecastController {
      * @return The best matching ForecastTransaction if found with sufficient confidence, null otherwise
      * @throws Exception if database or other errors occur
      */
+    @Deprecated
     public ForecastTransaction findMatchingForecastTransaction(
             Transaction transaction,
             List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants,
             int daysBefore,
             int daysAfter) throws Exception {
 
-        // Calculate the date window
-        Calendar startDate = (Calendar) transaction.getDate().clone();
-        startDate.add(Calendar.DATE, -daysBefore);
-
-        Calendar endDate = (Calendar) transaction.getDate().clone();
-        endDate.add(Calendar.DATE, daysAfter);
-
-        // Get all forecast transactions in the date window for this budget
-        List<ForecastTransaction> candidateForecastTransactions =
-            ForecastTransaction.getForecastTransactionsInDateRange(forecast.getId(), startDate, endDate);
-
-        // If no candidates, return null
-        if (candidateForecastTransactions.isEmpty()) {
-            return null;
-        }
-
-        // Filter by merchant if we have a merchant list (but not if it's null - null means "no info")
-        if (possibleMerchants != null && !possibleMerchants.isEmpty()) {
-            List<ForecastTransaction> filteredTransactions = new ArrayList<>();
-
-            for (ForecastTransaction ft : candidateForecastTransactions) {
-                // Get the budget item for this forecast transaction
-                UUID idBudgetItem = ft.getForecastItem().getIdBudgetItem();
-                BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
-
-                // Get merchants assigned to this budget item
-                List<BudgetItemMerchant> budgetItemMerchants =
-                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
-
-                // Check if any of the budget item's merchants match our possible merchants
-                boolean merchantMatches = false;
-                if (budgetItemMerchants.isEmpty()) {
-                    // No merchants assigned - keep this forecast transaction as a candidate
-                    merchantMatches = true;
-                } else {
-                    for (BudgetItemMerchant bim : budgetItemMerchants) {
-                        for (com.hixon.financialApp.model.merchant.Merchant possibleMerchant : possibleMerchants) {
-                            if (bim.getIdMerchant().equals(possibleMerchant.getId())) {
-                                merchantMatches = true;
-                                break;
-                            }
-                        }
-                        if (merchantMatches) break;
-                    }
-                }
-
-                if (merchantMatches) {
-                    filteredTransactions.add(ft);
-                }
-            }
-
-            candidateForecastTransactions = filteredTransactions;
-        }
-
-        // If no candidates remain after filtering, return null
-        if (candidateForecastTransactions.isEmpty()) {
-            return null;
-        }
-
-        // Score each remaining forecast transaction
-        ForecastTransaction bestMatch = null;
-        double bestScore = 0.0;
-
-        for (ForecastTransaction ft : candidateForecastTransactions) {
-            double score = com.hixon.financialApp.utility.ForecastTransactionMatcher.calculateMatchScore(
-                    transaction, ft, possibleMerchants);
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMatch = ft;
-            }
-        }
-
-        // Only return a match if confidence is at least 70%
-        if (bestScore >= 70.0) {
-            return bestMatch;
-        }
-
-        return null;
+        return com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
+                transaction, forecast, possibleMerchants, daysBefore, daysAfter);
     }
 
     // Reconcile a register transaction with a forecast transaction:

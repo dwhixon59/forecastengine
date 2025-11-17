@@ -322,10 +322,9 @@ public class ImportController {
                                 transaction.getMerchantPayee());
 
                         // Try to find a matching forecast transaction within ±5 days
-                        ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                notificationService);
-                        ForecastTransaction matchedForecast = forecastController.findMatchingForecastTransaction(
-                                transaction, possibleMerchants, 5, 5);
+                        ForecastTransaction matchedForecast =
+                            com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                transaction, forecast, possibleMerchants, 5, 5);
 
                         // If we found a confident match
                         if (matchedForecast != null) {
