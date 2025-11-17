@@ -56,7 +56,7 @@ public class ForecastTransactionMatcher {
 
         // Get all forecast transactions in the date window for this budget
         List<ForecastTransaction> candidateForecastTransactions =
-                ForecastTransaction.getForecastTransactionsInDateRange(forecast.getId(), startDate, endDate);
+                ForecastTransactionUtilities.getForecastTransactionsInDateRange(forecast.getId(), startDate, endDate);
 
         // If no candidates, return null
         if (candidateForecastTransactions.isEmpty()) {
