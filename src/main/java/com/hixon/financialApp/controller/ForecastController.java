@@ -398,7 +398,8 @@ public class ForecastController {
         double bestScore = 0.0;
 
         for (ForecastTransaction ft : candidateForecastTransactions) {
-            double score = calculateMatchScore(transaction, ft, possibleMerchants);
+            double score = com.hixon.financialApp.utility.ForecastTransactionMatcher.calculateMatchScore(
+                    transaction, ft, possibleMerchants);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -412,74 +413,6 @@ public class ForecastController {
         }
 
         return null;
-    }
-
-    /**
-     * Calculates a match score (0-100) between a transaction and a forecast transaction.
-     * Higher scores indicate better matches.
-     *
-     * Scoring breakdown:
-     * - Date proximity: 0-40 points (closer dates score higher)
-     * - Amount similarity: 0-40 points (closer amounts score higher, with tip tolerance)
-     * - Merchant match: 0-20 points (bonus if merchant matches)
-     *
-     * @param transaction The cleared transaction
-     * @param forecastTransaction The forecast transaction to score
-     * @param possibleMerchants List of possible merchants (can be null)
-     * @return Score from 0-100
-     */
-    private double calculateMatchScore(
-            Transaction transaction,
-            ForecastTransaction forecastTransaction,
-            List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants) throws Exception {
-
-        double score = 0.0;
-
-        // 1. Date Proximity Score (0-40 points)
-        long daysDiff = Math.abs(
-            (transaction.getDate().getTimeInMillis() - forecastTransaction.getPlannedDate().getTimeInMillis())
-            / (1000 * 60 * 60 * 24)
-        );
-        score += Math.max(0, 40 - (daysDiff * 8)); // -8 points per day difference
-
-        // 2. Amount Similarity Score (0-40 points)
-        double transactionAmount = Math.abs(transaction.getAmount());
-        double forecastAmount = Math.abs(forecastTransaction.getForecastItem().getAmount());
-        double amountDiff = Math.abs(transactionAmount - forecastAmount);
-        double percentDiff = amountDiff / Math.max(transactionAmount, forecastAmount);
-
-        // Perfect match or very close
-        if (percentDiff <= 0.01) {
-            score += 40;
-        }
-        // Within 5% (likely same transaction)
-        else if (percentDiff <= 0.05) {
-            score += 40 - (percentDiff * 400); // Gradually decrease from 40 to 20
-        }
-        // Within 25% (could be same with tip)
-        else if (percentDiff <= 0.25) {
-            score += 20 - (percentDiff * 80); // Gradually decrease from 20 to 0
-        }
-        // Otherwise 0 points
-
-        // 3. Merchant Match Score (0-20 points)
-        if (possibleMerchants != null && !possibleMerchants.isEmpty()) {
-            UUID idBudgetItem = forecastTransaction.getForecastItem().getIdBudgetItem();
-            BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
-            List<BudgetItemMerchant> budgetItemMerchants =
-                BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
-
-            for (BudgetItemMerchant bim : budgetItemMerchants) {
-                for (com.hixon.financialApp.model.merchant.Merchant possibleMerchant : possibleMerchants) {
-                    if (bim.getIdMerchant().equals(possibleMerchant.getId())) {
-                        score += 20;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return score;
     }
 
     // Reconcile a register transaction with a forecast transaction:
