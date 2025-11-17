@@ -1,44 +1,78 @@
 package com.hixon.financialApp.model.merchant;
 
-import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Utility class for merchant-related operations.
- * Provides helper methods for working with merchants across controllers.
- */
-public final class MerchantUtilities {
+import static com.hixon.financialApp.utility.Utility.getDbConnection;
 
-    private MerchantUtilities() {
-        // Private constructor to prevent instantiation
-    }
+/**
+ * Utility class for merchant-related operations that don't belong in the core Merchant entity class.
+ * Contains helper methods for merchant lookup, matching, and analysis.
+ */
+public class MerchantUtilities {
 
     /**
-     * Retrieves all merchants from the database.
+     * Get a list of possible merchants for a given transaction payee.
+     * This method attempts to identify merchants without user interaction.
      *
-     * @return List of all Merchant objects
-     * @throws EntityException if there's a database error
-     * @throws SQLException if there's a SQL error
-     * @throws RegisterException if there's an error creating Merchant objects
+     * <p>The matching process:
+     * <ol>
+     *   <li>First tries exact match in merchant_payee table</li>
+     *   <li>Falls back to fuzzy matching on merchant names:
+     *     <ul>
+     *       <li>Checks if merchant name is contained in payee (e.g., "PURCHASE AT WALMART" matches "Walmart")</li>
+     *       <li>Checks if payee is contained in merchant name (e.g., "TARGET" matches "Target Corporation")</li>
+     *     </ul>
+     *   </li>
+     * </ol>
+     *
+     * @param payee The transaction payee string
+     * @return A list of possible merchants:
+     *         <ul>
+     *           <li>Empty list if payee is null/empty or no matches found</li>
+     *           <li>Single item if exact match found</li>
+     *           <li>Multiple items if fuzzy matching finds several possibilities</li>
+     *         </ul>
+     * @throws RegisterException if a database error occurs
      */
-    public static List<Merchant> getAllMerchants() throws EntityException, SQLException, RegisterException {
-        String selectQuery = "select " + Merchant.getSelectColumns() + " from merchant m";
-        ResultSet rs = EntityInt.getRS(selectQuery, "retrieving all merchants");
+    public static List<Merchant> getPossibleMerchantsByPayee(String payee) throws RegisterException {
+        List<Merchant> possibleMerchants = new ArrayList<>();
 
-        List<Merchant> merchants = new ArrayList<>();
-        if (rs != null) {
-            while (rs.next()) {
-                merchants.add(new Merchant(rs));
-            }
+        if (payee == null || payee.trim().isEmpty()) {
+            return possibleMerchants;
         }
 
-        return merchants;
+        // First try exact match
+        Merchant exactMatch = Merchant.getByPayee(payee);
+        if (exactMatch != null) {
+            possibleMerchants.add(exactMatch);
+            return possibleMerchants;
+        }
+
+        // If no exact match, try fuzzy matching on merchant names within the payee
+        // This handles cases like "PURCHASE AT WALMART" -> "Walmart"
+        String escapedPayee = Utility.escapeSqlString(payee.toLowerCase());
+        String query = Merchant.getSelectQuery() + " where LOWER(m.name) LIKE '%" + escapedPayee + "%' " +
+                "OR '" + escapedPayee + "' LIKE CONCAT('%', LOWER(m.name), '%')";
+
+        try {
+            Statement statement = getDbConnection().createStatement();
+            ResultSet rs = statement.executeQuery(query);
+            while (rs.next()) {
+                possibleMerchants.add(new Merchant(rs));
+            }
+            return possibleMerchants;
+        } catch (SQLException e) {
+            RegisterException re = new RegisterException("Database error occurred trying to get possible Merchants for the " +
+                    "payee " + payee + "\nSQL statement was:  " + query, e);
+            throw re;
+        }
     }
 }
 

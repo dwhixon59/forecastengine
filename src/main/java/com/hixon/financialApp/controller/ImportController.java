@@ -312,6 +312,55 @@ public class ImportController {
                     importLog.logImportEvent(transaction, isNewTransaction);
 
                     /*
+                     * Phase 2.5: Try to match with forecast transactions directly (bypassing merchant/budget item selection)
+                     */
+                    // If we don't have splits yet (no provisional transaction was found), try forecast matching
+                    if (splits == null) {
+                        // Get possible merchants from the transaction payee (0, 1, or more matches)
+                        List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants =
+                            com.hixon.financialApp.model.merchant.MerchantUtilities.getPossibleMerchantsByPayee(
+                                transaction.getMerchantPayee());
+
+                        // Try to find a matching forecast transaction within ±5 days
+                        ForecastController forecastController = new ForecastController(register, budget, forecast, view,
+                                notificationService);
+                        ForecastTransaction matchedForecast = forecastController.findMatchingForecastTransaction(
+                                transaction, possibleMerchants, 5, 5);
+
+                        // If we found a confident match
+                        if (matchedForecast != null) {
+                            // Get the budget item from the forecast transaction
+                            UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
+
+                            // Create the split automatically
+                            splits = new ArrayList<>();
+                            splits.add(new TransactionSplit(transaction.getAmount(), idBudgetItem,
+                                    transaction.getId(), null));
+
+                            // Inform the user about the auto-match
+                            view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+
+                            // If we found a merchant from the payee, use it
+                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
+                                transaction.setMerchant(possibleMerchants.get(0));
+                                transaction.setIdMerchant(possibleMerchants.get(0).getId());
+                            } else if (merchant != null) {
+                                // Use the merchant we already identified
+                                transaction.setMerchant(merchant);
+                                transaction.setIdMerchant(merchant.getId());
+                            }
+
+                            // Save the transaction with merchant info
+                            transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                            // Save the split
+                            for (TransactionSplit split : splits) {
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                            }
+                        }
+                    }
+
+                    /*
                      * Phase 3:  Get the assigned budget items for this merchant:
                      */
                     // If there was a provisional transaction with assigned splits, then the splits are already assigned.
