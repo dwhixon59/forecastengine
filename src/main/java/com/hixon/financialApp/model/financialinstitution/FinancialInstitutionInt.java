@@ -1,7 +1,6 @@
 package com.hixon.financialApp.model.financialinstitution;
 
 import com.hixon.financialApp.model.entity.EntityException;
-import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
@@ -36,7 +35,8 @@ public interface FinancialInstitutionInt {
     Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception;
 
     // Get a provisional transaction from an import record:
-    Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction, Merchant merchant) throws RegisterException, SQLException, EntityException, java.text.ParseException, Exception;
+    Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
+            throws RegisterException, SQLException, EntityException, java.text.ParseException, Exception;
 
     /**
      * Reconciles a cleared transaction with its matching provisional transaction (if one exists).

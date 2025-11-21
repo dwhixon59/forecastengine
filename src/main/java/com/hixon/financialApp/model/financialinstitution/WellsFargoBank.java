@@ -4,7 +4,6 @@ import com.hixon.financialApp.controller.RegisterController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionUtilities;
@@ -433,45 +432,32 @@ public class WellsFargoBank extends FinancialInstitution {
     }
 
     /**
-     * Finds a matching provisional transaction for the given cleared transaction and merchant.
-     * Provisional transactions are pending transactions that have been entered manually
-     * or imported from a provisional transaction file before the actual transaction posts.
+     * Finds a matching provisional transaction for the given cleared transaction.
+     * Uses fuzzy payee matching within a ±5 day window to find provisional transactions
+     * that likely correspond to the cleared transaction.
      *
-     * <p>This method uses improved fuzzy matching that accounts for:
-     * <ul>
-     *   <li>Date differences between provisional and posted transactions (±5 days)</li>
-     *   <li>Payee string differences (Wells Fargo formats differ between provisional and posted)</li>
-     *   <li>Merchant matching when available</li>
-     * </ul>
-     *
-     * @param clearedTransaction The cleared transaction from the CSV import (already parsed)
-     * @param merchant The merchant associated with the transaction
-     * @return The matching provisional Transaction if found, or null if no match exists
-     * @throws SQLException If a database error occurs during the search
+     * @param clearedTransaction The cleared transaction to match
+     * @return The matching provisional Transaction, or null if no match is found
+     * @throws SQLException If a database error occurs
      * @throws EntityException If an entity-related error occurs
      * @throws ParseException If date parsing fails
      * @throws Exception If an error occurs
      */
     @Override
-    public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction, Merchant merchant) throws SQLException,
-            EntityException, ParseException, Exception {
+    public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
+            throws SQLException, EntityException, ParseException, Exception {
 
-        // Get the merchant payee from the already-parsed transaction (avoids re-prompting user)
+        // Get the merchant payee from the already-parsed transaction
         String merchantPayee = clearedTransaction.getMerchantPayee();
 
-        // Try the improved fuzzy matching first
+        // Use fuzzy matching based on payee, date, and amount
         Transaction provisionalTransaction = TransactionUtilities.findMatchingProvisionalTransaction(
                 register.getId(),
                 clearedTransaction.getAmount(),
                 clearedTransaction.getDate(),
                 merchantPayee,
-                merchant != null ? merchant.getId() : null
+                null  // Don't use merchant for matching, rely on payee string matching
         );
-
-        // If no match found with fuzzy matching and merchant is assigned, fall back to old method
-        if (provisionalTransaction == null && merchant != null) {
-            provisionalTransaction = TransactionUtilities.getFirstProvisionalTransaction(merchant.getId(), clearedTransaction.getAmount());
-        }
 
         return provisionalTransaction;
     }

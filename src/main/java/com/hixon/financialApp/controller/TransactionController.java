@@ -296,7 +296,7 @@ public class TransactionController {
 
                 if (result.isNumber()) {
                     // User selected a transaction by number
-                    int index = result.getSelectedIndex() - 1; // Convert 1-based to 0-based
+                    int index = result.getSelectedIndex(); // Already 0-based from view layer
                     if (index >= 0 && index < transactions.size()) {
                         return transactions.get(index);
                     } else {
@@ -640,9 +640,34 @@ public class TransactionController {
         // Use MerchantController to assign a merchant
         MerchantController merchantController = new MerchantController(view, notificationService);
 
-        // Get or create merchant payee string
-        String merchantPayeeString = transaction.getMerchantPayee() != null ?
-                transaction.getMerchantPayee() : transaction.getPayee();
+        // Parse the merchant payee string for creating the MerchantPayee mapping
+        // Note: merchantPayee is not stored in the transaction table, but is used to create
+        // a MerchantPayee record that maps the cleaned payee string to the merchant
+        String merchantPayeeString;
+        try {
+            // Get the register and financial institution to parse the merchant payee
+            Register transactionRegister = transaction.getRegister();
+
+            // For now, hardcode WellsFargoBank since that's what's currently used
+            // TODO: Make this configurable based on register's financial institution
+            com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt financialInstitution =
+                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(
+                            transactionRegister, budget, forecast, view, notificationService);
+
+            // Parse the merchant payee from the raw payee to get a cleaned, shortened version
+            // Example: "PURCHASE AUTHORIZED ON 11/18 TARGET T-0799..." -> "TARGET T-0799 Sarasota FL"
+            merchantPayeeString = financialInstitution.parseMerchantPayee(
+                    transaction.getDate(),
+                    transaction.getAmount(),
+                    transaction.getPayee());
+
+        } catch (Exception e) {
+            // If parsing fails, fall back to using the raw payee
+            // This may cause database errors if the raw payee is too long
+            view.say("Warning: Could not parse merchant payee from raw payee. Using raw payee instead.");
+            view.say("Error: " + e.getMessage());
+            merchantPayeeString = transaction.getPayee();
+        }
 
         Merchant merchant = merchantController.assignMerchant(
                 merchantPayeeString,

@@ -10,13 +10,14 @@ import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.merchant.MerchantPayee;
+import com.hixon.financialApp.model.merchant.MerchantUtilities;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.FinancialAppException;
-import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.utility.ForecastTransactionMatcher;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVFormat;
@@ -386,7 +387,7 @@ public class ImportController {
             Transaction currentTransaction;
 
             // Open the import file:
-            BufferedReader br = Utility.openBufferedFileReader(Transaction.CLEARED_TRANSACTIONS_FILE,
+            BufferedReader br = openBufferedFileReader(Transaction.CLEARED_TRANSACTIONS_FILE,
                     clearedTransactionsFilename);
 
             // Describe the format of the CSV file for the CSVFormat.Builder:
@@ -408,10 +409,15 @@ public class ImportController {
             // For each transaction in the import file:
             HashMap<String, String> map = new HashMap<>();
             String importRecordId;
-            Merchant merchant;
+            Merchant merchant = null;
             boolean firstTransaction = true;
             for (i = recordList.size() - 1, j = 0; i > -1; i--, j++) {
                 CSVRecord record = recordList.get(i);
+
+                // Set up for processing this transaction:
+                importRecordId = null;
+                currentTransaction = null;
+                merchant = null;
 
                 /*
                  * Phase 1:  create or retrieve the transaction and the merchant associated with it.  The reason we can
@@ -445,7 +451,6 @@ public class ImportController {
                         register.update();
                         continue;
                     }
-                    merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
                 }
 
                 // It is expected that transactions will be downloaded almost daily, so if the first transaction is more
@@ -470,7 +475,99 @@ public class ImportController {
                 // If we haven't already assigned the splits to this transaction in a previous run:
                 if (splits == null) {
 
-                    // If there wasn't a merchant associated with the transaction payee, then assign or create one:
+                    /*
+                     * Phase 2:  Reconcile the transaction with any existing provisional transactions
+                     */
+                    // Get matching provisional transaction and reconcile it with the cleared transaction.
+                    // The financial institution class handles all the details including tip detection
+                    // and balance adjustments. Matching is now done purely on payee, date, and amount.
+                    Transaction provisionalTransaction =
+                            financialInstitution.getMatchingProvisionalTransaction(currentTransaction);
+
+                    // If we found a provisional transaction:
+                    boolean reconciledWithProvisional = false;
+                    if (provisionalTransaction != null) {
+
+                        // The merchant from a provisional transaction should never be null, but just in case:
+                        if (provisionalTransaction.getMerchant() == null) {
+                            throw new ControllerException("Provisional transaction has no merchant assigned.");
+                        }
+
+                        // If the merchant is the unknown merchant:
+                        if (provisionalTransaction.getMerchant().getName().equals(Merchant.UNKNOWN)) {
+
+                            // then get the merchant with the help of the user:
+                            merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
+                            currentTransaction.setMerchant(merchant);
+                        }
+                        else {
+                            merchant = provisionalTransaction.getMerchant();
+                        }
+
+                        // Get the splits from the provisional transaction:
+                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransaction);
+
+                        // Let the financial institution reconcile the provisional with cleared transaction
+                        reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
+                                currentTransaction, provisionalTransaction, register, splits);
+                    }
+
+                    // If no provisional transaction was found and this is a new transaction,
+                    // update the register balance
+                    if (!reconciledWithProvisional && isNewTransaction) {
+                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
+                        register.update();
+                    }
+
+                    /*
+                     * Phase 2.5: Try to match with forecast transactions directly (bypassing merchant/budget item selection)
+                     */
+                    // If we don't have splits yet (no provisional transaction was found), try forecast matching
+                    if (splits == null) {
+                        // Get possible merchants from the transaction payee (0, 1, or more matches)
+                        List<Merchant> possibleMerchants =
+                            MerchantUtilities.getPossibleMerchantsByPayee(
+                                currentTransaction.getMerchantPayee());
+
+                        // Try to find a matching forecast transaction within ±5 days
+                        ForecastTransaction matchedForecast =
+                            ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                currentTransaction, forecast, possibleMerchants, 5, 5);
+
+                        // If we found a confident match
+                        if (matchedForecast != null) {
+                            // Get the budget item from the forecast transaction
+                            UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
+
+                            // Create the split automatically
+                            splits = new ArrayList<>();
+                            splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
+                                    currentTransaction.getId(), null));
+
+                            // Inform the user about the auto-match
+                            view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+
+                            // If we found a merchant from the payee, use it
+                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
+                                currentTransaction.setMerchant(possibleMerchants.get(0));
+                                currentTransaction.setIdMerchant(possibleMerchants.get(0).getId());
+                            } else if (merchant != null) {
+                                // Use the merchant we already identified
+                                currentTransaction.setMerchant(merchant);
+                                currentTransaction.setIdMerchant(merchant.getId());
+                            }
+
+                            // Save the transaction with merchant info
+                            currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                            // Save the split
+                            for (TransactionSplit split : splits) {
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                            }
+                        }
+                    }
+
+                    // If we haven't determined the merchant yet, then assign or create one:
                     if (merchant == null) {
                         try {
                             MerchantController merchantController = new MerchantController(view, notificationService);
@@ -522,89 +619,13 @@ public class ImportController {
                         }
                     }
 
-                    // then update the transaction merchant info from the merchant that we just assigned or created:
+                    // At this point the transaction is complete, so save it off:
                     currentTransaction.setMerchant(merchant);
                     currentTransaction.setIdMerchant(merchant.getId());
-
-                    /*
-                     * Phase 2:  Reconcile the transaction with any existing provisional transactions
-                     */
-                    // Get matching provisional transaction and reconcile it with the cleared transaction.
-                    // The financial institution class handles all the details including tip detection
-                    // and balance adjustments.
-                    Transaction provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(currentTransaction,
-                            merchant);
-
-                    // Get the splits for the provisional transaction if one exists
-                    boolean reconciledWithProvisional = false;
-                    if (provisionalTransaction != null) {
-                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransaction);
-
-                        // Let the financial institution reconcile the provisional with cleared transaction
-                        reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
-                                currentTransaction, provisionalTransaction, register, splits);
-                    }
-
-                    // If no provisional transaction was found and this is a new transaction,
-                    // update the register balance
-                    if (!reconciledWithProvisional && isNewTransaction) {
-                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                        register.update();
-                    }
-
-                    // At this point the transaction is complete, so save it off:
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
 
                     // Tell the user what we just did:
                     importLog.logImportEvent(currentTransaction, isNewTransaction);
-
-                    /*
-                     * Phase 2.5: Try to match with forecast transactions directly (bypassing merchant/budget item selection)
-                     */
-                    // If we don't have splits yet (no provisional transaction was found), try forecast matching
-                    if (splits == null) {
-                        // Get possible merchants from the transaction payee (0, 1, or more matches)
-                        List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants =
-                            com.hixon.financialApp.model.merchant.MerchantUtilities.getPossibleMerchantsByPayee(
-                                currentTransaction.getMerchantPayee());
-
-                        // Try to find a matching forecast transaction within ±5 days
-                        ForecastTransaction matchedForecast =
-                            com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                currentTransaction, forecast, possibleMerchants, 5, 5);
-
-                        // If we found a confident match
-                        if (matchedForecast != null) {
-                            // Get the budget item from the forecast transaction
-                            UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
-
-                            // Create the split automatically
-                            splits = new ArrayList<>();
-                            splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
-                                    currentTransaction.getId(), null));
-
-                            // Inform the user about the auto-match
-                            view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
-
-                            // If we found a merchant from the payee, use it
-                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
-                                currentTransaction.setMerchant(possibleMerchants.get(0));
-                                currentTransaction.setIdMerchant(possibleMerchants.get(0).getId());
-                            } else if (merchant != null) {
-                                // Use the merchant we already identified
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-                            }
-
-                            // Save the transaction with merchant info
-                            currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-
-                            // Save the split
-                            for (TransactionSplit split : splits) {
-                                split.save(INSERT_ON_DUPLICATE_UPDATE);
-                            }
-                        }
-                    }
 
                     /*
                      * Phase 3:  Get the assigned budget items for this merchant:
@@ -997,13 +1018,13 @@ public class ImportController {
                         // If we don't have splits yet, try forecast matching
                         if (splits == null) {
                             // Get possible merchants from the transaction payee (0, 1, or more matches)
-                            List<com.hixon.financialApp.model.merchant.Merchant> possibleMerchants =
-                                com.hixon.financialApp.model.merchant.MerchantUtilities.getPossibleMerchantsByPayee(
+                            List<Merchant> possibleMerchants =
+                                MerchantUtilities.getPossibleMerchantsByPayee(
                                     provisionalTransactions.get(provTrxIndex).getMerchantPayee());
 
                             // Try to find a matching forecast transaction within ±5 days
                             ForecastTransaction matchedForecast =
-                                com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                ForecastTransactionMatcher.findMatchingForecastTransaction(
                                     provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
 
                             // If we found a confident match
@@ -1346,7 +1367,7 @@ public class ImportController {
                     budgetItem.loadFromCsvRecord(record);
 
                     // Save the budgetItem and associated items:
-                    budgetItem.save(EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE);
+                    budgetItem.save(INSERT_ON_DUPLICATE_UPDATE);
                     i++;
 
                 } // End for each record in the transactions file.

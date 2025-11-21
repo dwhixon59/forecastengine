@@ -4,7 +4,6 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
-import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -126,7 +125,8 @@ public class GenericClassifer implements FinancialInstitutionInt {
     }
 
     @Override
-    public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction, Merchant merchant) throws RegisterException, SQLException, EntityException {
+    public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
+            throws RegisterException, SQLException, EntityException {
         return null;
     }
 
@@ -134,7 +134,8 @@ public class GenericClassifer implements FinancialInstitutionInt {
     public boolean reconcileProvisionalTransaction(Transaction clearedTransaction,
                                                    Transaction provisionalTransaction,
                                                    Register register,
-                                                   List<com.hixon.financialApp.model.budget.TransactionSplit> splits) throws Exception {
+                                                   List<com.hixon.financialApp.model.budget.TransactionSplit> splits)
+            throws Exception {
         // Generic classifier doesn't support provisional transactions
         return false;
     }
