@@ -1128,6 +1128,235 @@ public class ViewCmdline implements ViewInt {
      * {@inheritDoc}
      */
     @Override
+    public NumberOrStringResponse selectFromListByPositionOrMenuOrString(
+            String listPrompt,
+            List<String> items,
+            String menuPrompt,
+            List<String> menuOptions,
+            boolean allowString,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException {
+
+        // Paging configuration
+        final int PAGE_SIZE = 25;
+        int[] currentPageWrapper = {0};  // Use array to allow mutation in lambda
+        final int totalPages;
+
+        // Calculate total pages if we have items
+        if (items != null && !items.isEmpty()) {
+            totalPages = (int) Math.ceil((double) items.size() / PAGE_SIZE);
+        } else {
+            totalPages = 0;
+        }
+
+        // Lambda to display the current page of the list
+        Runnable displayCurrentPage = () -> {
+            if (listPrompt != null && items != null && !items.isEmpty()) {
+                int currentPage = currentPageWrapper[0];
+                int startIndex = currentPage * PAGE_SIZE;
+                int endIndex = Math.min(startIndex + PAGE_SIZE, items.size());
+
+                say();
+                sayH3(listPrompt + " (Page " + (currentPage + 1) + " of " + totalPages +
+                      ", showing " + (startIndex + 1) + "-" + endIndex + " of " + items.size() + ")");
+
+                for (int i = startIndex; i < endIndex; i++) {
+                    say("  " + (i + 1) + " - " + items.get(i));
+                }
+                say();
+
+                // Show paging hints if there are multiple pages
+                if (totalPages > 1) {
+                    StringBuilder pagingHint = new StringBuilder("  [");
+                    if (currentPage > 0) {
+                        pagingHint.append("'B' for back");
+                    }
+                    if (currentPage < totalPages - 1) {
+                        if (currentPage > 0) pagingHint.append(", ");
+                        pagingHint.append("'F' for forward");
+                    }
+                    pagingHint.append("]");
+                    say(pagingHint.toString());
+                    say();
+                }
+            }
+        };
+
+        // Display initial page
+        displayCurrentPage.run();
+
+        // Display the menu options (if any)
+        if (menuOptions != null && !menuOptions.isEmpty() && menuPrompt != null && !menuPrompt.isEmpty()) {
+            sayH3(menuPrompt);
+            for (String option : menuOptions) {
+                char shortcut = Character.toLowerCase(option.charAt(0));
+                say("  " + shortcut + " - " + option);
+            }
+        }
+
+        // Build the prompt based on what's allowed
+        String inputPrompt = "Enter your choice";
+        if (allowString) {
+            inputPrompt += " or search criteria";
+        }
+
+        // Get user input with cancel/quit/skip handling
+        while (true) {
+            String response = getResponseString(inputPrompt, null, DO_NOT_ALLOW_NONE,
+                    SHOW_CANCEL_QUIT_SKIP, isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+
+            // Check for numeric input (selecting from list)
+            if (items != null && !items.isEmpty()) {
+                try {
+                    int selection = Integer.parseInt(response);
+                    if (selection >= 1 && selection <= items.size()) {
+                        return new NumberOrStringResponse(selection - 1); // Return 0-based index
+                    } else {
+                        StringBuilder errorMsg = new StringBuilder("Please enter a number between 1 and " + items.size());
+                        if (menuOptions != null && !menuOptions.isEmpty()) {
+                            errorMsg.append(", a menu option (").append(getMenuShortcuts(menuOptions)).append(")");
+                        }
+                        if (totalPages > 1) {
+                            errorMsg.append(", 'F'/'B' for paging");
+                        }
+                        if (allowString) {
+                            errorMsg.append(", or search criteria");
+                        }
+                        errorMsg.append(".");
+                        say(errorMsg.toString());
+                        continue;
+                    }
+                } catch (NumberFormatException e) {
+                    // Not a number, continue to check other options
+                }
+            }
+
+            // Single-character input: check for paging and menu commands
+            if (response.length() == 1) {
+                char inputChar = Character.toLowerCase(response.charAt(0));
+
+                // Check for paging commands (capital F and B) BEFORE menu options
+                char originalChar = response.charAt(0);
+                if (items != null && !items.isEmpty() && totalPages > 1) {
+                    if (originalChar == 'F') {
+                        // Forward (next page)
+                        if (currentPageWrapper[0] < totalPages - 1) {
+                            currentPageWrapper[0]++;
+                            displayCurrentPage.run();
+                            continue;
+                        } else {
+                            say("Already on last page.");
+                            continue;
+                        }
+                    } else if (originalChar == 'B') {
+                        // Back (previous page)
+                        if (currentPageWrapper[0] > 0) {
+                            currentPageWrapper[0]--;
+                            displayCurrentPage.run();
+                            continue;
+                        } else {
+                            say("Already on first page.");
+                            continue;
+                        }
+                    }
+                }
+
+                // Check if it's a valid menu option (if menu exists)
+                if (menuOptions != null && !menuOptions.isEmpty()) {
+                    // Special case: 's' means "show list again" if not a menu option
+                    if (inputChar == 's' && !hasMenuOption(menuOptions, 's')) {
+                        if (items != null && !items.isEmpty()) {
+                            displayCurrentPage.run();
+                            continue;
+                        }
+                    }
+
+                    // Check if it matches a menu shortcut
+                    for (String option : menuOptions) {
+                        char shortcut = Character.toLowerCase(option.charAt(0));
+                        if (inputChar == shortcut) {
+                            return new NumberOrStringResponse(String.valueOf(inputChar));
+                        }
+                    }
+                } else {
+                    // No menu - 's' always means show list again
+                    if (inputChar == 's' && items != null && !items.isEmpty()) {
+                        displayCurrentPage.run();
+                        continue;
+                    }
+                }
+
+                // Not a valid menu option or command
+                StringBuilder errorMsg = new StringBuilder("Invalid choice. Please enter ");
+                if (items != null && !items.isEmpty()) {
+                    errorMsg.append("a number (1-").append(items.size()).append(")");
+                }
+                if (menuOptions != null && !menuOptions.isEmpty()) {
+                    if (items != null && !items.isEmpty()) errorMsg.append(", ");
+                    errorMsg.append("a menu option (").append(getMenuShortcuts(menuOptions)).append(")");
+                }
+                if (totalPages > 1) {
+                    errorMsg.append(", 'F'/'B' for paging");
+                }
+                if (items != null && !items.isEmpty() && (menuOptions == null || menuOptions.isEmpty() || !hasMenuOption(menuOptions, 's'))) {
+                    errorMsg.append(", 's' to show list");
+                }
+                if (allowString) {
+                    errorMsg.append(", or search criteria");
+                }
+                errorMsg.append(".");
+                say(errorMsg.toString());
+                continue;
+            }
+
+            // Multi-character string - automatically treat as new search criteria
+            if (allowString) {
+                return new NumberOrStringResponse(response);
+            } else {
+                StringBuilder errorMsg = new StringBuilder("Invalid input. Please enter ");
+                if (items != null && !items.isEmpty()) {
+                    errorMsg.append("a number (1-").append(items.size()).append(")");
+                }
+                if (menuOptions != null && !menuOptions.isEmpty()) {
+                    if (items != null && !items.isEmpty()) errorMsg.append(" or ");
+                    errorMsg.append("a menu option (").append(getMenuShortcuts(menuOptions)).append(")");
+                }
+                errorMsg.append(".");
+                say(errorMsg.toString());
+            }
+        }
+    }
+
+    /**
+     * Helper method to check if a menu has an option starting with a given character.
+     */
+    private boolean hasMenuOption(List<String> menuOptions, char c) {
+        for (String option : menuOptions) {
+            if (Character.toLowerCase(option.charAt(0)) == c) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Helper method to build a comma-separated list of menu shortcuts.
+     */
+    private String getMenuShortcuts(List<String> menuOptions) {
+        StringBuilder shortcuts = new StringBuilder();
+        for (int i = 0; i < menuOptions.size(); i++) {
+            if (i > 0) shortcuts.append(",");
+            shortcuts.append(Character.toLowerCase(menuOptions.get(i).charAt(0)));
+        }
+        return shortcuts.toString();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public Calendar getStartDate() throws QuitException {
         return parseCalendarDate("Please enter the start date", null);
     }

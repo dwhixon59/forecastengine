@@ -87,6 +87,7 @@ public class TransactionController {
     public void manageTransactions() throws Exception, QuitException {
         Register lastSelectedRegister = register;  // Track the last selected register across operations
         boolean done = false;
+        String pendingSearchString = null;  // Track search string from action menu
 
         while (!done) {
             try {
@@ -100,108 +101,195 @@ public class TransactionController {
                     }
                 }
 
-                // Step 2: Search for and select a transaction
-                // (selectTransactionFromRegister loops internally if user cancels from selection list)
-                Transaction selectedTransaction = selectTransactionFromRegister(lastSelectedRegister);
+                // Step 2: Search for and select transactions
+                // Returns a TransactionSearchResult containing the list and selected transaction
+                TransactionSearchResult searchResult = selectTransactionFromRegister(lastSelectedRegister, pendingSearchString);
+                pendingSearchString = null;  // Clear after use
 
-                // User selected a transaction - show action menu
-                boolean actionComplete = false;
-                while (!actionComplete) {
-                    // Display the selected transaction
-                    view.say();
-                    view.say("Selected transaction:");
-                    view.say("  " + selectedTransaction.toStringVeryConcise());
+                // User selected a transaction - work with it and potentially select more from the same list
+                boolean selectingFromCurrentSearch = true;
+                while (selectingFromCurrentSearch) {
+                    Transaction selectedTransaction = searchResult.getSelectedTransaction();
 
-                    // Warn if disputed/improper
-                    if (selectedTransaction.getIsImproper()) {
-                        view.say("\nNOTE: This transaction is marked as DISPUTED/IMPROPER.");
-                    }
+                    // User action loop for the current transaction
+                    boolean actionComplete = false;
+                    while (!actionComplete) {
+                        // Display the selected transaction
+                        view.say();
+                        view.say("Selected transaction:");
+                        view.say("  " + selectedTransaction.toStringVeryConcise());
 
-                    // Step 3: Ask what to do with this transaction
-                    String action = view.selectFromMenu("What would you like to do with this transaction?",
-                            List.of("view details", "update this transaction", "assign/change merchant",
-                                    "recategorize transaction", "manage splits/categories",
-                                    "delete this transaction", "search again"),
-                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                        // Warn if disputed/improper
+                        if (selectedTransaction.getIsImproper()) {
+                            view.say("\nNOTE: This transaction is marked as DISPUTED/IMPROPER.");
+                        }
 
-                    switch (action) {
-                        case "v":  // view details
-                            view.say();
-                            view.say("Transaction Details:");
-                            view.say("──────────────────────────────────────");
-                            displayTransactionDetails(selectedTransaction);
-                            view.say("──────────────────────────────────────");
-                            break;
+                        // Step 3: Ask what to do with this transaction using the flexible method
+                        // User can enter:
+                        // - A number (1-25) to select another transaction from the list
+                        // - A single letter (v,u,a,r,m,d,s) for a menu command
+                        // - Multi-character string for new search criteria
+                        // - 'C' to cancel, 'Q' to quit
 
-                        case "u":  // update this transaction
-                            Transaction updatedTransaction = getTransactionFromUser(selectedTransaction);
-                            updatedTransaction.setId(selectedTransaction.getId()); // Preserve the original ID
-                            updatedTransaction.update();
-                            view.say("Transaction successfully updated.");
-                            selectedTransaction = updatedTransaction; // Update reference for display
-                            break;
-
-                        case "a":  // assign/change merchant
+                        // Build display strings for transactions
+                        List<String> transactionDisplayStrings = new ArrayList<>();
+                        for (Transaction t : searchResult.getTransactions()) {
                             try {
-                                assignMerchantToTransaction(selectedTransaction);
-                                view.say("Merchant successfully assigned.");
-                                // Reload the transaction to show updated merchant info
-                                selectedTransaction = Transaction.getById(selectedTransaction.getId());
-                            } catch (SkipException e) {
-                                view.say("Merchant assignment skipped.");
+                                transactionDisplayStrings.add(t.toStringVeryConcise());
+                            } catch (Exception e) {
+                                transactionDisplayStrings.add("Transaction ID: " + t.getId());
                             }
-                            break;
+                        }
 
-                        case "r":  // recategorize transaction
-                            try {
-                                recategorizeTransaction(selectedTransaction);
-                                view.say("Transaction successfully recategorized.");
-                                // Reload the transaction to show updated splits
-                                selectedTransaction = Transaction.getById(selectedTransaction.getId());
-                            } catch (SkipException e) {
-                                view.say("Recategorization skipped.");
-                            }
-                            break;
+                        NumberOrStringResponse response = view.selectFromListByPositionOrMenuOrString(
+                                null,  // Don't show the list here since we're in the action menu
+                                transactionDisplayStrings,  // Transaction display strings for validation
+                                "What would you like to do with this transaction?",
+                                List.of("view details", "update this transaction", "assign/change merchant",
+                                        "recategorize transaction", "manage splits/categories",
+                                        "delete this transaction", "show list again"),
+                                ALLOW_CREATE,  // Allow multi-character strings as new search criteria
+                                ALLOW_CANCEL,
+                                ALLOW_QUIT,
+                                DO_NOT_ALLOW_SKIP);
 
-                        case "m":  // manage splits/categories
-                            // Delegate to TransactionSplitsController
-                            manageSplitsForTransaction(selectedTransaction);
-                            break;
+                        // Check if user entered multi-character string (new search criteria)
+                        if (!response.isNumber() && response.getSearchString().length() > 1) {
+                            // User entered new search criteria - store it and exit to perform new search
+                            searchResult.setNextSearchString(response.getSearchString());
+                            actionComplete = true;
+                            selectingFromCurrentSearch = false;
+                            continue;
+                        }
 
-                        case "d":  // delete this transaction
-                            view.say("\nYou are about to delete:");
-                            view.say("  " + selectedTransaction.toStringVeryConcise());
+                        // Check if user selected a different transaction by number
+                        if (response.isNumber()) {
+                            int index = response.getSelectedIndex();
+                            selectedTransaction = searchResult.getTransactions().get(index);
+                            searchResult.setSelectedTransaction(selectedTransaction);
+                            // Stay in action loop with the new transaction
+                            continue;
+                        }
 
-                            // Check for transaction splits associated with this transaction
-                            List<TransactionSplit> splits = getTransactionSplits(selectedTransaction);
-                            if (!splits.isEmpty()) {
-                                view.say("\nWARNING: This transaction has " + splits.size() +
-                                        " split(s) associated with it.");
-                                view.say("Deleting this transaction will CASCADE DELETE all associated splits.");
-                            }
+                        // User selected a menu command
+                        String action = response.getSearchString();
 
-                            if (view.getYesOrNo("\nAre you sure you want to delete this transaction?")) {
+                        switch (action) {
+                            case "v":  // view details
+                                view.say();
+                                view.say("Transaction Details:");
+                                view.say("──────────────────────────────────────");
+                                displayTransactionDetails(selectedTransaction);
+                                view.say("──────────────────────────────────────");
+                                break;
+
+                            case "u":  // update this transaction
+                                Transaction updatedTransaction = getTransactionFromUser(selectedTransaction);
+                                updatedTransaction.setId(selectedTransaction.getId()); // Preserve the original ID
+                                updatedTransaction.update();
+                                view.say("Transaction successfully updated.");
+                                selectedTransaction = updatedTransaction; // Update reference for display
+                                searchResult.setSelectedTransaction(selectedTransaction);
+                                break;
+
+                            case "a":  // assign/change merchant
                                 try {
-                                    selectedTransaction.delete();
-                                    view.say("Transaction deleted successfully.");
-                                    actionComplete = true;
-                                } catch (Exception e) {
-                                    view.say("Error deleting transaction: " + e.getMessage());
-                                    // TODO: Use proper logging instead of System.err
-                                    System.err.println("Error deleting transaction: " + e.getMessage());
+                                    assignMerchantToTransaction(selectedTransaction);
+                                    view.say("Merchant successfully assigned.");
+                                    // Reload the transaction to show updated merchant info
+                                    selectedTransaction = Transaction.getById(selectedTransaction.getId());
+                                    searchResult.setSelectedTransaction(selectedTransaction);
+                                } catch (SkipException e) {
+                                    view.say("Merchant assignment skipped.");
                                 }
-                            } else {
-                                view.say("Deletion cancelled.");
-                            }
-                            break;
+                                break;
 
-                        case "s":  // search again
-                            actionComplete = true;  // Go back to search
-                            break;
+                            case "r":  // recategorize transaction
+                                try {
+                                    recategorizeTransaction(selectedTransaction);
+                                    view.say("Transaction successfully recategorized.");
+                                    // Reload the transaction to show updated splits
+                                    selectedTransaction = Transaction.getById(selectedTransaction.getId());
+                                    searchResult.setSelectedTransaction(selectedTransaction);
+                                } catch (SkipException e) {
+                                    view.say("Recategorization skipped.");
+                                }
+                                break;
 
-                        default:
-                            throw new InvalidEntryException("Unexpected option returned: " + action);
+                            case "m":  // manage splits/categories
+                                // Delegate to TransactionSplitsController
+                                manageSplitsForTransaction(selectedTransaction);
+                                break;
+
+                            case "d":  // delete this transaction
+                                view.say("\nYou are about to delete:");
+                                view.say("  " + selectedTransaction.toStringVeryConcise());
+
+                                // Check for transaction splits associated with this transaction
+                                List<TransactionSplit> splits = getTransactionSplits(selectedTransaction);
+                                if (!splits.isEmpty()) {
+                                    view.say("\nWARNING: This transaction has " + splits.size() +
+                                            " split(s) associated with it.");
+                                    view.say("Deleting this transaction will CASCADE DELETE all associated splits.");
+                                }
+
+                                if (view.getYesOrNo("\nAre you sure you want to delete this transaction?")) {
+                                    try {
+                                        selectedTransaction.delete();
+                                        view.say("Transaction deleted successfully.");
+
+                                        // Remove from cached list
+                                        searchResult.getTransactions().remove(selectedTransaction);
+
+                                        // If list is now empty, go back to search
+                                        if (searchResult.getTransactions().isEmpty()) {
+                                            view.say("No more transactions in the current list.");
+                                            selectingFromCurrentSearch = false;
+                                            actionComplete = true;
+                                        } else {
+                                            actionComplete = true;
+                                        }
+                                    } catch (Exception e) {
+                                        view.say("Error deleting transaction: " + e.getMessage());
+                                        // TODO: Use proper logging instead of System.err
+                                        System.err.println("Error deleting transaction: " + e.getMessage());
+                                    }
+                                } else {
+                                    view.say("Deletion cancelled.");
+                                }
+                                break;
+
+                            case "s":  // show list again
+                                // Display the numbered list of transactions
+                                view.say();
+                                view.sayH3("Current transaction list (showing " + searchResult.getTransactions().size() + " result(s)):");
+                                for (int i = 0; i < transactionDisplayStrings.size(); i++) {
+                                    view.say("  " + (i + 1) + " - " + transactionDisplayStrings.get(i));
+                                }
+                                view.say();
+                                break;
+
+                            default:
+                                throw new InvalidEntryException("Unexpected option returned: " + action);
+                        }
                     }
+
+                    // After completing an action (except search again which exits the loop),
+                    // automatically show the list again for the user to select another transaction
+                    if (selectingFromCurrentSearch && !searchResult.getTransactions().isEmpty()) {
+                        try {
+                            Transaction nextTransaction = selectFromCachedList(searchResult.getTransactions());
+                            searchResult.setSelectedTransaction(nextTransaction);
+                        } catch (CancelException e) {
+                            // User cancelled from selection - go back to search
+                            selectingFromCurrentSearch = false;
+                        }
+                    }
+                }
+
+                // Check if user entered a new search string from the action menu
+                if (searchResult.getNextSearchString() != null) {
+                    pendingSearchString = searchResult.getNextSearchString();
                 }
 
             } catch (CancelException e) {
@@ -217,13 +305,14 @@ public class TransactionController {
      * Only throws CancelException if user cancels from the search prompt itself.
      *
      * @param register The register to search within
-     * @return The selected Transaction, or null if no results found
+     * @param initialSearchString Optional initial search string to use (can be null)
+     * @return TransactionSearchResult containing the list of transactions and the selected one
      * @throws Exception if any error occurs during selection
      * @throws CancelException if the user cancels from the search prompt
      */
-    private Transaction selectTransactionFromRegister(Register register) throws Exception, CancelException {
+    private TransactionSearchResult selectTransactionFromRegister(Register register, String initialSearchString) throws Exception, CancelException {
 
-        String searchString = null; // Track search string across loop iterations
+        String searchString = initialSearchString; // Use provided search string or null to prompt user
 
         while (true) {
             // Show search menu only if we don't already have a search string from a previous iteration
@@ -285,10 +374,11 @@ public class TransactionController {
 
             // Let user select from the list or enter a new search string
             try {
-                NumberOrStringResponse result = view.selectFromListOrString(
-                        "Select a transaction (showing " + transactions.size() + " result(s)) or enter a new search string",
+                NumberOrStringResponse result = view.selectFromListByPositionOrMenuOrString(
+                        "Select a transaction",
                         transactionDisplayStrings,
-                        DO_NOT_ALLOW_NONE,
+                        "", // No menu prompt - just list selection
+                        List.of(), // No menu options - only list selection
                         ALLOW_CREATE, // Allow entering a new search string
                         ALLOW_CANCEL,
                         ALLOW_QUIT,
@@ -298,7 +388,7 @@ public class TransactionController {
                     // User selected a transaction by number
                     int index = result.getSelectedIndex(); // Already 0-based from view layer
                     if (index >= 0 && index < transactions.size()) {
-                        return transactions.get(index);
+                        return new TransactionSearchResult(transactions, transactions.get(index));
                     } else {
                         view.say("Invalid selection. Please try again.");
                         searchString = null; // Reset and go back to search prompt
@@ -672,7 +762,8 @@ public class TransactionController {
         Merchant merchant = merchantController.assignMerchant(
                 merchantPayeeString,
                 transaction.getPayee(),
-                transaction.getAmount());
+                transaction.getAmount(),
+                true);  // Always require confirmation for manual merchant assignment
 
         if (merchant != null) {
             // Update the transaction with the new merchant
@@ -825,4 +916,71 @@ public class TransactionController {
             }
         }
     }
+
+    /**
+     * Allows user to select another transaction from a cached list of transactions.
+     * This avoids having to re-execute the search query.
+     *
+     * @param transactions The cached list of transactions
+     * @return The selected transaction
+     * @throws Exception if any error occurs
+     * @throws CancelException if the user cancels
+     */
+    private Transaction selectFromCachedList(List<Transaction> transactions) throws Exception, CancelException {
+        // Build display strings for the transactions
+        List<String> transactionDisplayStrings = new ArrayList<>();
+        for (Transaction t : transactions) {
+            try {
+                transactionDisplayStrings.add(t.toStringVeryConcise());
+            } catch (Exception e) {
+                transactionDisplayStrings.add("Transaction ID: " + t.getId());
+            }
+        }
+
+        // Let user select from the list
+        NumberOrStringResponse result = view.selectFromListOrString(
+                "Select another transaction from current list (showing " + transactions.size() + " result(s))",
+                transactionDisplayStrings,
+                DO_NOT_ALLOW_NONE,
+                DO_NOT_ALLOW_CREATE,
+                ALLOW_CANCEL,
+                ALLOW_QUIT,
+                DO_NOT_ALLOW_SKIP);
+
+        if (result.isNumber()) {
+            int index = result.getSelectedIndex(); // Already 0-based from view layer
+            if (index >= 0 && index < transactions.size()) {
+                return transactions.get(index);
+            } else {
+                throw new InvalidEntryException("Invalid transaction selection index: " + index);
+            }
+        } else {
+            throw new InvalidEntryException("Expected a number selection, got string");
+        }
+    }
+
+    /**
+     * Helper class to hold search results and the currently selected transaction.
+     * This allows us to cache the search results and select multiple transactions
+     * from the same list without re-executing the query.
+     */
+    private static class TransactionSearchResult {
+        @Getter
+        private final List<Transaction> transactions;
+
+        @Getter
+        @Setter
+        private Transaction selectedTransaction;
+
+        @Getter
+        @Setter
+        private String nextSearchString;
+
+        public TransactionSearchResult(List<Transaction> transactions, Transaction selectedTransaction) {
+            this.transactions = transactions;
+            this.selectedTransaction = selectedTransaction;
+            this.nextSearchString = null;
+        }
+    }
 }
+

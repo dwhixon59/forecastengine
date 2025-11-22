@@ -658,6 +658,44 @@ public interface ViewInt {
             throws CancelException, QuitException, SkipException;
 
     /**
+     * Displays a list of items and a menu of options. The user can:
+     * 1. Enter a number (1-N) to select an item from the list by position
+     * 2. Enter a single letter (e.g., v,u,a,d,s) to choose a menu option
+     * 3. Enter C/Q/S to cancel/quit/skip (if allowed)
+     * 4. Enter a string (anything else) to provide new search/selection criteria
+     *
+     * This is the most flexible selection method, useful when you want to show a list of items
+     * with actions/commands and allow the user to refine their search. For example, showing a list
+     * of transactions with options to view, edit, delete, search again, or enter new search criteria.
+     *
+     * @param listPrompt      The prompt to display above the numbered list (null to skip showing list)
+     * @param items           A list of strings representing the items to select from (can be null/empty)
+     * @param menuPrompt      The prompt to display for the menu choices
+     * @param menuOptions     A list of menu option descriptions (first letter becomes the shortcut)
+     * @param allowString     If true, allows entering arbitrary strings (for new search criteria)
+     * @param isCancelAllowed Is the user allowed to cancel?
+     * @param isQuitAllowed   Is the user allowed to quit?
+     * @param isSkipAllowed   Is the user allowed to skip?
+     * @return NumberOrStringResponse containing either:
+     *         - A number (0-based index if user selected from list)
+     *         - A single-letter string (menu shortcut if user selected menu option)
+     *         - A multi-character string (new search criteria if user entered text)
+     * @throws CancelException If the user cancels
+     * @throws QuitException   If the user quits
+     * @throws SkipException   If the user skips
+     */
+    NumberOrStringResponse selectFromListByPositionOrMenuOrString(
+            String listPrompt,
+            List<String> items,
+            String menuPrompt,
+            List<String> menuOptions,
+            boolean allowString,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
      * This method checks to see if a file exists, is not a directory and is not empty.  If any of the previous are true,
      * then this method asks the user if they want to fix the problem and retry.
      *

@@ -66,13 +66,40 @@ public class MerchantController {
      */
     public Merchant assignMerchant(String merchantPayeeString, String transactionPayee, double amount)
             throws Exception {
+        return assignMerchant(merchantPayeeString, transactionPayee, amount, false);
+    }
+
+    /**
+     * Assigns or selects a merchant for a transaction.
+     * First tries to find an existing merchant by payee string.
+     * If found, confirms with user based on requireConfirmation or merchant's askAlways flag.
+     * If not found or user declines, prompts user to search/create merchant.
+     *
+     * This method will:
+     * 1. Check if a merchant already exists for the given payee
+     * 2. Ask for confirmation if requireConfirmation is true or merchant has askAlways flag
+     * 3. If not found or declined, prompt the user to select or create a merchant
+     * 4. Associate the payee with the selected/created merchant
+     *
+     * @param merchantPayeeString The merchant payee string from the transaction
+     * @param transactionPayee The transaction payee
+     * @param amount The transaction amount
+     * @param requireConfirmation If true, always ask for confirmation even if merchant.askAlways is false
+     * @return The assigned Merchant, or null if cancelled/skipped
+     * @throws Exception if any error occurs
+     */
+    public Merchant assignMerchant(String merchantPayeeString, String transactionPayee, double amount,
+                                    boolean requireConfirmation)
+            throws Exception {
 
         // First, try to find an existing merchant by the payee string
         Merchant merchant = Merchant.getByPayee(merchantPayeeString);
 
         if (merchant != null) {
-            // Merchant found - check if we should always ask before using it
-            if (merchant.isAskAlways()) {
+            // Merchant found - check if we should ask before using it
+            boolean shouldAsk = requireConfirmation || merchant.isAskAlways();
+
+            if (shouldAsk) {
                 String confirm = view.getResponseString(
                         "Use merchant '" + merchant.getName() + "' for payee '" + merchantPayeeString + "'? (y/n):",
                         "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
