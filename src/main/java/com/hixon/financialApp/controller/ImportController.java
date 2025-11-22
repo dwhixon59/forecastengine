@@ -975,10 +975,6 @@ public class ImportController {
                         notificationService);
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
-                    // Tell the user about the bank transaction we are processing:
-                    if (provTrxIndex < provisionalTransactions.size()) {
-                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
-                    }
 
                     // Compare the current provisional transaction to the current register transaction:
                     int comparison;
@@ -1209,6 +1205,9 @@ public class ImportController {
                                 }
                             }
                         }
+
+                        // Log the import event now that merchant is determined
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
                         // Update the balance in the register and save it:
                         register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
