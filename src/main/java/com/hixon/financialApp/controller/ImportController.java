@@ -418,6 +418,7 @@ public class ImportController {
                 importRecordId = null;
                 currentTransaction = null;
                 merchant = null;
+                boolean autoMatched = false;  // Track if we auto-matched and already reconciled in Phase 2.5
 
                 /*
                  * Phase 1:  create or retrieve the transaction and the merchant associated with it.  The reason we can
@@ -520,9 +521,8 @@ public class ImportController {
                     }
 
                     /*
-                     * Phase 2.5: Try to match with forecast transactions directly (bypassing merchant/budget item selection)
+                     * Phase 2.5: Auto-match with forecast transactions (if enabled)
                      */
-                    // If we don't have splits yet (no provisional transaction was found), try forecast matching
                     if (splits == null) {
                         // Get possible merchants from the transaction payee (0, 1, or more matches)
                         List<Merchant> possibleMerchants =
@@ -565,6 +565,14 @@ public class ImportController {
                             for (TransactionSplit split : splits) {
                                 split.save(INSERT_ON_DUPLICATE_UPDATE);
                             }
+
+                            // Reconcile immediately with the forecast (no need to do it again in Phase 5)
+                            ForecastController forecastController = new ForecastController(register, budget, forecast, view,
+                                    notificationService);
+                            forecastController.reconcile(currentTransaction, splits);
+
+                            // Mark that we've auto-matched and already reconciled
+                            autoMatched = true;
                         }
                     }
 
@@ -621,9 +629,12 @@ public class ImportController {
                     }
 
                     // At this point the transaction is complete, so save it off:
-                    currentTransaction.setMerchant(merchant);
-                    currentTransaction.setIdMerchant(merchant.getId());
-                    currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                    // Only save if we didn't already save in Phase 2.5
+                    if (!autoMatched) {
+                        currentTransaction.setMerchant(merchant);
+                        currentTransaction.setIdMerchant(merchant.getId());
+                        currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                    }
 
                     // Tell the user what we just did:
                     importLog.logImportEvent(currentTransaction, isNewTransaction);
@@ -633,9 +644,10 @@ public class ImportController {
                      */
                     // If there was a provisional transaction with assigned splits, then the splits are already assigned.
                     // If that is not the case then we need to assign the splits now.
-                    BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                            notificationService);
                     if (splits == null) {
+                        // Declare BudgetController here since it's only needed in this block
+                        BudgetController budgetController = new BudgetController(register, budget, forecast, view,
+                                notificationService);
 
                         // Get the assigned budget items for the merchant:
                         List<BudgetItemMerchant> budgetItemsForMerchant =
@@ -720,13 +732,13 @@ public class ImportController {
                  * Phase 5:  Reconcile the transaction with the forecast:
                  */
 
-                // Reconcile this transaction with the forecast:
-                ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                        notificationService);
-                forecastController.reconcile(currentTransaction, splits);
-
-                // We don't need to figure out what to do if the user aborted the reconciliation process
-                // because there is nothing left to do with this transaction.
+                // Only reconcile if we didn't already reconcile in Phase 2.5
+                if (!autoMatched) {
+                    // Reconcile this transaction with the forecast:
+                    ForecastController forecastController = new ForecastController(register, budget, forecast, view,
+                            notificationService);
+                    forecastController.reconcile(currentTransaction, splits);
+                }
 
             } // End for each record in the transaction file.
 
