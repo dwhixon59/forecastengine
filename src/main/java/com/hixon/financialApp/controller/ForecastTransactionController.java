@@ -399,7 +399,7 @@ public class ForecastTransactionController {
      */
     private String buildForecastTransactionQuery(SearchCriteria criteria) {
         StringBuilder query = new StringBuilder();
-        query.append(ForecastTransaction.getSelectQuery());
+        query.append(ForecastTransaction.getSelectQuery()).append(" ");
         query.append("INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem ");
         query.append("WHERE fi.Forecast_idForecast = uuid_to_bin('").append(forecast.getId()).append("') ");
 
