@@ -549,8 +549,9 @@ public class ImportController {
 
                             // If we found a merchant from the payee, use it
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
-                                currentTransaction.setMerchant(possibleMerchants.get(0));
-                                currentTransaction.setIdMerchant(possibleMerchants.get(0).getId());
+                                merchant = possibleMerchants.get(0);  // Update local variable
+                                currentTransaction.setMerchant(merchant);
+                                currentTransaction.setIdMerchant(merchant.getId());
                             } else if (merchant != null) {
                                 // Use the merchant we already identified
                                 currentTransaction.setMerchant(merchant);

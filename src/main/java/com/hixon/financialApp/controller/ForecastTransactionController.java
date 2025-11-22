@@ -11,6 +11,7 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 
@@ -58,99 +59,425 @@ public class ForecastTransactionController {
      */
 
     /**
-     * Manage forecast transactions interactively using a unified search-based interface.
-     * The workflow is:
-     * 1. Search for a forecast transaction (or create new)
-     * 2. Choose what to do with it (view, update, delete, manage splits)
+     * Manage forecast transactions interactively using an enhanced search-based interface.
+     * Features:
+     * - Cached search results for selecting multiple transactions without re-searching
+     * - Automatic paging (25 items per page) with F/B navigation
+     * - Direct number selection to jump to any transaction
+     * - Multi-character input automatically triggers new search
+     * - Single-letter commands for actions
      *
      * @throws Exception if any error occurs during management operations
      */
     public void manageForecastTransactions() throws Exception {
         boolean done = false;
+        String pendingSearchString = null;  // Track search string from action menu
 
         while (!done) {
             try {
-                // Ask whether to search for existing or create new
-                String choice = view.selectFromMenu("What would you like to do?",
-                        List.of("search for existing forecast transaction", "create new forecast transaction"),
-                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                // Step 1: Search for and select forecast transactions
+                ForecastTransactionSearchResult searchResult = selectForecastTransactionFromForecast(pendingSearchString);
+                pendingSearchString = null;  // Clear after use
 
-                if (choice.equals("c")) {
-                    // User chose to create - not supported for forecast transactions as they're generated
-                    view.say("Forecast transactions are automatically generated from forecast items.");
-                    view.say("To add transactions, create or modify forecast items in the budget.");
+                if (searchResult == null) {
+                    // User cancelled from search
                     continue;
                 }
 
-                // User chose to search
-                ForecastTransaction selectedTransaction = selectForecastTransaction();
+                // Step 2: Loop through selecting transactions from cached search results
+                boolean selectingFromCurrentSearch = true;
+                while (selectingFromCurrentSearch && !searchResult.getTransactions().isEmpty()) {
+                    ForecastTransaction selectedTransaction = searchResult.getSelectedTransaction();
 
-                if (selectedTransaction == null) {
-                    // User cancelled the search
-                    continue;
-                }
+                    // User action loop for the current transaction
+                    boolean actionComplete = false;
+                    while (!actionComplete) {
+                        // Display the selected transaction
+                        view.say();
+                        view.say("Selected forecast transaction:");
+                        view.say("  " + selectedTransaction.toStringConcise());
 
-                // User selected an existing transaction - show action menu
-                boolean actionComplete = false;
-                while (!actionComplete) {
-                    // Display the selected transaction
-                    view.say();
-                    view.say("Selected forecast transaction:");
-                    view.say("  " + selectedTransaction.toStringConcise());
+                        // Step 3: Ask what to do with this transaction using the flexible method
+                        // User can enter:
+                        // - A number (1-N) to select another transaction from the list
+                        // - A single letter (v,u,d,m,s) for a menu command
+                        // - Multi-character string for new search criteria
+                        // - 'C' to cancel, 'Q' to quit
 
-                    // Ask what to do with this transaction
-                    String action = view.selectFromMenu("What would you like to do with this forecast transaction?",
-                            List.of("view details", "update this transaction", "delete this transaction",
-                                    "manage splits/dispositions", "search again"),
-                            DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                        // Build display strings for transactions
+                        List<String> transactionDisplayStrings = new ArrayList<>();
+                        for (ForecastTransaction t : searchResult.getTransactions()) {
+                            transactionDisplayStrings.add(t.toStringConcise());
+                        }
 
-                    switch (action) {
-                        case "v":  // view details
-                            displayForecastTransactionDetails(selectedTransaction);
-                            break;
+                        NumberOrStringResponse response = view.selectFromListByPositionOrMenuOrString(
+                                null,  // Don't show the list here since we're in the action menu
+                                transactionDisplayStrings,  // Transaction display strings for validation
+                                "What would you like to do with this forecast transaction?",
+                                List.of("view details", "update this transaction", "delete this transaction",
+                                        "manage splits/dispositions", "show list again"),
+                                ALLOW_CREATE,  // Allow multi-character strings as new search criteria
+                                ALLOW_CANCEL,
+                                ALLOW_QUIT,
+                                DO_NOT_ALLOW_SKIP);
 
-                        case "u":  // update this transaction
-                            updateForecastTransaction(selectedTransaction);
-                            actionComplete = true;  // After update, go back to search
-                            break;
-
-                        case "d":  // delete this transaction
-                            deleteForecastTransaction(selectedTransaction);
-                            actionComplete = true;  // After delete, go back to search
-                            break;
-
-                        case "m":  // manage splits/dispositions
-                            manageForecastTransactionSplits(selectedTransaction);
-                            break;
-
-                        case "s":  // search again
+                        // Check if user entered multi-character string (new search criteria)
+                        if (!response.isNumber() && response.getSearchString().length() > 1) {
+                            // User entered new search criteria - store it and exit to perform new search
+                            searchResult.setNextSearchString(response.getSearchString());
                             actionComplete = true;
-                            break;
+                            selectingFromCurrentSearch = false;
+                            continue;
+                        }
 
-                        case "c":  // cancel
-                            actionComplete = true;
-                            break;
+                        // Check if user selected a different transaction by number
+                        if (response.isNumber()) {
+                            int index = response.getSelectedIndex();
+                            selectedTransaction = searchResult.getTransactions().get(index);
+                            searchResult.setSelectedTransaction(selectedTransaction);
+                            // Stay in action loop with the new transaction
+                            continue;
+                        }
 
-                        default:
-                            throw new InvalidEntryException("Unexpected menu option: " + action);
+                        // User selected a menu command
+                        String action = response.getSearchString();
+
+                        switch (action) {
+                            case "v":  // view details
+                                displayForecastTransactionDetails(selectedTransaction);
+                                break;
+
+                            case "u":  // update this transaction
+                                updateForecastTransaction(selectedTransaction);
+                                // Reload the transaction to show updated info
+                                selectedTransaction = ForecastTransaction.getById(selectedTransaction.getId());
+                                searchResult.setSelectedTransaction(selectedTransaction);
+                                break;
+
+                            case "d":  // delete this transaction
+                                view.say("\nYou are about to delete:");
+                                view.say("  " + selectedTransaction.toStringConcise());
+
+                                view.say("\nWARNING: Deleting this forecast transaction cannot be undone.");
+                                view.say("The transaction will be regenerated if you rebuild the forecast.");
+
+                                if (view.getYesOrNo("\nAre you sure you want to delete this forecast transaction?")) {
+                                    try {
+                                        selectedTransaction.delete();
+                                        view.say("Forecast transaction deleted successfully.");
+
+                                        // Remove from cached list
+                                        searchResult.getTransactions().remove(selectedTransaction);
+
+                                        // If list is now empty, go back to search
+                                        if (searchResult.getTransactions().isEmpty()) {
+                                            view.say("No more forecast transactions in the current list.");
+                                            selectingFromCurrentSearch = false;
+                                            actionComplete = true;
+                                        } else {
+                                            actionComplete = true;
+                                        }
+                                    } catch (Exception e) {
+                                        view.say("Error deleting forecast transaction: " + e.getMessage());
+                                        System.err.println("Error deleting forecast transaction: " + e.getMessage());
+                                    }
+                                } else {
+                                    view.say("Deletion cancelled.");
+                                }
+                                break;
+
+                            case "m":  // manage splits/dispositions
+                                manageForecastTransactionSplits(selectedTransaction);
+                                break;
+
+                            case "s":  // show list again
+                                // Display the numbered list of forecast transactions
+                                view.say();
+                                view.sayH3("Current forecast transaction list (showing " + searchResult.getTransactions().size() + " result(s)):");
+                                for (int i = 0; i < transactionDisplayStrings.size(); i++) {
+                                    view.say("  " + (i + 1) + " - " + transactionDisplayStrings.get(i));
+                                }
+                                view.say();
+                                break;
+
+                            default:
+                                throw new InvalidEntryException("Unexpected option returned: " + action);
+                        }
+                    }
+
+                    // After completing an action, automatically show the list again for the user to select another transaction
+                    if (selectingFromCurrentSearch && !searchResult.getTransactions().isEmpty()) {
+                        try {
+                            ForecastTransaction nextTransaction = selectFromCachedList(searchResult.getTransactions());
+                            searchResult.setSelectedTransaction(nextTransaction);
+                        } catch (CancelException e) {
+                            // User cancelled from selection - go back to search
+                            selectingFromCurrentSearch = false;
+                        }
                     }
                 }
 
+                // Check if user entered a new search string from the action menu
+                if (searchResult.getNextSearchString() != null) {
+                    pendingSearchString = searchResult.getNextSearchString();
+                }
+
             } catch (CancelException e) {
-                // User cancelled - return to data manager menu
                 done = true;
-            } catch (QuitException e) {
-                throw e;
             }
         }
     }
 
     /**
+     * Selects a forecast transaction from the forecast using a flexible search interface.
+     * Allows searching by planned date, category, payee, or memo.
+     * Returns a search result containing the list of transactions and the selected one.
+     *
+     * @param initialSearchString Optional initial search string to use (can be null)
+     * @return ForecastTransactionSearchResult containing the list and selected transaction
+     * @throws Exception if any error occurs during selection
+     * @throws CancelException if the user cancels from the search prompt
+     */
+    private ForecastTransactionSearchResult selectForecastTransactionFromForecast(String initialSearchString)
+            throws Exception, CancelException {
+
+        String searchString = initialSearchString; // Use provided search string or null to prompt user
+
+        while (true) {
+            // Show search menu only if we don't already have a search string from a previous iteration
+            if (searchString == null) {
+                view.say();
+                view.say("--- Forecast Transaction Search ---");
+                view.say("You can search by:");
+                view.say("  • Planned date range (e.g., '2024-01-01 to 2024-12-31')");
+                view.say("  • Category, payee, or memo");
+                view.say("  • Or press Enter to see all forecast transactions");
+                view.say();
+
+                try {
+                    searchString = view.getResponseString(
+                            "Search for forecast transaction (date range, category, payee, memo, or filters):",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                } catch (CancelException e) {
+                    throw e; // Let it bubble up to exit the whole manage operation
+                }
+            }
+
+            // Parse search criteria
+            SearchCriteria criteria = parseSearchCriteria(searchString);
+
+            // Build query based on search criteria
+            String query = buildForecastTransactionQuery(criteria);
+
+            // Execute query and build list of forecast transactions
+            List<ForecastTransaction> transactions = new ArrayList<>();
+            ResultSet rs = EntityInt.getRS(query, "searching for forecast transactions");
+            if (rs != null) {
+                while (rs.next()) {
+                    transactions.add(new ForecastTransaction(rs));
+                }
+            }
+
+            if (transactions.isEmpty()) {
+                view.say("No forecast transactions found matching your search criteria.");
+                // Reset search string and loop back to search prompt
+                searchString = null;
+                continue;
+            }
+
+            // Build display strings for the transactions
+            List<String> transactionDisplayStrings = new ArrayList<>();
+            for (ForecastTransaction t : transactions) {
+                transactionDisplayStrings.add(t.toStringConcise());
+            }
+
+            // Let user select from the list or enter a new search string
+            try {
+                NumberOrStringResponse result = view.selectFromListByPositionOrMenuOrString(
+                        "Select a forecast transaction",
+                        transactionDisplayStrings,
+                        "", // No menu prompt - just list selection
+                        List.of(), // No menu options - only list selection
+                        ALLOW_CREATE, // Allow entering a new search string
+                        ALLOW_CANCEL,
+                        ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP);
+
+                if (result.isNumber()) {
+                    // User selected a transaction by number
+                    int index = result.getSelectedIndex(); // Already 0-based from view layer
+                    if (index >= 0 && index < transactions.size()) {
+                        return new ForecastTransactionSearchResult(transactions, transactions.get(index));
+                    } else {
+                        view.say("Invalid selection.");
+                        continue;
+                    }
+                } else {
+                    // User entered a new search string
+                    searchString = result.getSearchString();
+                    // Loop back to search with the new string
+                    continue;
+                }
+            } catch (CancelException e) {
+                // User cancelled from selection list - loop back to search prompt
+                searchString = null;
+                continue;
+            }
+        }
+    }
+
+    /**
+     * Selects a transaction from a cached list of forecast transactions.
+     *
+     * @param transactions The list of transactions to select from
+     * @return The selected transaction
+     * @throws CancelException if user cancels
+     */
+    private ForecastTransaction selectFromCachedList(List<ForecastTransaction> transactions) throws CancelException {
+        // Build display strings
+        List<String> displayStrings = new ArrayList<>();
+        for (ForecastTransaction t : transactions) {
+            displayStrings.add(t.toStringConcise());
+        }
+
+        try {
+            NumberOrStringResponse result = view.selectFromListByPositionOrMenuOrString(
+                    "Select another forecast transaction from current list",
+                    displayStrings,
+                    "", // No menu
+                    List.of(), // No menu options
+                    DO_NOT_ALLOW_CREATE, // Don't allow search strings here
+                    ALLOW_CANCEL,
+                    ALLOW_QUIT,
+                    DO_NOT_ALLOW_SKIP);
+
+            if (result.isNumber()) {
+                int index = result.getSelectedIndex();
+                return transactions.get(index);
+            } else {
+                throw new CancelException("User cancelled selection");
+            }
+        } catch (QuitException e) {
+            throw new RuntimeException(e);
+        } catch (SkipException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Parse search string into search criteria.
+     */
+    private SearchCriteria parseSearchCriteria(String searchString) {
+        SearchCriteria criteria = new SearchCriteria();
+
+        if (searchString == null || searchString.trim().isEmpty() || searchString.equals("*")) {
+            criteria.searchAll = true;
+            return criteria;
+        }
+
+        // Check for date range pattern (YYYY-MM-DD to YYYY-MM-DD)
+        String dateRangePattern = "(\\d{4}-\\d{2}-\\d{2})\\s+to\\s+(\\d{4}-\\d{2}-\\d{2})";
+        if (searchString.matches(dateRangePattern)) {
+            String[] parts = searchString.split("\\s+to\\s+");
+            try {
+                criteria.startDate = stringDateDashToCalendarDate(parts[0]);
+                criteria.endDate = stringDateDashToCalendarDate(parts[1]);
+            } catch (Exception e) {
+                // If parsing fails, treat as text search
+                criteria.searchText = searchString;
+            }
+        } else {
+            // Text search
+            criteria.searchText = searchString;
+        }
+
+        return criteria;
+    }
+
+    /**
+     * Build SQL query based on search criteria.
+     */
+    private String buildForecastTransactionQuery(SearchCriteria criteria) {
+        StringBuilder query = new StringBuilder();
+        query.append(ForecastTransaction.getSelectQuery());
+        query.append("INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem ");
+        query.append("WHERE fi.Forecast_idForecast = uuid_to_bin('").append(forecast.getId()).append("') ");
+
+        if (!criteria.searchAll) {
+            if (criteria.startDate != null && criteria.endDate != null) {
+                // Date range search
+                query.append("AND ft.plannedDate >= '").append(calendarDateToStringDate(criteria.startDate)).append("' ");
+                query.append("AND ft.plannedDate <= '").append(calendarDateToStringDate(criteria.endDate)).append("' ");
+            } else if (criteria.searchText != null && !criteria.searchText.isEmpty()) {
+                // Text search across category, payee, and memo
+                String searchTerm = criteria.searchText.replace("'", "''"); // Escape single quotes
+                query.append("AND (fi.category LIKE '%").append(searchTerm).append("%' ");
+                query.append("OR fi.payee LIKE '%").append(searchTerm).append("%' ");
+                query.append("OR ft.memo LIKE '%").append(searchTerm).append("%') ");
+            }
+        }
+
+        // Order by date descending (most recent first)
+        query.append("ORDER BY ft.plannedDate DESC LIMIT 100");
+
+        return query.toString();
+    }
+
+    /**
+     * Inner class to hold search criteria for forecast transactions.
+     */
+    private static class SearchCriteria {
+        boolean searchAll = false;
+        Calendar startDate = null;
+        Calendar endDate = null;
+        String searchText = null;
+    }
+
+    /**
+     * Helper class to hold search results and the currently selected transaction.
+     * This allows us to cache the search results and select multiple transactions
+     * from the same list without re-executing the query.
+     */
+    private static class ForecastTransactionSearchResult {
+        private final List<ForecastTransaction> transactions;
+        private ForecastTransaction selectedTransaction;
+        private String nextSearchString;
+
+        public ForecastTransactionSearchResult(List<ForecastTransaction> transactions, ForecastTransaction selectedTransaction) {
+            this.transactions = transactions;
+            this.selectedTransaction = selectedTransaction;
+            this.nextSearchString = null;
+        }
+
+        public List<ForecastTransaction> getTransactions() {
+            return transactions;
+        }
+
+        public ForecastTransaction getSelectedTransaction() {
+            return selectedTransaction;
+        }
+
+        public void setSelectedTransaction(ForecastTransaction transaction) {
+            this.selectedTransaction = transaction;
+        }
+
+        public String getNextSearchString() {
+            return nextSearchString;
+        }
+
+        public void setNextSearchString(String searchString) {
+            this.nextSearchString = searchString;
+        }
+    }
+
+    /**
+     * @deprecated Use selectForecastTransactionFromForecast instead
      * Search for and select a forecast transaction.
      *
      * @return The selected ForecastTransaction, or null if cancelled
      * @throws Exception if any error occurs
      */
+    @Deprecated
     private ForecastTransaction selectForecastTransaction() throws Exception {
         SelectionController selectionController = new SelectionController(view);
 
