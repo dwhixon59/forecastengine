@@ -256,7 +256,7 @@ public class ForecastTransactionController {
 
                 try {
                     searchString = view.getResponseString(
-                            "Search for forecast transaction (date range, category, payee, memo, or filters):",
+                            "Search for forecast transaction (date range, category, payee, memo, or filters)",
                             "",  // Empty default value - allows user to press Enter
                             ALLOW_NONE,  // Allow empty input to show all transactions
                             DO_NOT_SHOW_CANCEL_QUIT_SKIP,
