@@ -257,7 +257,10 @@ public class ForecastTransactionController {
                 try {
                     searchString = view.getResponseString(
                             "Search for forecast transaction (date range, category, payee, memo, or filters):",
-                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                            ALLOW_NONE,  // Allow empty input to show all transactions
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                            null);
                 } catch (CancelException e) {
                     throw e; // Let it bubble up to exit the whole manage operation
                 }
