@@ -770,11 +770,24 @@ public class Utility {
     }
 
 
+    /**
+     * Calculates the number of business days between two dates.
+     * Business days are defined as Monday through Friday, excluding bank holidays.
+     *
+     * @param firstDate The first date (later date for positive result)
+     * @param secondDate The second date (earlier date)
+     * @return The number of business days between the dates (positive if firstDate is after secondDate)
+     */
     public static int businessDaysBeteween(Calendar firstDate, Calendar secondDate) {
         Calendar firstDateCopy = (Calendar) firstDate.clone();
         int diffDays = 0;
         while (firstDateCopy.compareTo(secondDate) > 0) {
-            if (!isaBankHoliday(Utility.calendarDateToStringDate(firstDateCopy))) diffDays++;
+            int dayOfWeek = firstDateCopy.get(DAY_OF_WEEK);
+            // Only count weekdays (Monday-Friday) that are not bank holidays
+            if (dayOfWeek != SATURDAY && dayOfWeek != SUNDAY &&
+                !isaBankHoliday(Utility.calendarDateToStringDate(firstDateCopy))) {
+                diffDays++;
+            }
             firstDateCopy.add(DATE, -1);
         }
         return diffDays;
