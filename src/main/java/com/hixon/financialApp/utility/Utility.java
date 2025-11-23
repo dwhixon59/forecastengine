@@ -818,7 +818,7 @@ public class Utility {
      *  Christmas Day – Thursday, December 25, 2025
      */
     public static boolean isaBankHoliday(String date) {
-        String holidays[] = {"01-01-2025", "01-20-2025", "02-17-2025", "05-26-2025", "06-19-2025", "07-04-2024",
+        String holidays[] = {"01-01-2025", "01-20-2025", "02-17-2025", "05-26-2025", "06-19-2025", "07-04-2025",
                 "09-01-2025", "10-13-2025", "11-11-2025", "11-27-2025", "12-25-2025"};
         for (int i = 0; i < holidays.length; i++) {
             if (date.equalsIgnoreCase(holidays[i])) {
