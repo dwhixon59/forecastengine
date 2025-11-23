@@ -133,7 +133,8 @@ public class ForecastTransactionMatcher {
      *
      * <p>Scoring breakdown:
      * <ul>
-     *   <li><b>Date proximity (0-40 points):</b> Closer dates score higher, -8 points per day difference</li>
+     *   <li><b>Date proximity (0-40 points):</b> Closer dates score higher, -8 points per business day difference
+     *       (uses business days to account for weekends and holidays)</li>
      *   <li><b>Amount similarity (0-40 points):</b>
      *     <ul>
      *       <li>Exact match or within 1%: 40 points</li>
@@ -158,11 +159,21 @@ public class ForecastTransactionMatcher {
         double score = 0.0;
 
         // 1. Date Proximity Score (0-40 points)
-        long daysDiff = Math.abs(
-                (transaction.getDate().getTimeInMillis() - forecastTransaction.getPlannedDate().getTimeInMillis())
-                        / (1000 * 60 * 60 * 24)
-        );
-        score += Math.max(0, 40 - (daysDiff * 8)); // -8 points per day difference
+        // Use business days instead of calendar days for more accurate matching
+        // (e.g., Friday to Monday = 1 business day, not 3 calendar days)
+        Calendar transactionDate = transaction.getDate();
+        Calendar forecastDate = forecastTransaction.getPlannedDate();
+        int businessDaysDiff;
+
+        if (transactionDate.compareTo(forecastDate) > 0) {
+            // Transaction is after forecast
+            businessDaysDiff = Utility.businessDaysBeteween(transactionDate, forecastDate);
+        } else {
+            // Transaction is before forecast
+            businessDaysDiff = Utility.businessDaysBeteween(forecastDate, transactionDate);
+        }
+
+        score += Math.max(0, 40 - (businessDaysDiff * 8)); // -8 points per business day difference
 
         // 2. Amount Similarity Score (0-40 points)
         double transactionAmount = Math.abs(transaction.getAmount());
