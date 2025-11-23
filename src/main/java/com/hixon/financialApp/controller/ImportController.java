@@ -183,6 +183,64 @@ public class ImportController {
     // Getters and setters:
 
 
+    /*
+     * Strategy-Based Import Methods (New Architecture)
+     */
+
+    /**
+     * Imports cleared transactions using an automatically detected import strategy.
+     *
+     * <p>This method examines the file extension and selects the appropriate import
+     * strategy (CSV, QFX, OFX, QIF, etc.). This is the recommended method for
+     * importing transactions as it supports multiple file formats.</p>
+     *
+     * <p>Supported formats:</p>
+     * <ul>
+     *   <li>.csv, .tsv, .txt - CSV/Tab-separated values</li>
+     *   <li>.qfx - Quicken Web Connect (OFX 2.x XML)</li>
+     *   <li>.ofx - Open Financial Exchange (SGML or XML)</li>
+     *   <li>.qif - Quicken Interchange Format (text)</li>
+     * </ul>
+     *
+     * @param filename The full path to the transaction file
+     * @return true if the forecast is in sync after import, false otherwise
+     * @throws FinancialAppException If any error occurs during import
+     */
+    public boolean importRegisterTransactions(String filename) throws FinancialAppException {
+        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
+        view.say("Using import strategy: " + strategy.getStrategyName());
+        return strategy.importRegisterTransactions(filename, register, budget, forecast, view, notificationService);
+    }
+
+    /**
+     * Imports provisional transactions using an automatically detected import strategy.
+     *
+     * <p>Provisional transactions are those that have been authorized but not yet posted.
+     * Not all formats support provisional transactions separately from cleared ones.</p>
+     *
+     * @param filename The full path to the provisional transaction file
+     * @return true if the forecast is in sync after import, false otherwise
+     * @throws FinancialAppException If any error occurs during import
+     */
+    public boolean importProvisionalTransactions(String filename) throws FinancialAppException {
+        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
+        view.say("Using import strategy: " + strategy.getStrategyName());
+        return strategy.importProvisionalTransactions(filename, register, budget, forecast, view, notificationService);
+    }
+
+    /**
+     * Imports budget items using an automatically detected import strategy.
+     *
+     * @param filename The full path to the budget items file
+     * @throws FinancialAppException If any error occurs during import
+     */
+    public void importBudgetItems(String filename) throws FinancialAppException {
+        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
+        view.say("Using import strategy: " + strategy.getStrategyName());
+        strategy.importBudgetItems(filename, budget, view);
+    }
+
+
     // Helper functions:
 
     /**
