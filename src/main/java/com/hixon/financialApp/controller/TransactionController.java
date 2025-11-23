@@ -310,7 +310,10 @@ public class TransactionController {
                 view.say("\n--- Transaction Search ---");
                 view.say("You can search by:");
                 view.say("  • Payee or merchant name");
-                view.say("  • Date range (e.g., '2024-01-01 to 2024-12-31')");
+                view.say("  • Date range:");
+                view.say("      - Full dates: '2024-01-01 to 2024-12-31'");
+                view.say("      - Month-day: '01-15 to 03-20' (defaults to current year, wraps to next year if needed)");
+                view.say("      - Day only: '15 to 20' (defaults to current month, wraps to next month if needed)");
                 view.say("  • Amount (e.g., '25.00' for exact match)");
                 view.say("  • Amount range (e.g., '10.00 to 50.00')");
                 view.say("  • Filters: cleared:yes, cleared:no, new:yes, disputed:yes");
@@ -407,25 +410,29 @@ public class TransactionController {
 
         // Parse filters from search string
         if (searchString != null && !searchString.isEmpty()) {
-            // Check for date range pattern (YYYY-MM-DD to YYYY-MM-DD)
-            String dateRangePattern = "(\\d{4}-\\d{2}-\\d{2})\\s+to\\s+(\\d{4}-\\d{2}-\\d{2})";
+            // Check for date range pattern (supports YYYY-MM-DD, MM-DD, or DD formats)
+            // Pattern matches: "something to something" where something contains digits and optionally dashes
+            String dateRangePattern = "([\\d-]+)\\s+to\\s+([\\d-]+)";
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(dateRangePattern);
             java.util.regex.Matcher matcher = pattern.matcher(searchString);
 
             if (matcher.find()) {
-                // Found a date range
-                try {
-                    String startDateStr = matcher.group(1);
-                    String endDateStr = matcher.group(2);
+                // Found a potential date range - try parsing with flexible parser
+                String dateRangeStr = matcher.group(0);  // Full match including "to"
+                Calendar[] dates = Utility.parseFlexibleDateRange(dateRangeStr);
 
-                    criteria.startDate = Utility.sqlDateStringToCalendarDate(startDateStr);
-                    criteria.endDate = Utility.sqlDateStringToCalendarDate(endDateStr);
+                if (dates != null) {
+                    criteria.startDate = dates[0];
+                    criteria.endDate = dates[1];
 
                     // Remove the date range from search text
-                    searchString = searchString.replaceAll(dateRangePattern, "").trim();
+                    searchString = searchString.replaceAll(java.util.regex.Pattern.quote(dateRangeStr), "").trim();
                     criteria.searchText = searchString;
-                } catch (Exception e) {
-                    view.say("Warning: Could not parse date range. Format should be 'YYYY-MM-DD to YYYY-MM-DD'");
+                } else {
+                    view.say("Warning: Could not parse date range. Supported formats:");
+                    view.say("  - Full: 'YYYY-MM-DD to YYYY-MM-DD'");
+                    view.say("  - Month-day: 'MM-DD to MM-DD'");
+                    view.say("  - Day only: 'DD to DD'");
                 }
             }
 

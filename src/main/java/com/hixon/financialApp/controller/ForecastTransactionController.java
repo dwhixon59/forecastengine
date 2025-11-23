@@ -239,7 +239,10 @@ public class ForecastTransactionController {
                 view.say();
                 view.say("--- Forecast Transaction Search ---");
                 view.say("You can search by:");
-                view.say("  • Planned date range (e.g., '2024-01-01 to 2024-12-31')");
+                view.say("  • Planned date range:");
+                view.say("      - Full dates: '2024-01-01 to 2024-12-31'");
+                view.say("      - Month-day: '01-15 to 03-20' (defaults to current year, wraps to next year if needed)");
+                view.say("      - Day only: '15 to 20' (defaults to current month, wraps to next month if needed)");
                 view.say("  • Category, payee, or memo");
                 view.say("  • Or press Enter to see all forecast transactions");
                 view.say();
@@ -369,14 +372,17 @@ public class ForecastTransactionController {
             return criteria;
         }
 
-        // Check for date range pattern (YYYY-MM-DD to YYYY-MM-DD)
-        String dateRangePattern = "(\\d{4}-\\d{2}-\\d{2})\\s+to\\s+(\\d{4}-\\d{2}-\\d{2})";
+        // Check for date range pattern (supports YYYY-MM-DD, MM-DD, or DD formats)
+        // Pattern matches: "something to something" where something contains digits and optionally dashes
+        String dateRangePattern = "([\\d-]+)\\s+to\\s+([\\d-]+)";
         if (searchString.matches(dateRangePattern)) {
-            String[] parts = searchString.split("\\s+to\\s+");
-            try {
-                criteria.startDate = stringDateDashToCalendarDate(parts[0]);
-                criteria.endDate = stringDateDashToCalendarDate(parts[1]);
-            } catch (Exception e) {
+            // Try parsing with flexible parser
+            Calendar[] dates = Utility.parseFlexibleDateRange(searchString);
+
+            if (dates != null) {
+                criteria.startDate = dates[0];
+                criteria.endDate = dates[1];
+            } else {
                 // If parsing fails, treat as text search
                 criteria.searchText = searchString;
             }
@@ -399,9 +405,9 @@ public class ForecastTransactionController {
 
         if (!criteria.searchAll) {
             if (criteria.startDate != null && criteria.endDate != null) {
-                // Date range search
-                query.append("AND ft.plannedDate >= '").append(calendarDateToStringDate(criteria.startDate)).append("' ");
-                query.append("AND ft.plannedDate <= '").append(calendarDateToStringDate(criteria.endDate)).append("' ");
+                // Date range search - use SQL date format (YYYY-MM-DD)
+                query.append("AND ft.plannedDate >= ").append(Utility.calendarDateToSqlDateString(criteria.startDate)).append(" ");
+                query.append("AND ft.plannedDate <= ").append(Utility.calendarDateToSqlDateString(criteria.endDate)).append(" ");
             } else if (criteria.searchText != null && !criteria.searchText.isEmpty()) {
                 // Text search across category, payee, and memo
                 String searchTerm = criteria.searchText.replace("'", "''"); // Escape single quotes

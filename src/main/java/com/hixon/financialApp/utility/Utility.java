@@ -962,4 +962,93 @@ public class Utility {
 
         return result;
     }
+
+    /**
+     * Parses a flexible date range string and returns an array of two Calendar objects [startDate, endDate].
+     * Supports multiple date formats:
+     * - YYYY-MM-DD to YYYY-MM-DD (full dates)
+     * - MM-DD to MM-DD (defaults to current year for start, next occurrence for end)
+     * - DD to DD (defaults to current month/year for start, next occurrence for end)
+     *
+     * @param dateRangeStr The date range string (e.g., "2024-01-01 to 2024-12-31", "01-15 to 03-20", "15 to 20")
+     * @return Array of two Calendar objects [startDate, endDate], or null if parsing fails
+     */
+    public static Calendar[] parseFlexibleDateRange(String dateRangeStr) {
+        if (dateRangeStr == null || dateRangeStr.trim().isEmpty()) {
+            return null;
+        }
+
+        String[] parts = dateRangeStr.trim().split("\\s+to\\s+");
+        if (parts.length != 2) {
+            return null;
+        }
+
+        String startStr = parts[0].trim();
+        String endStr = parts[1].trim();
+
+        try {
+            Calendar startDate;
+            Calendar endDate;
+            Calendar now = Calendar.getInstance();
+
+            // Check format by counting dashes
+            int startDashes = startStr.length() - startStr.replace("-", "").length();
+            int endDashes = endStr.length() - endStr.replace("-", "").length();
+
+            if (startDashes == 2 && endDashes == 2) {
+                // Full format: YYYY-MM-DD to YYYY-MM-DD
+                startDate = sqlDateStringToCalendarDate(startStr);
+                endDate = sqlDateStringToCalendarDate(endStr);
+            } else if (startDashes == 1 && endDashes == 1) {
+                // MM-DD to MM-DD format
+                startDate = parseMonthDay(startStr, now.get(YEAR));
+                endDate = parseMonthDay(endStr, now.get(YEAR));
+
+                // If endDate is before startDate, it's in the next year
+                if (endDate.before(startDate)) {
+                    endDate.add(YEAR, 1);
+                }
+            } else if (startDashes == 0 && endDashes == 0) {
+                // DD to DD format (day only)
+                int startDay = Integer.parseInt(startStr);
+                int endDay = Integer.parseInt(endStr);
+
+                startDate = (Calendar) now.clone();
+                startDate.set(DATE, startDay);
+
+                endDate = (Calendar) now.clone();
+                endDate.set(DATE, endDay);
+
+                // If endDate is before startDate in the same month, move to next month
+                if (endDate.before(startDate)) {
+                    endDate.add(MONTH, 1);
+                }
+            } else {
+                // Mixed formats not supported
+                return null;
+            }
+
+            return new Calendar[]{startDate, endDate};
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Parses a MM-DD string into a Calendar with the given year.
+     *
+     * @param monthDayStr String in MM-DD format
+     * @param year The year to use
+     * @return Calendar object set to the specified date
+     * @throws ParseException if parsing fails
+     */
+    private static Calendar parseMonthDay(String monthDayStr, int year) throws ParseException {
+        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd", Locale.ENGLISH);
+        sdf.parse(monthDayStr);
+        Calendar cal = sdf.getCalendar();
+        cal.set(YEAR, year);
+        return cal;
+    }
+
 }
