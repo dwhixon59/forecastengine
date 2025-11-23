@@ -115,7 +115,7 @@ public class ForecastTransactionController {
                                 transactionDisplayStrings,  // Transaction display strings for validation
                                 "What would you like to do with this forecast transaction?",
                                 List.of("view details", "update this transaction", "delete this transaction",
-                                        "manage splits/dispositions", "show list again"),
+                                        "manage splits/dispositions"),
                                 ALLOW_CREATE,  // Allow multi-character strings as new search criteria
                                 ALLOW_CANCEL,
                                 ALLOW_QUIT,
@@ -188,16 +188,6 @@ public class ForecastTransactionController {
 
                             case "m":  // manage splits/dispositions
                                 manageForecastTransactionSplits(selectedTransaction);
-                                break;
-
-                            case "s":  // show list again
-                                // Display the numbered list of forecast transactions
-                                view.say();
-                                view.sayH3("Current forecast transaction list (showing " + searchResult.getTransactions().size() + " result(s)):");
-                                for (int i = 0; i < transactionDisplayStrings.size(); i++) {
-                                    view.say("  " + (i + 1) + " - " + transactionDisplayStrings.get(i));
-                                }
-                                view.say();
                                 break;
 
                             default:

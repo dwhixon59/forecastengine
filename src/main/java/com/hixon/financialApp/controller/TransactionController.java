@@ -147,7 +147,7 @@ public class TransactionController {
                                 "What would you like to do with this transaction?",
                                 List.of("view details", "update this transaction", "assign/change merchant",
                                         "recategorize transaction", "manage splits/categories",
-                                        "delete this transaction", "show list again"),
+                                        "delete this transaction"),
                                 ALLOW_CREATE,  // Allow multi-character strings as new search criteria
                                 ALLOW_CANCEL,
                                 ALLOW_QUIT,
@@ -257,16 +257,6 @@ public class TransactionController {
                                 } else {
                                     view.say("Deletion cancelled.");
                                 }
-                                break;
-
-                            case "s":  // show list again
-                                // Display the numbered list of transactions
-                                view.say();
-                                view.sayH3("Current transaction list (showing " + searchResult.getTransactions().size() + " result(s)):");
-                                for (int i = 0; i < transactionDisplayStrings.size(); i++) {
-                                    view.say("  " + (i + 1) + " - " + transactionDisplayStrings.get(i));
-                                }
-                                view.say();
                                 break;
 
                             default:
