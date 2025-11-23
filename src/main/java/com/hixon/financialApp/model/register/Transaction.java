@@ -394,7 +394,7 @@ public class Transaction extends IndependentEntity {
      * @throws RegisterException if a register error occurs
      */
     public Merchant getMerchant() throws EntityException, RegisterException {
-        if (merchant == null) {
+        if (merchant == null && idMerchant != null && !idMerchant.equals("null")) {
             merchant = Merchant.getById(idMerchant);
         }
         return merchant;

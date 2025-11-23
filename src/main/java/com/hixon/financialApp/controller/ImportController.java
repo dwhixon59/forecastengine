@@ -1018,6 +1018,13 @@ public class ImportController {
                         /*
                          * then this is a new provisional transaction, so add this transaction to the database:
                          */
+
+                        // Display basic transaction info so user knows what we're processing
+                        view.say("\nProcessing provisional transaction:");
+                        view.say("  Date: " + calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getPostDate()));
+                        view.say("  Amount: " + formatDollarAmount(provisionalTransactions.get(provTrxIndex).getAmount()));
+                        view.say("  Payee: " + provisionalTransactions.get(provTrxIndex).getPayee());
+
                         // Get the splits for the transaction:
                         splits = TransactionSplit.getSplitsForTransaction(provisionalTransactions.get(provTrxIndex));
 

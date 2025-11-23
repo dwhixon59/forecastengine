@@ -791,21 +791,22 @@ public class Utility {
     }
 
     /*
-     *  US FinancialInstitutionController holidays for 2024:
-     * New Year's Day: January 1
-     * Martin Luther King Jr. Day: January 15
-     * Presidents' Day: February 19
-     * Memorial Day: May 28
-     * Independence Day: July 4
-     * Labor Day: September 3
-     * Columbus Day: October 8
-     * Veterans Day: November 12
-     * Thanksgiving Day: November 28
-     * Christmas Day: December 25
+     *  US bank holidays for 2025:
+     *  New Year’s Day – Wednesday, January 1, 2025
+     *  Martin Luther King Jr. Day – Monday, January 20, 2025
+     *  Presidents Day (Washington’s Birthday) – Monday, February 17, 2025
+     *  Memorial Day – Monday, May 26, 2025
+     *  Juneteenth National Independence Day – Thursday, June 19, 2025
+     *  Independence Day – Friday, July 4, 2025
+     *  Labor Day – Monday, September 1, 2025
+     *  Columbus Day / Indigenous Peoples’ Day – Monday, October 13, 2025
+     *  Veterans Day – Tuesday, November 11, 2025
+     *  Thanksgiving Day – Thursday, November 27, 2025
+     *  Christmas Day – Thursday, December 25, 2025
      */
     public static boolean isaBankHoliday(String date) {
-        String holidays[] = {"01-01-2024", "01-15-2024", "02-19-2024", "05-28-2024", "07-04-2024", "09-03-2024",
-                "10-08-2024", "11-12-2024", "11-28-2024", "12-25-2024"};
+        String holidays[] = {"01-01-2025", "01-20-2025", "02-17-2025", "05-26-2025", "06-19-2025", "07-04-2024",
+                "09-01-2025", "10-13-2025", "11-11-2025", "11-27-2025", "12-25-2025"};
         for (int i = 0; i < holidays.length; i++) {
             if (date.equalsIgnoreCase(holidays[i])) {
                 return true;
