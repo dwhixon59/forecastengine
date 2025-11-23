@@ -560,13 +560,15 @@ public class ForecastTransactionController {
             view.say("Current values:");
             view.say("  Planned Date: " + calendarDateToStringDate(transaction.getPlannedDate()));
             view.say("  Remaining Amount: " + formatDollarAmount(transaction.getRemainingAmount()));
+            view.say("  Running Balance: " + formatDollarAmount(transaction.getRunningBalance()));
             view.say("  Memo: " + (transaction.getMemo() != null ? transaction.getMemo() : ""));
             view.say("  Overridden: " + (transaction.isOverridden() ? "yes" : "no"));
             view.say("  Found: " + (transaction.isFound() ? "yes" : "no"));
 
             // Ask what to update
             String choice = view.selectFromMenu("What would you like to update?",
-                    List.of("planned date", "remaining amount", "memo", "overridden flag", "found flag", "done - save changes"),
+                    List.of("planned date", "remaining amount", "running balance", "memo",
+                            "overridden flag", "found flag", "done - save changes"),
                     DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             switch (choice) {
@@ -584,6 +586,13 @@ public class ForecastTransactionController {
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
                     transaction.setRemainingAmount(newAmount);
                     transaction.setOverridden(true);  // Mark as overridden when amount changes
+                    break;
+
+                case "b":  // running balance
+                    double newBalance = view.getResponseCurrency("Enter new running balance:",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    transaction.setRunningBalance(newBalance);
+                    transaction.setOverridden(true);  // Mark as overridden when balance changes
                     break;
 
                 case "m":  // memo
