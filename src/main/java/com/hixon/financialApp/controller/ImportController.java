@@ -508,6 +508,8 @@ public class ImportController {
                         currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
                         register.setBalance(register.getBalance() + currentTransaction.getAmount());
                         register.update();
+                        // Add a blank line after the update register call prompt
+                        view.say("");
                         continue;
                     }
                 }
@@ -576,6 +578,8 @@ public class ImportController {
                     if (!reconciledWithProvisional && isNewTransaction) {
                         register.setBalance(register.getBalance() + currentTransaction.getAmount());
                         register.update();
+                        // Add a blank line after the update register call prompt
+                        view.say("");
                     }
 
                     /*
@@ -602,8 +606,8 @@ public class ImportController {
                             splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
                                     currentTransaction.getId(), null));
 
-                            // Inform the user about the auto-match
-                            view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                            // Inform the user about the auto-match as a heading
+                            view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
                             // If we found a merchant from the payee, use it
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
@@ -674,6 +678,8 @@ public class ImportController {
                                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
                                     register.setBalance(register.getBalance() + currentTransaction.getAmount());
                                     register.update();
+                                    // Add a blank line after the update register call prompt
+                                    view.say("");
                                     continue;
 
                                 case QUIT:
@@ -1111,8 +1117,8 @@ public class ImportController {
                                 splits.add(new TransactionSplit(provisionalTransactions.get(provTrxIndex).getAmount(),
                                         idBudgetItem, provisionalTransactions.get(provTrxIndex).getId(), null));
 
-                                // Inform the user about the auto-match
-                                view.say("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                                // Inform the user about the auto-match as a heading
+                                view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
                                 // If we found a merchant from the payee, use it
                                 if (possibleMerchants != null && possibleMerchants.size() == 1) {
@@ -1277,6 +1283,8 @@ public class ImportController {
                         // Update the balance in the register and save it:
                         register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
                         register.update();
+                        // Add a blank line after the update register call prompt
+                        view.say("");
 
                         // Save the provisional transaction:
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
