@@ -4,12 +4,16 @@ import com.hixon.financialApp.controller.MainController;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.notification.async.file.fileBasedNotificationService;
 import com.hixon.financialApp.view.cmdLine.ViewCmdline;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class Main {
+
+    private static final Logger logger = LogManager.getLogger(Main.class);
 
     public static void main(String[] goals) {
         Connection dbConnection = null;
@@ -33,15 +37,15 @@ public class Main {
             // Start the mainController and give it a list of goals to work on:
             mainController.run(goals);
 //        } catch (ClassNotFoundException e) {
-//            System.err.println("MySQL driver not found: " + e.getMessage());
+//            logger.error("MySQL driver not found", e);
         } catch (SQLException | EntityException e) {
-            System.err.println("An error occurred while connecting to the database: " + e.getMessage());
+            logger.error("An error occurred while connecting to the database", e);
         } finally {
             if (dbConnection != null) {
                 try {
                     dbConnection.close();
                 } catch (SQLException e) {
-                    System.err.println("An error occurred while closing the database connection: " + e.getMessage());
+                    logger.error("An error occurred while closing the database connection", e);
                 }
             }
         }

@@ -14,6 +14,8 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -30,6 +32,8 @@ import static com.hixon.financialApp.utility.Utility.*;
 import static com.hixon.financialApp.view.base.ViewInt.*;
 
 public class ForecastTransactionController {
+
+    private static final Logger logger = LogManager.getLogger(ForecastTransactionController.class);
 
     /*
      * Fields for ForecastTransactionController:
@@ -179,7 +183,7 @@ public class ForecastTransactionController {
                                         }
                                     } catch (Exception e) {
                                         view.say("Error deleting forecast transaction: " + e.getMessage());
-                                        System.err.println("Error deleting forecast transaction: " + e.getMessage());
+                                        logger.error("Error deleting forecast transaction", e);
                                     }
                                 } else {
                                     view.say("Deletion cancelled.");
