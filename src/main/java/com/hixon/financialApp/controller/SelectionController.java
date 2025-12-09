@@ -169,7 +169,11 @@ public class SelectionController {
                         // entities:
                         do {
                             // Create an entity for this row and add the entity to the list of entities:
-                            entities.add(rsEntityCreator.apply(rs));
+                            // The rsEntityCreator.apply(rs) returns a T, but some callers use BudgetItem.createFromResultSet
+                            // which returns a BudgetItem; narrow unchecked cast suppressed here.
+                            @SuppressWarnings("unchecked")
+                            T nextEntity = (T) rsEntityCreator.apply(rs);
+                            entities.add(nextEntity);
 
                             // and if this entity matches the name, then there is no sense to giving the user the option
                             // to create one with that name, so set a flag to prevent the option to create a new entity:
@@ -291,6 +295,8 @@ public class SelectionController {
                 String query = BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" + scope.getId() + "')";
                 ResultSet rs = EntityInt.getRS(query, "getting all budget items for budget");
                 while (rs.next()) {
+                    // BudgetItem.createFromResultSet returns a BudgetItem; cast to T is unchecked but expected here
+                    @SuppressWarnings("unchecked")
                     T entity = (T) BudgetItem.createFromResultSet(rs);
                     entities.add(entity);
                 }

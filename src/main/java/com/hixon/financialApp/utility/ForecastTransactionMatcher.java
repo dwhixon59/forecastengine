@@ -176,8 +176,15 @@ public class ForecastTransactionMatcher {
         score += Math.max(0, 40 - (businessDaysDiff * 8)); // -8 points per business day difference
 
         // 2. Amount Similarity Score (0-40 points)
-        double transactionAmount = Math.abs(transaction.getAmount());
-        double forecastAmount = Math.abs(forecastTransaction.getForecastItem().getAmount());
+        double transactionAmount = transaction.getAmount();
+        double forecastAmount = forecastTransaction.getForecastItem().getAmount();
+        // Check sign: if signs differ, return score 0 (no match)
+        if (Math.signum(transactionAmount) != Math.signum(forecastAmount)) {
+            return 0.0;
+        }
+        // Use absolute values for similarity scoring
+        transactionAmount = Math.abs(transactionAmount);
+        forecastAmount = Math.abs(forecastAmount);
         double amountDiff = Math.abs(transactionAmount - forecastAmount);
         double percentDiff = amountDiff / Math.max(transactionAmount, forecastAmount);
 
@@ -215,4 +222,3 @@ public class ForecastTransactionMatcher {
         return score;
     }
 }
-

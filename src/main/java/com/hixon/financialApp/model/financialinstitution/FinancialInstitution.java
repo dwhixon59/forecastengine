@@ -3,12 +3,15 @@ package com.hixon.financialApp.model.financialinstitution;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.ViewInt;
 
+import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 
@@ -103,8 +106,11 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
         // Transfer properties from provisional to cleared transaction
         clearedTransaction.setId(provisionalTransaction.getId());
+        clearedTransaction.setIdMerchant(provisionalTransaction.getIdMerchant());
+        clearedTransaction.setMerchant(provisionalTransaction.getMerchant());
+        clearedTransaction.setMerchantPayee(provisionalTransaction.getMerchantPayee());
         clearedTransaction.setIsImproper(provisionalTransaction.getIsImproper());
-        clearedTransaction.setIsNew(provisionalTransaction.getIsNew());
+        clearedTransaction.setIsNew(false);
 
         // Check if there's a tip (cleared amount differs from provisional amount)
         double tipAmount = clearedTransaction.getAmount() - provisionalTransaction.getAmount();

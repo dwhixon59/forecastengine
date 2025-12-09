@@ -231,7 +231,7 @@ public class Register extends IndependentEntity {
     }
 
     public void update() throws BudgetException, SQLException, EntityException, RegisterException {
-        getView().say("Update Register call.  New balance = " + Utility.formatDollarAmount(getBalance()));
+        //getView().say("\nUpdate Register call.  New balance = " + Utility.formatDollarAmount(getBalance()));
         super.update();
     }
 

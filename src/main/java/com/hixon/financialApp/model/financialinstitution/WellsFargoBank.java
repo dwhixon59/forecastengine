@@ -178,9 +178,10 @@ public class WellsFargoBank extends FinancialInstitution {
      */
     @Override
     public String getRegisterImportRecordBaseName(CSVRecord record) {
+        String clearedStatus = "*".equals(record.get(Headers.CLEARED)) ? "true" : "false";
         return record.get(Headers.TRANSACTION_DATE) + "\t" +
                record.get(Headers.AMOUNT) + "\t" +
-               record.get(Headers.CLEARED) + "\t" +
+               clearedStatus + "\t" +
                record.get(Headers.CHECK_NUMBER) + "\t" +
                record.get(Headers.PAYEE);
     }
@@ -432,7 +433,7 @@ public class WellsFargoBank extends FinancialInstitution {
     }
 
     /**
-     * Finds a matching provisional transaction for the given cleared transaction.
+     * Generates a matching provisional transaction for the given cleared transaction.
      * Uses fuzzy payee matching within a ±5 day window to find provisional transactions
      * that likely correspond to the cleared transaction.
      *
@@ -440,26 +441,22 @@ public class WellsFargoBank extends FinancialInstitution {
      * @return The matching provisional Transaction, or null if no match is found
      * @throws SQLException If a database error occurs
      * @throws EntityException If an entity-related error occurs
-     * @throws ParseException If date parsing fails
      * @throws Exception If an error occurs
      */
     @Override
     public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
-            throws SQLException, EntityException, ParseException, Exception {
+            throws SQLException, EntityException, Exception {
 
         // Get the merchant payee from the already-parsed transaction
         String merchantPayee = clearedTransaction.getMerchantPayee();
 
-        // Use fuzzy matching based on payee, date, and amount
-        Transaction provisionalTransaction = TransactionUtilities.findMatchingProvisionalTransaction(
+        // Use fuzzy matching based on payee, date, and amount only (no merchant ID)
+        return TransactionUtilities.findMatchingProvisionalTransaction(
                 register.getId(),
                 clearedTransaction.getAmount(),
                 clearedTransaction.getDate(),
-                merchantPayee,
-                null  // Don't use merchant for matching, rely on payee string matching
+                merchantPayee
         );
-
-        return provisionalTransaction;
     }
 
     /**
@@ -610,7 +607,14 @@ public class WellsFargoBank extends FinancialInstitution {
         postDate.setTime(sdf.parse(record.get(Headers.TRANSACTION_DATE)));
         String payee = record.get(Headers.PAYEE);
         double amount = Double.parseDouble(record.get(Headers.AMOUNT));
-        boolean cleared = record.get(Headers.CLEARED).contentEquals("*");
+        // Adjust the cleared flag based on the CSV record:
+        boolean cleared = false;
+        String clearedField = record.get(Headers.CLEARED);
+        if (clearedField != null && clearedField.trim().equals("*")) {
+            cleared = true;
+        } else if (clearedField != null && clearedField.trim().isEmpty()) {
+            cleared = false;
+        }
         String checkNumberString = record.get(Headers.CHECK_NUMBER);
         int checkNumber = 0;
         if (checkNumberString != null && !checkNumberString.isEmpty()) {
@@ -730,7 +734,7 @@ public class WellsFargoBank extends FinancialInstitution {
     private void cleanPayeeTokenList(int start) throws SQLException, EntityException {
         for (int i = start; i < payeeTokens.length; i++) {
             // Remove city followed by state from the merchant payee:
-            if (payeeTokens[i].length() == 2 && STATES.indexOf(payeeTokens[i]) > 0) {
+            if (i > 0 && payeeTokens[i].length() == 2 && STATES.indexOf(payeeTokens[i]) > 0) {
                 if (CityStateChecker.exists(payeeTokens[i - 1], payeeTokens[i])) {
                     payeeTokens[i] = "###";
                     payeeTokens[i - 1] = "###";

@@ -320,7 +320,7 @@ public class MainController {
 
                     case "updateFromExternalSource":
                         view.say("\n\n========================================================================");
-                        view.say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
+                        view.say("UPDATE THE REGISTER FROM AN EXTERNAL SOURCE.");
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
@@ -443,8 +443,7 @@ public class MainController {
                         break;
 
                     case "dailyUpdate":
-                        view.say("\n\n========================================================================");
-                        view.say("PERFORM THE DAILY UPDATE");
+                        view.sayH1("PERFORM THE DAILY UPDATE");
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
@@ -452,11 +451,10 @@ public class MainController {
 
                         // Perform the daily update:
                         if (dailyUpdateController.run()) {
-                            view.say("The daily update succeeded.");
+                            view.sayH4("The daily update succeeded.");
                         } else {
-                            view.say("The daily update failed.");
+                            view.sayH4("The daily update failed.");
                         }
-                        view.say("------------------------------------------------------------------------");
                         break;
 
                     default:

@@ -129,9 +129,9 @@ public class Transaction extends IndependentEntity {
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
                 + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
-                + balance + ", isImproper = " + isImproper + ", isNew = " + isNew
-                + ", Register_idRegister = uuid_to_bin('" + getIdRegister() + "'), Merchant_idMerchant = " +
-                "uuid_to_bin('" + getIdMerchant() + "')";
+                + balance + ", isImproper = " + isImproper + ", isNew = " + isNew +
+                ", importRecordId = \"" + importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "'), " +
+                "Merchant_idMerchant = uuid_to_bin('" + getIdMerchant() + "')";
     }
 
     private static final String updateQuery =

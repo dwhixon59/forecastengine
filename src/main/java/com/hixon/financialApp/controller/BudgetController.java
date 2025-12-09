@@ -15,6 +15,7 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
@@ -688,10 +689,46 @@ public class BudgetController {
 
             view.sayH2("Basic Information");
 
-            // Get the category, and validate that it is a valid category:
-            String category = view.getResponseString("Category", template != null ? template.getCategory() :
-                    null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
-                    () -> helpText.getProperty("budgetitem.category")).trim();
+            // Get the category - allow selection from existing categories or entering a new one:
+            List<String> existingCategories = BudgetItem.getAllDistinctCategories();
+            String category;
+
+            if (existingCategories.isEmpty()) {
+                // No existing categories, just get a string input
+                category = view.getResponseString("Category", template != null ? template.getCategory() :
+                        null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                        () -> helpText.getProperty("budgetitem.category")).trim();
+            } else {
+                // Existing categories available - let user select or enter new
+                String defaultCategory = template != null ? template.getCategory() : null;
+                int defaultIndex = -1;
+                if (defaultCategory != null && !defaultCategory.trim().isEmpty()) {
+                    // Find the index of the default category in the list
+                    for (int i = 0; i < existingCategories.size(); i++) {
+                        if (existingCategories.get(i).equalsIgnoreCase(defaultCategory.trim())) {
+                            defaultIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                NumberOrStringResponse response = view.selectFromListOrString(
+                        "Select an existing category or enter a new one:",
+                        existingCategories,
+                        DO_NOT_ALLOW_NONE,
+                        ViewInt.ALLOW_CREATE,
+                        ALLOW_CANCEL,
+                        ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP);
+
+                if (response.isNumber()) {
+                    // User selected from the list
+                    category = existingCategories.get(response.getSelectedIndex());
+                } else {
+                    // User entered a new category
+                    category = response.getSearchString().trim();
+                }
+            }
 
             // Get the payee:
             String defaultPayee = template != null ? template.getPayee() : "";

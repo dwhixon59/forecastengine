@@ -138,15 +138,22 @@ public class ForecastEngine {
                 boolean firstOccurrence = true;
                 while (forecast.fallsWithinForecastWindow(nextDate) && !forecastItem.isExpired(nextDate)) {
 
+                    // If there is an overridden forecast transaction in the database for this date, skip *adding* it,
+                    // but still advance to the next date.
+                    if (forecast.hasOverriddenForecastTransactionOnDate(forecastItem, nextDate)) {
+                        firstOccurrence = false; // we did "see" the first occurrence
+                        nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
+                        continue;
+                    }
+
                     // Add the forecast transaction to the forecast:
                     forecast.addTransactionOnDate(forecastItem, startDate, nextDate, firstOccurrence);
                     firstOccurrence = false;
 
                     // Go to the next instance of this budget item:
                     nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
-
-                } // End for each instance of this item in the forecast window.
-            } // End for each item in the budget.
+                }
+           } // End for each item in the budget.
 
         } catch (SQLException se) {
             System.out.println("[SEVERE]  Database error traversing the list of budget items.");

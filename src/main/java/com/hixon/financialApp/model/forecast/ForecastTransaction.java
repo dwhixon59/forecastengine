@@ -8,6 +8,7 @@ import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -645,10 +646,10 @@ public class ForecastTransaction extends IndependentEntity {
             String memoString =
                     (this.getForecastItem().getMemo() == null || this.getForecastItem().getMemo().isEmpty()) ?
                             "" : " Memo = " + this.getForecastItem().getMemo();
-            s = "Forecast Transaction:  Planned Date = " + calendarDateToStringDate(this.getPlannedDate()) +
-                    ", Category = " + this.getForecastItem().getCategory() + ", Payee = " +
-                    this.getForecastItem().getPayee() + memoString + ", Budgeted Amount = " +
-                    formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
+            s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
+                    + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
+                    this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
+                    ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
                     formatDollarAmount(remainingAmount);
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";

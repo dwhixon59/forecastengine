@@ -66,7 +66,7 @@ public abstract class AbstractRegisterView  extends AbstractView implements Regi
             if (userResource != null) {
                 reports.add(userResource);
             } else {
-                Utility.getView().say("\nNo new transactions to report on.");
+                Utility.getView().sayH4("No new transactions to report on.");
                 break;
             }
         }

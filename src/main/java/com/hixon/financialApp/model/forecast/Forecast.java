@@ -78,6 +78,32 @@ public class Forecast extends IndependentEntity {
     private static final String updateQuery = "update forecast set ";
     private static final String deleteQuery = "delete from forecast where ";
 
+    // inside Forecast
+    private static class OverrideKey {
+        private final UUID forecastItemId;
+        private final LocalDate date;
+
+        OverrideKey(UUID forecastItemId, LocalDate date) {
+            this.forecastItemId = forecastItemId;
+            this.date = date;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof OverrideKey)) return false;
+            OverrideKey that = (OverrideKey) o;
+            return Objects.equals(forecastItemId, that.forecastItemId)
+                    && Objects.equals(date, that.date);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(forecastItemId, date);
+        }
+    }
+
+    private Set<OverrideKey> overriddenTransactionKeys;  // lazily loaded
 
     /*
      * Forecast class getters and setters:
@@ -700,4 +726,73 @@ public class Forecast extends IndependentEntity {
 
         return dailyBalances;
     }
+
+    private void loadOverriddenTransactionKeys() {
+        if (overriddenTransactionKeys != null) {
+            return; // already loaded
+        }
+
+        Set<OverrideKey> result = new HashSet<>();
+
+        String sql =
+                "SELECT BIN_TO_UUID(fi.idForecastItem) AS idForecastItem, ft.plannedDate " +
+                        "FROM forecast_transaction ft " +
+                        "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                        "WHERE fi.Forecast_idForecast = UUID_TO_BIN(?) " +
+                        "AND ft.overridden = TRUE";
+
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+
+        try {
+            conn = Utility.getDbConnection();  // DO NOT close this; it's shared
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, this.getId().toString());
+
+            rs = ps.executeQuery();
+            while (rs.next()) {
+                UUID itemId = UUID.fromString(rs.getString("idForecastItem"));
+                LocalDate date = rs.getDate("plannedDate").toLocalDate();
+                result.add(new OverrideKey(itemId, date));
+            }
+        } catch (SQLException e) {
+            // log as needed
+            result = Collections.emptySet();
+        } finally {
+            // Close only the statement/result set; leave shared connection open
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (ps != null) {
+                try { ps.close(); } catch (SQLException ignored) {}
+            }
+            // DO NOT close conn
+        }
+
+        this.overriddenTransactionKeys = result;
+    }
+
+
+    /**
+     * Checks if this forecast contains an overridden forecast transaction for the given forecast item and date.
+     * @param forecastItem the forecast item
+     * @param date the planned date
+     * @return true if an overridden transaction exists for this forecast item and date in this forecast, false otherwise
+     */
+    public boolean hasOverriddenForecastTransactionOnDate(ForecastItem forecastItem, Calendar date) {
+        if (forecastItem == null || date == null) {
+            return false;
+        }
+
+        loadOverriddenTransactionKeys();
+
+        LocalDate localDate = date.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+
+        OverrideKey key = new OverrideKey(forecastItem.getId(), localDate);
+        return overriddenTransactionKeys.contains(key);
+    }
+
 }

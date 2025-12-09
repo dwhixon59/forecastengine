@@ -50,7 +50,10 @@ public class IndependentEntityHistory<T extends IndependentEntity> {
             throws SQLException, EntityException, RegisterException, BudgetException, ForecastException {
         List<T> entities = new ArrayList<>();
         for (int i = rangeStart; i <= rangeEnd; i++) {
-            entities.add((T) T.getById(entityIdsList.get(i)));
+            // IndependentEntity.getById returns an IndependentEntity; cast to T is unchecked but expected
+            @SuppressWarnings("unchecked")
+            T item = (T) IndependentEntity.getById(entityIdsList.get(i));
+            entities.add(item);
         }
         return entities;
     }

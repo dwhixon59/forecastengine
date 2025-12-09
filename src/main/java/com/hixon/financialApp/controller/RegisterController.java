@@ -255,7 +255,7 @@ public class RegisterController {
                     register.getBalance()) + ".  You should update it.");
         }
 
-        view.say("\nThe current balance of the " + register.getName() + " is " +
+        view.sayH4("The current balance of the " + register.getName() + " is " +
                 Utility.formatDollarAmount(register.getBalance()));
 
         Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
@@ -524,11 +524,12 @@ public class RegisterController {
         if (possibleRegisters.size() == 1) {
             Register singleRegister = possibleRegisters.iterator().next();
             view.say("Found potential match: " + singleRegister.toStringConcise());
-            if (view.getYesOrNo("Is this the correct register?")) {
-                return singleRegister;
-            } else {
-                return null;
-            }
+//            if (view.getYesOrNo("Is this the correct register?")) {
+//                return singleRegister;
+//            } else {
+//                return null;
+//            }
+            return singleRegister;
         }
 
         // Case 3: Multiple registers - continue filtering

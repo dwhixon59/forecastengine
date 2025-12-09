@@ -287,8 +287,16 @@ public class TransactionSplit extends DependentEntity {
 
     // Delete the splits for a transaction:
     public static void deleteSplitsForTransaction(UUID id) throws EntityException {
-        EntityInt.deleteMultiple(deleteQuery + "where Transaction_idTransaction = uuid_to_bin('" + id + "')",
-                "Databsae error occurred deleting TransactionSplits from the database.");
+        try {
+            java.sql.Statement statement = com.hixon.financialApp.utility.Utility.getDbConnection().createStatement();
+            int rowCount = statement.executeUpdate(deleteQuery + "where Transaction_idTransaction = uuid_to_bin('" + id + "')");
+            // Row count of 0 is OK - it just means there were no splits to delete (e.g., for a new transaction)
+            statement.close();
+        } catch (java.sql.SQLException e) {
+            EntityException ee = new EntityException("Database error occurred deleting TransactionSplits from the database.");
+            ee.initCause(e);
+            throw ee;
+        }
     }
 
     // Get a list of new transactions for a budget item:

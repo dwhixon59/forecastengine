@@ -78,8 +78,7 @@ public class DailyUpdateController {
             boolean inSync = true;
 
             // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
-            view.say("\n\n========================================================================");
-            view.say("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE.");
+            view.sayH2("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE");
             try {
                 forecastController.updateFromExternalSource();
             } catch (Exception e) {
@@ -88,32 +87,27 @@ public class DailyUpdateController {
                     throw e;
                 }
             }
-            view.say("------------------------------------------------------------------------");
 
             // Process any transactions skipped in previous update runs:
-           view.say("\n\n===============================================================" +
-                    "=========");
-           view.say("REPROCESS SKIPPED TRANSACTIONS");
+           view.sayH2("REPROCESS SKIPPED TRANSACTIONS");
             // If there are skipped transactions from previous runs:
             try {
                 if (register.isSkippedTransactions(forecast)) {
 
                     // Then ask the user if they want to reprocess them now:
-                    if (view.getYesOrNo("\nThere are skipped transactions in the register.  " +
+                    if (view.getYesOrNo("There are skipped transactions in the register.  " +
                             "Do you want to process them now?")) {
                         inSync = registerController.processUnreconciledTransactions();
                         if (!inSync) {
                             forecastController.updateForecast();
                         }
-                       view.say("\nThe skipped transactions were successfully updated.");
+                       view.sayH4("The skipped transactions were successfully updated.");
                     } else {
-                       view.say("\nThe skipped transactions were not processed.");
+                       view.sayH4("The skipped transactions were not processed.");
                     }
                 } else {
-                   view.say("\nThe are no skipped transactions.");
+                   view.sayH4("The are no skipped transactions.");
                 }
-               view.say("---------------------------------------------------------------" +
-                        "---------");
             } catch (QuitException qe) {
                 throw qe;
             } catch (Exception e) {
@@ -125,8 +119,7 @@ public class DailyUpdateController {
 
             // Import the cleared transactions from the register:
             try {
-               view.say("\n\n========================================================================");
-               view.say("IMPORT CLEARED TRANSACTIONS");
+               view.sayH2("IMPORT CLEARED TRANSACTIONS");
 
                 if (view.existsFileWithRetry(Transaction.CLEARED_TRANSACTIONS_FILE,
                         register.getTrxImportFilePath()))
@@ -136,7 +129,6 @@ public class DailyUpdateController {
                 {
                    view.say("Import of cleared transactions skipped at user's request.");
                 }
-               view.say("------------------------------------------------------------------------");
             } catch (QuitException qe) {
                 throw qe;
             } catch (Exception e) {
@@ -147,62 +139,56 @@ public class DailyUpdateController {
             }
 
             // Import the provisional transactions from the register:
-           view.say("\n\n===================================================================" +
-                    "=====");
-           view.say("IMPORT PROVISIONAL TRANSACTIONS");
+           view.sayH2("IMPORT PROVISIONAL TRANSACTIONS");
             try {
                 if (view.existsFileWithRetry(Transaction.PROVISIONAL_TRANSACTIONS_FILE,
                         register.getProvisionalTrxFileDirectory() + "\\" + register.getProvisionalTrxFileName()))
                 {
                     // Then import them:
                     boolean inSyncProv = importController.importCsvProvisionalTransactionFile();
-                   view.say("\nThe provisional transactions were successfully imported.");
+                   view.sayH4("The provisional transactions were successfully imported.");
                     if (!inSyncProv) {
                         inSync = false;
                     }
                 } else {
-                   view.say("\nImport of provisional transactions skipped at user's request.");
+                   view.say("Import of provisional transactions skipped at user's request.");
                 }
-               view.say("------------------------------------------------------------------------");
             } catch (QuitException qe) {
                 throw qe;
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while importing the provisional " +
+                if (!view.askContinue("The error '" + e + "' occurred while importing the provisional " +
                         " transactions into the register.")) {
                     throw e;
                 }
             }
 
             // Verify the register balance:
-           view.say("\n\n========================================================================");
-           view.say("VERIFY REGISTER BALANCE\n");
+           view.sayH2("VERIFY REGISTER BALANCE");
             try {
                  if (!registerController.verifyRegisterBalance(register)) {
-                   view.say("The balance of the register " + register.getName() + " was " +
+                   view.sayH4("The balance of the register " + register.getName() + " was " +
                             "successfully updated.");
                 }
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while verifying the register " +
+                if (!view.askContinue("The error '" + e + "' occurred while verifying the register " +
                         "balance. ")) {
                     throw e;
                 }
             }
-           view.say("------------------------------------------------------------------------");
 
             // If changes were made to one or more budget items during the importing of transactions:
             if (!inSync) {
-               view.say("\n\n========================================================================");
-               view.say("UPDATE THE FORECAST\n");
+               view.sayH2("UPDATE THE FORECAST");
 
                 // Ask the user if they want to update the forecast:
                 if (view.getYesOrNo("Budget items were changed.  Do you want to update the forecast?")) {
                     try {
                         forecastController.updateForecast();
-                       view.say("\nThe long term forecast was successfully updated.");
+                       view.sayH4("The long term forecast was successfully updated.");
                     } catch (QuitException qe) {
                         throw qe;
                     } catch (Exception e) {
-                        if (!view.askContinue("\nThe error '" + e + "' occurred while updating the " +
+                        if (!view.askContinue("The error '" + e + "' occurred while updating the " +
                                 "forecast.")) {
                             throw e;
                         }
@@ -213,8 +199,7 @@ public class DailyUpdateController {
             }
 
             // Render the long term forecast:
-           view.say("\n\n========================================================================");
-           view.say("RENDER THE LONG TERM FORECAST\n");
+           view.sayH2("RENDER THE LONG TERM FORECAST");
             try {
                 sessionController.getForecastView().renderLongTermForecast(forecast);
                view.say("\nSuccessfully rendered the long term forecast.");
@@ -225,28 +210,23 @@ public class DailyUpdateController {
                     throw e;
                 }
             }
-           view.say("------------------------------------------------------------------------");
 
             // Render the Spending Report for the current month:
             try {
-               view.say("\n\n========================================================================");
-               view.say("RENDER THE SPENDING REPORT\n");
+               view.sayH2("RENDER THE SPENDING REPORT");
                sessionController.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
-               view.say("The spending report was successfully rendered");
-               view.say("------------------------------------------------------------------------");
+               view.sayH4("The spending report was successfully rendered");
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while rendering the spending report.")) {
+                if (!view.askContinue("The error '" + e + "' occurred while rendering the spending report.")) {
                     throw e;
                 }
             }
 
             // Render the Items of Interest report:
             try {
-               view.say("\n\n========================================================================");
-               view.say("RENDERING THE ITEMS OF INTEREST REPORT\n");
+               view.sayH2("RENDERING THE ITEMS OF INTEREST REPORT");
                notificationService.sendItemsOfInterestReport(forecast);
-               view.say("Successfully rendered the Items of Interest Report.");
-               view.say("------------------------------------------------------------------------");
+               view.sayH4("Successfully rendered the Items of Interest Report.");
              } catch (Exception e) {
                 if (!view.askContinue("\nThe error '" + e + "' occurred while Rendering of the Items of Interest " +
                         "report.")) {
@@ -256,13 +236,11 @@ public class DailyUpdateController {
 
             // Render the Overdue and Upcoming Items Report:
             try {
-               view.say("\n\n========================================================================");
-               view.say("RENDERING THE OVERDUE AND UPCOMING ITEMS REPORT\n");
+               view.sayH2("RENDERING THE OVERDUE AND UPCOMING ITEMS REPORT");
                notificationService.sendOverdueAndUpcomingItemsReport(forecast);
-               view.say("Successfully rendered the Overdue and Upcoming Items Report.");
-               view.say("------------------------------------------------------------------------");
+               view.sayH4("Successfully rendered the Overdue and Upcoming Items Report.");
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while rendering of the Overdue and Upcoming " +
+                if (!view.askContinue("The error '" + e + "' occurred while rendering of the Overdue and Upcoming " +
                         "Items Report.")) {
                     throw e;
                 }
@@ -270,12 +248,11 @@ public class DailyUpdateController {
 
             // Render the New Transaction Summary report:
             try {
-               view.say("\n\n========================================================================");
-               view.say("RENDERING THE NEW TRANSACTION SUMMARY REPORT\n");
+               view.sayH2("RENDERING THE NEW TRANSACTION SUMMARY REPORT");
                 notificationService.sendNewTransactionSummaryReport(register);
-               view.say("Successfully rendered the New Transaction Summary Report.");
+               view.sayH4("Successfully rendered the New Transaction Summary Report.");
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while rendering the New Transaction Summary " +
+                if (!view.askContinue("The error '" + e + "' occurred while rendering the New Transaction Summary " +
                         "Report.")) {
                     throw e;
                 }
@@ -285,13 +262,13 @@ public class DailyUpdateController {
         // If an exception during the update process:
         catch (QuitException qe) {
 
-           sessionController.getView().say("\nAborting the daily update process at the user's request.");
+           sessionController.getView().sayH4("Aborting the daily update process at the user's request.");
             result = false;
 
         }
         catch (Exception e) {
 
-           sessionController.getView().say("\nAborting the daily update process because an exception occurred.");
+           sessionController.getView().sayH4("Aborting the daily update process because an exception occurred.");
             throw new RuntimeException(e);
         }
 
