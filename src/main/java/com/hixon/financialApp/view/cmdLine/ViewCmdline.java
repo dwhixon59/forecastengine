@@ -1276,41 +1276,42 @@ public class ViewCmdline implements ViewInt {
             if (response.length() == 1) {
                 char inputChar = Character.toLowerCase(response.charAt(0));
 
-                // Check for paging commands (capital F and B) BEFORE menu options
+                // Check for paging and display commands (capital F, B, and R) BEFORE menu options
                 char originalChar = response.charAt(0);
-                if (items != null && !items.isEmpty() && totalPages > 1) {
-                    if (originalChar == 'F') {
-                        // Forward (next page)
-                        if (currentPageWrapper[0] < totalPages - 1) {
-                            currentPageWrapper[0]++;
-                            displayCurrentPage.run();
-                            continue;
-                        } else {
-                            say("Already on last page.");
-                            continue;
+                if (items != null && !items.isEmpty()) {
+                    if (totalPages > 1) {
+                        if (originalChar == 'F') {
+                            // Forward (next page)
+                            if (currentPageWrapper[0] < totalPages - 1) {
+                                currentPageWrapper[0]++;
+                                displayCurrentPage.run();
+                                continue;
+                            } else {
+                                say("Already on last page.");
+                                continue;
+                            }
+                        } else if (originalChar == 'B') {
+                            // Back (previous page)
+                            if (currentPageWrapper[0] > 0) {
+                                currentPageWrapper[0]--;
+                                displayCurrentPage.run();
+                                continue;
+                            } else {
+                                say("Already on first page.");
+                                continue;
+                            }
                         }
-                    } else if (originalChar == 'B') {
-                        // Back (previous page)
-                        if (currentPageWrapper[0] > 0) {
-                            currentPageWrapper[0]--;
-                            displayCurrentPage.run();
-                            continue;
-                        } else {
-                            say("Already on first page.");
-                            continue;
-                        }
+                    }
+
+                    // Redisplay list (capital R) - works on any list regardless of paging
+                    if (originalChar == 'R') {
+                        displayCurrentPage.run();
+                        continue;
                     }
                 }
 
                 // Check if it's a valid menu option (if menu exists)
                 if (menuOptions != null && !menuOptions.isEmpty()) {
-                    // Special case: 'r' means "redisplay list again" if not a menu option
-                    if (inputChar == 'r' && !hasMenuOption(menuOptions, 'r')) {
-                        if (items != null && !items.isEmpty()) {
-                            displayCurrentPage.run();
-                            continue;
-                        }
-                    }
 
                     // Check if it matches a menu shortcut
                     for (String option : menuOptions) {
@@ -1318,12 +1319,6 @@ public class ViewCmdline implements ViewInt {
                         if (inputChar == shortcut) {
                             return new NumberOrStringResponse(String.valueOf(inputChar));
                         }
-                    }
-                } else {
-                    // No menu - 'r' always means redisplay list again
-                    if (inputChar == 'r' && items != null && !items.isEmpty()) {
-                        displayCurrentPage.run();
-                        continue;
                     }
                 }
 
@@ -1339,8 +1334,8 @@ public class ViewCmdline implements ViewInt {
                 if (totalPages > 1) {
                     errorMsg.append(", 'F'/'B' for paging");
                 }
-                if (items != null && !items.isEmpty() && (menuOptions == null || menuOptions.isEmpty() || !hasMenuOption(menuOptions, 'r'))) {
-                    errorMsg.append(", 'r' to redisplay list");
+                if (items != null && !items.isEmpty()) {
+                    errorMsg.append(", 'R' to redisplay list");
                 }
                 if (allowString) {
                     errorMsg.append(", or search criteria");
