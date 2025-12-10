@@ -4,6 +4,8 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,9 +19,7 @@ import java.util.UUID;
  */
 public class TransactionUtilities {
 
-
-    // Flip this to true while debugging provisional matching
-    private static final boolean DEBUG_PROVISIONAL_MATCHING = true;
+    private static final Logger logger = LogManager.getLogger(TransactionUtilities.class);
 
     /*
      * Helper methods:
@@ -57,14 +57,12 @@ public class TransactionUtilities {
                                        String clearedMerchantPayee,
                                        String candidateFieldValue,
                                        FuzzyMatchResult result) {
-        if (!DEBUG_PROVISIONAL_MATCHING) return;
-
-        System.out.println("  Fuzzy match against candidate " + comparedField + ":");
-        System.out.println("    cleared merchantPayee: '" + clearedMerchantPayee + "'");
-        System.out.println("    candidate " + comparedField + ": '" + candidateFieldValue + "'");
-        System.out.println("    match?       " + result.match);
-        System.out.println("    matchRatio:  " + result.matchRatio);
-        System.out.println("    matchedTokens: " + result.matchedTokens);
+        logger.debug("  Fuzzy match against candidate {}:", comparedField);
+        logger.debug("    cleared merchantPayee: '{}'", clearedMerchantPayee);
+        logger.debug("    candidate {}: '{}'", comparedField, candidateFieldValue);
+        logger.debug("    match?       {}", result.match);
+        logger.debug("    matchRatio:  {}", result.matchRatio);
+        logger.debug("    matchedTokens: {}", result.matchedTokens);
     }
 
 
@@ -128,16 +126,15 @@ public class TransactionUtilities {
         Calendar endDate = (Calendar) postDate.clone();
         endDate.add(Calendar.DAY_OF_MONTH, 5);
 
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            System.out.println("\n=== Provisional Matching Debug ===");
-            System.out.println("Cleared txn:");
-            System.out.println("  Register:   " + idRegister);
-            System.out.println("  Amount:     " + clearedAmount);
-            System.out.println("  Post date:  " + postDate.getTime());
-            System.out.println("  MerchantPayee: '" + merchantPayee + "'");
-            System.out.println("Search window:");
-            System.out.println("  Date:   " + startDate.getTime() + " .. " + endDate.getTime());
-        }
+        logger.debug("");
+        logger.debug("=== Provisional Matching Debug ===");
+        logger.debug("Cleared txn:");
+        logger.debug("  Register:   {}", idRegister);
+        logger.debug("  Amount:     {}", clearedAmount);
+        logger.debug("  Post date:  {}", postDate.getTime());
+        logger.debug("  MerchantPayee: '{}'", merchantPayee);
+        logger.debug("Search window:");
+        logger.debug("  Date:   {} .. {}", startDate.getTime(), endDate.getTime());
 
         // Determine if this is a transfer
         boolean isTransfer = merchantPayee != null &&
@@ -146,9 +143,8 @@ public class TransactionUtilities {
                  merchantPayee.toUpperCase().contains("ATM TRANSFER"));
 
         // PHASE 1: Look for EXACT amount matches first
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            System.out.println("\nPHASE 1: Looking for exact amount matches...");
-        }
+        logger.debug("");
+        logger.debug("PHASE 1: Looking for exact amount matches...");
 
         String exactMatchQuery = Transaction.getSelectQuery() +
                 " WHERE tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
@@ -174,47 +170,41 @@ public class TransactionUtilities {
             }
         }
 
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            System.out.println("Found " + exactMatches.size() + " exact amount match(es)");
-        }
+        logger.debug("Found {} exact amount match(es)", exactMatches.size());
 
         // If we found exact matches, handle them
         if (!exactMatches.isEmpty()) {
             // If only one exact match, return it immediately
             if (exactMatches.size() == 1) {
                 Transaction match = exactMatches.get(0);
-                if (DEBUG_PROVISIONAL_MATCHING) {
-                    System.out.println("\nSingle exact amount match found - returning it:");
-                    System.out.println("  id:          " + match.getId());
-                    System.out.println("  postDate:    " + match.getDate().getTime());
-                    System.out.println("  amount:      " + match.getAmount());
-                    System.out.println("  payee:       '" + match.getPayee() + "'");
-                    System.out.println("  merchantPayee: '" + match.getMerchantPayee() + "'");
-                    System.out.println("Reason: EXACT AMOUNT MATCH (only one)");
-                    System.out.println("=== End Provisional Matching Debug ===");
-                }
+                logger.debug("");
+                logger.debug("Single exact amount match found - returning it:");
+                logger.debug("  id:          {}", match.getId());
+                logger.debug("  postDate:    {}", match.getDate().getTime());
+                logger.debug("  amount:      {}", match.getAmount());
+                logger.debug("  payee:       '{}'", match.getPayee());
+                logger.debug("  merchantPayee: '{}'", match.getMerchantPayee());
+                logger.debug("Reason: EXACT AMOUNT MATCH (only one)");
+                logger.debug("=== End Provisional Matching Debug ===");
                 return match;
             }
 
             // Multiple exact matches - use fuzzy matching to disambiguate (unless it's a transfer)
-            if (DEBUG_PROVISIONAL_MATCHING) {
-                System.out.println("\nMultiple exact amount matches found. Need to disambiguate.");
-                if (isTransfer) {
-                    System.out.println("This is a TRANSFER - returning closest by date (fuzzy matching not useful)");
-                }
+            logger.debug("");
+            logger.debug("Multiple exact amount matches found. Need to disambiguate.");
+            if (isTransfer) {
+                logger.debug("This is a TRANSFER - returning closest by date (fuzzy matching not useful)");
             }
 
             if (isTransfer) {
                 // For transfers, just return the one closest by date
                 Transaction match = exactMatches.get(0); // Already sorted by date
-                if (DEBUG_PROVISIONAL_MATCHING) {
-                    System.out.println("  Selected transfer match (closest by date):");
-                    System.out.println("    id:          " + match.getId());
-                    System.out.println("    postDate:    " + match.getDate().getTime());
-                    System.out.println("    amount:      " + match.getAmount());
-                    System.out.println("    payee:       '" + match.getPayee() + "'");
-                    System.out.println("=== End Provisional Matching Debug ===");
-                }
+                logger.debug("  Selected transfer match (closest by date):");
+                logger.debug("    id:          {}", match.getId());
+                logger.debug("    postDate:    {}", match.getDate().getTime());
+                logger.debug("    amount:      {}", match.getAmount());
+                logger.debug("    payee:       '{}'", match.getPayee());
+                logger.debug("=== End Provisional Matching Debug ===");
                 return match;
             }
 
@@ -227,13 +217,12 @@ public class TransactionUtilities {
             for (int i = 0; i < exactMatches.size(); i++) {
                 Transaction candidate = exactMatches.get(i);
 
-                if (DEBUG_PROVISIONAL_MATCHING) {
-                    System.out.println("\nExact match candidate #" + (i + 1) + ":");
-                    System.out.println("  id:          " + candidate.getId());
-                    System.out.println("  postDate:    " + candidate.getDate().getTime());
-                    System.out.println("  payee:       '" + candidate.getPayee() + "'");
-                    System.out.println("  merchantPayee: '" + candidate.getMerchantPayee() + "'");
-                }
+                logger.debug("");
+                logger.debug("Exact match candidate #{}:", (i + 1));
+                logger.debug("  id:          {}", candidate.getId());
+                logger.debug("  postDate:    {}", candidate.getDate().getTime());
+                logger.debug("  payee:       '{}'", candidate.getPayee());
+                logger.debug("  merchantPayee: '{}'", candidate.getMerchantPayee());
 
                 if (merchantPayee != null) {
                     // Try comparing to candidate.merchantPayee
@@ -241,10 +230,8 @@ public class TransactionUtilities {
                         FuzzyMatchResult result =
                                 fuzzyPayeeMatchWithDetails(merchantPayee, candidate.getMerchantPayee());
 
-                        if (DEBUG_PROVISIONAL_MATCHING) {
-                            logFuzzyResult("merchantPayee", merchantPayee,
-                                    candidate.getMerchantPayee(), result);
-                        }
+                        logFuzzyResult("merchantPayee", merchantPayee,
+                                candidate.getMerchantPayee(), result);
 
                         if (result.matchRatio > bestMatchScore) {
                             bestMatchScore = result.matchRatio;
@@ -259,10 +246,8 @@ public class TransactionUtilities {
                         FuzzyMatchResult result =
                                 fuzzyPayeeMatchWithDetails(merchantPayee, candidate.getPayee());
 
-                        if (DEBUG_PROVISIONAL_MATCHING) {
-                            logFuzzyResult("payee", merchantPayee,
-                                    candidate.getPayee(), result);
-                        }
+                        logFuzzyResult("payee", merchantPayee,
+                                candidate.getPayee(), result);
 
                         if (result.matchRatio > bestMatchScore) {
                             bestMatchScore = result.matchRatio;
@@ -276,40 +261,37 @@ public class TransactionUtilities {
 
             // If we found a good fuzzy match among the exact amounts, return it
             if (bestMatch != null && bestMatchScore >= 0.5) {
-                if (DEBUG_PROVISIONAL_MATCHING) {
-                    System.out.println("\nSelected exact amount match with best fuzzy score:");
-                    System.out.println("  id:          " + bestMatch.getId());
-                    System.out.println("  postDate:    " + bestMatch.getDate().getTime());
-                    System.out.println("  amount:      " + bestMatch.getAmount());
-                    System.out.println("  payee:       '" + bestMatch.getPayee() + "'");
-                    System.out.println("  merchantPayee: '" + bestMatch.getMerchantPayee() + "'");
-                    System.out.println("Reason: EXACT AMOUNT + Best fuzzy match");
-                    System.out.println("  Matched on:  " + bestSource);
-                    System.out.println("  matchRatio:  " + bestResult.matchRatio);
-                    System.out.println("  matchedTokens: " + bestResult.matchedTokens);
-                    System.out.println("=== End Provisional Matching Debug ===");
-                }
+                logger.debug("");
+                logger.debug("Selected exact amount match with best fuzzy score:");
+                logger.debug("  id:          {}", bestMatch.getId());
+                logger.debug("  postDate:    {}", bestMatch.getDate().getTime());
+                logger.debug("  amount:      {}", bestMatch.getAmount());
+                logger.debug("  payee:       '{}'", bestMatch.getPayee());
+                logger.debug("  merchantPayee: '{}'", bestMatch.getMerchantPayee());
+                logger.debug("Reason: EXACT AMOUNT + Best fuzzy match");
+                logger.debug("  Matched on:  {}", bestSource);
+                logger.debug("  matchRatio:  {}", bestResult.matchRatio);
+                logger.debug("  matchedTokens: {}", bestResult.matchedTokens);
+                logger.debug("=== End Provisional Matching Debug ===");
                 return bestMatch;
             }
 
             // No good fuzzy match, just return the first (closest by date)
             Transaction match = exactMatches.get(0);
-            if (DEBUG_PROVISIONAL_MATCHING) {
-                System.out.println("\nNo strong fuzzy match found. Returning closest by date:");
-                System.out.println("  id:          " + match.getId());
-                System.out.println("  postDate:    " + match.getDate().getTime());
-                System.out.println("  amount:      " + match.getAmount());
-                System.out.println("  payee:       '" + match.getPayee() + "'");
-                System.out.println("Reason: EXACT AMOUNT + Closest date (fuzzy match inconclusive)");
-                System.out.println("=== End Provisional Matching Debug ===");
-            }
+            logger.debug("");
+            logger.debug("No strong fuzzy match found. Returning closest by date:");
+            logger.debug("  id:          {}", match.getId());
+            logger.debug("  postDate:    {}", match.getDate().getTime());
+            logger.debug("  amount:      {}", match.getAmount());
+            logger.debug("  payee:       '{}'", match.getPayee());
+            logger.debug("Reason: EXACT AMOUNT + Closest date (fuzzy match inconclusive)");
+            logger.debug("=== End Provisional Matching Debug ===");
             return match;
         }
 
         // PHASE 2: No exact matches found, look for tip tolerance matches
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            System.out.println("\nPHASE 2: No exact matches. Looking with tip tolerance...");
-        }
+        logger.debug("");
+        logger.debug("PHASE 2: No exact matches. Looking with tip tolerance...");
 
         // For negative amounts (debits), the cleared amount is usually more negative than the provisional
         // (because of tips). For example: provisional = -50, cleared = -60.
@@ -323,9 +305,7 @@ public class TransactionUtilities {
             maxAmount = clearedAmount * 1.30;
         }
 
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            System.out.println("  Amount range: " + minAmount + " .. " + maxAmount);
-        }
+        logger.debug("  Amount range: {} .. {}", minAmount, maxAmount);
 
         String tipQuery = Transaction.getSelectQuery() +
                 " WHERE tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
@@ -348,10 +328,8 @@ public class TransactionUtilities {
         );
 
         if (tipRs == null) {
-            if (DEBUG_PROVISIONAL_MATCHING) {
-                System.out.println("No provisional candidates returned by tip query.");
-                System.out.println("=== End Provisional Matching Debug ===");
-            }
+            logger.debug("No provisional candidates returned by tip query.");
+            logger.debug("=== End Provisional Matching Debug ===");
             return null;
         }
 
@@ -365,14 +343,13 @@ public class TransactionUtilities {
             candidateIndex++;
             Transaction candidate = new Transaction(tipRs);
 
-            if (DEBUG_PROVISIONAL_MATCHING) {
-                System.out.println("\nTip-tolerance candidate #" + candidateIndex + ":");
-                System.out.println("  id:          " + candidate.getId());
-                System.out.println("  postDate:    " + candidate.getDate().getTime());
-                System.out.println("  amount:      " + candidate.getAmount());
-                System.out.println("  payee:       '" + candidate.getPayee() + "'");
-                System.out.println("  merchantPayee: '" + candidate.getMerchantPayee() + "'");
-            }
+            logger.debug("");
+            logger.debug("Tip-tolerance candidate #{}:", candidateIndex);
+            logger.debug("  id:          {}", candidate.getId());
+            logger.debug("  postDate:    {}", candidate.getDate().getTime());
+            logger.debug("  amount:      {}", candidate.getAmount());
+            logger.debug("  payee:       '{}'", candidate.getPayee());
+            logger.debug("  merchantPayee: '{}'", candidate.getMerchantPayee());
 
             if (merchantPayee != null) {
                 // Try comparing to candidate.merchantPayee
@@ -380,10 +357,8 @@ public class TransactionUtilities {
                     FuzzyMatchResult result =
                             fuzzyPayeeMatchWithDetails(merchantPayee, candidate.getMerchantPayee());
 
-                    if (DEBUG_PROVISIONAL_MATCHING) {
-                        logFuzzyResult("merchantPayee", merchantPayee,
-                                candidate.getMerchantPayee(), result);
-                    }
+                    logFuzzyResult("merchantPayee", merchantPayee,
+                            candidate.getMerchantPayee(), result);
 
                     if (result.match) {
                         bestMatch = candidate;
@@ -398,10 +373,8 @@ public class TransactionUtilities {
                     FuzzyMatchResult result =
                             fuzzyPayeeMatchWithDetails(merchantPayee, candidate.getPayee());
 
-                    if (DEBUG_PROVISIONAL_MATCHING) {
-                        logFuzzyResult("payee", merchantPayee,
-                                candidate.getPayee(), result);
-                    }
+                    logFuzzyResult("payee", merchantPayee,
+                            candidate.getPayee(), result);
 
                     if (result.match) {
                         bestMatch = candidate;
@@ -413,23 +386,23 @@ public class TransactionUtilities {
             }
         }
 
-        if (DEBUG_PROVISIONAL_MATCHING) {
-            if (bestMatch != null) {
-                System.out.println("\nSelected tip-tolerance match:");
-                System.out.println("  id:          " + bestMatch.getId());
-                System.out.println("  postDate:    " + bestMatch.getDate().getTime());
-                System.out.println("  amount:      " + bestMatch.getAmount());
-                System.out.println("  payee:       '" + bestMatch.getPayee() + "'");
-                System.out.println("  merchantPayee: '" + bestMatch.getMerchantPayee() + "'");
-                System.out.println("Reason: TIP TOLERANCE + Fuzzy match");
-                System.out.println("  Matched on:  " + bestSource);
-                System.out.println("  matchRatio:  " + bestResult.matchRatio);
-                System.out.println("  matchedTokens: " + bestResult.matchedTokens);
-            } else {
-                System.out.println("\nNo matching provisional transaction found.");
-            }
-            System.out.println("=== End Provisional Matching Debug ===");
+        if (bestMatch != null) {
+            logger.debug("");
+            logger.debug("Selected tip-tolerance match:");
+            logger.debug("  id:          {}", bestMatch.getId());
+            logger.debug("  postDate:    {}", bestMatch.getDate().getTime());
+            logger.debug("  amount:      {}", bestMatch.getAmount());
+            logger.debug("  payee:       '{}'", bestMatch.getPayee());
+            logger.debug("  merchantPayee: '{}'", bestMatch.getMerchantPayee());
+            logger.debug("Reason: TIP TOLERANCE + Fuzzy match");
+            logger.debug("  Matched on:  {}", bestSource);
+            logger.debug("  matchRatio:  {}", bestResult.matchRatio);
+            logger.debug("  matchedTokens: {}", bestResult.matchedTokens);
+        } else {
+            logger.debug("");
+            logger.debug("No matching provisional transaction found.");
         }
+        logger.debug("=== End Provisional Matching Debug ===");
 
         return bestMatch;
     }
