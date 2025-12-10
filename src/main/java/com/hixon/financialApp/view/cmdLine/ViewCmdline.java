@@ -1304,8 +1304,8 @@ public class ViewCmdline implements ViewInt {
 
                 // Check if it's a valid menu option (if menu exists)
                 if (menuOptions != null && !menuOptions.isEmpty()) {
-                    // Special case: 's' means "show list again" if not a menu option
-                    if (inputChar == 's' && !hasMenuOption(menuOptions, 's')) {
+                    // Special case: 'r' means "redisplay list again" if not a menu option
+                    if (inputChar == 'r' && !hasMenuOption(menuOptions, 'r')) {
                         if (items != null && !items.isEmpty()) {
                             displayCurrentPage.run();
                             continue;
@@ -1320,8 +1320,8 @@ public class ViewCmdline implements ViewInt {
                         }
                     }
                 } else {
-                    // No menu - 's' always means show list again
-                    if (inputChar == 's' && items != null && !items.isEmpty()) {
+                    // No menu - 'r' always means redisplay list again
+                    if (inputChar == 'r' && items != null && !items.isEmpty()) {
                         displayCurrentPage.run();
                         continue;
                     }
@@ -1339,8 +1339,8 @@ public class ViewCmdline implements ViewInt {
                 if (totalPages > 1) {
                     errorMsg.append(", 'F'/'B' for paging");
                 }
-                if (items != null && !items.isEmpty() && (menuOptions == null || menuOptions.isEmpty() || !hasMenuOption(menuOptions, 's'))) {
-                    errorMsg.append(", 's' to show list");
+                if (items != null && !items.isEmpty() && (menuOptions == null || menuOptions.isEmpty() || !hasMenuOption(menuOptions, 'r'))) {
+                    errorMsg.append(", 'r' to redisplay list");
                 }
                 if (allowString) {
                     errorMsg.append(", or search criteria");
