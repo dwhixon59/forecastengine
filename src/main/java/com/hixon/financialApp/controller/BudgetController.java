@@ -888,7 +888,7 @@ public class BudgetController {
                     List<String> existingCategories = BudgetItem.getAllDistinctCategories();
                     String category;
                     if (existingCategories.isEmpty()) {
-                        category = view.getResponseString("Enter new category:",
+                        category = view.getResponseString("Enter new category",
                                 budgetItem.getCategory(), DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                                 () -> helpText.getProperty("budgetitem.category")).trim();
@@ -911,7 +911,7 @@ public class BudgetController {
                     break;
 
                 case "p":  // payee
-                    String newPayee = view.getResponseString("Enter new payee:",
+                    String newPayee = view.getResponseString("Enter new payee",
                             budgetItem.getPayee(), DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                             () -> helpText.getProperty("budgetitem.payee"));
@@ -919,7 +919,7 @@ public class BudgetController {
                     break;
 
                 case "m":  // memo
-                    String newMemo = view.getResponseString("Enter new memo:",
+                    String newMemo = view.getResponseString("Enter new memo",
                             budgetItem.getMemo() != null ? budgetItem.getMemo() : "",
                             ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
@@ -953,7 +953,7 @@ public class BudgetController {
                     break;
 
                 case "s":  // start date
-                    String newStartDate = view.getResponseString("Enter new start date (MM-DD-YYYY):",
+                    String newStartDate = view.getResponseString("Enter new start date (MM-DD-YYYY)",
                             budgetItem.getStartDate() != null ?
                                     Utility.calendarDateToStringDate(budgetItem.getStartDate()) : "",
                             DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
@@ -962,7 +962,7 @@ public class BudgetController {
                     break;
 
                 case "d":  // end date (en**d** date - e is taken by period)
-                    String newEndDate = view.getResponseString("Enter new end date (MM-DD-YYYY or 'none'):",
+                    String newEndDate = view.getResponseString("Enter new end date (MM-DD-YYYY or 'none')",
                             budgetItem.getEndDate() != null ?
                                     Utility.calendarDateToStringDate(budgetItem.getEndDate()) : "none",
                             ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
