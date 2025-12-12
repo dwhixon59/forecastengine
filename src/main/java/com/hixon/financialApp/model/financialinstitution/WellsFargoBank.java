@@ -14,6 +14,8 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -41,6 +43,8 @@ import java.util.regex.Pattern;
  * with posted transactions, including tip detection for restaurant purchases.
  */
 public class WellsFargoBank extends FinancialInstitution {
+
+    private static final Logger logger = LogManager.getLogger(WellsFargoBank.class);
 
     /*
      * Constants for Wells Fargo:
@@ -233,10 +237,19 @@ public class WellsFargoBank extends FinancialInstitution {
      */
     @Override
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
+        logger.debug("");
+        logger.debug("=== parseMerchantPayee Debug ===");
+        logger.debug("Input:");
+        logger.debug("  Date:   {}", date.getTime());
+        logger.debug("  Amount: {}", amount);
+        logger.debug("  Payee:  '{}'", payee);
+
         // Construct the merchant payee string from portions of the bank payee string:
         String merchantPayee;
         String firstFewWords;
         payeeTokens = payee.split(" ");
+        logger.debug("  Tokenized into {} tokens", payeeTokens.length);
+
         if (payeeTokens[0].equalsIgnoreCase("CHECK")) {
             firstFewWords = payeeTokens[0];
         } else {
@@ -246,6 +259,7 @@ public class WellsFargoBank extends FinancialInstitution {
                 firstFewWords = payeeTokens[0] + " " + payeeTokens[1];
             }
         }
+        logger.debug("  First few words: '{}'", firstFewWords);
 
         int i;
         int start = 0;
@@ -256,6 +270,7 @@ public class WellsFargoBank extends FinancialInstitution {
             case "PURCHASE RETURN AUTHORIZED":
             case "PURCHASE WITH CASH":
             case "RECURRING PAYMENT AUTHORIZED":
+                logger.debug("Processing as PURCHASE/RECURRING PAYMENT ('{}')", firstFewWords);
 
                 // Beginning with the token after the date of the transaction, skip over any tokens starting with a digit:
                 start = switch (payeeTokens[2]) {
@@ -264,9 +279,11 @@ public class WellsFargoBank extends FinancialInstitution {
                     case "CASH" -> 9;
                     default -> start;
                 };
+                logger.debug("  Start token index: {}", start);
 
                 // Derive a payee from the remaining tokens:
                 merchantPayee = makePayeeFromTokens(start);
+                logger.debug("  Derived merchantPayee: '{}'", merchantPayee);
                 break;
 
             // If this is a transfer:
@@ -277,6 +294,7 @@ public class WellsFargoBank extends FinancialInstitution {
             case "ATM TRANSFER AUTHORIZED":
             case "Transfer in Branch/Store":
             case "SAVE AS YOU":
+                logger.debug("Processing as TRANSFER ('{}')", firstFewWords);
 
                 // Find the register by the last four digits of the account number, or if the account number is not
                 // present, then have the user tell us which register it came from. The reason we only use the last four
@@ -287,6 +305,7 @@ public class WellsFargoBank extends FinancialInstitution {
                 Register transferRegister;
                 String accountNumber = "";
                 if (i == payeeTokens.length) {
+                    logger.debug("  Account number not found in payee string - will ask user");
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
                     RegisterController registerController = new RegisterController(register, this,
@@ -298,13 +317,20 @@ public class WellsFargoBank extends FinancialInstitution {
 
                         // Then get the account number from the register:
                         accountNumber = transferRegister.getAccountNumber();
+                        logger.debug("  User selected register: {} (account: {})", transferRegister.getName(), accountNumber);
                     }
                 }
                 else {
                     // The account number is in the payee string, so use it to find the register:
                     accountNumber = payeeTokens[i];
                     String lastFourDigits = accountNumber.substring(accountNumber.length() - 4);
+                    logger.debug("  Found account number in payee: {} (last 4: {})", accountNumber, lastFourDigits);
                     transferRegister = Register.getByLastFourDigits(lastFourDigits);
+                    if (transferRegister != null) {
+                        logger.debug("  Matched to register: {}", transferRegister.getName());
+                    } else {
+                        logger.debug("  No register found for last 4 digits: {}", lastFourDigits);
+                    }
                 }
 
                 // Construct a string that describes the transfer for the user
@@ -323,10 +349,12 @@ public class WellsFargoBank extends FinancialInstitution {
                     merchantPayee = "Transfer " + toFrom1 + " " + accountNumber + " " + toFrom2 + " " +
                             register.getName();
                 }
+                logger.debug("  Constructed merchantPayee: '{}'", merchantPayee);
                 break;
 
             // If this is an interest payment:
             case "INTEREST PAYMENT":
+                logger.debug("Processing as INTEREST PAYMENT");
 
                 // then the merchant is Interest Payment:
                 merchantPayee = "Interest Payment";
@@ -334,20 +362,24 @@ public class WellsFargoBank extends FinancialInstitution {
 
             // Overdraft fees:
             case "OVERDRAFT FEE FOR":
+                logger.debug("Processing as OVERDRAFT FEE");
 
                 // then Wells Fargo is the merchant:
                 merchantPayee = "Overdraft Fee";
                 break;
 
             case "ATM CASH DEPOSIT":
+                logger.debug("Processing as ATM CASH DEPOSIT");
                 merchantPayee = "ATM Cash Deposit";
                 break;
 
             case "CHECK":
+                logger.debug("Processing as CHECK");
                 merchantPayee = "Check";
                 break;
 
             default: // One-time online payments:
+                logger.debug("Processing as DEFAULT (one-time online payment or other)");
 
                 // Skip over certain words at the beginning if they are present:
                 if (payeeTokens[0].equalsIgnoreCase("BILL") && payeeTokens[1].equalsIgnoreCase("PAY")) {
@@ -356,12 +388,19 @@ public class WellsFargoBank extends FinancialInstitution {
                         payeeTokens[0].equalsIgnoreCase("REVERSAL")) {
                     start = 1;
                 }
+                logger.debug("  Start token index: {}", start);
 
                 // Derive a payee from the remaining tokens:
                 merchantPayee = makePayeeFromTokens(start);
+                logger.debug("  Derived merchantPayee: '{}'", merchantPayee);
 
                 break;
         }
+
+        logger.debug("Final parsed merchantPayee: '{}'", merchantPayee);
+        logger.debug("=== End parseMerchantPayee Debug ===");
+        logger.debug("");
+
         return merchantPayee;
     }
 
