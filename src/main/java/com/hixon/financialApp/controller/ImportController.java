@@ -961,9 +961,6 @@ public class ImportController {
                             transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
                     transaction.setImportRecordId(constructImportRecordId(map, importRecordBaseName));
 
-                    // Don't assign merchant yet - we'll do it during reconciliation
-                    // This allows forecast matching to work properly without premature user interaction
-
                     // Add the transaction to the array of provisional transactions:
                     provisionalTransactions.add(transaction);
                     //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
@@ -1304,6 +1301,10 @@ public class ImportController {
                         provTrxIndex++;
 
                     } else if (comparison == 0) {  // else, if the transaction was previously imported:
+
+                        // Log the import event
+                        provisionalTransactions.get(provTrxIndex).setMerchant(registerTransactions.get(regTrxIndex).getMerchant());
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
                         // Tell the user what we did:
                         view.say("Transaction wws previously imported.");

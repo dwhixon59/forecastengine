@@ -31,6 +31,7 @@ import static com.hixon.financialApp.controller.ImportController.TerminationCond
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction;
 
 public class RegisterController {
     private static final Logger logger = LogManager.getLogger(RegisterController.class);
@@ -280,15 +281,16 @@ public class RegisterController {
      * the case of zero entries tell the user that there are no registers that fit, if there is one register in the list,
      * confirms that is the correct register with the user.
      *
-     * @param date   The date of the transaction.
-     * @param amount The amount of the transaction.
-     * @param payee  The payee string from the transaction.
+     * @param date      The date of the transaction.
+     * @param amount    The amount of the transaction.
+     * @param payee     The payee string from the transaction.
+     * @param recurring
      * @return Register The register that was selected by the user.
      * @throws RegisterException If there is an error with the register.
      * @throws SkipException     If the user skips the operation.
      * @throws QuitException     If the user quits the operation.
      */
-    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws Exception {
+    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee, boolean recurring) throws Exception {
 
         logger.debug("");
         logger.debug("=== resolveUnmatchedAccount Debug ===");
@@ -300,6 +302,29 @@ public class RegisterController {
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
+
+
+        // if this is a recurring transfer:
+        if (recurring) {
+
+            // then it is most likely in the forecast, so try to determine the merchant payee by getting the
+            // corresponding forecast transaction:
+            logger.debug("Processing as RECURRING TRANSFER");
+            ForecastTransaction forecastTransaction = findMatchingForecastTransaction(date, amount, forecast, null, 5, 5);
+
+            // If we found a matching forecast transaction, use its merchant payee:
+            if (forecastTransaction != null) {
+
+                // Get the most recent instance of the matching forecast transaction that has been reconciled:
+                Transaction transaction = forecastTransaction.getMostRecentReconciledTransaction(forecastTransaction);
+
+                // If there is one, use its merchant payee:
+                if (transaction != null) {
+                    logger.debug("  Found matching forecast transaction: '{}'", transaction.getMerchant().getName());
+                    return Register.getByName(transaction.getMerchant().getName());
+                }
+            }
+        }
 
         // Get a set of all the registers that we will progressively narrow down.  If at any point the list of possible
         // registers is 1, then return that register:

@@ -47,11 +47,56 @@ public class ForecastTransactionMatcher {
             int daysBefore,
             int daysAfter) throws Exception {
 
+        return findMatchingForecastTransaction(
+                transaction.getDate(),
+                transaction.getAmount(),
+                forecast,
+                possibleMerchants,
+                daysBefore,
+                daysAfter);
+    }
+
+    /**
+     * Attempts to find a matching forecast transaction based on date and amount proximity.
+     * This method provides automatic matching for planned transactions without requiring merchant identification
+     * or budget item selection from the user.
+     *
+     * <p>The matching process:
+     * <ol>
+     *   <li>Retrieves forecast transactions within the date window (daysBefore to daysAfter)</li>
+     *   <li>Filters by possible merchants if provided (null = no filtering)</li>
+     *   <li>Scores remaining forecast transactions based on date and amount similarity</li>
+     *   <li>Returns the best match if confidence is high enough (70%+), otherwise null</li>
+     * </ol>
+     *
+     * @param date The transaction date to match
+     * @param amount The transaction amount to match
+     * @param forecast The forecast to search in
+     * @param possibleMerchants List of possible merchants (null = no merchant filtering,
+     *                          empty = no merchants match, 1+ = filter to these merchants)
+     * @param daysBefore Number of days before transaction date to search
+     * @param daysAfter Number of days after transaction date to search
+     * @return The best matching ForecastTransaction if found with sufficient confidence (70%+), null otherwise
+     * @throws Exception if database or other errors occur
+     */
+    public static ForecastTransaction findMatchingForecastTransaction(
+            Calendar date,
+            double amount,
+            Forecast forecast,
+            List<Merchant> possibleMerchants,
+            int daysBefore,
+            int daysAfter) throws Exception {
+
+        // If no forecast is available, we cannot match
+        if (forecast == null) {
+            return null;
+        }
+
         // Calculate the date window
-        Calendar startDate = (Calendar) transaction.getDate().clone();
+        Calendar startDate = (Calendar) date.clone();
         startDate.add(Calendar.DATE, -daysBefore);
 
-        Calendar endDate = (Calendar) transaction.getDate().clone();
+        Calendar endDate = (Calendar) date.clone();
         endDate.add(Calendar.DATE, daysAfter);
 
         // Get all forecast transactions in the date window for this budget
@@ -111,7 +156,7 @@ public class ForecastTransactionMatcher {
         double bestScore = 0.0;
 
         for (ForecastTransaction ft : candidateForecastTransactions) {
-            double score = calculateMatchScore(transaction, ft, possibleMerchants);
+            double score = calculateMatchScore(date, amount, ft, possibleMerchants);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -156,12 +201,50 @@ public class ForecastTransactionMatcher {
             ForecastTransaction forecastTransaction,
             List<Merchant> possibleMerchants) throws Exception {
 
+        return calculateMatchScore(
+                transaction.getDate(),
+                transaction.getAmount(),
+                forecastTransaction,
+                possibleMerchants);
+    }
+
+    /**
+     * Calculates a match score (0-100) between a transaction date/amount and a forecast transaction.
+     * Higher scores indicate better matches. Scores of 70+ are considered confident matches.
+     *
+     * <p>Scoring breakdown:
+     * <ul>
+     *   <li><b>Date proximity (0-40 points):</b> Closer dates score higher, -8 points per business day difference
+     *       (uses business days to account for weekends and holidays)</li>
+     *   <li><b>Amount similarity (0-40 points):</b>
+     *     <ul>
+     *       <li>Exact match or within 1%: 40 points</li>
+     *       <li>Within 5%: 20-40 points (likely same transaction)</li>
+     *       <li>Within 25%: 0-20 points (could include tip or variance)</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Merchant match (0-20 points):</b> Bonus if merchant matches budget item's assigned merchants</li>
+     * </ul>
+     *
+     * @param date The transaction date to score
+     * @param amount The transaction amount to score
+     * @param forecastTransaction The forecast transaction to score against
+     * @param possibleMerchants List of possible merchants from the transaction payee (can be null)
+     * @return Score from 0-100, where higher is better
+     * @throws Exception if an error occurs accessing budget item or merchant data
+     */
+    public static double calculateMatchScore(
+            Calendar date,
+            double amount,
+            ForecastTransaction forecastTransaction,
+            List<Merchant> possibleMerchants) throws Exception {
+
         double score = 0.0;
 
         // 1. Date Proximity Score (0-40 points)
         // Use business days instead of calendar days for more accurate matching
         // (e.g., Friday to Monday = 1 business day, not 3 calendar days)
-        Calendar transactionDate = transaction.getDate();
+        Calendar transactionDate = date;
         Calendar forecastDate = forecastTransaction.getPlannedDate();
         int businessDaysDiff;
 
@@ -176,7 +259,7 @@ public class ForecastTransactionMatcher {
         score += Math.max(0, 40 - (businessDaysDiff * 8)); // -8 points per business day difference
 
         // 2. Amount Similarity Score (0-40 points)
-        double transactionAmount = transaction.getAmount();
+        double transactionAmount = amount;
         double forecastAmount = forecastTransaction.getForecastItem().getAmount();
         // Check sign: if signs differ, return score 0 (no match)
         if (Math.signum(transactionAmount) != Math.signum(forecastAmount)) {

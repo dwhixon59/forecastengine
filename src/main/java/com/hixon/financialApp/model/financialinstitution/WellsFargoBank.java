@@ -23,6 +23,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import static com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction;
+
 /**
  * The WellsFargoBank class handles Wells Fargo-specific transaction processing logic.
  * This class extends FinancialInstitution and provides specific implementations for
@@ -263,6 +265,7 @@ public class WellsFargoBank extends FinancialInstitution {
 
         int i;
         int start = 0;
+        boolean recurring = false;
         switch (firstFewWords) {
 
             // If the transaction is a purchase:
@@ -286,11 +289,14 @@ public class WellsFargoBank extends FinancialInstitution {
                 logger.debug("  Derived merchantPayee: '{}'", merchantPayee);
                 break;
 
-            // If this is a transfer:
-            case "ONLINE TRANSFER TO":
-            case "ONLINE TRANSFER FROM":
+                // If this is a transfer:
             case "RECURRING TRANSFER TO":
             case "RECURRING TRANSFER FROM":
+
+                recurring = true;
+
+            case "ONLINE TRANSFER TO":
+            case "ONLINE TRANSFER FROM":
             case "ATM TRANSFER AUTHORIZED":
             case "Transfer in Branch/Store":
             case "SAVE AS YOU":
@@ -310,7 +316,7 @@ public class WellsFargoBank extends FinancialInstitution {
                     // The account number isn't in the payee string, so ask the user which register it came from:
                     RegisterController registerController = new RegisterController(register, this,
                             budget, forecast, view, notificationService);
-                    transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee);
+                    transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
 
                     // If we were able to determine the register this transaction was transferred to/from:
                     if (transferRegister != null) {
@@ -402,73 +408,6 @@ public class WellsFargoBank extends FinancialInstitution {
         logger.debug("");
 
         return merchantPayee;
-    }
-
-    /**
-     * Loads a provisional transaction from a CSV-formatted text line.
-     * Provisional transactions are transactions that have not yet posted to the account
-     * but are expected (e.g., pending transactions, scheduled payments).
-     *
-     * <p>This method handles two CSV formats:
-     * <ul>
-     *   <li>Short version: Starts with a date</li>
-     *   <li>Long version: Starts with descriptive text, followed by date in second column</li>
-     * </ul>
-     *
-     * <p>The method extracts the transaction amount from either the credit or debit column,
-     * parses the merchant name, and creates a provisional Transaction object.
-     *
-     * @param line A tab-separated line containing provisional transaction data
-     * @param register The register (bank account) to associate with this transaction
-     * @return A new provisional Transaction object
-     * @throws Exception If the line format is invalid, required fields are missing, or parsing fails
-     */
-    @Override
-    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception {
-        String[] tokens;
-
-        // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
-        tokens = line.split("\t");
-        if (tokens.length < 3) {
-            throw new ParseException("Too few tokens in the line.", 0);
-        }
-
-        // There are two formats for the CSV list that it could be.  The first one starts with a date (short version).
-        // The second one starts with some useless text (long version).  To figure out which format it is, test if we
-        // can convert the first column to a date:
-        int iOffset;
-        Calendar postDate = Calendar.getInstance();
-        try {
-            postDate.setTime(sdf.parse(tokens[0]));
-            iOffset = 0;
-        } catch (ParseException e) {
-            iOffset = 1;
-        }
-
-        // Determine the amount of the credit and debit:
-        double amount = 0;
-        if (tokens.length >= (3 + iOffset) && !tokens[2 + iOffset].isEmpty()) {
-            try {
-                amount = Utility.parseDollarAmount(tokens[2 + iOffset]);
-            } catch (NumberFormatException ignored) {
-            }
-        } else {
-            if (tokens.length >= (4 + iOffset) && !tokens[3 + iOffset].isEmpty()) {
-                try {
-                    amount = -Utility.parseDollarAmount(tokens[3 + iOffset]);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-        if (amount == 0) {
-            throw new ParseException("Could not determine the amount of the transaction.", 0);
-        }
-
-        // Figure out which merchant the transaction is associated with:
-        String merchantPayee = parseMerchantPayee(postDate, amount, tokens[1 + iOffset]);
-
-        // Create a transaction based on the provisional record:
-        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
     }
 
     /**
@@ -686,6 +625,73 @@ public class WellsFargoBank extends FinancialInstitution {
 
         // Return the transaction:
         return transaction;
+    }
+
+    /**
+     * Loads a provisional transaction from a CSV-formatted text line.
+     * Provisional transactions are transactions that have not yet posted to the account
+     * but are expected (e.g., pending transactions, scheduled payments).
+     *
+     * <p>This method handles two CSV formats:
+     * <ul>
+     *   <li>Short version: Starts with a date</li>
+     *   <li>Long version: Starts with descriptive text, followed by date in second column</li>
+     * </ul>
+     *
+     * <p>The method extracts the transaction amount from either the credit or debit column,
+     * parses the merchant name, and creates a provisional Transaction object.
+     *
+     * @param line A tab-separated line containing provisional transaction data
+     * @param register The register (bank account) to associate with this transaction
+     * @return A new provisional Transaction object
+     * @throws Exception If the line format is invalid, required fields are missing, or parsing fails
+     */
+    @Override
+    public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception {
+        String[] tokens;
+
+        // Split the line.  If we don't get at least three tokens, then this isn't a valid line:
+        tokens = line.split("\t");
+        if (tokens.length < 3) {
+            throw new ParseException("Too few tokens in the line.", 0);
+        }
+
+        // There are two formats for the CSV list that it could be.  The first one starts with a date (short version).
+        // The second one starts with some useless text (long version).  To figure out which format it is, test if we
+        // can convert the first column to a date:
+        int iOffset;
+        Calendar postDate = Calendar.getInstance();
+        try {
+            postDate.setTime(sdf.parse(tokens[0]));
+            iOffset = 0;
+        } catch (ParseException e) {
+            iOffset = 1;
+        }
+
+        // Determine the amount of the credit and debit:
+        double amount = 0;
+        if (tokens.length >= (3 + iOffset) && !tokens[2 + iOffset].isEmpty()) {
+            try {
+                amount = Utility.parseDollarAmount(tokens[2 + iOffset]);
+            } catch (NumberFormatException ignored) {
+            }
+        } else {
+            if (tokens.length >= (4 + iOffset) && !tokens[3 + iOffset].isEmpty()) {
+                try {
+                    amount = -Utility.parseDollarAmount(tokens[3 + iOffset]);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        if (amount == 0) {
+            throw new ParseException("Could not determine the amount of the transaction.", 0);
+        }
+
+        // Figure out which merchant the transaction is associated with:
+        String merchantPayee = parseMerchantPayee(postDate, amount, tokens[1 + iOffset]);
+
+        // Create a transaction based on the provisional record:
+        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
     }
 
     /**
