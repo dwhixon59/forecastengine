@@ -1051,11 +1051,21 @@ public class ImportController {
                          * then this is a new provisional transaction, so add this transaction to the database:
                          */
 
+                        // Parse the merchant payee for this NEW transaction (deferred from loadProvisionalTransactionFromCSV).
+                        // This avoids prompting user for transfers without account numbers when the transaction
+                        // already exists in the database.
+                        String merchantPayee = financialInstitution.parseMerchantPayee(
+                                provisionalTransactions.get(provTrxIndex).getPostDate(),
+                                provisionalTransactions.get(provTrxIndex).getAmount(),
+                                provisionalTransactions.get(provTrxIndex).getPayee());
+                        provisionalTransactions.get(provTrxIndex).setMerchantPayee(merchantPayee);
+
                         // Display basic transaction info so user knows what we're processing
                         view.say("\nProcessing provisional transaction:");
                         view.say("  Date: " + calendarDateToStringDate(provisionalTransactions.get(provTrxIndex).getPostDate()));
                         view.say("  Amount: " + formatDollarAmount(provisionalTransactions.get(provTrxIndex).getAmount()));
                         view.say("  Payee: " + provisionalTransactions.get(provTrxIndex).getPayee());
+                        view.say("  Merchant Payee: " + merchantPayee);
                         view.say("  Merchant: " +
                                 (provisionalTransactions.get(provTrxIndex).getMerchant() != null ?
                                         provisionalTransactions.get(provTrxIndex).getMerchant().getName() : "Not assigned"));

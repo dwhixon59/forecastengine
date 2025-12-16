@@ -687,11 +687,13 @@ public class WellsFargoBank extends FinancialInstitution {
             throw new ParseException("Could not determine the amount of the transaction.", 0);
         }
 
-        // Figure out which merchant the transaction is associated with:
-        String merchantPayee = parseMerchantPayee(postDate, amount, tokens[1 + iOffset]);
+        // Don't parse merchant payee yet - defer until after duplicate checking in ImportController.
+        // This avoids prompting the user for transfers without account numbers when the provisional
+        // transaction already exists in the database with merchant already identified.
+        // The merchant payee will be parsed later for new transactions only.
 
-        // Create a transaction based on the provisional record:
-        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, merchantPayee);
+        // Create a transaction based on the provisional record (merchantPayee will be set to raw payee):
+        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, tokens[1 + iOffset]);
     }
 
     /**

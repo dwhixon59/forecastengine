@@ -469,21 +469,36 @@ public class BudgetController {
                 // then if the budget item isn't already associated with this merchant:
                 if (!isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
 
-                    // then if the user wants to add this budget item to the list of budget items for the merchant:
-                    if (
-                            !firstTime || // Later iterations don't make sense if we don't add them to the list:
-                                    view.getYesOrNo("Do you want to add this budget item \"" +
-                                            selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
-                                            + merchant.getName() + "\"?")
-                    ) {
-                        firstTime = false;
+                    // Check if the association already exists in the database (might not be in the in-memory list)
+                    BudgetItemMerchant existingAssociation = BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
 
-                        // Associate the budget item with the merchant in the database:
-                        budgetItemMerchant.save();
+                    if (existingAssociation == null) {
+                        // Association doesn't exist in database - safe to create
+
+                        // then if the user wants to add this budget item to the list of budget items for the merchant:
+                        if (
+                                !firstTime || // Later iterations don't make sense if we don't add them to the list:
+                                        view.getYesOrNo("Do you want to add this budget item \"" +
+                                                selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
+                                                + merchant.getName() + "\"?")
+                        ) {
+                            firstTime = false;
+
+                            // Associate the budget item with the merchant in the database:
+                            budgetItemMerchant.save();
+                        }
+
+                        // Add the budget item to the list of budget items passed in:
+                        budgetItemsForMerchant.add(budgetItemMerchant);
+                    } else {
+                        // Association already exists in database - use existing one
+                        view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                                "associated with the merchant \"" + merchant.getName() + "\" in the database.");
+
+                        // Add the existing association to the in-memory list
+                        existingAssociation.setBudgetItem(selectedBudgetItem);
+                        budgetItemsForMerchant.add(existingAssociation);
                     }
-
-                    // Add the budget item to the list of budget items passed in:
-                    budgetItemsForMerchant.add(budgetItemMerchant);
                 } else {
                     // Tell the user that this budget item is already associated with this merchant:
                     view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
