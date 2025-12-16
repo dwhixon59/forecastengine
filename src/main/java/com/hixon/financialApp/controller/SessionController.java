@@ -215,9 +215,6 @@ public class SessionController {
             register = RegisterController.selectRegister(view);
             registerView = new SpreadsheetXmlRegisterView(register);
 
-            // and set the financial institution associated with the selected register
-            financialInstitution = new WellsFargoBank(register, budget, forecast, view, notificationService);
-
             // and get the budget associated with the selected register that the user wants to work with:
             budget = Budget.getById(register.getBudgetID());
             budgetView = new SpreadsheetXmlBudgetView(budget);
@@ -226,6 +223,9 @@ public class SessionController {
             forecast = Forecast.selectForecast(budget);
             //forecastView = new SpreadsheetXmlForecastView(forecast);
             forecastView = new ExcelForecastView(forecast);
+
+            // and set the financial institution associated with the selected register (after forecast is retrieved)
+            financialInstitution = new WellsFargoBank(register, budget, forecast, view, notificationService);
         }
         else {
             // If the budget is null, then get the budget associated with the selected register the user wants to work

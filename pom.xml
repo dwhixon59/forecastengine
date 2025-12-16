@@ -126,6 +126,21 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <compilerArgs>
+                        <arg>-Xlint:deprecation</arg>
+                        <arg>-Xlint:unchecked</arg>
+                        <!-- Suppress the future-annotation-processing informational lint if desired:
+                             <arg>-Xlint:-options</arg>
+                        -->
+                    </compilerArgs>
+                    <!-- Make annotation processors explicit (Lombok is used in the project) -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.30</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
 

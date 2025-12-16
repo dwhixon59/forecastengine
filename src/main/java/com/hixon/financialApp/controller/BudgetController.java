@@ -15,6 +15,7 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
+import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
@@ -229,21 +230,15 @@ public class BudgetController {
                                         break;
 
                                     case "u":  // update this item
-                                        BudgetItem updatedItem = getBudgetItemFromUser(selectedItem);
-                                        if (updatedItem != null && updatedItem.isValid()) {
-                                            BudgetItem confirmedItem = confirmBudgetItem(updatedItem, "updated");
-                                            if (confirmedItem != null) {
-                                                confirmedItem.setId(selectedItem.getId()); // Preserve the original ID
-                                                confirmedItem.update();
-                                                view.say("Budget item successfully updated.");
+                                        updateBudgetItem(selectedItem);
+                                        // Reload the item to show updated values
+                                        selectedItem = BudgetItem.getById(selectedItem.getId());
 
-                                                // Ask if user wants to update associated forecasts
-                                                updateAssociatedForecasts(selectedBudget);
-                                            }
-                                        } else if (updatedItem != null) {
-                                            view.say("Budget item entered by user is invalid.");
+                                        // Ask if user wants to update associated forecasts
+                                        if (view.getYesOrNo("Do you want to update associated forecasts?")) {
+                                            updateAssociatedForecasts(selectedBudget);
                                         }
-                                        actionComplete = true;  // Go back to search/add menu
+                                        // Don't set actionComplete - stay in the action menu to allow more updates
                                         break;
 
                                     case "d":  // delete this item
@@ -474,21 +469,36 @@ public class BudgetController {
                 // then if the budget item isn't already associated with this merchant:
                 if (!isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
 
-                    // then if the user wants to add this budget item to the list of budget items for the merchant:
-                    if (
-                            !firstTime || // Later iterations don't make sense if we don't add them to the list:
-                                    view.getYesOrNo("Do you want to add this budget item \"" +
-                                            selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
-                                            + merchant.getName() + "\"?")
-                    ) {
-                        firstTime = false;
+                    // Check if the association already exists in the database (might not be in the in-memory list)
+                    BudgetItemMerchant existingAssociation = BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
 
-                        // Associate the budget item with the merchant in the database:
-                        budgetItemMerchant.save();
+                    if (existingAssociation == null) {
+                        // Association doesn't exist in database - safe to create
+
+                        // then if the user wants to add this budget item to the list of budget items for the merchant:
+                        if (
+                                !firstTime || // Later iterations don't make sense if we don't add them to the list:
+                                        view.getYesOrNo("Do you want to add this budget item \"" +
+                                                selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
+                                                + merchant.getName() + "\"?")
+                        ) {
+                            firstTime = false;
+
+                            // Associate the budget item with the merchant in the database:
+                            budgetItemMerchant.save();
+                        }
+
+                        // Add the budget item to the list of budget items passed in:
+                        budgetItemsForMerchant.add(budgetItemMerchant);
+                    } else {
+                        // Association already exists in database - use existing one
+                        view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                                "associated with the merchant \"" + merchant.getName() + "\" in the database.");
+
+                        // Add the existing association to the in-memory list
+                        existingAssociation.setBudgetItem(selectedBudgetItem);
+                        budgetItemsForMerchant.add(existingAssociation);
                     }
-
-                    // Add the budget item to the list of budget items passed in:
-                    budgetItemsForMerchant.add(budgetItemMerchant);
                 } else {
                     // Tell the user that this budget item is already associated with this merchant:
                     view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
@@ -688,10 +698,46 @@ public class BudgetController {
 
             view.sayH2("Basic Information");
 
-            // Get the category, and validate that it is a valid category:
-            String category = view.getResponseString("Category", template != null ? template.getCategory() :
-                    null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
-                    () -> helpText.getProperty("budgetitem.category")).trim();
+            // Get the category - allow selection from existing categories or entering a new one:
+            List<String> existingCategories = BudgetItem.getAllDistinctCategories();
+            String category;
+
+            if (existingCategories.isEmpty()) {
+                // No existing categories, just get a string input
+                category = view.getResponseString("Category", template != null ? template.getCategory() :
+                        null, DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                        () -> helpText.getProperty("budgetitem.category")).trim();
+            } else {
+                // Existing categories available - let user select or enter new
+                String defaultCategory = template != null ? template.getCategory() : null;
+                int defaultIndex = -1;
+                if (defaultCategory != null && !defaultCategory.trim().isEmpty()) {
+                    // Find the index of the default category in the list
+                    for (int i = 0; i < existingCategories.size(); i++) {
+                        if (existingCategories.get(i).equalsIgnoreCase(defaultCategory.trim())) {
+                            defaultIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                NumberOrStringResponse response = view.selectFromListOrString(
+                        "Select an existing category or enter a new one:",
+                        existingCategories,
+                        DO_NOT_ALLOW_NONE,
+                        ViewInt.ALLOW_CREATE,
+                        ALLOW_CANCEL,
+                        ALLOW_QUIT,
+                        DO_NOT_ALLOW_SKIP);
+
+                if (response.isNumber()) {
+                    // User selected from the list
+                    category = existingCategories.get(response.getSelectedIndex());
+                } else {
+                    // User entered a new category
+                    category = response.getSearchString().trim();
+                }
+            }
 
             // Get the payee:
             String defaultPayee = template != null ? template.getPayee() : "";
@@ -808,6 +854,188 @@ public class BudgetController {
 
             // If the user canceled, then return null:
             return null;
+        }
+    }
+
+    /**
+     * Update a budget item using a field-by-field selection interface.
+     * The user is presented with a list of fields and can update them one at a time.
+     * This is more efficient than re-entering all fields when only one needs to change.
+     *
+     * @param budgetItem The budget item to update
+     * @throws Exception if any error occurs
+     */
+    private void updateBudgetItem(BudgetItem budgetItem) throws Exception {
+        view.say();
+        view.say("──── Update Budget Item ────");
+
+        boolean done = false;
+        while (!done) {
+            // Show current values
+            view.say();
+            view.say("Current values:");
+            view.say("  Category: " + (budgetItem.getCategory() != null ? budgetItem.getCategory() : ""));
+            view.say("  Payee: " + (budgetItem.getPayee() != null ? budgetItem.getPayee() : ""));
+            view.say("  Memo: " + (budgetItem.getMemo() != null ? budgetItem.getMemo() : ""));
+            view.say("  Period: " + budgetItem.getPeriod());
+            view.say("  Amount: " + Utility.formatDollarAmount(budgetItem.getAmount()));
+            view.say("  Running Balance: " + Utility.formatDollarAmount(budgetItem.getRunningBalance()));
+            view.say("  Minimum Balance: " + Utility.formatDollarAmount(budgetItem.getMinimumBalance()));
+            view.say("  Start Date: " + (budgetItem.getStartDate() != null ?
+                    Utility.calendarDateToStringDate(budgetItem.getStartDate()) : ""));
+            view.say("  End Date: " + (budgetItem.getEndDate() != null ?
+                    Utility.calendarDateToStringDate(budgetItem.getEndDate()) : "none"));
+            view.say("  Number of Payments: " + budgetItem.getNumberOfPayments());
+            view.say("  Item Type: " + budgetItem.getItemType());
+            view.say("  How Important: " + budgetItem.getHowImportant());
+            view.say("  How Occurs: " + budgetItem.getHowOccurs());
+            view.say("  How Paid: " + budgetItem.getHowPaid());
+
+            // Ask what to update
+            String choice = view.selectFromMenu("What would you like to update?",
+                    List.of("category", "payee", "memo", "period", "amount", "running balance",
+                            "minimum balance", "start date", "end date", "number of payments",
+                            "item type", "how important", "how occurs", "how paid", "done - save changes"),
+                    DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+            switch (choice) {
+                case "c":  // category
+                    List<String> existingCategories = BudgetItem.getAllDistinctCategories();
+                    String category;
+                    if (existingCategories.isEmpty()) {
+                        category = view.getResponseString("Enter new category",
+                                budgetItem.getCategory(), DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                                () -> helpText.getProperty("budgetitem.category")).trim();
+                    } else {
+                        NumberOrStringResponse response = view.selectFromListOrString(
+                                "Select an existing category or enter a new one:",
+                                existingCategories,
+                                DO_NOT_ALLOW_NONE,
+                                ViewInt.ALLOW_CREATE,
+                                ALLOW_CANCEL,
+                                ALLOW_QUIT,
+                                DO_NOT_ALLOW_SKIP);
+                        if (response.isNumber()) {
+                            category = existingCategories.get(response.getSelectedIndex());
+                        } else {
+                            category = response.getSearchString().trim();
+                        }
+                    }
+                    budgetItem.setCategory(category);
+                    break;
+
+                case "p":  // payee
+                    String newPayee = view.getResponseString("Enter new payee",
+                            budgetItem.getPayee(), DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                            () -> helpText.getProperty("budgetitem.payee"));
+                    budgetItem.setPayee(newPayee);
+                    break;
+
+                case "m":  // memo
+                    String newMemo = view.getResponseString("Enter new memo",
+                            budgetItem.getMemo() != null ? budgetItem.getMemo() : "",
+                            ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
+                            () -> helpText.getProperty("budgetitem.memo"));
+                    budgetItem.setMemo(newMemo);
+                    break;
+
+                case "e":  // period (p**e**riod - p is taken by payee)
+                    Item.PeriodType newPeriod = view.selectByPositionFromList("Select new period type:",
+                            budgetItem.getPeriod(), Item.PeriodType.class,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setPeriod(newPeriod);
+                    break;
+
+                case "a":  // amount
+                    double newAmount = view.getResponseCurrency("Enter new amount:",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setAmount(newAmount);
+                    break;
+
+                case "r":  // running balance
+                    double newRunningBalance = view.getResponseCurrency("Enter new running balance:",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setRunningBalance(newRunningBalance);
+                    break;
+
+                case "b":  // minimum balance (minimum **b**alance - m is taken by memo)
+                    double newMinBalance = view.getResponseCurrency("Enter new minimum balance:",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setMinimumBalance(newMinBalance);
+                    break;
+
+                case "s":  // start date
+                    String newStartDate = view.getResponseString("Enter new start date (MM-DD-YYYY)",
+                            budgetItem.getStartDate() != null ?
+                                    Utility.calendarDateToStringDate(budgetItem.getStartDate()) : "",
+                            DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                    budgetItem.setStartDate(Utility.stringDateDashToCalendarDate(newStartDate));
+                    break;
+
+                case "d":  // end date (en**d** date - e is taken by period)
+                    String newEndDate = view.getResponseString("Enter new end date (MM-DD-YYYY or 'none')",
+                            budgetItem.getEndDate() != null ?
+                                    Utility.calendarDateToStringDate(budgetItem.getEndDate()) : "none",
+                            ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                    if (newEndDate != null && !newEndDate.trim().isEmpty() && !newEndDate.trim().equalsIgnoreCase("none")) {
+                        budgetItem.setEndDate(Utility.stringDateDashToCalendarDate(newEndDate));
+                    } else {
+                        budgetItem.setEndDate(null);
+                    }
+                    break;
+
+                case "n":  // number of payments
+                    int newNumPayments = view.getResponseInt("Enter new number of payments:",
+                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setNumberOfPayments(newNumPayments);
+                    break;
+
+                case "i":  // item type
+                    Item.ItemType newItemType = view.selectByPositionFromList("Select new item type:",
+                            budgetItem.getItemType(), Item.ItemType.class,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setItemType(newItemType);
+                    break;
+
+                case "h":  // how important
+                    Item.HowImportant newHowImportant = view.selectByPositionFromList("Select new importance:",
+                            budgetItem.getHowImportant(), Item.HowImportant.class,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setHowImportant(newHowImportant);
+                    break;
+
+                case "o":  // how occurs (how **o**ccurs - h is taken by how important)
+                    Item.HowOccurs newHowOccurs = view.selectByPositionFromList("Select new occurrence:",
+                            budgetItem.getHowOccurs(), Item.HowOccurs.class,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setHowOccurs(newHowOccurs);
+                    break;
+
+                case "w":  // how paid (ho**w** paid - h and o are taken)
+                    Item.HowPaid newHowPaid = view.selectByPositionFromList("Select new payment method:",
+                            budgetItem.getHowPaid(), Item.HowPaid.class,
+                            DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    budgetItem.setHowPaid(newHowPaid);
+                    break;
+
+                case "-":  // done - save changes
+                    if (budgetItem.isDirty()) {
+                        budgetItem.update();
+                        view.say("Budget item successfully updated.");
+                    } else {
+                        view.say("No changes were made.");
+                    }
+                    done = true;
+                    break;
+
+                default:
+                    throw new InvalidEntryException("Unexpected menu option: " + choice);
+            }
         }
     }
 

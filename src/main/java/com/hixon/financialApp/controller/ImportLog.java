@@ -3,6 +3,7 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,21 +13,13 @@ import static com.hixon.financialApp.utility.Utility.*;
 /**
  * This class encapsulates the logic around logging what was done while importing transactions.
  */
+@Getter
 public class ImportLog {
 
     /*
      * Fields:
      */
-    private List<Transaction> importedTransactions = new ArrayList<>();
-
-
-    /*
-     * Getters and setters:
-     */
-
-    public List<Transaction> getImportedTransactions() {
-        return importedTransactions;
-    }
+    private final List<Transaction> importedTransactions = new ArrayList<>();
 
 
     /*
@@ -55,10 +48,12 @@ public class ImportLog {
 
         String importStatus = isNewTransaction ? "Imported a " : "Already imported: ";
 
-        getView().say("\n" + importStatus + creditOrDebitString + transaction.getMerchant().getName() + " for " +
+        // Log the import record ID for better traceability
+        getView().sayH3(importStatus + creditOrDebitString + transaction.getMerchant().getName() + " for " +
                 formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
                 ((transaction.getAuthorizationDate() != null) ?
                         calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                        calendarDateToStringDate(transaction.getPostDate())));
+                        calendarDateToStringDate(transaction.getPostDate())) +
+                " (Import Record ID: " + transaction.getImportRecordId() + ")");
     }
 }

@@ -15,6 +15,8 @@ import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +32,8 @@ import static com.hixon.financialApp.view.base.ViewInt.*;
 @Getter
 @Setter
 public class TransactionController {
+
+    private static final Logger logger = LogManager.getLogger(TransactionController.class);
 
     /*
      * Member variables for the Transaction Controller:
@@ -251,8 +255,7 @@ public class TransactionController {
                                         }
                                     } catch (Exception e) {
                                         view.say("Error deleting transaction: " + e.getMessage());
-                                        // TODO: Use proper logging instead of System.err
-                                        System.err.println("Error deleting transaction: " + e.getMessage());
+                                        logger.error("Error deleting transaction", e);
                                     }
                                 } else {
                                     view.say("Deletion cancelled.");
@@ -452,7 +455,6 @@ public class TransactionController {
 
                     // Remove the amount range from search text
                     searchString = searchString.replaceAll(amountRangePattern, "").trim();
-                    criteria.searchText = searchString;
                 } catch (Exception e) {
                     view.say("Warning: Could not parse amount range. Format should be '10.00 to 50.00'");
                 }
@@ -472,7 +474,6 @@ public class TransactionController {
 
                         // Remove the amount from search text
                         searchString = searchString.replaceAll(singleAmountPattern, "").trim();
-                        criteria.searchText = searchString;
                     } catch (Exception e) {
                         view.say("Warning: Could not parse amount. Format should be '25.00'");
                     }
@@ -510,14 +511,9 @@ public class TransactionController {
                 }
             }
 
-            // Only update searchText if we have non-date content
+            // Update searchText with remaining text after filters have been extracted
             String finalSearchText = textParts.toString().trim();
-            if (!finalSearchText.isEmpty()) {
-                criteria.searchText = finalSearchText;
-            } else if (criteria.startDate != null) {
-                // If we only have a date range, clear the search text
-                criteria.searchText = "";
-            }
+            criteria.searchText = finalSearchText;
         }
 
         return criteria;

@@ -7,7 +7,9 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
 import com.hixon.financialApp.model.register.RegisterException;
+import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -534,6 +536,49 @@ public class ForecastTransaction extends IndependentEntity {
         return !forecastItem.isWithinNormalDateVariance(variance);
     }
 
+    /**
+     * Get the most recent reconciled transaction for the specified forecast transaction.  The algorithm is to use a
+     * single SQL query that joins the forecast item associated with all it's forecast transactions that have forecast
+     * transaction splits in descending order by date and limit the result set to 1.
+     * <p>
+     * This method queries the database to find the most recently posted transaction that has been reconciled
+     * to any forecast transaction associated with the same forecast item as the given forecast transaction.
+     * This is useful for determining when the last occurrence of a recurring budget item actually took place.
+     * </p>
+     *
+     * @param forecastTransaction The forecast transaction to find the most recent reconciled transaction for.
+     *                           Must not be null and must have a valid forecast item.
+     * @return The most recent Transaction that has been reconciled to a forecast transaction with the same
+     *         forecast item, or null if no reconciled transactions exist.
+     * @throws EntityException If there is a database error while executing the query
+     * @throws SQLException If there is a SQL error during database operations
+     * @throws ForecastException If there is an error retrieving the forecast item ID
+     * @throws BudgetException If there is an error related to budget processing
+     */
+    public Transaction getMostRecentReconciledTransaction(ForecastTransaction forecastTransaction)
+            throws EntityException, SQLException, ForecastException, BudgetException {
+
+        // Build the SQL query that joins forecast_transaction_split, transaction, and forecast_transaction
+        // to find the most recent transaction by date for the same forecast item
+        String query = Transaction.getSelectQuery() + " " +
+                "INNER JOIN forecast_transaction_split fts ON tr.idTransaction = fts.Transaction_Split_idTransaction " +
+                "INNER JOIN forecast_transaction ft ON fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction " +
+                "WHERE ft.ForecastItem_idForecastItem = uuid_to_bin('" + forecastTransaction.getIdForecastItem() + "') " +
+                "ORDER BY tr.postDate DESC " +
+                "LIMIT 1";
+
+        // Execute the query and get the result
+        ResultSet rs = EntityInt.getSingletonRS(query, "getting most recent reconciled transaction for forecast transaction");
+
+        // If a result was found, create and return the Transaction object
+        if (rs != null) {
+            return new Transaction(rs);
+        }
+
+        // No reconciled transactions found
+        return null;
+    }
+
     // Timing of a date with respect to the applicability period of a forecast transaction:
     public enum Timing {PRIOR_TO, WITHIN, AFTER, UNDEFINED}
 
@@ -645,10 +690,10 @@ public class ForecastTransaction extends IndependentEntity {
             String memoString =
                     (this.getForecastItem().getMemo() == null || this.getForecastItem().getMemo().isEmpty()) ?
                             "" : " Memo = " + this.getForecastItem().getMemo();
-            s = "Forecast Transaction:  Planned Date = " + calendarDateToStringDate(this.getPlannedDate()) +
-                    ", Category = " + this.getForecastItem().getCategory() + ", Payee = " +
-                    this.getForecastItem().getPayee() + memoString + ", Budgeted Amount = " +
-                    formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
+            s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
+                    + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
+                    this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
+                    ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
                     formatDollarAmount(remainingAmount);
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";

@@ -20,6 +20,8 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -29,8 +31,11 @@ import static com.hixon.financialApp.controller.ImportController.TerminationCond
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
+import static com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatchingForecastTransaction;
 
 public class RegisterController {
+    private static final Logger logger = LogManager.getLogger(RegisterController.class);
+
     /*
      * Fields for RegisterController:
      */
@@ -255,7 +260,7 @@ public class RegisterController {
                     register.getBalance()) + ".  You should update it.");
         }
 
-        view.say("\nThe current balance of the " + register.getName() + " is " +
+        view.sayH4("The current balance of the " + register.getName() + " is " +
                 Utility.formatDollarAmount(register.getBalance()));
 
         Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
@@ -276,41 +281,84 @@ public class RegisterController {
      * the case of zero entries tell the user that there are no registers that fit, if there is one register in the list,
      * confirms that is the correct register with the user.
      *
-     * @param date   The date of the transaction.
-     * @param amount The amount of the transaction.
-     * @param payee  The payee string from the transaction.
+     * @param date      The date of the transaction.
+     * @param amount    The amount of the transaction.
+     * @param payee     The payee string from the transaction.
+     * @param recurring
      * @return Register The register that was selected by the user.
      * @throws RegisterException If there is an error with the register.
      * @throws SkipException     If the user skips the operation.
      * @throws QuitException     If the user quits the operation.
      */
-    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee) throws Exception {
+    public Register resolveUnmatchedAccount(Calendar date, double amount, String payee, boolean recurring) throws Exception {
+
+        logger.debug("");
+        logger.debug("=== resolveUnmatchedAccount Debug ===");
+        logger.debug("Input:");
+        logger.debug("  Date:   {}", date.getTime());
+        logger.debug("  Amount: {}", amount);
+        logger.debug("  Payee:  '{}'", payee);
+        logger.debug("  Current register: {}", register.getName());
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
 
+
+        // if this is a recurring transfer:
+        if (recurring) {
+
+            // then it is most likely in the forecast, so try to determine the merchant payee by getting the
+            // corresponding forecast transaction:
+            logger.debug("Processing as RECURRING TRANSFER");
+            ForecastTransaction forecastTransaction = findMatchingForecastTransaction(date, amount, forecast, null, 5, 5);
+
+            // If we found a matching forecast transaction, use its merchant payee:
+            if (forecastTransaction != null) {
+
+                // Get the most recent instance of the matching forecast transaction that has been reconciled:
+                Transaction transaction = forecastTransaction.getMostRecentReconciledTransaction(forecastTransaction);
+
+                // If there is one, use its merchant payee:
+                if (transaction != null) {
+                    logger.debug("  Found matching forecast transaction: '{}'", transaction.getMerchant().getName());
+                    return Register.getByName(transaction.getMerchant().getName());
+                }
+            }
+        }
+
         // Get a set of all the registers that we will progressively narrow down.  If at any point the list of possible
         // registers is 1, then return that register:
         Set<Register> possibleRegisters = new HashSet<>(Register.getListOf());
+        logger.debug("Starting with {} total registers", possibleRegisters.size());
 
         // Narrow the list of possible registers by removing the register that we are currently working with:
         possibleRegisters.remove(register);
+        logger.debug("After removing current register: {} possible registers", possibleRegisters.size());
         try {
             return evaluateRegisterSet(possibleRegisters);
         } catch (ContinueFilteringException e) {
+            logger.debug("Multiple registers still possible, continuing filtering...");
             // Continue to the next filter.
         }
 
         // Narrow the list of possible registers that this transaction could be in to the ones that are of the same type
         // as the register in the payee and owned by the same user:
+        logger.debug("");
+        logger.debug("FILTER: Extracting users and account type from payee...");
         Set<Register> registersSameTypeAndUser = new HashSet<>();
         List<User> users = financialInstitution.extractUsers(payee);
         if (users.isEmpty()) {
+            logger.debug("  No users found in payee");
             view.say("There are no users associated with this payee: " + payee + ".");
+        } else {
+            logger.debug("  Found {} user(s): {}", users.size(), users);
         }
         String accountType = financialInstitution.extractAccountType(payee);
         if (accountType == null) {
+            logger.debug("  No account type found in payee");
             view.say("There is no account type in this payee: " + payee);
+        } else {
+            logger.debug("  Account type: '{}'", accountType);
         }
         if (!users.isEmpty()) {
             for (User user : users) {
@@ -321,6 +369,7 @@ public class RegisterController {
             registersSameTypeAndUser.addAll(Register.getListOfByUserAndType(null, accountType));
         }
         possibleRegisters.retainAll(registersSameTypeAndUser);
+        logger.debug("  After filtering by user and account type: {} possible registers", possibleRegisters.size());
         if (possibleRegisters.isEmpty()) {
             // If there were no users:
             if (users.isEmpty()) {
@@ -332,13 +381,19 @@ public class RegisterController {
             else {
                 view.say("There are no " + accountType + " accounts owned by the user(s) " + users + ".");
             }
+            logger.debug("  No matching registers found, returning null");
             return null;
         }
 
         // See if we are down to one register:
         try {
-            return evaluateRegisterSet(possibleRegisters);
+            Register result = evaluateRegisterSet(possibleRegisters);
+            logger.debug("Resolved to single register after user/type filter: {}", result.getName());
+            logger.debug("=== End resolveUnmatchedAccount Debug ===");
+            logger.debug("");
+            return result;
         } catch (ContinueFilteringException e) {
+            logger.debug("Multiple registers still possible, continuing filtering...");
             // Continue to the next filter.
         }
 
@@ -346,33 +401,47 @@ public class RegisterController {
         // Extract the memo from the payee using the method for the financial institution that we are dealing with, and
         // then see if any of the tokens in the memo match the nickname of a possible register.  If we find a match,
         // then return that register:
+        logger.debug("");
+        logger.debug("FILTER: Checking user description for register nicknames...");
         String userDescription = financialInstitution.extractUserDescription(payee);
+        logger.debug("  Extracted user description: '{}'", userDescription);
         List<Register> registers;
         if (userDescription != null) {
 
             // Tokenize the memo:
             String[] tokens = userDescription.split("[\\s,]+" );
+            logger.debug("  Tokenized into {} tokens", tokens.length);
 
             // See if any of the tokens in the user description match the nickname of a register:
             for (String token : tokens) {
+                logger.debug("  Checking token: '{}'", token);
                 for (Register possibleRegister : possibleRegisters) {
                     if (possibleRegister.getNickname().equalsIgnoreCase(token)) {
+                        logger.debug("  MATCH! Token '{}' matches register nickname: {}", token, possibleRegister.getName());
                         view.say("Found a register that matches the token in the memo: " + token);
+                        logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                        logger.debug("");
                         return possibleRegister;
                     }
                 }
             }
+            logger.debug("  No nickname matches found");
         }
 
         // Try to find the most recent instance of a transaction with the same payee and approximately the same amount
         // that is also in the list of possible registers.  This transaction will be an almost exact match for the one
         // we are trying to resolve.  If we find one, then ask the user if this is the correct register:
+        logger.debug("");
+        logger.debug("FILTER: Looking for most recent transaction with same payee...");
         Transaction transaction = TransactionUtilities.getMostRecentTransactionByPayee(payee, amount);
         if (transaction != null) {
+            logger.debug("  Found recent transaction: {}", transaction.toStringVeryConcise());
             Merchant merchant = transaction.getMerchant();
             if (merchant != null) {
+                logger.debug("  Transaction merchant: {}", merchant.getName());
                 Register possibleRegister = Register.getByName(merchant.getName());
                 if (possibleRegister != null && possibleRegisters.contains(possibleRegister)) {
+                    logger.debug("  Merchant matches a register in possible list: {}", possibleRegister.getName());
                     view.say("The most recent transaction with this payee was: " + transaction.toStringVeryConcise());
                     Set<Register> setWithRecentTransaction = new HashSet<>();
                     setWithRecentTransaction.add(possibleRegister);
@@ -381,40 +450,66 @@ public class RegisterController {
                         if (evaluateRegisterSet(setWithRecentTransaction) != null) {
 
                             // The user confirmed that this is the correct register:
+                            logger.debug("  User confirmed register: {}", possibleRegister.getName());
+                            logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                            logger.debug("");
                             return possibleRegister;
                         }
                         else {
                             // The user said that this is not the correct register, so remove it from the list of possible
                             // registers:
+                            logger.debug("  User rejected register, removing from possible list");
                             possibleRegisters.remove(possibleRegister);
 
                             // If there are no more possible registers, return null:
                             if (possibleRegisters.isEmpty()) {
+                                logger.debug("  No more possible registers, returning null");
                                 view.say("There are no more possible registers.");
+                                logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                                logger.debug("");
                                 return null;
                             }
                             else {
                                 // If there is only one possible register left, return it:
                                 try {
-                                    return evaluateRegisterSet(possibleRegisters);
+                                    Register result = evaluateRegisterSet(possibleRegisters);
+                                    logger.debug("  Down to one register after rejection: {}", result.getName());
+                                    logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                                    logger.debug("");
+                                    return result;
                                 } catch (ContinueFilteringException e) {
+                                    logger.debug("  Multiple registers still possible, continuing filtering...");
                                     // Continue to the next filter.
                                 }
                             }
                         }
                     } catch (ContinueFilteringException e) {
+                        logger.debug("  User cancelled recent transaction confirmation, removing from possible list");
                         possibleRegisters.remove(possibleRegister);
                     }
+                } else {
+                    if (possibleRegister == null) {
+                        logger.debug("  Merchant name doesn't correspond to a register");
+                    } else {
+                        logger.debug("  Register not in possible list (already filtered out)");
+                    }
                 }
+            } else {
+                logger.debug("  Transaction has no merchant");
             }
+        } else {
+            logger.debug("  No recent transaction found with this payee");
         }
 
         // Couldn't match so far, so do a full text search on the memo, get the most relevant transactions and let
         // the user select the register from the list of transactions:
+        logger.debug("");
+        logger.debug("FILTER: Performing full-text search on user description...");
         if (userDescription != null) {
 
             // Get a list of transactions that match the user description:
             List<Transaction> relevantTransactions = TransactionUtilities.getByUserDescriptionFullText(userDescription);
+            logger.debug("  Found {} transactions matching full-text search", relevantTransactions.size());
             if (!relevantTransactions.isEmpty()) {
 
                 // First narrow the list of transactions to only those that are associated with a register that is in the
@@ -425,32 +520,43 @@ public class RegisterController {
                     Register register = Register.getByName(relevantTransaction.getMerchant().getName());
                     if (register == null) {
                         // throw out the transaction because it is not associated with a register:
+                        logger.debug("  Removing transaction (not associated with register): {}", relevantTransaction.toStringVeryConcise());
                         iterator.remove();
                     } else if (!possibleRegisters.contains(register)) {
                         // throw out the transaction because it is not associated with a register that is in the list of
                         // possible registers:
+                        logger.debug("  Removing transaction (register not in possible list): {}", relevantTransaction.toStringVeryConcise());
                         iterator.remove();
                     }
                 }
+                logger.debug("  After filtering to possible registers: {} transactions remain", relevantTransactions.size());
                 if (!relevantTransactions.isEmpty()) {
 
                     // If there is only one transaction, then ask the user if this is the correct register:
                     if (relevantTransactions.size() == 1) {
+                        logger.debug("  Only one transaction found, asking user for confirmation");
                         Transaction relevantTransaction = relevantTransactions.get(0);
                         Register register = Register.getByName(relevantTransaction.getMerchant().getName());
                         if (register != null) {
+                            logger.debug("  Associated register: {}", register.getName());
                             view.say("Found a register that matches the token in the memo: " + register.toStringConcise());
                             Set<Register> setWithMatchingToken = new HashSet<>();
                             setWithMatchingToken.add(register);
                             try {
-                                return evaluateRegisterSet(setWithMatchingToken);
+                                Register result = evaluateRegisterSet(setWithMatchingToken);
+                                logger.debug("  User confirmed register from full-text match: {}", result.getName());
+                                logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                                logger.debug("");
+                                return result;
                             } catch (ContinueFilteringException e) {
+                                logger.debug("  User rejected register, removing from possible list");
                                 possibleRegisters.remove(register);
                             }
                         }
                     }
 
                     // There are multiple transactions, so create a list of "transaction with the register name" strings:
+                    logger.debug("  Multiple transactions found ({}), building selection list", relevantTransactions.size());
                     List<String> fullTextTrxsWithRegisterNames = new ArrayList<>();
                     Set<Register> associatedRegisters = new HashSet<>();
                     for (Transaction relevantTransaction : relevantTransactions) {
@@ -461,18 +567,26 @@ public class RegisterController {
                                 relevantTransaction.getPayee() + ", associated register: " +
                                 relevantTransaction.getMerchant().getName());
                     }
+                    logger.debug("  Found {} unique associated registers", associatedRegisters.size());
 
                     // If there is only one or zero registers associated with the transactions, then consult the user to
                     // confirm the register:
                     if (associatedRegisters.size() < 2)
                     {
+                        logger.debug("  Only one unique register, asking user for confirmation");
                         try {
-                            return evaluateRegisterSet(associatedRegisters);
+                            Register result = evaluateRegisterSet(associatedRegisters);
+                            logger.debug("  User confirmed register: {}", result.getName());
+                            logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                            logger.debug("");
+                            return result;
                         } catch (ContinueFilteringException e) {
+                            logger.debug("  User rejected, continuing to next filter");
                             // Continue to next filter.
                         }
                     }
                     else {
+                        logger.debug("  Multiple unique registers, asking user to select from list");
                         // Allow the user to select the correct register from the list of transactions with register names:
                         int selection = view.selectByPositionFromList("The following transactions match the token in the memo.  " +
                                         "Select a transaction with the same register as the one associated with this transfer",
@@ -480,19 +594,33 @@ public class RegisterController {
 
                         // If the user selected a register, then return it:
                         if (selection > 0) {
-                            return Register.getByName(relevantTransactions.get(selection).getMerchant().getName());
+                            Register result = Register.getByName(relevantTransactions.get(selection).getMerchant().getName());
+                            logger.debug("  User selected register: {}", result.getName());
+                            logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                            logger.debug("");
+                            return result;
                         } else {
+                            logger.debug("  User made no selection, removing associated registers from possible list");
                             // Remove the associated registers from the list of possible registers:
                             for (Transaction relevantTransaction : relevantTransactions) {
                                 possibleRegisters.remove(relevantTransaction.getRegister());
                             }
                         }
                     }
+                } else {
+                    logger.debug("  No transactions remain after filtering to possible registers");
                 }
+            } else {
+                logger.debug("  No transactions found in full-text search");
             }
+        } else {
+            logger.debug("  No user description available for full-text search");
         }
 
         // If we haven't found a match, give up and let the user select a register from the list of possible registers:
+        logger.debug("");
+        logger.debug("FILTER: Final fallback - manual user selection from all possible registers");
+        logger.debug("  {} possible registers remaining", possibleRegisters.size());
         List<String> registerNames = new ArrayList<>();
         List<Register> possibleRegistersList = new ArrayList<>(possibleRegisters);
         for (Register possibleRegister : possibleRegistersList) {
@@ -502,7 +630,11 @@ public class RegisterController {
         // then allow the user to select the correct register from the list of registers:
         int selection = view.selectByPositionFromList("Select the register associated with this transfer",
                 registerNames, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
-        return possibleRegistersList.get(selection);
+        Register result = possibleRegistersList.get(selection);
+        logger.debug("  User selected register: {}", result.getName());
+        logger.debug("=== End resolveUnmatchedAccount Debug ===");
+        logger.debug("");
+        return result;
     }
 
     /**
@@ -524,11 +656,12 @@ public class RegisterController {
         if (possibleRegisters.size() == 1) {
             Register singleRegister = possibleRegisters.iterator().next();
             view.say("Found potential match: " + singleRegister.toStringConcise());
-            if (view.getYesOrNo("Is this the correct register?")) {
-                return singleRegister;
-            } else {
-                return null;
-            }
+//            if (view.getYesOrNo("Is this the correct register?")) {
+//                return singleRegister;
+//            } else {
+//                return null;
+//            }
+            return singleRegister;
         }
 
         // Case 3: Multiple registers - continue filtering

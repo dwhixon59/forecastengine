@@ -65,6 +65,14 @@ public interface ViewInt {
      */
     void sayH3(String s);
 
+    /**
+     * Displays a minor header (H4) with subtle emphasis.
+     * Format: blank line before, text .
+     *
+     * @param s the header text to display
+     */
+    void sayH4(String s);
+
     ImportController.TerminationCondition getTerminationCondition();
 
     /**
@@ -74,6 +82,14 @@ public interface ViewInt {
      * @param question The question to ask the user.
      */
     void ask(String question);
+
+    /**
+     * Ask the user a question using the H4 style.  Getting the answer is handled by a different method: (getYesOrNo(),
+     * getNumberBetween(), etc.):
+     *
+     * @param question The question to ask the user.
+     */
+    void askH4(String question);
 
     /**
      * Ask the user if they want to continue.  Usually this is asked after a recoverable error has occurred.

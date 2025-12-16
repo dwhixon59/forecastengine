@@ -726,6 +726,30 @@ public class BudgetItem extends Item {
         return items;
     }
 
+    /**
+     * Get a list of all distinct categories from budget items across all budgets.
+     * Categories are sorted alphabetically.
+     *
+     * @return A list of distinct category names
+     * @throws EntityException If there's a database error
+     * @throws SQLException If there's a SQL error
+     */
+    public static List<String> getAllDistinctCategories() throws EntityException, SQLException {
+        List<String> categories = new ArrayList<>();
+
+        String query = "SELECT DISTINCT category FROM budget_item WHERE category IS NOT NULL AND category != '' ORDER BY category ASC";
+        ResultSet rs = EntityInt.getRS(query, "retrieve a list of distinct budget categories");
+
+        while (rs.next()) {
+            String category = rs.getString("category");
+            if (category != null && !category.trim().isEmpty()) {
+                categories.add(category.trim());
+            }
+        }
+
+        return categories;
+    }
+
 
     /**
      * Get the amount of money budgeted for this budget item in the current month.

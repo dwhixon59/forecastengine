@@ -37,6 +37,7 @@ public class ViewCmdline implements ViewInt {
         H1,    // Major section header
         H2,    // Sub-section header
         H3,    // Minor header
+        H4,    // Minor header
         NONE   // Regular output or no heading
     }
 
@@ -161,9 +162,47 @@ public class ViewCmdline implements ViewInt {
         lastHeading = HeadingLevel.H3;
     }
 
+    /**
+     * Displays a minor header (H3) with subtle emphasis.
+     * Format: blank line before (unless preceded by H1 or H2), text with a visual marker (▸).
+     *
+     * @param s the header text to display
+     */
+    public void sayH4(String s) {
+
+        if (s == null || s.isEmpty()) {
+            return; // Do nothing for null or empty strings
+        }
+
+        // Only print blank line if not immediately following a higher-level heading
+        if (lastHeading != HeadingLevel.H1 && lastHeading != HeadingLevel.H2 && lastHeading != HeadingLevel.H3) {
+            System.out.println();
+        }
+        say(s);
+        lastHeading = HeadingLevel.H4;
+    }
+
+    /**
+     * Prints a prompt to the user without a newline.  Usually used before reading input.
+     * @param s the prompt string
+     */
     public void ask(String s) {
         System.out.print(s);
         lastHeading = HeadingLevel.NONE;
+    }
+
+    /**
+     * Prints a prompt to the user without a newline.  Usually used before reading input.
+     * @param s the prompt string
+     */
+    public void askH4(String s) {
+
+        // Only print blank line if not immediately following a higher-level heading
+        if (lastHeading != HeadingLevel.H1 && lastHeading != HeadingLevel.H2 && lastHeading != HeadingLevel.H3) {
+            System.out.println();
+        }
+        System.out.print(s);
+        lastHeading = HeadingLevel.H4;
     }
 
     /**
@@ -283,7 +322,7 @@ public class ViewCmdline implements ViewInt {
     }
 
     public boolean askContinue(String prompt) {
-        ask(prompt + "  Do you want to continue?  " + "(y/n): ");
+        askH4(prompt + "  Do you want to continue?  " + "(y/n): ");
         while (true) {
             String line = getLine().trim();
             if (line.equalsIgnoreCase("y")) return true;
@@ -1237,41 +1276,42 @@ public class ViewCmdline implements ViewInt {
             if (response.length() == 1) {
                 char inputChar = Character.toLowerCase(response.charAt(0));
 
-                // Check for paging commands (capital F and B) BEFORE menu options
+                // Check for paging and display commands (capital F, B, and R) BEFORE menu options
                 char originalChar = response.charAt(0);
-                if (items != null && !items.isEmpty() && totalPages > 1) {
-                    if (originalChar == 'F') {
-                        // Forward (next page)
-                        if (currentPageWrapper[0] < totalPages - 1) {
-                            currentPageWrapper[0]++;
-                            displayCurrentPage.run();
-                            continue;
-                        } else {
-                            say("Already on last page.");
-                            continue;
+                if (items != null && !items.isEmpty()) {
+                    if (totalPages > 1) {
+                        if (originalChar == 'F') {
+                            // Forward (next page)
+                            if (currentPageWrapper[0] < totalPages - 1) {
+                                currentPageWrapper[0]++;
+                                displayCurrentPage.run();
+                                continue;
+                            } else {
+                                say("Already on last page.");
+                                continue;
+                            }
+                        } else if (originalChar == 'B') {
+                            // Back (previous page)
+                            if (currentPageWrapper[0] > 0) {
+                                currentPageWrapper[0]--;
+                                displayCurrentPage.run();
+                                continue;
+                            } else {
+                                say("Already on first page.");
+                                continue;
+                            }
                         }
-                    } else if (originalChar == 'B') {
-                        // Back (previous page)
-                        if (currentPageWrapper[0] > 0) {
-                            currentPageWrapper[0]--;
-                            displayCurrentPage.run();
-                            continue;
-                        } else {
-                            say("Already on first page.");
-                            continue;
-                        }
+                    }
+
+                    // Redisplay list (capital R) - works on any list regardless of paging
+                    if (originalChar == 'R') {
+                        displayCurrentPage.run();
+                        continue;
                     }
                 }
 
                 // Check if it's a valid menu option (if menu exists)
                 if (menuOptions != null && !menuOptions.isEmpty()) {
-                    // Special case: 's' means "show list again" if not a menu option
-                    if (inputChar == 's' && !hasMenuOption(menuOptions, 's')) {
-                        if (items != null && !items.isEmpty()) {
-                            displayCurrentPage.run();
-                            continue;
-                        }
-                    }
 
                     // Check if it matches a menu shortcut
                     for (String option : menuOptions) {
@@ -1279,12 +1319,6 @@ public class ViewCmdline implements ViewInt {
                         if (inputChar == shortcut) {
                             return new NumberOrStringResponse(String.valueOf(inputChar));
                         }
-                    }
-                } else {
-                    // No menu - 's' always means show list again
-                    if (inputChar == 's' && items != null && !items.isEmpty()) {
-                        displayCurrentPage.run();
-                        continue;
                     }
                 }
 
@@ -1300,8 +1334,8 @@ public class ViewCmdline implements ViewInt {
                 if (totalPages > 1) {
                     errorMsg.append(", 'F'/'B' for paging");
                 }
-                if (items != null && !items.isEmpty() && (menuOptions == null || menuOptions.isEmpty() || !hasMenuOption(menuOptions, 's'))) {
-                    errorMsg.append(", 's' to show list");
+                if (items != null && !items.isEmpty()) {
+                    errorMsg.append(", 'R' to redisplay list");
                 }
                 if (allowString) {
                     errorMsg.append(", or search criteria");
@@ -1462,7 +1496,7 @@ public class ViewCmdline implements ViewInt {
                     done = true;
                     found = true;
                 } else {
-                    say("\n" + fileType + " file " + fileName + " does not exist or is empty.");
+                    sayH4(fileType + " file " + fileName + " does not exist or is empty.");
                     if (!getYesOrNo("Do you want to try again?")) {
                         done = true;
                     }

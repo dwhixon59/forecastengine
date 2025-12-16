@@ -783,9 +783,9 @@ public class ForecastController {
 
         // Return the number of transactions updated:
         if (i > 0) {
-            view.say("\nSuccessfully processed " + i + " forecast transactions from the external source.");
+            view.say("Successfully processed " + i + " forecast transactions from the external source.");
         } else {
-            view.say("\nThere are no forecast transactions in the external source to update from.");
+            view.say("There are no forecast transactions in the external source to update from.");
         }
 
     } // End updateFromExternalSource(Connection dbConnection).

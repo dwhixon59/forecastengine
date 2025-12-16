@@ -143,6 +143,10 @@ public class MerchantController {
             }
 
             if (!payeeExists) {
+                // Before creating the new association, delete any existing association with a different merchant
+                // The payee field has a UNIQUE constraint, so we must delete the old one first
+                MerchantPayee.deleteByName(merchantPayeeString);
+
                 MerchantPayee newPayee = new MerchantPayee(merchantPayeeString, merchant.getId());
                 newPayee.save();
                 view.say("Associated payee '" + merchantPayeeString + "' with merchant '" + merchant.getName() + "'");
