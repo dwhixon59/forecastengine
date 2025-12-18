@@ -47,18 +47,73 @@ QfxTransaction  // Clear! This is from a QFX file
 
 ### Current State (After Phase A)
 ```
+ImportController → knows about file formats (bad coupling!)
 QFX File → QfxParser → QfxTransaction/QfxStatement (DTOs)
 CSV File → ??? → ??? (no DTO yet, creates Transaction directly)
 ```
 
 ### Target State (After All Phases)
+
+**Import Flow**:
 ```
-QFX File  → QfxParser  → QfxTransaction → BarclaysBank → Transaction
-CSV File  → CsvParser  → CsvTransaction → WellsFargoBank → Transaction  
-JSON File → JsonParser → JsonTransaction → OtherBank → Transaction
+1. User: "Import transactions"
+2. App: "Which register?"
+3. User: "Bill Pay Account"
+4. App retrieves Register → knows FinancialInstitution type + import filename
+5. App: new WellsFargoBank(filename) or BarclaysBank(filename)
+6. FinancialInstitution:
+   - Single format? Instantiate that parser
+   - Multiple formats? Check file extension → instantiate correct parser
+7. Parser: parses file → produces format-specific DTOs
+8. FinancialInstitution: converts DTOs → Transaction objects
+9. ImportController: processes Transactions (agnostic to format!)
 ```
 
-**Key Insight**: Parsers handle file formats, Financial Institutions convert DTOs to domain Transactions.
+**Concrete Example - Wells Fargo (supports CSV only)**:
+```
+ImportController → WellsFargoBank("/downloads/checking.csv")
+                   ├─ WellsFargoBank.constructor()
+                   │  └─ parser = new CsvParser(filename)
+                   ├─ WellsFargoBank.hasNext()
+                   │  └─ return parser.hasNext()
+                   ├─ WellsFargoBank.getNext()
+                   │  ├─ CsvTransaction csvTxn = parser.getNext()
+                   │  └─ return convertToTransaction(csvTxn)
+                   └─ Returns Transaction objects
+```
+
+**Concrete Example - Barclays (supports QFX only)**:
+```
+ImportController → BarclaysBank("/downloads/statement.qfx")
+                   ├─ BarclaysBank.constructor()
+                   │  └─ parser = new QfxParser(filename)
+                   ├─ BarclaysBank.hasNext()
+                   │  └─ return parser.hasNext()
+                   ├─ BarclaysBank.getNext()
+                   │  ├─ QfxTransaction qfxTxn = parser.getNext()
+                   │  └─ return convertToTransaction(qfxTxn)
+                   └─ Returns Transaction objects
+```
+
+**Concrete Example - Future Bank (supports multiple formats)**:
+```
+ImportController → FutureBank("/downloads/statement.csv")
+                   ├─ FutureBank.constructor(filename)
+                   │  ├─ extension = getFileExtension(filename) // ".csv"
+                   │  └─ parser = switch(extension) {
+                   │      case ".csv" -> new CsvParser(filename)
+                   │      case ".qfx" -> new QfxParser(filename)
+                   │      case ".json" -> new JsonParser(filename)
+                   │      default -> throw new UnsupportedFormatException()
+                   │     }
+                   └─ ...
+```
+
+**Key Insights**: 
+- ✅ ImportController is **parser-agnostic** - only knows about Transactions
+- ✅ FinancialInstitution is **format-aware** - instantiates correct parser
+- ✅ Parser is **format-specific** - knows CSV, QFX, JSON, etc.
+- ✅ Register metadata drives the whole process (institution type + filename)
 
 ---
 
@@ -112,11 +167,12 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
 - Fail: 1  
 - Error: 12
 
-**After Rename** (expected - should be same):
-- All tests should still compile and run
-- Same pass/fail numbers (we only renamed, didn't change logic)
-
-**To Verify**: Run tests again to confirm no regression
+**After Rename** ✅ **VERIFIED**:
+- Tests run: 20
+- Pass: 7  
+- Fail: 1
+- Error: 12
+- **Result**: IDENTICAL - No regression introduced!
 
 ---
 
