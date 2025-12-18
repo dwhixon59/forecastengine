@@ -34,6 +34,23 @@ class QfxParserTest {
         parser = new QfxParser();
     }
 
+    /**
+     * Helper method to parse a QFX file and return the statement.
+     * Handles the new iterator-based API with proper cleanup.
+     */
+    private QfxStatement parseQfxFile(String resourcePath) throws Exception {
+        InputStream input = getClass().getResourceAsStream(resourcePath);
+        assertNotNull(input, "Test file should exist: " + resourcePath);
+
+        try {
+            parser.open(input);
+            return parser.getStatement();
+        } finally {
+            // Note: parser.close() will close the input stream
+            parser.close();
+        }
+    }
+
     // ========================================
     // Phase 1: Basic Parsing Tests
     // ========================================
@@ -41,12 +58,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 1: Parse valid QFX file returns non-null QfxStatement")
     void testParseValidQfxFile_ReturnsNonNull() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-        assertNotNull(input, "Test file should exist");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
 
         // Assert
         assertNotNull(statement, "Parsed statement should not be null");
@@ -55,11 +68,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 2: Parse single purchase transaction - verify transaction count")
     void testParseSinglePurchase_VerifyTransactionCount() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         List<QfxTransaction> transactions = statement.getTransactions();
 
         // Assert
@@ -70,11 +80,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 3: Parse single purchase - verify transaction type is DEBIT")
     void testParseSinglePurchase_VerifyType() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -85,11 +92,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 4: Parse single purchase - verify amount")
     void testParseSinglePurchase_VerifyAmount() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -100,11 +104,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 5: Parse single purchase - verify posted date")
     void testParseSinglePurchase_VerifyPostedDate() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -115,11 +116,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 6: Parse single purchase - verify payee name")
     void testParseSinglePurchase_VerifyPayee() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -130,11 +128,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 7: Parse single purchase - verify FITID")
     void testParseSinglePurchase_VerifyFitId() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -149,11 +144,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 8: Parse single payment - verify type is CREDIT")
     void testParseSinglePayment_VerifyType() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-payment.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -164,11 +156,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 9: Parse single payment - verify positive amount")
     void testParseSinglePayment_VerifyPositiveAmount() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-payment.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -179,11 +168,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 10: Parse single payment - verify payee")
     void testParseSinglePayment_VerifyPayee() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-payment.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -198,11 +184,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 11: Parse statement - verify account number")
     void testParseStatement_VerifyAccountNumber() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
 
         // Assert
         assertEquals("XXXXXXXXXXXX2925", statement.getAccountNumber(),
@@ -212,11 +195,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 12: Parse statement - verify currency")
     void testParseStatement_VerifyCurrency() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
 
         // Assert
         assertEquals("USD", statement.getCurrency(),
@@ -226,11 +206,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 13: Parse statement - verify ledger balance")
     void testParseStatement_VerifyLedgerBalance() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-single-purchase.qfx");
 
         // Assert
         assertEquals(-28.20, statement.getLedgerBalance(), 0.01,
@@ -246,8 +223,8 @@ class QfxParserTest {
     void testParseNullInput_ThrowsException() {
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
-            parser.parse(null);
-        }, "Parsing null input should throw IllegalArgumentException");
+            parser.open(null);
+        }, "Opening parser with null input should throw IllegalArgumentException");
     }
 
     @Test
@@ -260,9 +237,9 @@ class QfxParserTest {
         // Act & Assert
         assertThrows(QfxParseException.class, () -> {
             try (FileInputStream fis = new FileInputStream(emptyFile)) {
-                parser.parse(fis);
+                parser.open(fis);
             }
-        }, "Parsing empty file should throw QfxParseException");
+        }, "Opening parser with empty file should throw QfxParseException");
     }
 
     @Test
@@ -275,9 +252,9 @@ class QfxParserTest {
         // Act & Assert
         assertThrows(QfxParseException.class, () -> {
             try (FileInputStream fis = new FileInputStream(malformedFile)) {
-                parser.parse(fis);
+                parser.open(fis);
             }
-        }, "Parsing malformed QFX should throw QfxParseException");
+        }, "Opening parser with malformed QFX should throw QfxParseException");
     }
 
     // ========================================
@@ -287,11 +264,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 17: Parse annual fee transaction")
     void testParseAnnualFee() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-annual-fee.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-annual-fee.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -305,11 +279,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 18: Parse interest charge transaction")
     void testParseInterestCharge() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-interest-charge.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-interest-charge.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -323,11 +294,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 19: Parse reward credit transaction")
     void testParseRewardCredit() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-reward-credit.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-reward-credit.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -341,11 +309,8 @@ class QfxParserTest {
     @Test
     @DisplayName("Test 20: Parse transaction with user date")
     void testParseTransaction_WithUserDate() throws Exception {
-        // Arrange
-        InputStream input = getClass().getResourceAsStream("/qfx/test-reward-credit.qfx");
-
         // Act
-        QfxStatement statement = parser.parse(input);
+        QfxStatement statement = parseQfxFile("/qfx/test-reward-credit.qfx");
         QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
@@ -354,5 +319,6 @@ class QfxParserTest {
                 "User date should be 2025-10-04");
     }
 }
+
 
 
