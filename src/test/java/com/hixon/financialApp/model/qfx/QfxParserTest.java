@@ -39,14 +39,14 @@ class QfxParserTest {
     // ========================================
 
     @Test
-    @DisplayName("Test 1: Parse valid QFX file returns non-null ParsedStatement")
+    @DisplayName("Test 1: Parse valid QFX file returns non-null QfxStatement")
     void testParseValidQfxFile_ReturnsNonNull() throws Exception {
         // Arrange
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
         assertNotNull(input, "Test file should exist");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
+        QfxStatement statement = parser.parse(input);
 
         // Assert
         assertNotNull(statement, "Parsed statement should not be null");
@@ -59,8 +59,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        List<ParsedTransaction> transactions = statement.getTransactions();
+        QfxStatement statement = parser.parse(input);
+        List<QfxTransaction> transactions = statement.getTransactions();
 
         // Assert
         assertNotNull(transactions, "Transactions list should not be null");
@@ -74,8 +74,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals(TransactionType.DEBIT, transaction.getType(),
@@ -89,8 +89,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals(-28.20, transaction.getAmount(), 0.01,
@@ -104,8 +104,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals(LocalDate.of(2025, 12, 10), transaction.getPostedDate(),
@@ -119,8 +119,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals("NETFLIX.COM", transaction.getName(),
@@ -134,8 +134,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals("554328650712053126673293001", transaction.getFitId(),
@@ -153,8 +153,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals(TransactionType.CREDIT, transaction.getType(),
@@ -168,8 +168,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals(2219.00, transaction.getAmount(), 0.01,
@@ -183,8 +183,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-payment.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertEquals("PAYMENT RECV'D CHECKFREE", transaction.getName(),
@@ -202,7 +202,7 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
+        QfxStatement statement = parser.parse(input);
 
         // Assert
         assertEquals("XXXXXXXXXXXX2925", statement.getAccountNumber(),
@@ -216,7 +216,7 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
+        QfxStatement statement = parser.parse(input);
 
         // Assert
         assertEquals("USD", statement.getCurrency(),
@@ -230,7 +230,7 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-single-purchase.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
+        QfxStatement statement = parser.parse(input);
 
         // Assert
         assertEquals(-28.20, statement.getLedgerBalance(), 0.01,
@@ -291,8 +291,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-annual-fee.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertAll("Annual fee transaction",
@@ -309,8 +309,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-interest-charge.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertAll("Interest charge transaction",
@@ -327,8 +327,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-reward-credit.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertAll("Reward credit transaction",
@@ -345,8 +345,8 @@ class QfxParserTest {
         InputStream input = getClass().getResourceAsStream("/qfx/test-reward-credit.qfx");
 
         // Act
-        ParsedStatement statement = parser.parse(input);
-        ParsedTransaction transaction = statement.getTransactions().get(0);
+        QfxStatement statement = parser.parse(input);
+        QfxTransaction transaction = statement.getTransactions().get(0);
 
         // Assert
         assertNotNull(transaction.getUserDate(), "User date should not be null");
@@ -354,4 +354,5 @@ class QfxParserTest {
                 "User date should be 2025-10-04");
     }
 }
+
 
