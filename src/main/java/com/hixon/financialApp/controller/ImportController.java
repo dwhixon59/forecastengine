@@ -269,7 +269,13 @@ public class ImportController {
      * @throws QuitException If the user quits the import process
      * @see Register#getTrxImportFilePath()
      */
-    public boolean importCsvRegisterTransactionFile() throws ControllerException, QuitException {
+    public boolean importRegisterTransactionFile() throws ControllerException, QuitException {
+
+        // TODO:  Get an iterator for the cleared transactions file:
+
+        //TODO:  Process each transaction from the iterator:
+
+        // Call the main import method with the register's configured import file path:
         return importCsvRegisterTransactionFile(register.getTrxImportFilePath());
     }
 
@@ -561,7 +567,7 @@ public class ImportController {
                     // If we haven't determined the merchant yet, then assign or create one:
                     if (merchant == null) {
                         try {
-                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(), currentTransaction.getPayee(),
                                     currentTransaction.getAmount());
                             currentTransaction.setIdMerchant(merchant.getId());
@@ -628,8 +634,7 @@ public class ImportController {
                     // If that is not the case then we need to assign the splits now.
                     if (splits == null) {
                         // Declare BudgetController here since it's only needed in this block
-                        BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                                notificationService);
+                        BudgetController budgetController = new BudgetController(sessionController);
 
                         // Get the assigned budget items for the merchant:
                         List<BudgetItemMerchant> budgetItemsForMerchant =
@@ -942,10 +947,8 @@ public class ImportController {
                 view.say("\n----------\nCategorize the provisional transactions.");
                 int regTrxIndex = 0;
                 List<TransactionSplit> splits;
-                RegisterController registerController = new RegisterController(register, financialInstitution, budget,
-                        forecast, view, notificationService);
-                BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                        notificationService);
+                RegisterController registerController = new RegisterController(sessionController);
+                BudgetController budgetController = new BudgetController(sessionController);
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
 
@@ -1155,7 +1158,7 @@ public class ImportController {
                             // If we still don't have a merchant, ask the user to identify it
                             if (merchant == null) {
                                 try {
-                                    MerchantController merchantController = new MerchantController(view, notificationService);
+                                    MerchantController merchantController = new MerchantController(sessionController);
                                     Merchant assignedMerchant = merchantController.assignMerchant(
                                             provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
                                             provisionalTransactions.get(provTrxIndex).getPayee(),

@@ -8,7 +8,6 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.ViewInt;
 
-import java.security.InvalidParameterException;
 import java.util.Calendar;
 
 
@@ -123,7 +122,7 @@ public class DailyUpdateController {
                 if (view.existsFileWithRetry(Transaction.CLEARED_TRANSACTIONS_FILE,
                         register.getTrxImportFilePath()))
                 {
-                    inSync = importController.importCsvRegisterTransactionFile();
+                    inSync = importController.importRegisterTransactionFile();
                 } else
                 {
                    view.say("Import of cleared transactions skipped at user's request.");

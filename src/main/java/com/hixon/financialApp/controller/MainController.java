@@ -135,7 +135,7 @@ public class MainController {
                         importController = new ImportController(sessionController);
 
                         // Import the register transactions:
-                        inSync = importController.importCsvRegisterTransactionFile();
+                        inSync = importController.importRegisterTransactionFile();
                         if (!inSync) {
                             forecastController = new ForecastController(
                                     sessionController);
