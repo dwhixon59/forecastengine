@@ -22,9 +22,10 @@ public class TransactionSplitsController {
      * Fields for SplitsController:
      */
     private ImportController.TerminationCondition terminationCondition;
-    Register register;
-    Budget budget;
-    Forecast forecast;
+    protected SessionController sessionController;
+    protected Register register;
+    protected Budget budget;
+    protected Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
 
@@ -38,16 +39,18 @@ public class TransactionSplitsController {
 
 
     /**
-     * Constructors and destructor for SplitsController:
+     * Constructor for TransactionSplitsController with SessionController.
+     *
+     * @param sessionController The session controller for accessing register, budget, and forecast information
      */
-    public TransactionSplitsController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
+    public TransactionSplitsController(SessionController sessionController) {
         terminationCondition = QUIT;
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
     /**

@@ -68,27 +68,19 @@ public class BudgetController {
 
 
     /**
-     * Constructors and destructor for BudgetController:
-     */
-    public BudgetController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
-        terminationCondition = QUIT;
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
-    }
-
-    /**
      * Constructor for BudgetController with SessionController (for accessing user budgets).
      * Used by controllers that need to work across multiple budgets.
+     *
+     * @param sessionController The session controller for accessing register, budget, and forecast information
      */
-    public BudgetController(SessionController sessionController, ViewInt view) {
+    public BudgetController(SessionController sessionController) {
         terminationCondition = QUIT;
         this.sessionController = sessionController;
-        this.view = view;
-        this.notificationService = null;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -308,7 +300,7 @@ public class BudgetController {
                                                                 try {
                                                                     Forecast affectedForecast = Forecast.getById(forecastId);
                                                                     ForecastController forecastController = new ForecastController(
-                                                                            register, selectedBudget, affectedForecast, view, null);
+                                                                            sessionController);
                                                                     forecastController.updateForecast(firstOfNextMonth);
                                                                     view.say("Forecast '" + affectedForecast.getDescription() + "' regenerated successfully.");
                                                                 } catch (Exception e) {
@@ -1207,7 +1199,7 @@ public class BudgetController {
             try {
                 Forecast forecastToUpdate = forecasts.get(index);
                 ForecastController forecastController = new ForecastController(
-                        register, budget, forecastToUpdate, view, null);
+                        sessionController);
                 forecastController.updateForecast(firstOfNextMonth);
                 view.say("Forecast '" + forecastToUpdate.getDescription() + "' updated successfully.");
             } catch (Exception e) {

@@ -41,12 +41,12 @@ public class RegisterController {
      */
     private ImportController.TerminationCondition terminationCondition;
     protected Register register;
-    private final FinancialInstitutionInt financialInstitution;
+    protected FinancialInstitutionInt financialInstitution;
     protected Budget budget;
     protected Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
-    private SessionController sessionController;
+    protected SessionController sessionController;
 
 
     /*
@@ -58,33 +58,20 @@ public class RegisterController {
 
 
     /**
-     * Constructors and destructor for RegisterController:
-     */
-    public RegisterController(Register register, FinancialInstitutionInt financialInstitution, Budget budget,
-                              Forecast forecast, ViewInt view, NotificationServiceInt notificationService) {
-        terminationCondition = QUIT;
-        this.register = register;
-        this.financialInstitution = financialInstitution;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
-    }
-
-    /**
      * Constructor for RegisterController with SessionController.
      * Used for managing registers across multiple users and budgets.
      *
-     * @param sessionController The session controller for accessing user and budget information
-     * @param view The view interface for user interaction
-     * @param notificationService The notification service for sending notifications
+     * @param sessionController The session controller for accessing register, budget, and forecast information
      */
-    public RegisterController(SessionController sessionController, ViewInt view, NotificationServiceInt notificationService) {
+    public RegisterController(SessionController sessionController) {
         terminationCondition = QUIT;
         this.sessionController = sessionController;
-        this.financialInstitution = null;
-        this.view = view;
-        this.notificationService = notificationService;
+        this.register = sessionController.getRegister();
+        this.financialInstitution = sessionController.getFinancialInstitution();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -865,8 +852,8 @@ public class RegisterController {
                     }
 
                     // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                            notificationService);
+                    ForecastController forecastController = new ForecastController(
+                            sessionController);
                     forecastController.reconcile(transaction, splits);
                 }
 
@@ -1012,8 +999,8 @@ public class RegisterController {
                     }
 
                     // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                            notificationService);
+                    ForecastController forecastController = new ForecastController(
+                            sessionController);
                     forecastController.reconcile(transaction, splits);
                 }
 

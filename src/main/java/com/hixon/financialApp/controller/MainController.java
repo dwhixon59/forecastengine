@@ -93,9 +93,8 @@ public class MainController {
                         registerController = new RegisterController(sessionController.getRegister(),
                                 sessionController.getFinancialInstitution(), sessionController.getBudget(),
                                 sessionController.getForecast(), view, notificationService);
-                        forecastController = new ForecastController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view,
-                                notificationService);
+                        forecastController = new ForecastController(
+                                sessionController);
 
                         // Process the uncategorized transactions:
                         inSync = registerController.processUncategorizedTransactions();
@@ -115,9 +114,8 @@ public class MainController {
                         registerController = new RegisterController(sessionController.getRegister(),
                                 sessionController.getFinancialInstitution(), sessionController.getBudget(),
                                 sessionController.getForecast(), view, notificationService);
-                        forecastController = new ForecastController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view,
-                                notificationService);
+                        forecastController = new ForecastController(
+                                sessionController);
 
                         // Process the unreconciled transactions:
                         inSync = registerController.processUnreconciledTransactions();
@@ -134,16 +132,13 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        importController = new ImportController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
+                        importController = new ImportController(sessionController);
 
                         // Import the register transactions:
                         inSync = importController.importCsvRegisterTransactionFile();
                         if (!inSync) {
-                            forecastController = new ForecastController(sessionController.getRegister(),
-                                    sessionController.getBudget(), sessionController.getForecast(), view,
-                                    notificationService);
+                            forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.updateForecast();
                             view.say("\nThe long term forecast was successfully updated.");
                         }
@@ -156,17 +151,15 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        importController = new ImportController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
+                        importController = new ImportController(sessionController);
+
 
                         // Import the provisional transactions:
                         inSync = importController.importCsvProvisionalTransactionFile();
                         view.say("The provisional transactions were successfully imported.");
                         if (!inSync) {
-                            forecastController = new ForecastController(sessionController.getRegister(),
-                                    sessionController.getBudget(), sessionController.getForecast(), view,
-                                    notificationService);
+                            forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
                         }
@@ -197,9 +190,8 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        importController = new ImportController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
+                        importController = new ImportController(sessionController);
+
 
                         // Import the budget items:
                         importController.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
@@ -229,9 +221,8 @@ public class MainController {
                             if (!sessionController.isFullyInitialized()) {
                                 sessionController.getRegisterBudgetForecast();
                             }
-                            forecastController = new ForecastController(sessionController.getRegister(),
-                                    sessionController.getBudget(), sessionController.getForecast(), view,
-                                    notificationService);
+                            forecastController = new ForecastController(
+                                    sessionController);
 
                             forecastController.updateForecast();
                             view.say("The long term forecast was successfully updated.");
@@ -305,8 +296,8 @@ public class MainController {
 
                         // Create the forecast:
                         ForecastEngine forecastEngine = new ForecastEngine();
-                        forecastController = new ForecastController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
+                        forecastController = new ForecastController(
+                                sessionController);
                         startDate = forecastController.askStartDate();
                         double startingBalance = 0;
                         int numberOfMonths = 12;
@@ -324,8 +315,8 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        forecastController = new ForecastController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
+                        forecastController = new ForecastController(
+                                sessionController);
 
                         // Update the forecast from an external source:
                         if (sessionController.getForecast() != null) {
@@ -355,8 +346,8 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        forecastController = new ForecastController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
+                        forecastController = new ForecastController(
+                                sessionController);
 
                         // Update the forecast:
                         forecastController.updateForecast();

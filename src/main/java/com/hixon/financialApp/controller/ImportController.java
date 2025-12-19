@@ -19,6 +19,8 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.ForecastTransactionMatcher;
 import com.hixon.financialApp.view.base.ViewInt;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -104,6 +106,8 @@ import static com.hixon.financialApp.utility.Utility.*;
  * @version 2.0
  * @since 1.0
  */
+@Getter
+@Setter
 public class ImportController {
 
     // Logger:
@@ -134,6 +138,9 @@ public class ImportController {
     /** The current termination condition, determines how the import process should proceed */
     public TerminationCondition terminationCondition = QUIT;
 
+    /** The session controller managing the overall application session */
+    private final SessionController sessionController;
+
     /** The register (bank account) into which transactions are being imported */
     private final Register register;
 
@@ -157,83 +164,17 @@ public class ImportController {
     /**
      * Creates a new ImportController for importing transactions into a specific register.
      *
-     * @param register The register (bank account) to import transactions into
-     * @param financialInstitution The financial institution implementation for parsing transactions
-     * @param budget The budget to use for categorizing transactions
-     * @param forecast The forecast to reconcile transactions against
-     * @param view The view interface for user interactions
-     * @param notificationService Service for sending notifications to users
+     * @param sessionController The session controller managing the application session
      */
-    ImportController(Register register, FinancialInstitutionInt financialInstitution, Budget budget, Forecast forecast,
-                     ViewInt view, NotificationServiceInt notificationService) {
+    ImportController(SessionController sessionController) {
 
-        this.register = register;
-        this.financialInstitution = financialInstitution;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
-    }
-
-
-    // Getters and setters:
-
-
-    /*
-     * Strategy-Based Import Methods (New Architecture)
-     */
-
-    /**
-     * Imports cleared transactions using an automatically detected import strategy.
-     *
-     * <p>This method examines the file extension and selects the appropriate import
-     * strategy (CSV, QFX, OFX, QIF, etc.). This is the recommended method for
-     * importing transactions as it supports multiple file formats.</p>
-     *
-     * <p>Supported formats:</p>
-     * <ul>
-     *   <li>.csv, .tsv, .txt - CSV/Tab-separated values</li>
-     *   <li>.qfx - Quicken Web Connect (OFX 2.x XML)</li>
-     *   <li>.ofx - Open Financial Exchange (SGML or XML)</li>
-     *   <li>.qif - Quicken Interchange Format (text)</li>
-     * </ul>
-     *
-     * @param filename The full path to the transaction file
-     * @return true if the forecast is in sync after import, false otherwise
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public boolean importRegisterTransactions(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        return strategy.importRegisterTransactions(filename, register, budget, forecast, view, notificationService);
-    }
-
-    /**
-     * Imports provisional transactions using an automatically detected import strategy.
-     *
-     * <p>Provisional transactions are those that have been authorized but not yet posted.
-     * Not all formats support provisional transactions separately from cleared ones.</p>
-     *
-     * @param filename The full path to the provisional transaction file
-     * @return true if the forecast is in sync after import, false otherwise
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public boolean importProvisionalTransactions(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        return strategy.importProvisionalTransactions(filename, register, budget, forecast, view, notificationService);
-    }
-
-    /**
-     * Imports budget items using an automatically detected import strategy.
-     *
-     * @param filename The full path to the budget items file
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public void importBudgetItems(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        strategy.importBudgetItems(filename, budget, view);
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.financialInstitution = sessionController.getFinancialInstitution();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -608,8 +549,8 @@ public class ImportController {
                             }
 
                             // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                            ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);
+                            ForecastController forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.reconcile(currentTransaction, splits);
 
                             // Mark that we've auto-matched and already reconciled
@@ -773,8 +714,8 @@ public class ImportController {
                 // Only reconcile if we didn't already reconcile in Phase 2.5
                 if (!autoMatched) {
                     // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                            notificationService);
+                    ForecastController forecastController = new ForecastController(
+                            sessionController);
                     forecastController.reconcile(currentTransaction, splits);
                 }
 
@@ -1126,8 +1067,8 @@ public class ImportController {
                                 }
 
                                 // Reconcile immediately with the forecast (no need to do it again later)
-                                ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                        notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
 
                                 // Move to the next provisional transaction since we're done with this one
@@ -1302,8 +1243,8 @@ public class ImportController {
                             }
 
                             // and then reconcile the splits with the forecast:
-                            ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);
+                            ForecastController forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
                         }
 

@@ -38,6 +38,7 @@ public class ForecastTransactionController {
     /*
      * Fields for ForecastTransactionController:
      */
+    protected SessionController sessionController;
     protected Register register;
     protected Budget budget;
     protected Forecast forecast;
@@ -48,13 +49,13 @@ public class ForecastTransactionController {
     /**
      * Constructors and destructor for ForecastTransactionController:
      */
-    public ForecastTransactionController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public ForecastTransactionController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -896,8 +897,8 @@ public class ForecastTransactionController {
                             if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                ForecastController forecastController = new ForecastController(register, budget, forecast,
-                                        view, notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 UserResponse resp = forecastController.assignSplitDateToForecastTransaction(split,
                                         forecastTransaction);
                                 split.setDisposition(resp.getDisposition());
@@ -987,8 +988,8 @@ public class ForecastTransactionController {
                             if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                ForecastController forecastController = new ForecastController(register, budget, forecast,
-                                        view, notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 UserResponse resp = forecastController.assignSplitDateToForecastTransaction(split, forecastTransaction);
                                 split.setDisposition(resp.getDisposition());
                                 switch (split.getDisposition()) {

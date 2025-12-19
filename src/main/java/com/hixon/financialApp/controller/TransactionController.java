@@ -38,9 +38,10 @@ public class TransactionController {
     /*
      * Member variables for the Transaction Controller:
      */
-    private Register register;
-    private Budget budget;
-    private Forecast forecast;
+    protected SessionController sessionController;
+    protected Register register;
+    protected Budget budget;
+    protected Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
 
@@ -62,13 +63,13 @@ public class TransactionController {
     /*
      * Constructors and destructor for the Transaction Controller:
      */
-    public TransactionController(Register register, Budget budget, Forecast forecast, ViewInt view,
-                                  NotificationServiceInt notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public TransactionController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
     /*
@@ -898,7 +899,7 @@ public class TransactionController {
                 }
 
                 if (forecastToUse != null) {
-                    ForecastController forecastController = new ForecastController(register, budget, forecastToUse, view, notificationService);
+                    ForecastController forecastController = new ForecastController(sessionController);
                     forecastController.reconcile(transaction, splits);
                     view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");
                 } else {

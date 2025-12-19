@@ -22,7 +22,14 @@ public class DailyUpdateController {
     /*
      * Fields:
      */
-    private SessionController sessionController;
+    protected SessionController sessionController;
+    // Get session objects for convenience
+    protected Register register;
+    protected Budget budget;
+    protected Forecast forecast;
+    protected FinancialInstitutionInt financialInstitution;
+    protected ViewInt view;
+    protected NotificationServiceInt notificationService;
 
 
     /*
@@ -34,11 +41,13 @@ public class DailyUpdateController {
      * Constructors:
      */
     public DailyUpdateController(SessionController sessionController) {
-        if (sessionController != null) {
-            this.sessionController = sessionController;
-        } else {
-            throw new InvalidParameterException("Session controller must not be null.");
-        }
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.financialInstitution = sessionController.getFinancialInstitution();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -60,21 +69,11 @@ public class DailyUpdateController {
 
         boolean result = true;
         try {
-            // Get session objects for convenience
-            Register register = sessionController.getRegister();
-            Budget budget = sessionController.getBudget();
-            Forecast forecast = sessionController.getForecast();
-            FinancialInstitutionInt financialInstitution = sessionController.getFinancialInstitution();
-            ViewInt view = sessionController.getView();
-            NotificationServiceInt notificationService = sessionController.getNotificationService();
 
             // Setup for the update run:
-            ImportController importController = new ImportController(register, financialInstitution, budget, forecast,
-                    view, notificationService);
-            RegisterController registerController = new RegisterController(register, financialInstitution, budget,
-                    forecast, view, notificationService);
-            ForecastController forecastController = new ForecastController(register, budget, forecast,
-                    view, notificationService);
+            ImportController importController = new ImportController(sessionController);
+            RegisterController registerController = new RegisterController(sessionController);
+            ForecastController forecastController = new ForecastController(sessionController);
             boolean inSync = true;
 
             // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:

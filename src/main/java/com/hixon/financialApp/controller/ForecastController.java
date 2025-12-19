@@ -36,6 +36,7 @@ public class ForecastController {
     /*
      * Fields for ForecastController:
      */
+    protected SessionController sessionController;
     protected Register register;
     protected Budget budget;
     protected Forecast forecast;
@@ -46,13 +47,13 @@ public class ForecastController {
     /**
      * Constructors and destructor for ForecastController:
      */
-    public ForecastController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public ForecastController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -324,7 +325,7 @@ public class ForecastController {
 
                 // Find the forecast transaction in the list that this split applies to:
                 ForecastTransactionController forecastTransactionController =
-                        new ForecastTransactionController(register, budget, forecast, view, notificationService);
+                        new ForecastTransactionController(sessionController);
                 ForecastTransaction forecastTransaction =
                         forecastTransactionController.getApplicableForecastTransaction(forecast, split);
 
@@ -764,7 +765,7 @@ public class ForecastController {
                 // Set all the forecast transactions deleted from the spreadsheet to zero because the user zeroed them
                 // out in the spreadsheet:
                 ForecastTransactionController forecastTransactionController =
-                        new ForecastTransactionController(register, budget, forecast, view, notificationService);
+                        new ForecastTransactionController(sessionController);
                 forecastTransactionController.zeroNotFound();
 
                 // Close the external source of forecast transactions:
