@@ -539,8 +539,7 @@ public class BudgetController {
                                         ((budgetItemMerchants.get(0).getAmount() == 0) && (budgetItemMerchants.get(0).getPercentage() == 0)))
         ) {
             // then ask the user to enter the splits:
-            TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget,
-                    forecast, view, notificationService);
+            TransactionSplitsController transactionSplitsController = new TransactionSplitsController(sessionController);
             transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
             // Capture the termination condition so ImportController can check it
             terminationCondition = transactionSplitsController.getTerminationCondition();
@@ -580,7 +579,7 @@ public class BudgetController {
             if (transactionAmount != 0) {
                 view.say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
-                TransactionSplitsController transactionSplitsController = new TransactionSplitsController(register, budget, forecast, view, notificationService);
+                TransactionSplitsController transactionSplitsController = new TransactionSplitsController(sessionController);
                 transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
                 // Capture the termination condition so ImportController can check it
                 terminationCondition = transactionSplitsController.getTerminationCondition();

@@ -4,13 +4,19 @@ import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.merchant.Merchant;
+import com.hixon.financialApp.model.parser.TransactionParser;
+import com.hixon.financialApp.model.qfx.QfxParser;
+import com.hixon.financialApp.model.qfx.QfxTransaction;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 
+import java.io.FileInputStream;
 import java.util.Calendar;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
@@ -52,6 +58,11 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * The notification service for sending asynchronous notifications.
      */
     protected NotificationServiceInt notificationService;
+
+    // QFX import fields
+    private TransactionParser<QfxTransaction> qfxParser;
+    private String qfxFilename;
+    private boolean isQfxOpen = false;
 
     /**
      * Constructs a new FinancialInstitution with the specified dependencies.
@@ -138,6 +149,114 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         }
 
         return true;
+    }
+
+    // ========================================
+    // QFX Import Methods (shared by all institutions using QFX format)
+    // ========================================
+
+    /**
+     * Imports transactions from a QFX file.
+     * This method is used by any financial institution that supports QFX/OFX format.
+     *
+     * @param filename the QFX file to import
+     * @throws Exception if the file cannot be opened or parsed
+     */
+    protected void importQfxRegisterTrxFile(String filename) throws Exception {
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new IllegalArgumentException("QFX filename cannot be null or empty");
+        }
+
+        this.qfxFilename = filename;
+        this.qfxParser = new QfxParser();
+
+        // Open the parser
+        this.qfxParser.open(new FileInputStream(filename));
+        this.isQfxOpen = true;
+    }
+
+    /**
+     * Converts a QfxTransaction to a Transaction domain object.
+     * Subclasses can override this if they need custom conversion logic.
+     *
+     * @param qfxTxn the QFX transaction
+     * @return a Transaction object
+     * @throws Exception if conversion fails
+     */
+    protected Transaction convertQfxToTransaction(QfxTransaction qfxTxn) throws Exception {
+        // Convert LocalDate to Calendar
+        Calendar postDate = Utility.localDateToCalendarDate(qfxTxn.getPostedDate());
+
+        // Get payee from QFX transaction
+        String payee = qfxTxn.getName();
+
+        // QFX transactions are always cleared
+        boolean cleared = true;
+
+        // Credit cards don't have check numbers
+        int checkNumber = 0;
+
+        // Use FITID as import record ID
+        String importRecordId = qfxTxn.getFitId();
+
+        // Create the transaction
+        Transaction transaction = new Transaction(
+            register,
+            postDate,
+            payee,
+            qfxTxn.getAmount(),
+            cleared,
+            checkNumber,
+            importRecordId
+        );
+
+        // Parse merchant/payee using institution-specific logic
+        String merchantPayee = parseMerchantPayee(postDate, qfxTxn.getAmount(), payee);
+        transaction.setMerchantPayee(merchantPayee);
+
+        return transaction;
+    }
+
+    // ========================================
+    // Iterator<Transaction> Implementation
+    // ========================================
+
+    @Override
+    public boolean hasNext() {
+        if (!isQfxOpen || qfxParser == null) {
+            return false;
+        }
+        return qfxParser.hasNext();
+    }
+
+    @Override
+    public Transaction next() {
+        if (!isQfxOpen || qfxParser == null) {
+            throw new NoSuchElementException("QFX parser is not open");
+        }
+
+        try {
+            // Get next QFX transaction from parser
+            QfxTransaction qfxTxn = qfxParser.getNext();
+
+            // Convert QfxTransaction to Transaction
+            return convertQfxToTransaction(qfxTxn);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error converting QFX transaction to Transaction: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        try {
+            if (qfxParser != null) {
+                qfxParser.close();
+            }
+        } finally {
+            isQfxOpen = false;
+            qfxParser = null;
+        }
     }
 }
 

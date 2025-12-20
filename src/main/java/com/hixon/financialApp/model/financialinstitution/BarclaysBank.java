@@ -4,19 +4,14 @@ import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.parser.TransactionParser;
-import com.hixon.financialApp.model.qfx.QfxParser;
-import com.hixon.financialApp.model.qfx.QfxTransaction;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
-import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
-import java.io.FileInputStream;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.*;
@@ -29,12 +24,11 @@ import java.util.*;
  *
  * <p><strong>Supported Formats:</strong>
  * <ul>
- *   <li>QFX/OFX files (via QfxParser)</li>
+ *   <li>QFX/OFX files (inherited from {@link FinancialInstitution})</li>
  * </ul>
  *
- * <p><strong>Iterator Pattern:</strong> This class implements {@link Iterator} to provide
- * sequential access to transactions. The ImportController can iterate through transactions
- * without knowing they came from a QFX file.
+ * <p><strong>Iterator Pattern:</strong> This class uses the inherited iterator implementation
+ * from {@link FinancialInstitution} to provide sequential access to transactions.
  *
  * <p><strong>Usage:</strong>
  * <pre>{@code
@@ -52,18 +46,12 @@ import java.util.*;
  * }
  * }</pre>
  *
- * @see QfxParser
- * @see QfxTransaction
  * @see FinancialInstitution
  */
-public class BarclaysBank extends FinancialInstitution implements Iterator<Transaction> {
-
-    private TransactionParser<QfxTransaction> parser;
-    private String filename;
-    private boolean isOpen = false;
+public class BarclaysBank extends FinancialInstitution {
 
     /**
-     * Creates a new BarclaysBank instance.
+     * Creates a new BarclaysBank instance and opens the QFX file for import.
      *
      * @param filename the QFX file to import
      * @param register the register to import transactions into
@@ -77,111 +65,12 @@ public class BarclaysBank extends FinancialInstitution implements Iterator<Trans
                        ViewInt view, NotificationServiceInt notificationService) throws Exception {
         super(register, budget, forecast, view, notificationService);
 
-        if (filename == null || filename.trim().isEmpty()) {
-            throw new IllegalArgumentException("Filename cannot be null or empty");
-        }
-
-        this.filename = filename;
-        this.parser = new QfxParser();
-
-        // Open the parser immediately
-        this.parser.open(new FileInputStream(filename));
-        this.isOpen = true;
+        // Use inherited QFX import functionality
+        importQfxRegisterTrxFile(filename);
     }
 
     // ========================================
-    // Iterator<Transaction> Implementation
-    // ========================================
-
-    @Override
-    public boolean hasNext() {
-        if (!isOpen) {
-            return false;
-        }
-        return parser.hasNext();
-    }
-
-    @Override
-    public Transaction next() {
-        if (!isOpen) {
-            throw new NoSuchElementException("BarclaysBank is not open");
-        }
-
-        try {
-            // Get next QFX transaction from parser
-            QfxTransaction qfxTxn = parser.getNext();
-
-            // Convert QfxTransaction to Transaction
-            return convertToTransaction(qfxTxn);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Error converting QFX transaction to Transaction: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Closes the parser and releases all resources.
-     *
-     * @throws Exception if an error occurs closing the parser
-     */
-    public void close() throws Exception {
-        try {
-            if (parser != null) {
-                parser.close();
-            }
-        } finally {
-            isOpen = false;
-        }
-    }
-
-    // ========================================
-    // QFX-Specific Conversion
-    // ========================================
-
-    /**
-     * Converts a QfxTransaction to a Transaction domain object.
-     *
-     * @param qfxTxn the QFX transaction
-     * @return a Transaction object
-     * @throws Exception if conversion fails
-     */
-    private Transaction convertToTransaction(QfxTransaction qfxTxn) throws Exception {
-        // Convert LocalDate to Calendar
-        Calendar postDate = Utility.localDateToCalendarDate(qfxTxn.getPostedDate());
-
-        // Get payee from QFX transaction
-        String payee = qfxTxn.getName();
-
-        // QFX transactions are always cleared
-        boolean cleared = true;
-
-        // Credit cards don't have check numbers
-        int checkNumber = 0;
-
-        // Use FITID as import record ID
-        String importRecordId = qfxTxn.getFitId();
-
-        // Create the transaction
-        Transaction transaction = new Transaction(
-            register,
-            postDate,
-            payee,
-            qfxTxn.getAmount(),
-            cleared,
-            checkNumber,
-            importRecordId
-        );
-
-        // Parse merchant/payee using Barclays-specific logic
-        String merchantPayee = parseMerchantPayee(postDate, qfxTxn.getAmount(), payee);
-        transaction.setMerchantPayee(merchantPayee);
-
-        return transaction;
-    }
-
-    // ========================================
-    // FinancialInstitutionInt Implementation
-    // (CSV-specific methods - not used for QFX)
+    // CSV Methods (Not Supported)
     // ========================================
 
     @Override
@@ -212,14 +101,23 @@ public class BarclaysBank extends FinancialInstitution implements Iterator<Trans
     }
 
     // ========================================
-    // Institution-Specific Methods
+    // Barclays-Specific Methods
     // ========================================
 
+    /**
+     * Parses merchant/payee information from Barclays transaction data.
+     * Barclays credit card payees are typically clean merchant names, so we return as-is.
+     *
+     * @param date the transaction date
+     * @param amount the transaction amount
+     * @param payee the payee string from Barclays
+     * @return the parsed merchant/payee string
+     */
     @Override
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
         // Barclays credit card payees are typically clean merchant names
         // For now, just return the payee as-is
-        // TODO: Add Barclays-specific payee parsing if needed
+        // TODO: Add Barclays-specific payee parsing if needed in the future
         return payee;
     }
 

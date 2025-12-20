@@ -259,10 +259,7 @@ public class ImportController {
      */
 
     /**
-     * Imports cleared (posted) transactions from the register's default CSV import file.
-     *
-     * <p>This is a convenience method that calls {@link #importCsvRegisterTransactionFile(String)}
-     * with the file path specified in the register's configuration.</p>
+     * Imports transactions from the register's import file.
      *
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
@@ -271,12 +268,14 @@ public class ImportController {
      */
     public boolean importRegisterTransactionFile() throws ControllerException, QuitException {
 
-        // TODO:  Get an iterator for the cleared transactions file:
+        boolean inSync = true;
 
-        //TODO:  Process each transaction from the iterator:
+        // TODO:  Get an iterator for the transactions file:
+
+        // TODO:  Process each transaction in the iterator:
 
         // Call the main import method with the register's configured import file path:
-        return importCsvRegisterTransactionFile(register.getTrxImportFilePath());
+        return inSync;
     }
 
     /**

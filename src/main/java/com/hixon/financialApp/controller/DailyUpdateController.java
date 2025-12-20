@@ -118,16 +118,8 @@ public class DailyUpdateController {
             // Import the cleared transactions from the register:
             try {
                view.sayH2("IMPORT CLEARED TRANSACTIONS");
-
-                if (view.existsFileWithRetry(Transaction.CLEARED_TRANSACTIONS_FILE,
-                        register.getTrxImportFilePath()))
-                {
-                    inSync = importController.importRegisterTransactionFile();
-                } else
-                {
-                   view.say("Import of cleared transactions skipped at user's request.");
-                }
-            } catch (QuitException qe) {
+               inSync = importController.importRegisterTransactionFile();
+             } catch (QuitException qe) {
                 throw qe;
             } catch (Exception e) {
                 if (!view.askContinue("\nThe error '" + e + "' occurred while importing new transactions " +

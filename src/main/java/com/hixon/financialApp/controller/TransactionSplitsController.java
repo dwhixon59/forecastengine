@@ -82,7 +82,7 @@ public class TransactionSplitsController {
 
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
-        BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+        BudgetController budgetController = new BudgetController(sessionController);
         while (!done) {
 
             // Assume we will get this done in one iteration:

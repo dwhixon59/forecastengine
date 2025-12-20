@@ -10,9 +10,27 @@ import org.apache.commons.csv.CSVRecord;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 
-public interface FinancialInstitutionInt {
+/**
+ * Interface for financial institution implementations that handle transaction imports.
+ *
+ * <p>This interface extends {@link Iterator} to provide format-agnostic sequential access
+ * to transactions. Financial institutions can import from various formats (CSV, QFX, etc.)
+ * and expose transactions through the iterator pattern.
+ *
+ * <p><strong>Usage by ImportController:</strong>
+ * <pre>{@code
+ * FinancialInstitutionInt institution = // ... created by factory
+ * while (institution.hasNext()) {
+ *     Transaction t = institution.next();
+ *     // Process transaction...
+ * }
+ * institution.close();
+ * }</pre>
+ */
+public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoCloseable {
 
     /**
      * Returns the enum class representing CSV column headers for this financial institution.

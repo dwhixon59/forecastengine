@@ -583,7 +583,7 @@ public class ForecastController {
 
         try {
             // We will need a BudgetController:
-            BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+            BudgetController budgetController = new BudgetController(sessionController);
 
             // Get the name and type of the source:
             //String sourceName = getForecastController().getUserSelectedString("Enter the name of the external source " +

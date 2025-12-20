@@ -83,7 +83,7 @@ public class DataManagerController {
                 switch(option) {
                     case "b":
                         // Delegate to BudgetController
-                        budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+                        budgetController = new BudgetController(sessionController);
                         budgetController.manageBudgetItems();
                         break;
                     case "m":

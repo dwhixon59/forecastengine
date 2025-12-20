@@ -14,9 +14,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 
-public class GenericClassifer implements FinancialInstitutionInt {
+public class GenericClassifer implements FinancialInstitutionInt, Iterator<Transaction> {
 
     protected BudgetItem[] budgetItems;
 
@@ -158,5 +159,20 @@ public class GenericClassifer implements FinancialInstitutionInt {
      */
     @Override
     public String extractAccountType(String payee) {return "";}
-}
 
+    // Iterator methods - not supported by GenericClassifier
+    @Override
+    public boolean hasNext() {
+        throw new UnsupportedOperationException("GenericClassifier does not support iterator pattern");
+    }
+
+    @Override
+    public Transaction next() {
+        throw new UnsupportedOperationException("GenericClassifier does not support iterator pattern");
+    }
+
+    @Override
+    public void close() throws Exception {
+        // No-op for GenericClassifier
+    }
+}

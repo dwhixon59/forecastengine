@@ -734,8 +734,7 @@ public class RegisterController {
         ImportLog importLog = new ImportLog();
 
         int i = 0;
-        BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                notificationService);
+        BudgetController budgetController = new BudgetController(sessionController);
         try {
             // Retrieve any transactions that were skipped.
             ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast);
@@ -781,7 +780,7 @@ public class RegisterController {
                     if (merchant == null) {
                         ImportController.TerminationCondition terminationCondition = FOUND;
                         try {
-                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {
@@ -881,8 +880,7 @@ public class RegisterController {
     public boolean processUnreconciledTransactions() throws QuitException, RegisterException {
 
         ImportLog importLog = new ImportLog();
-        BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                notificationService);
+        BudgetController budgetController = new BudgetController(sessionController);
 
         int i = 0;
         try {
@@ -929,7 +927,7 @@ public class RegisterController {
                     if (merchant == null) {
                         ImportController.TerminationCondition terminationCondition = FOUND;
                         try {
-                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
                                     transaction.getPayee(), transaction.getAmount());
                         } catch (CancelException ce) {

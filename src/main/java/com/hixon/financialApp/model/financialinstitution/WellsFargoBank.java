@@ -1,6 +1,7 @@
 package com.hixon.financialApp.model.financialinstitution;
 
 import com.hixon.financialApp.controller.RegisterController;
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -314,8 +315,9 @@ public class WellsFargoBank extends FinancialInstitution {
                     logger.debug("  Account number not found in payee string - will ask user");
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
-                    RegisterController registerController = new RegisterController(register, this,
-                            budget, forecast, view, notificationService);
+                    SessionController tempSessionController = new SessionController(register, budget, forecast, view, notificationService);
+                    tempSessionController.setFinancialInstitution(this);
+                    RegisterController registerController = new RegisterController(tempSessionController);
                     transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
 
                     // If we were able to determine the register this transaction was transferred to/from:

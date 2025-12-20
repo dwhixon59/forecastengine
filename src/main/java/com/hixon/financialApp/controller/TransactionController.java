@@ -722,7 +722,7 @@ public class TransactionController {
         }
 
         // Use MerchantController to assign a merchant
-        MerchantController merchantController = new MerchantController(view, notificationService);
+        MerchantController merchantController = new MerchantController(sessionController);
 
         // Parse the merchant payee string for creating the MerchantPayee mapping
         // Note: merchantPayee is not stored in the transaction table, but is used to create
@@ -843,7 +843,7 @@ public class TransactionController {
      * @throws SkipException if the user skips the reconciliation
      */
     public void reconcileTransaction(Transaction transaction) throws Exception, SkipException {
-        BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+        BudgetController budgetController = new BudgetController(sessionController);
 
         Merchant merchant = transaction.getMerchant();
 

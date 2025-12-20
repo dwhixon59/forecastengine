@@ -90,11 +90,8 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        registerController = new RegisterController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
-                        forecastController = new ForecastController(
-                                sessionController);
+                        registerController = new RegisterController(sessionController);
+                        forecastController = new ForecastController(sessionController);
 
                         // Process the uncategorized transactions:
                         inSync = registerController.processUncategorizedTransactions();
@@ -111,11 +108,8 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        registerController = new RegisterController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
-                        forecastController = new ForecastController(
-                                sessionController);
+                        registerController = new RegisterController(sessionController);
+                        forecastController = new ForecastController(sessionController);
 
                         // Process the unreconciled transactions:
                         inSync = registerController.processUnreconciledTransactions();
@@ -172,9 +166,7 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        registerController = new RegisterController(sessionController.getRegister(),
-                                sessionController.getFinancialInstitution(), sessionController.getBudget(),
-                                sessionController.getForecast(), view, notificationService);
+                        registerController = new RegisterController(sessionController);
 
                         // Verify the register balance:
                         if (!registerController.verifyRegisterBalance(sessionController.getRegister())) {
@@ -207,8 +199,7 @@ public class MainController {
                         // The DataManagerController will prompt for register/budget/forecast only when needed
                         // based on the type of entity being managed (e.g., transactions need register,
                         // budget items need budget, but merchants are global)
-                        dataManagerController = new DataManagerController(null, null, null, view,
-                                notificationService);
+                        dataManagerController = new DataManagerController(sessionController);
                         inSync = dataManagerController.manageData();
 
                         // Update the forecast if necessary:
@@ -277,8 +268,7 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
-                        budgetController = new BudgetController(sessionController.getRegister(),
-                                sessionController.getBudget(), sessionController.getForecast(), view, notificationService);
+                        budgetController = new BudgetController(sessionController);
 
                         // Render the spending report for the specified month
                         Calendar month = budgetController.getSpendingReportMonth();
