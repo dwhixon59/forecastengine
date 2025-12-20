@@ -1,6 +1,7 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionFactory;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -225,7 +226,8 @@ public class SessionController {
             forecastView = new ExcelForecastView(forecast);
 
             // and set the financial institution associated with the selected register (after forecast is retrieved)
-            financialInstitution = new WellsFargoBank(register, budget, forecast, view, notificationService);
+            financialInstitution = FinancialInstitutionFactory.create(
+                    register, budget, forecast, view, notificationService);
         }
         else {
             // If the budget is null, then get the budget associated with the selected register the user wants to work

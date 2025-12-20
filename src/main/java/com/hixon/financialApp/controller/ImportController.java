@@ -264,15 +264,25 @@ public class ImportController {
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
      * @throws QuitException If the user quits the import process
+     * @throws Exception If an error occurs closing the financial institution
      * @see Register#getTrxImportFilePath()
      */
-    public boolean importRegisterTransactionFile() throws ControllerException, QuitException {
+    public boolean importRegisterTransactionFile() throws ControllerException, QuitException, Exception {
 
         boolean inSync = true;
 
         // TODO:  Get an iterator for the transactions file:
 
         // TODO:  Process each transaction in the iterator:
+
+  try {
+      while (financialInstitution.hasNext()) {
+          Transaction t = financialInstitution.next();
+          // Process transaction...
+      }
+  } finally {
+      financialInstitution.close();
+  }
 
         // Call the main import method with the register's configured import file path:
         return inSync;
