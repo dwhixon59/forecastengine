@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.financialinstitution;
 
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -32,9 +33,10 @@ import java.util.*;
  *
  * <p><strong>Usage:</strong>
  * <pre>{@code
- * BarclaysBank barclays = new BarclaysBank(
- *     filename, register, budget, forecast, view, notificationService
- * );
+ * BarclaysBank barclays = new BarclaysBank(sessionController);
+ *
+ * // Import transactions from register's configured QFX file
+ * barclays.importRegisterTrxFile();
  *
  * try {
  *     while (barclays.hasNext()) {
@@ -51,22 +53,12 @@ import java.util.*;
 public class BarclaysBank extends FinancialInstitution {
 
     /**
-     * Creates a new BarclaysBank instance and opens the QFX file for import.
+     * Creates a new BarclaysBank instance.
      *
-     * @param filename the QFX file to import
-     * @param register the register to import transactions into
-     * @param budget the budget for transaction categorization
-     * @param forecast the forecast for planning
-     * @param view the view for user interaction
-     * @param notificationService the notification service
-     * @throws Exception if the QFX file cannot be opened or parsed
+     * @param sessionController the session controller containing register, budget, forecast, view, and notificationService
      */
-    public BarclaysBank(String filename, Register register, Budget budget, Forecast forecast,
-                       ViewInt view, NotificationServiceInt notificationService) throws Exception {
-        super(register, budget, forecast, view, notificationService);
-
-        // Use inherited QFX import functionality
-        importQfxRegisterTrxFile(filename);
+    public BarclaysBank(SessionController sessionController) {
+        super(sessionController);
     }
 
     // ========================================
@@ -103,6 +95,7 @@ public class BarclaysBank extends FinancialInstitution {
     // ========================================
     // Barclays-Specific Methods
     // ========================================
+
 
     /**
      * Parses merchant/payee information from Barclays transaction data.

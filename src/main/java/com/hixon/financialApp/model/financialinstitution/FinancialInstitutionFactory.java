@@ -16,13 +16,14 @@ import com.hixon.financialApp.view.base.ViewInt;
  * <p><strong>Usage:</strong>
  * <pre>{@code
  * FinancialInstitutionInt institution = FinancialInstitutionFactory.create(sessionController);
+ * institution.importRegisterTrxFile(); // Reads file from register's trxImportFileName
  * }</pre>
  *
  * <p><strong>Supported Institutions:</strong>
  * <ul>
- *   <li>Wells Fargo Bank - CSV format (auto-created from register field)</li>
- *   <li>Barclays Bank - QFX format (requires explicit createBarclays() call with filename)</li>
- *   <li>Generic Bank - Manual entry or basic import (auto-created from register field)</li>
+ *   <li>Wells Fargo Bank - CSV format</li>
+ *   <li>Barclays Bank - QFX format</li>
+ *   <li>Generic Bank - Manual entry or basic import</li>
  * </ul>
  *
  * @see FinancialInstitutionInt
@@ -42,9 +43,12 @@ public class FinancialInstitutionFactory {
      * <p><strong>Supported Institution Names:</strong>
      * <ul>
      *   <li>"Wells Fargo Bank" (or "WellsFargo", "Wells Fargo") - Creates WellsFargoBank for CSV import</li>
-     *   <li>"Barclays Bank" (or "Barclays") - Throws exception, use createBarclays() with QFX file</li>
+     *   <li>"Barclays Bank" (or "Barclays") - Creates BarclaysBank for QFX import</li>
      *   <li>"Bank" (or "Generic Bank", "Generic") - Creates GenericBank for manual entry</li>
      * </ul>
+     *
+     * <p><strong>Note:</strong> After creating the institution, call {@code importRegisterTrxFile()}
+     * to import transactions from the file specified in the register's {@code trxImportFileName} field.
      *
      * @param sessionController the session controller containing register, budget, forecast, view, and notificationService
      * @return a FinancialInstitutionInt implementation appropriate for the register
@@ -81,16 +85,13 @@ public class FinancialInstitutionFactory {
         // Create the appropriate financial institution based on the name
         return switch (institutionName.toLowerCase().trim()) {
             case "wells fargo bank", "wellsfargo", "wells fargo" ->
-                new WellsFargoBank(register, budget, forecast, view, notificationService);
+                new WellsFargoBank(sessionController);
 
             case "barclays bank", "barclays" ->
-                throw new UnsupportedOperationException(
-                    "Barclays Bank requires QFX file import. " +
-                    "Use FinancialInstitutionFactory.createBarclays() with QFX filename."
-                );
+                new BarclaysBank(sessionController);
 
             case "bank", "generic bank", "generic" ->
-                new GenericBank(register, budget, forecast, view, notificationService);
+                new GenericBank(sessionController);
 
             default ->
                 throw new IllegalArgumentException(
@@ -99,29 +100,6 @@ public class FinancialInstitutionFactory {
                     "Please update the register's financialInstitution field."
                 );
         };
-    }
-
-    /**
-     * Creates a Barclays Bank institution with a QFX filename.
-     *
-     * @param qfxFilename the QFX file to import
-     * @param register the register for this financial institution
-     * @param budget the budget for transaction categorization
-     * @param forecast the forecast for planning
-     * @param view the view interface for user interaction
-     * @param notificationService the notification service
-     * @return a BarclaysBank instance
-     * @throws Exception if the institution cannot be created
-     */
-    public static FinancialInstitutionInt createBarclays(
-            String qfxFilename,
-            Register register,
-            Budget budget,
-            Forecast forecast,
-            ViewInt view,
-            NotificationServiceInt notificationService) throws Exception {
-
-        return new BarclaysBank(qfxFilename, register, budget, forecast, view, notificationService);
     }
 }
 

@@ -148,15 +148,10 @@ public class WellsFargoBank extends FinancialInstitution {
     /**
      * Constructs a new WellsFargoBank instance for processing Wells Fargo transactions.
      *
-     * @param register The register (bank account) associated with this financial institution
-     * @param budget The budget to use for categorizing transactions
-     * @param forecast The forecast for planning future transactions
-     * @param view The view interface for user interaction (following MVC pattern)
-     * @param notificationService The service for sending asynchronous notifications to users
+     * @param sessionController The session controller containing register, budget, forecast, view, and notificationService
      */
-    public WellsFargoBank(Register register, Budget budget, Forecast forecast, ViewInt view,
-                          NotificationServiceInt notificationService) {
-        super(register, budget, forecast, view, notificationService);
+    public WellsFargoBank(SessionController sessionController) {
+        super(sessionController);
     }
 
     /*

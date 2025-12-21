@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.financialinstitution;
 
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -37,15 +38,10 @@ public class GenericBank extends FinancialInstitution {
     /**
      * Creates a new GenericBank instance.
      *
-     * @param register the register for this financial institution
-     * @param budget the budget for transaction categorization
-     * @param forecast the forecast for planning
-     * @param view the view interface for user interaction
-     * @param notificationService the notification service
+     * @param sessionController the session controller containing register, budget, forecast, view, and notificationService
      */
-    public GenericBank(Register register, Budget budget, Forecast forecast,
-                       ViewInt view, NotificationServiceInt notificationService) {
-        super(register, budget, forecast, view, notificationService);
+    public GenericBank(SessionController sessionController) {
+        super(sessionController);
     }
 
     // ========================================

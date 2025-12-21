@@ -302,12 +302,10 @@ public class ImportController {
 
         boolean inSync = true;
 
-        // Call the main import method with the register's configured import file path:
-
         // TODO:  Get an iterator for the transactions file:
-        financialInstitution.importQfxRegisterTrxFile()
+        financialInstitution.importRegisterTrxFile();
 
-        // Process each transaction in the iterator:
+        // Process each transaction in the import file:
         try {
             while (financialInstitution.hasNext()) {
                 Transaction t = financialInstitution.next();

@@ -33,6 +33,27 @@ import java.util.List;
 public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoCloseable {
 
     /**
+     * Imports transactions from the import file associated with the register.
+     *
+     * <p>This method reads the import filename and directory from the register,
+     * determines the file type by extension, creates the appropriate parser,
+     * and loads transactions into memory for iteration.
+     *
+     * <p>The import file location is specified in the register's:
+     * <ul>
+     *   <li>{@code trxImportFileName} - filename (e.g., "transactions.csv", "data.qfx")</li>
+     *   <li>{@code trxImportFileDirectory} - directory path (optional)</li>
+     * </ul>
+     *
+     * <p>After calling this method, use the Iterator methods ({@code hasNext()}, {@code next()})
+     * to retrieve transactions one at a time.
+     *
+     * @throws Exception if the file cannot be found, opened, or parsed
+     * @throws IllegalStateException if register doesn't have import file configured
+     */
+    void importRegisterTrxFile() throws Exception;
+
+    /**
      * Returns the enum class representing CSV column headers for this financial institution.
      * This is used by CSV parsers to map column names to enum values.
      *

@@ -14,6 +14,7 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.util.Calendar;
 import java.util.List;
@@ -154,6 +155,80 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     }
 
     // ========================================
+    // Transaction File Import Methods
+    // ========================================
+
+    /**
+     * Imports transactions from the register's configured import file.
+     *
+     * <p>This method reads the import filename and directory from the register,
+     * determines the file type by extension, and creates the appropriate parser
+     * (CSV, QFX, etc.) to read transactions.
+     *
+     * <p><strong>Supported File Extensions:</strong>
+     * <ul>
+     *   <li>.qfx - QFX/OFX format (uses QfxParser)</li>
+     *   <li>.csv, .tsv - CSV format (institution-specific, not yet implemented here)</li>
+     * </ul>
+     *
+     * <p>Subclasses can override this method to provide custom import logic
+     * or to handle additional file formats.
+     *
+     * @throws Exception if the file cannot be found, opened, or parsed
+     * @throws IllegalStateException if register doesn't have import file configured
+     */
+    public void importRegisterTrxFile() throws Exception {
+        // Get import file information from register
+        String filename = register.getTrxImportFileName();
+        String directory = register.getTrxImportFileDirectory();
+
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "Register '" + register.getName() + "' does not have an import filename configured. " +
+                "Please set trxImportFileName field."
+            );
+        }
+
+        // Construct full file path
+        String fullPath;
+        if (directory != null && !directory.trim().isEmpty()) {
+            fullPath = new File(directory, filename).getAbsolutePath();
+        } else {
+            fullPath = filename; // Use filename as-is if no directory specified
+        }
+
+        // Determine file type by extension
+        String extension = "";
+        int lastDot = filename.lastIndexOf('.');
+        if (lastDot > 0) {
+            extension = filename.substring(lastDot + 1).toLowerCase();
+        }
+
+        // Create appropriate parser based on file extension
+        switch (extension) {
+            case "qfx", "ofx" -> {
+                // QFX/OFX format - use inherited QFX import
+                importQfxRegisterTrxFile(fullPath);
+            }
+            case "csv", "tsv" -> {
+                // CSV/TSV format - subclass must handle this
+                // This is institution-specific (WellsFargo has its own CSV parser)
+                throw new UnsupportedOperationException(
+                    "CSV/TSV import must be handled by institution-specific subclass. " +
+                    "File: " + fullPath
+                );
+            }
+            default -> {
+                throw new IllegalArgumentException(
+                    "Unsupported import file format: '" + extension + "'. " +
+                    "Supported formats: .qfx, .ofx, .csv, .tsv. " +
+                    "File: " + fullPath
+                );
+            }
+        }
+    }
+
+    // ========================================
     // QFX Import Methods (shared by all institutions using QFX format)
     // ========================================
 
@@ -261,4 +336,3 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         }
     }
 }
-
