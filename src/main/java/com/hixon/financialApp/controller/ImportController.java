@@ -94,6 +94,8 @@ import static com.hixon.financialApp.utility.Utility.*;
  *   <li>File versioning preserves original import files for recovery</li>
  * </ul>
  *
+ * @author David Hixon
+ * @version 2.0
  * @see Transaction
  * @see Register
  * @see Merchant
@@ -101,9 +103,6 @@ import static com.hixon.financialApp.utility.Utility.*;
  * @see ForecastTransaction
  * @see FinancialInstitutionInt
  * @see ViewInt
- *
- * @author David Hixon
- * @version 2.0
  * @since 1.0
  */
 @Getter
@@ -111,56 +110,88 @@ import static com.hixon.financialApp.utility.Utility.*;
 public class ImportController {
 
     // Logger:
-    /** Logger for tracking import events and actions during the import process */
+    /**
+     * Logger for tracking import events and actions during the import process
+     */
     private final ImportLog importLog = new ImportLog();
 
 
     // Fields:
+
     /**
      * Enumeration of possible termination conditions for the import process.
      * These values indicate how a particular operation or transaction processing was terminated.
      */
     public enum TerminationCondition {
-        /** Send an inquiry notification to a user for assistance */
+        /**
+         * Send an inquiry notification to a user for assistance
+         */
         INQUIRE,
-        /** Restart processing of the current transaction */
+        /**
+         * Restart processing of the current transaction
+         */
         RESTART,
-        /** Successfully found and processed the required data */
+        /**
+         * Successfully found and processed the required data
+         */
         FOUND,
-        /** User cancelled the current operation */
+        /**
+         * User cancelled the current operation
+         */
         CANCEL,
-        /** User chose to skip the current transaction */
+        /**
+         * User chose to skip the current transaction
+         */
         SKIP,
-        /** User chose to quit the entire import process */
+        /**
+         * User chose to quit the entire import process
+         */
         QUIT
     }
 
-    /** The current termination condition, determines how the import process should proceed */
+    /**
+     * The current termination condition, determines how the import process should proceed
+     */
     public TerminationCondition terminationCondition = QUIT;
 
-    /** The session controller managing the overall application session */
+    /**
+     * The session controller managing the overall application session
+     */
     private final SessionController sessionController;
 
-    /** The register (bank account) into which transactions are being imported */
+    /**
+     * The register (bank account) into which transactions are being imported
+     */
     private final Register register;
 
-    /** The financial institution providing the transaction data (e.g., Wells Fargo) */
+    /**
+     * The financial institution providing the transaction data (e.g., Wells Fargo)
+     */
     private final FinancialInstitutionInt financialInstitution;
 
-    /** The budget associated with this register */
+    /**
+     * The budget associated with this register
+     */
     private final Budget budget;
 
-    /** The forecast used for reconciling imported transactions */
+    /**
+     * The forecast used for reconciling imported transactions
+     */
     private final Forecast forecast;
 
-    /** The view interface for all user interactions */
+    /**
+     * The view interface for all user interactions
+     */
     private final ViewInt view;
 
-    /** Service for sending notifications to users */
+    /**
+     * Service for sending notifications to users
+     */
     private final NotificationServiceInt notificationService;
 
 
     // Constructors:
+
     /**
      * Creates a new ImportController for importing transactions into a specific register.
      *
@@ -195,10 +226,10 @@ public class ImportController {
      *   <li>Third occurrence: "2025-11-15\t-50.00\tWalmart\t3"</li>
      * </ul>
      *
-     * @param map A HashMap tracking instance numbers for each base record ID.
-     *            The key is the base record ID, the value is the highest instance number seen.
+     * @param map                  A HashMap tracking instance numbers for each base record ID.
+     *                             The key is the base record ID, the value is the highest instance number seen.
      * @param importRecordBaseName The base record ID without an instance number.
-     *                              Typically includes date, amount, and payee information.
+     *                             Typically includes date, amount, and payee information.
      * @return The full import record ID with instance number appended
      */
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
@@ -228,9 +259,9 @@ public class ImportController {
      * compares to their planned spending.</p>
      *
      * @param forecast The forecast containing the forecast transactions to check against
-     * @param splits The list of transaction splits to log
-     * @throws SQLException If a database error occurs while retrieving forecast transaction data
-     * @throws EntityException If an error occurs while accessing entity data
+     * @param splits   The list of transaction splits to log
+     * @throws SQLException      If a database error occurs while retrieving forecast transaction data
+     * @throws EntityException   If an error occurs while accessing entity data
      * @throws ForecastException If an error occurs while accessing forecast data
      */
     private void logSplitsAndReconciliation(Forecast forecast, List<TransactionSplit> splits)
@@ -263,28 +294,29 @@ public class ImportController {
      *
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
-     * @throws QuitException If the user quits the import process
-     * @throws Exception If an error occurs closing the financial institution
+     * @throws QuitException       If the user quits the import process
+     * @throws Exception           If an error occurs closing the financial institution
      * @see Register#getTrxImportFilePath()
      */
     public boolean importRegisterTransactionFile() throws ControllerException, QuitException, Exception {
 
         boolean inSync = true;
 
-        // TODO:  Get an iterator for the transactions file:
-
-        // TODO:  Process each transaction in the iterator:
-
-  try {
-      while (financialInstitution.hasNext()) {
-          Transaction t = financialInstitution.next();
-          // Process transaction...
-      }
-  } finally {
-      financialInstitution.close();
-  }
-
         // Call the main import method with the register's configured import file path:
+
+        // TODO:  Get an iterator for the transactions file:
+        financialInstitution.importQfxRegisterTrxFile()
+
+        // Process each transaction in the iterator:
+        try {
+            while (financialInstitution.hasNext()) {
+                Transaction t = financialInstitution.next();
+                // Process transaction...
+            }
+        } finally {
+            financialInstitution.close();
+        }
+
         return inSync;
     }
 
@@ -367,7 +399,7 @@ public class ImportController {
      * @param clearedTransactionsFilename The full path to the CSV file containing cleared transactions
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
-     * @throws QuitException If the user chooses to quit the import process
+     * @throws QuitException       If the user chooses to quit the import process
      * @see Transaction
      * @see Register
      * @see Merchant
@@ -497,8 +529,7 @@ public class ImportController {
                             // then get the merchant with the help of the user:
                             merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
                             currentTransaction.setMerchant(merchant);
-                        }
-                        else {
+                        } else {
                             merchant = provisionalTransaction.getMerchant();
                         }
 
@@ -523,13 +554,13 @@ public class ImportController {
                     if (splits == null) {
                         // Get possible merchants from the transaction payee (0, 1, or more matches)
                         List<Merchant> possibleMerchants =
-                            MerchantUtilities.getPossibleMerchantsByPayee(
-                                currentTransaction.getMerchantPayee());
+                                MerchantUtilities.getPossibleMerchantsByPayee(
+                                        currentTransaction.getMerchantPayee());
 
                         // Try to find a matching forecast transaction within ±5 days
                         ForecastTransaction matchedForecast =
-                            ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                currentTransaction, forecast, possibleMerchants, 5, 5);
+                                ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                        currentTransaction, forecast, possibleMerchants, 5, 5);
 
                         // If we found a confident match
                         if (matchedForecast != null) {
@@ -868,10 +899,10 @@ public class ImportController {
      *
      * @param filename The full path to the TSV file containing provisional transactions
      * @return true if the forecast is in sync after the import, false otherwise
-     * @throws RegisterException If an error occurs while updating the register
-     * @throws ControllerException If a controller logic error occurs during import
-     * @throws EntityException If a database error occurs
-     * @throws BudgetException If an error occurs while processing budget items
+     * @throws RegisterException     If an error occurs while updating the register
+     * @throws ControllerException   If a controller logic error occurs during import
+     * @throws EntityException       If a database error occurs
+     * @throws BudgetException       If an error occurs while processing budget items
      * @throws FinancialAppException If any other error occurs during the import process
      * @see #importCsvRegisterTransactionFile(String)
      * @see Transaction
@@ -1034,13 +1065,13 @@ public class ImportController {
                         if (splits == null) {
                             // Get possible merchants from the transaction payee (0, 1, or more matches)
                             List<Merchant> possibleMerchants =
-                                MerchantUtilities.getPossibleMerchantsByPayee(
-                                    provisionalTransactions.get(provTrxIndex).getMerchantPayee());
+                                    MerchantUtilities.getPossibleMerchantsByPayee(
+                                            provisionalTransactions.get(provTrxIndex).getMerchantPayee());
 
                             // Try to find a matching forecast transaction within ±5 days
                             ForecastTransaction matchedForecast =
-                                ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                    provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
+                                    ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                            provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
 
                             // If we found a confident match
                             if (matchedForecast != null) {
@@ -1141,8 +1172,7 @@ public class ImportController {
                                         }
                                     }
                                 }
-                            }
-                            catch (SkipException se) {
+                            } catch (SkipException se) {
                                 // Move to the next provisional transaction:
                                 provTrxIndex++;
                                 continue;
@@ -1152,7 +1182,7 @@ public class ImportController {
                             if (budgetItemMerchants.isEmpty()) {
                                 try {
                                     budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
-                                } catch (CancelException|SkipException ce) {
+                                } catch (CancelException | SkipException ce) {
 
                                     // Move to the next provisional transaction:
                                     provTrxIndex++;

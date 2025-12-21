@@ -53,6 +53,11 @@ public class MainController {
      * Helper methods:
      */
 
+
+    /*
+     * Main methods:
+     */
+
     /**
      * Run the app with the given user, database connection, resolver, notification service and goals:
      */

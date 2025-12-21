@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.financialinstitution;
 
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -35,6 +36,11 @@ import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
     /**
+     * The session controller.
+     */
+    protected SessionController sessionController;
+
+    /**
      * The register associated with this financial institution account.
      */
     protected Register register;
@@ -67,19 +73,15 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     /**
      * Constructs a new FinancialInstitution with the specified dependencies.
      *
-     * @param register The register to manage transactions for
-     * @param budget The budget to use for transaction categorization
-     * @param forecast The forecast to use for future transaction planning
-     * @param view The view interface for user interaction
-     * @param notificationService The notification service for async notifications
+     * @param sessionController The session controller containing register, budget, forecast, view, and notificationService.
      */
-    protected FinancialInstitution(Register register, Budget budget, Forecast forecast, ViewInt view,
-                                   NotificationServiceInt notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    protected FinancialInstitution(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
     /**
