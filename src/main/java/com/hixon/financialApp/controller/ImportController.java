@@ -302,7 +302,7 @@ public class ImportController {
 
         boolean inSync = true;
 
-        // TODO:  Get an iterator for the transactions file:
+        // Tell the financial institution to import the register transaction file:
         financialInstitution.importRegisterTrxFile();
 
         // Process each transaction in the import file:

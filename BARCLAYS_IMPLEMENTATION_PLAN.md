@@ -1,10 +1,77 @@
-wells # Barclays Bank Implementation Plan (QFX Format)
+# Barclays Bank Implementation Plan (QFX Format)
 ## Test-Driven Development Approach
 
 **Project**: Add support for Barclays Aviator Mastercard credit card tracking  
 **Import Format**: QFX (Quicken 2010 or later format)  
 **Development Methodology**: Test-Driven Development (TDD)  
-**Created**: December 15, 2025
+**Created**: December 15, 2025  
+**Updated**: December 21, 2025
+
+---
+
+## ✅ **COMPLETED ARCHITECTURAL REFACTORINGS** (Dec 21, 2025)
+
+Before starting the Barclays implementation, we completed several major architectural improvements:
+
+### 1. QFX Import Logic Moved to Base Class ✅
+- **Status**: COMPLETE
+- **What**: Moved QFX parsing and import logic from BarclaysBank to abstract FinancialInstitution class
+- **Benefit**: Any bank using QFX format can now inherit this functionality
+- **Files**: FinancialInstitution.java, BarclaysBank.java
+
+### 2. Iterator Pattern for All Institutions ✅
+- **Status**: COMPLETE
+- **What**: FinancialInstitutionInt now extends Iterator<Transaction> and AutoCloseable
+- **Benefit**: Format-agnostic transaction access; ImportController doesn't need to know file format
+- **Files**: FinancialInstitutionInt.java, FinancialInstitution.java
+
+### 3. SessionController Pattern ✅
+- **Status**: COMPLETE
+- **What**: All controllers and factories now use SessionController instead of 5-6 individual parameters
+- **Benefit**: Cleaner API, easier to maintain, consistent pattern throughout codebase
+- **Files**: All controllers, FinancialInstitutionFactory.java
+
+### 4. Database-Driven Institution Type ✅
+- **Status**: COMPLETE
+- **What**: FinancialInstitutionFactory reads `register.financialInstitution` field to determine which implementation to create
+- **Benefit**: No hardcoded logic; easy to add new institutions
+- **Files**: FinancialInstitutionFactory.java, Register.java (has financialInstitution VARCHAR(256) field)
+
+### 5. Filename Moved from Constructor to Method ✅
+- **Status**: COMPLETE
+- **What**: Financial institutions no longer take filename in constructor; instead call `importRegisterTrxFile()` which:
+  - Reads `trxImportFileName` and `trxImportFileDirectory` from register
+  - Constructs full file path
+  - Determines parser by file extension (.qfx, .csv, .tsv)
+  - Creates appropriate parser
+- **Benefit**: Separation of concerns; supports future non-import methods; flexible file handling
+- **Files**: FinancialInstitution.java, all institution implementations
+
+### 6. GenericBank Implementation ✅
+- **Status**: COMPLETE
+- **What**: Created GenericBank for unknown/generic banks
+- **Benefit**: Fallback for banks without specialized parsers
+- **Files**: GenericBank.java
+
+### Current Architecture (Ready for Barclays Testing):
+
+```java
+// How it works now:
+FinancialInstitutionInt institution = FinancialInstitutionFactory.create(sessionController);
+// ^ Factory reads register.financialInstitution field from database
+// ^ Creates WellsFargoBank, BarclaysBank, or GenericBank
+
+institution.importRegisterTrxFile(); 
+// ^ Reads register.trxImportFileName and register.trxImportFileDirectory
+// ^ Determines parser by file extension
+// ^ Opens file and loads transactions
+
+while (institution.hasNext()) {
+    Transaction t = institution.next();
+    // Process transaction...
+}
+institution.close();
+```
 
 ---
 
