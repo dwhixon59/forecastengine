@@ -116,6 +116,16 @@ public class Forecast extends IndependentEntity {
         return description;
     }
 
+    public void setForecastName(String description) {
+        this.description = description;
+        setDirty(true);
+    }
+
+    public void setBudgetId(UUID idBudget) {
+        this.idBudget = idBudget;
+        setDirty(true);
+    }
+
     public void setStartDate(Calendar forecastStartDate) {
         this.startDate = forecastStartDate;
         setDirty(true);
@@ -215,11 +225,20 @@ public class Forecast extends IndependentEntity {
 
     @Override
     public String getInsertQuery() {
-        return insertQuery + "uuid_to_bin('" + id + ", " + description + ", " +
-                Utility.calendarDateToSqlDateString(dateGenerated) + ", " +
-                Utility.calendarDateToSqlDateString(startDate) + ", " + startingBalance +
-                Utility.calendarDateToSqlDateString(endDate) + ", " + endingBalance + ", " + numberOfMonths + ", " +
-                " uuid_to_bin('" + idBudget + "')";
+        String descVal = description != null ? "'" + description + "'" : "NULL";
+        String dateGenVal = dateGenerated != null ? Utility.calendarDateToSqlDateString(dateGenerated) : "NULL";
+        String startDateVal = startDate != null ? Utility.calendarDateToSqlDateString(startDate) : "NULL";
+        String endDateVal = endDate != null ? Utility.calendarDateToSqlDateString(endDate) : "NULL";
+
+        return insertQuery + "uuid_to_bin('" + id + "'), " +
+                descVal + ", " +
+                dateGenVal + ", " +
+                startDateVal + ", " +
+                startingBalance + ", " +
+                endDateVal + ", " +
+                endingBalance + ", " +
+                numberOfMonths + ", " +
+                "uuid_to_bin('" + idBudget + "'))";
     }
 
     @Override
@@ -292,6 +311,15 @@ public class Forecast extends IndependentEntity {
         this.idBudget = UUID.fromString(rs.getString("idBudget"));
     }
 
+    // Default constructor for creating new forecasts:
+    public Forecast() {
+        super(false);
+        this.dateGenerated = Calendar.getInstance();
+        this.startingBalance = 0.0;
+        this.endingBalance = 0.0;
+        this.numberOfMonths = 0;
+    }
+
     /*
      * CRUD methods:
      */
@@ -322,9 +350,28 @@ public class Forecast extends IndependentEntity {
         // Get a list of all the forecasts for the budget:
         List<Forecast> forecasts = Forecast.getListOf(budget);
 
-        // If there are no forecasts, throw an exception:
+        // If there are no forecasts, offer to create one:
         if (forecasts.size() == 0) {
-            throw new ForecastException("There are no forecasts in the database.");
+            Utility.getView().say("No forecasts exist for budget '" + budget.getName() + "'.");
+
+            if (Utility.getView().getYesOrNo("Would you like to create a forecast for this budget?")) {
+                // Create a new forecast
+                Forecast newForecast = new Forecast();
+                newForecast.setId(java.util.UUID.randomUUID());
+                newForecast.setForecastName(budget.getName() + " Forecast");
+                newForecast.setBudgetId(budget.getId());
+                newForecast.setStartDate(java.util.Calendar.getInstance());
+
+                try {
+                    newForecast.insert();
+                    Utility.getView().say("✓ Forecast '" + newForecast.getDescription() + "' created successfully.");
+                    return newForecast;
+                } catch (Exception e) {
+                    throw new ForecastException("Error creating forecast: " + e.getMessage());
+                }
+            } else {
+                throw new ForecastException("No forecast available for budget '" + budget.getName() + "'. Cannot proceed.");
+            }
         }
 
         // If there is only one forecast, return it:

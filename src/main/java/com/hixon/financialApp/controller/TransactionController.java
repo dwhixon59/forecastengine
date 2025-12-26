@@ -734,9 +734,9 @@ public class TransactionController {
 
             // For now, hardcode WellsFargoBank since that's what's currently used
             // TODO: Make this configurable based on register's financial institution
+            SessionController tempSession = new SessionController(transactionRegister, budget, forecast, view, notificationService);
             com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt financialInstitution =
-                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(
-                            transactionRegister, budget, forecast, view, notificationService);
+                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(tempSession);
 
             // Parse the merchant payee from the raw payee to get a cleaned, shortened version
             // Example: "PURCHASE AUTHORIZED ON 11/18 TARGET T-0799..." -> "TARGET T-0799 Sarasota FL"

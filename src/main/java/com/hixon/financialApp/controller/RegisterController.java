@@ -18,6 +18,7 @@ import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
+import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.logging.log4j.LogManager;
@@ -82,8 +83,8 @@ public class RegisterController {
     /**
      * Allows the user to manage registers interactively.
      * The workflow is:
-     * 1. Select a register from all available registers
-     * 2. Choose what to do with it (view details, update balance, or select another)
+     * 1. Select a register from all available registers or create a new one
+     * 2. Choose what to do with it (view details, update, delete, or select another)
      *
      * @throws Exception if any error occurs during management operations
      */
@@ -92,8 +93,32 @@ public class RegisterController {
 
         while (!done) {
             try {
-                // Step 1: Select a register from all available registers
-                Register selectedRegister = selectRegisterForManagement();
+                // Step 1: Ask if user wants to select existing or create new
+                view.sayH1("Manage Registers");
+                String mainAction = view.selectFromMenu("What would you like to do?",
+                        List.of("select existing register", "create new register"),
+                        ViewInt.DO_NOT_ALLOW_NONE, ViewInt.SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP);
+
+                Register selectedRegister = null;
+
+                if (mainAction.equals("s")) {
+                    // Select existing register
+                    selectedRegister = selectRegisterForManagement();
+                    if (selectedRegister == null) {
+                        // User cancelled selection
+                        continue;
+                    }
+                } else if (mainAction.equals("c")) {
+                    // Create new register
+                    selectedRegister = createNewRegister();
+                    if (selectedRegister == null) {
+                        // User cancelled creation
+                        continue;
+                    }
+                    // After creating, don't show the action menu - just loop back
+                    continue;
+                }
 
                 if (selectedRegister == null) {
                     // User cancelled - exit
@@ -1024,6 +1049,62 @@ public class RegisterController {
     } // End processSkippedTransactions().
 
     /**
+     * Create a new register by collecting information from the user.
+     *
+     * @return The newly created Register, or null if cancelled
+     * @throws Exception if any error occurs during creation
+     */
+    private Register createNewRegister() throws Exception {
+        try {
+            view.sayH1("Create New Register");
+            view.say("Let's create a new register. You'll be asked to provide details.");
+            view.say();
+
+            // Get register details from user (pass null as template for new register)
+            Register newRegister = getRegisterFromUser(null);
+
+            if (newRegister == null) {
+                // User cancelled
+                return null;
+            }
+
+            if (!newRegister.isValid()) {
+                view.say("The register information entered is invalid. Please try again.");
+                return null;
+            }
+
+            // Budget has already been assigned during getRegisterFromUser()
+            // No need to override it here
+
+            // Confirm with user before saving
+            Register confirmedRegister = confirmRegister(newRegister, "created");
+
+            if (confirmedRegister == null) {
+                // User chose not to save
+                return null;
+            }
+
+            // Save the new register to the database
+            try {
+                confirmedRegister.insert();
+                view.say();
+                view.say("✓ Register successfully created!");
+                view.say("  " + confirmedRegister.toStringConcise());
+                return confirmedRegister;
+            } catch (Exception e) {
+                view.say("Error creating register: " + e.getMessage());
+                throw e;
+            }
+
+        } catch (CancelException e) {
+            view.say("Register creation cancelled.");
+            return null;
+        } catch (QuitException e) {
+            throw e;
+        }
+    }
+
+    /**
      * Get register information from the user interactively.
      * If a template register is provided, use its values as defaults.
      *
@@ -1046,6 +1127,7 @@ public class RegisterController {
                     ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
 
             // Get the nickname
+            view.say("Nicknames are suggested to be 3 capital letters (e.g., AVR, CHK, SAV)");
             String defaultNickname = template != null ? template.getNickname() : "";
             String nickname = view.getResponseString("Nickname", defaultNickname, ViewInt.DO_NOT_ALLOW_NONE,
                     ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
@@ -1083,6 +1165,28 @@ public class RegisterController {
             String financialInstitution = view.getResponseString("Financial Institution", defaultFinancialInstitution,
                     ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
 
+            // Get the default view type
+            String defaultDefaultView = template != null ? template.getReportType() : "periodic";
+            view.say("Default view types:");
+            view.say("  1-periodic (standard checking account view)");
+            view.say("  2-envelope (goal-oriented view showing progress toward savings goals)");
+            String defaultViewResponse = view.getResponseString("Select Default View Type (or enter view type name)",
+                    defaultDefaultView, ViewInt.DO_NOT_ALLOW_NONE,
+                    ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            // Parse the response - could be a number or a name
+            String defaultView;
+            try {
+                int selection = Integer.parseInt(defaultViewResponse);
+                switch (selection) {
+                    case 1: defaultView = "periodic"; break;
+                    case 2: defaultView = "envelope"; break;
+                    default: defaultView = defaultViewResponse; break;
+                }
+            } catch (NumberFormatException e) {
+                defaultView = defaultViewResponse;
+            }
+
             view.sayH2("Balance Information");
 
             // Get the balance
@@ -1117,12 +1221,68 @@ public class RegisterController {
             String provisionalTrxFileDirectory = view.getResponseString("Provisional Transaction File Directory", defaultProvisionalTrxFileDirectory,
                     ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
 
+            view.sayH2("Budget Assignment");
+
+            // Get or create budget
+            UUID budgetId = null;
+            try {
+                // Get list of existing budgets
+                List<Budget> existingBudgets = Budget.getListOf();
+
+                if (existingBudgets.isEmpty()) {
+                    view.say("No budgets exist yet. You'll need to create one.");
+                    String newBudgetName = view.getResponseString("Budget Name", "", ViewInt.DO_NOT_ALLOW_NONE,
+                            ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+                    // Create new budget
+                    Budget newBudget = new Budget();
+                    newBudget.setId(UUID.randomUUID());
+                    newBudget.setBudgetName(newBudgetName);
+                    newBudget.insert();
+                    budgetId = newBudget.getId();
+                    view.say("✓ Budget '" + newBudgetName + "' created successfully.");
+
+                } else {
+                    // Let user select existing budget or create new one
+                    EntityOrStringResult<Budget> budgetResult = view.selectByNameFromListOrString(
+                            "Select an existing budget or enter a new budget name:",
+                            existingBudgets,
+                            ViewInt.ALLOW_NONE,
+                            true  // allowCreate - user can enter new budget name
+                    );
+
+                    if (budgetResult.isEntitySelected() && budgetResult.getSelectedEntity() != null) {
+                        // User selected existing budget
+                        budgetId = budgetResult.getSelectedEntity().getId();
+                        view.say("Selected budget: " + budgetResult.getSelectedEntity().getName());
+                    } else if (!budgetResult.isEntitySelected()) {
+                        // User entered new budget name
+                        String newBudgetName = budgetResult.getSearchString();
+                        Budget newBudget = new Budget();
+                        newBudget.setId(UUID.randomUUID());
+                        newBudget.setBudgetName(newBudgetName);
+                        newBudget.insert();
+                        budgetId = newBudget.getId();
+                        view.say("✓ Budget '" + newBudgetName + "' created successfully.");
+                    } else {
+                        // User chose to leave budget null for now (selected entity is null)
+                        view.say("No budget assigned. You can update this register later to assign a budget.");
+                        budgetId = null;
+                    }
+                }
+            } catch (Exception e) {
+                view.say("Error accessing budgets: " + e.getMessage());
+                view.say("Continuing without budget assignment. You can update the register later.");
+                budgetId = null;
+            }
+
             // Create Register object
             Register register = new Register();
             register.setId(UUID.randomUUID());
             register.setName(name);
             register.setNickname(nickname);
             register.setAccountType(accountType);
+            register.setDefaultView(defaultView); // Set user-selected default view
             register.setAccountNumber(accountNumber);
             register.setFinancialInstitution(financialInstitution);
             register.setBalance(balance);
@@ -1131,10 +1291,17 @@ public class RegisterController {
             register.setTrxImportFileDirectory(trxImportFileDirectory);
             register.setProvisionalTrxFileName(provisionalTrxFileName);
             register.setProvisionalTrxFileDirectory(provisionalTrxFileDirectory);
+            register.setIdBudget(budgetId); // Set the budget ID (may be null)
 
-            // Copy over the budget ID if updating
+            // Copy over the budget ID and default_view if updating
             if (template != null) {
-                register.setIdBudget(template.getIdBudget());
+                // Only override budgetId if it wasn't just set
+                if (budgetId == null && template.getIdBudget() != null) {
+                    register.setIdBudget(template.getIdBudget());
+                }
+                if (template.getReportType() != null) {
+                    register.setDefaultView(template.getReportType());
+                }
             }
 
             return register;
@@ -1178,7 +1345,21 @@ public class RegisterController {
         view.say("Register: " + register.getName());
         view.say("Nickname: " + (register.getNickname() != null ? register.getNickname() : "(none)"));
         view.say("Account Type: " + (register.getAccountType() != null ? register.getAccountType() : "(none)"));
+        view.say("Default View: " + (register.getReportType() != null ? register.getReportType() : "(none)"));
         view.say("Account Number: " + (register.getAccountNumber() != null ? register.getAccountNumber() : "(none)"));
+
+        // Display budget if assigned
+        if (register.getIdBudget() != null) {
+            try {
+                Budget budget = Budget.getById(register.getIdBudget());
+                view.say("Budget: " + budget.getName());
+            } catch (Exception e) {
+                view.say("Budget: (error retrieving budget name)");
+            }
+        } else {
+            view.say("Budget: (none)");
+        }
+
         view.say("Balance: " + Utility.formatDollarAmount(register.getBalance()));
         view.say("Skipped Amount: " + Utility.formatDollarAmount(register.getSkippedAmount()));
         view.say("Financial Institution: " + (register.getFinancialInstitution() != null ? register.getFinancialInstitution() : "(none)"));

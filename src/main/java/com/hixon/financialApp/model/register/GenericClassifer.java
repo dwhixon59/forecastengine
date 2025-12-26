@@ -9,6 +9,7 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
+import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -159,6 +160,14 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
      */
     @Override
     public String extractAccountType(String payee) {return "";}
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void importRegisterTrxFile() throws IOException {
+        throw new UnsupportedOperationException("GenericClassifier does not support file import");
+    }
 
     // Iterator methods - not supported by GenericClassifier
     @Override

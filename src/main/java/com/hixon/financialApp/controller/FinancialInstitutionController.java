@@ -15,11 +15,11 @@ import com.hixon.financialApp.view.base.ViewInt;
 public abstract class FinancialInstitutionController extends FinancialInstitution {
 
    /**
-    * @deprecated Use {@link FinancialInstitution#FinancialInstitution(Register, Budget, Forecast, ViewInt, NotificationServiceInt)} instead
+    * @deprecated Use {@link FinancialInstitution#FinancialInstitution(SessionController)} instead
     */
    @Deprecated
    FinancialInstitutionController(Register register, Budget budget, Forecast forecast, ViewInt view,
                                   NotificationServiceInt notificationService) {
-      super(register, budget, forecast, view, notificationService);
+      super(new SessionController(register, budget, forecast, view, notificationService));
    }
 }

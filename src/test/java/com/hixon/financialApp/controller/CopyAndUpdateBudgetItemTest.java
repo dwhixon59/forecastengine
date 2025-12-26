@@ -50,8 +50,9 @@ public class CopyAndUpdateBudgetItemTest {
         when(mockBudget.getId()).thenReturn(UUID.randomUUID());
         when(mockBudget.getName()).thenReturn("Test Budget");
 
-        // Create controller
-        budgetController = new BudgetController(mockRegister, mockBudget, mockForecast, mockView, null);
+        // Create controller with SessionController
+        SessionController sessionController = new SessionController(mockRegister, mockBudget, mockForecast, mockView, null);
+        budgetController = new BudgetController(sessionController);
 
         // Create REAL template budget items (not mocked) since BudgetItem extends IndependentEntity which has final methods
         try {

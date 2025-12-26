@@ -14,7 +14,6 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.util.Calendar;
 import java.util.List;
@@ -161,7 +160,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     /**
      * Imports transactions from the register's configured import file.
      *
-     * <p>This method reads the import filename and directory from the register,
+     * <p>This method reads the import file path from the register,
      * determines the file type by extension, and creates the appropriate parser
      * (CSV, QFX, etc.) to read transactions.
      *
@@ -178,30 +177,21 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * @throws IllegalStateException if register doesn't have import file configured
      */
     public void importRegisterTrxFile() throws Exception {
-        // Get import file information from register
-        String filename = register.getTrxImportFileName();
-        String directory = register.getTrxImportFileDirectory();
+        // Get full import file path from register
+        String fullPath = register.getTrxImportFilePath();
 
-        if (filename == null || filename.trim().isEmpty()) {
+        if (fullPath == null || fullPath.trim().isEmpty()) {
             throw new IllegalStateException(
-                "Register '" + register.getName() + "' does not have an import filename configured. " +
-                "Please set trxImportFileName field."
+                "Register '" + register.getName() + "' does not have an import file path configured. " +
+                "Please set trxImportFileName and trxImportFileDirectory fields."
             );
-        }
-
-        // Construct full file path
-        String fullPath;
-        if (directory != null && !directory.trim().isEmpty()) {
-            fullPath = new File(directory, filename).getAbsolutePath();
-        } else {
-            fullPath = filename; // Use filename as-is if no directory specified
         }
 
         // Determine file type by extension
         String extension = "";
-        int lastDot = filename.lastIndexOf('.');
+        int lastDot = fullPath.lastIndexOf('.');
         if (lastDot > 0) {
-            extension = filename.substring(lastDot + 1).toLowerCase();
+            extension = fullPath.substring(lastDot + 1).toLowerCase();
         }
 
         // Create appropriate parser based on file extension

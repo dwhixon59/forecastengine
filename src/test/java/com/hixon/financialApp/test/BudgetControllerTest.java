@@ -3,6 +3,7 @@ package com.hixon.financialApp.test;
 import com.hixon.financialApp.controller.BudgetController;
 import com.hixon.financialApp.controller.CancelException;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetItem;
@@ -51,8 +52,9 @@ public class BudgetControllerTest {
         Budget budget = Budget.getByName("Bill Pay Account");
         Forecast forecast = Forecast.getByName("Bill Pay Account");
         Merchant merchant = Merchant.getByName("Amazon");
-        BudgetController budgetController = new BudgetController(register, budget, forecast, testController.getView(),
-                testController.getNotificationService());
+        SessionController sessionController = new SessionController(register, budget, forecast,
+                testController.getView(), testController.getNotificationService());
+        BudgetController budgetController = new BudgetController(sessionController);
 
         // Test the getBudgetItemByNameFullText() method:
         while (true) {

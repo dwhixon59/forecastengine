@@ -1159,8 +1159,26 @@ public class ViewCmdline implements ViewInt {
             boolean isQuitAllowed,
             boolean isSkipAllowed)
             throws CancelException, QuitException, SkipException {
-        return selectFromNumberedListOrString(prompt, items, allowNone, allowCreate, isCancelAllowed, isQuitAllowed,
-                isSkipAllowed);
+        return selectFromNumberedListOrString(prompt, items, null, allowNone, allowCreate, SHOW_CANCEL_QUIT_SKIP,
+                isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public NumberOrStringResponse selectFromListOrString(
+            String prompt,
+            List<String> items,
+            Integer defaultIndex,
+            boolean allowNone,
+            boolean allowCreate,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException {
+        return selectFromNumberedListOrString(prompt, items, defaultIndex, allowNone, allowCreate, SHOW_CANCEL_QUIT_SKIP,
+                isCancelAllowed, isQuitAllowed, isSkipAllowed, null);
     }
 
     /**
@@ -1603,6 +1621,7 @@ public class ViewCmdline implements ViewInt {
 
     /**
      * Helper method for selectFromListOrString methods.
+     * Displays items in pages of 25 with Forward/Back navigation for long lists.
      */
     public NumberOrStringResponse selectFromNumberedListOrString(
             String prompt,
@@ -1626,35 +1645,85 @@ public class ViewCmdline implements ViewInt {
             return new NumberOrStringResponse(0); // Return index 0 (the only item)
         }
 
-        sayH3(prompt);
-
-        String optionPrompt = "Enter your choice";
-
-        if (allowNone) {
-            optionPrompt += ", 0 for none";
-        }
-
-        if (allowCreate) {
-            // Check if this is a search/selection context vs. a create new entity context
-            if (prompt.toLowerCase().contains("select") || prompt.toLowerCase().contains("search")) {
-                optionPrompt += ", or enter a new search string";
-            } else {
-                optionPrompt += ", or enter a new value";
-            }
-        }
-
-        // Display the list of items:
-        for (int i = 0; i < items.size(); i++) {
-            say("  " + (i + 1) + " - " + items.get(i));
-        }
+        final int ITEMS_PER_PAGE = 25;
+        int totalItems = items.size();
+        int totalPages = (int) Math.ceil((double) totalItems / ITEMS_PER_PAGE);
+        int currentPage = 0;  // 0-based page index
 
         while (true) {
+            sayH3(prompt);
+
+            // Calculate the range of items to display for the current page
+            int startIndex = currentPage * ITEMS_PER_PAGE;
+            int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+
+            // Show page header if there are multiple pages
+            if (totalPages > 1) {
+                say(String.format("  (Page %d of %d, showing %d-%d of %d)",
+                        currentPage + 1, totalPages, startIndex + 1, endIndex, totalItems));
+            }
+
+            // Display the items for this page:
+            for (int i = startIndex; i < endIndex; i++) {
+                say("  " + (i + 1) + " - " + items.get(i));
+            }
+
+            // Build the navigation hint
+            StringBuilder navHint = new StringBuilder();
+            if (currentPage > 0) {
+                navHint.append("  ['B' for back]");
+            }
+            if (currentPage < totalPages - 1) {
+                if (navHint.length() > 0) navHint.append(" ");
+                navHint.append("  ['F' for forward]");
+            }
+            if (navHint.length() > 0) {
+                say(navHint.toString());
+            }
+
+            // Build the option prompt
+            String optionPrompt = "Enter your choice";
+
+            if (allowNone) {
+                optionPrompt += ", 0 for none";
+            }
+
+            if (allowCreate) {
+                // Check if this is a search/selection context vs. a create new entity context
+                if (prompt.toLowerCase().contains("select") || prompt.toLowerCase().contains("search")) {
+                    optionPrompt += ", or enter a new search string";
+                } else {
+                    optionPrompt += ", or enter a new value";
+                }
+            }
 
             // Convert defaultItemIndex to 1-based for display (getResponseString will add the brackets)
             String defaultItemIndexStr = (defaultItemIndex != null) ? String.valueOf(defaultItemIndex + 1) : null;
             String response = getResponseString(optionPrompt, defaultItemIndexStr, allowNone,
                     showCancelQuitSkipPrompt, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpSupplier);
 
+            // Handle navigation commands
+            if (response.equalsIgnoreCase("F")) {
+                if (currentPage < totalPages - 1) {
+                    currentPage++;
+                    continue;
+                } else {
+                    say("Already on the last page.");
+                    continue;
+                }
+            }
+
+            if (response.equalsIgnoreCase("B")) {
+                if (currentPage > 0) {
+                    currentPage--;
+                    continue;
+                } else {
+                    say("Already on the first page.");
+                    continue;
+                }
+            }
+
+            // Try to parse as a number
             try {
                 int selection = Integer.parseInt(response);
                 if (selection == 0 && allowNone) {

@@ -701,7 +701,7 @@ public class BudgetController {
             } else {
                 // Existing categories available - let user select or enter new
                 String defaultCategory = template != null ? template.getCategory() : null;
-                int defaultIndex = -1;
+                Integer defaultIndex = null;
                 if (defaultCategory != null && !defaultCategory.trim().isEmpty()) {
                     // Find the index of the default category in the list
                     for (int i = 0; i < existingCategories.size(); i++) {
@@ -715,6 +715,7 @@ public class BudgetController {
                 NumberOrStringResponse response = view.selectFromListOrString(
                         "Select an existing category or enter a new one:",
                         existingCategories,
+                        defaultIndex,
                         DO_NOT_ALLOW_NONE,
                         ViewInt.ALLOW_CREATE,
                         ALLOW_CANCEL,
@@ -899,9 +900,22 @@ public class BudgetController {
                                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP,
                                 () -> helpText.getProperty("budgetitem.category")).trim();
                     } else {
+                        // Find the index of the current category in the list
+                        Integer defaultIndex = null;
+                        String currentCategory = budgetItem.getCategory();
+                        if (currentCategory != null && !currentCategory.trim().isEmpty()) {
+                            for (int i = 0; i < existingCategories.size(); i++) {
+                                if (existingCategories.get(i).equalsIgnoreCase(currentCategory.trim())) {
+                                    defaultIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+
                         NumberOrStringResponse response = view.selectFromListOrString(
                                 "Select an existing category or enter a new one:",
                                 existingCategories,
+                                defaultIndex,
                                 DO_NOT_ALLOW_NONE,
                                 ViewInt.ALLOW_CREATE,
                                 ALLOW_CANCEL,

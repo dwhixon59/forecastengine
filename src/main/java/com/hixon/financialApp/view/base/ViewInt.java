@@ -674,6 +674,37 @@ public interface ViewInt {
             throws CancelException, QuitException, SkipException;
 
     /**
+     * Have the user select a string from a list, or enter an arbitrary string. This is targeted at selecting from
+     * a potentially long list of items typically retrieved from a database or cache, with the ability to enter a
+     * custom value if none of the options match.
+     * If allowed, the user may also specify cancel, skip or quit. If cancel, skip or quit is allowed, then the
+     * CancelException, SkipException or QuitException may be thrown.
+     *
+     * @param prompt          The prompt to display to the user.
+     * @param items           A list of strings to select from.
+     * @param defaultIndex    The 0-based index of the default item to pre-select (null for no default)
+     * @param allowNone       Is the user allowed to select none of the items?
+     * @param allowCreate     Is the user allowed to create a new item by entering a string?
+     * @param isCancelAllowed Is the user allowed to cancel the current process?
+     * @param isQuitAllowed   Is the user allowed to quit the program?
+     * @param isSkipAllowed   Is the user allowed to skip this item and not enter an integer?
+     * @return The selected item or null if none was selected, or a custom string entered by the user.
+     * @throws CancelException
+     * @throws QuitException
+     * @throws SkipException
+     */
+    NumberOrStringResponse selectFromListOrString(
+            String prompt,
+            List<String> items,
+            Integer defaultIndex,
+            boolean allowNone,
+            boolean allowCreate,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
      * Displays a list of items and a menu of options. The user can:
      * 1. Enter a number (1-N) to select an item from the list by position
      * 2. Enter a single letter (e.g., v,u,a,d,s) to choose a menu option

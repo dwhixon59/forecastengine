@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.financialinstitution;
 
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
@@ -32,21 +33,31 @@ class BarclaysBankTest {
         return new File(resource.toURI()).getAbsolutePath();
     }
 
-    @Test
-    @DisplayName("Test 1: Constructor with valid QFX file succeeds")
-    void testConstructor_ValidQfxFile() throws Exception {
-        // Arrange
-        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+    /**
+     * Helper method to create a SessionController with mocked dependencies.
+     */
+    private SessionController createMockSessionController(String qfxFilePath) {
         Register mockRegister = mock(Register.class);
+        when(mockRegister.getTrxImportFileDirectory()).thenReturn(new File(qfxFilePath).getParent());
+        when(mockRegister.getTrxImportFileName()).thenReturn(new File(qfxFilePath).getName());
+
         Budget mockBudget = mock(Budget.class);
         Forecast mockForecast = mock(Forecast.class);
         ViewInt mockView = mock(ViewInt.class);
         NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
 
+        return new SessionController(mockRegister, mockBudget, mockForecast, mockView, mockNotificationService);
+    }
+
+    @Test
+    @DisplayName("Test 1: Constructor with SessionController succeeds")
+    void testConstructor_ValidSessionController() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+
         // Act
-        BarclaysBank barclays = new BarclaysBank(
-            qfxFile, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-        );
+        BarclaysBank barclays = new BarclaysBank(sessionController);
 
         // Assert
         assertNotNull(barclays, "BarclaysBank should be created");
@@ -56,64 +67,19 @@ class BarclaysBankTest {
     }
 
     @Test
-    @DisplayName("Test 2: Constructor with null filename throws exception")
-    void testConstructor_NullFilename() {
-        // Arrange
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            new BarclaysBank(
-                null, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-            );
-        }, "Constructor should throw IllegalArgumentException for null filename");
-    }
-
-    @Test
-    @DisplayName("Test 3: Constructor with empty filename throws exception")
-    void testConstructor_EmptyFilename() {
-        // Arrange
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            new BarclaysBank(
-                "", mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-            );
-        }, "Constructor should throw IllegalArgumentException for empty filename");
-    }
-
-    @Test
-    @DisplayName("Test 4: hasNext returns false for file with no transactions")
-    void testHasNext_NoTransactions() throws Exception {
+    @DisplayName("Test 2: importRegisterTrxFile loads QFX file successfully")
+    void testImportRegisterTrxFile_ValidFile() throws Exception {
         // Arrange
         String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        BarclaysBank barclays = new BarclaysBank(
-            qfxFile, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-        );
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
 
         try {
             // Act
-            boolean hasNext = barclays.hasNext();
+            barclays.importRegisterTrxFile();
 
-            // Assert
-            // Note: Currently QfxParser returns empty transaction list
-            // This will change when we implement actual transaction extraction
-            assertFalse(hasNext, "Should return false when no transactions available");
+            // Assert - should not throw exception
+            assertNotNull(barclays, "BarclaysBank should successfully import file");
 
         } finally {
             // Cleanup
@@ -122,21 +88,41 @@ class BarclaysBankTest {
     }
 
     @Test
-    @DisplayName("Test 5: Iterator can iterate through transactions")
+    @DisplayName("Test 3: hasNext returns true for file with transactions")
+    void testHasNext_NoTransactions() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            // Import the file first
+            barclays.importRegisterTrxFile();
+
+            // Act
+            boolean hasNext = barclays.hasNext();
+
+            // Assert
+            assertTrue(hasNext, "Should return true when transactions are available");
+
+        } finally {
+            // Cleanup
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 4: Iterator can iterate through transactions")
     void testIterator_IterateThroughTransactions() throws Exception {
         // Arrange
         String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        BarclaysBank barclays = new BarclaysBank(
-            qfxFile, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-        );
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
 
         try {
+            // Import the file first
+            barclays.importRegisterTrxFile();
+
             // Act
             List<Transaction> transactions = new ArrayList<>();
             while (barclays.hasNext()) {
@@ -145,9 +131,7 @@ class BarclaysBankTest {
             }
 
             // Assert
-            // Note: Currently returns 0 transactions
-            // Will change when we implement actual transaction extraction
-            assertEquals(0, transactions.size(), "Should iterate through all transactions");
+            assertEquals(1, transactions.size(), "Should have exactly 1 transaction from test file");
 
         } finally {
             // Cleanup
@@ -156,19 +140,12 @@ class BarclaysBankTest {
     }
 
     @Test
-    @DisplayName("Test 6: parseMerchantPayee returns payee as-is")
+    @DisplayName("Test 5: parseMerchantPayee returns payee as-is")
     void testParseMerchantPayee() throws Exception {
         // Arrange
         String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        BarclaysBank barclays = new BarclaysBank(
-            qfxFile, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-        );
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
 
         try {
             // Act
@@ -184,19 +161,12 @@ class BarclaysBankTest {
     }
 
     @Test
-    @DisplayName("Test 7: CSV methods throw UnsupportedOperationException")
+    @DisplayName("Test 6: CSV methods throw UnsupportedOperationException")
     void testCsvMethods_ThrowException() throws Exception {
         // Arrange
         String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
-        Register mockRegister = mock(Register.class);
-        Budget mockBudget = mock(Budget.class);
-        Forecast mockForecast = mock(Forecast.class);
-        ViewInt mockView = mock(ViewInt.class);
-        NotificationServiceInt mockNotificationService = mock(NotificationServiceInt.class);
-
-        BarclaysBank barclays = new BarclaysBank(
-            qfxFile, mockRegister, mockBudget, mockForecast, mockView, mockNotificationService
-        );
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
 
         try {
             // Act & Assert
@@ -214,6 +184,207 @@ class BarclaysBankTest {
 
         } finally {
             // Cleanup
+            barclays.close();
+        }
+    }
+
+    // ========================================
+    // Phase 2: Transaction Conversion Tests
+    // ========================================
+
+    @Test
+    @DisplayName("Test 7: Convert QFX purchase to Transaction")
+    void testConvertPurchaseTransaction() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction, "Transaction should not be null");
+            assertEquals("NETFLIX.COM", transaction.getMerchantPayee(), "Merchant payee should match");
+            assertEquals(-28.20, transaction.getAmount(), 0.01, "Amount should match");
+            assertTrue(transaction.isCleared(), "QFX transactions should be cleared");
+            assertNotNull(transaction.getImportRecordId(), "Import record ID should be set");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 8: Convert QFX payment to Transaction")
+    void testConvertPaymentTransaction() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-payment.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction, "Transaction should not be null");
+            assertEquals("PAYMENT RECV'D CHECKFREE", transaction.getMerchantPayee(), "Merchant payee should match");
+            assertEquals(2219.00, transaction.getAmount(), 0.01, "Amount should be positive for payment");
+            assertTrue(transaction.isCleared(), "QFX transactions should be cleared");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 9: Convert QFX fee to Transaction")
+    void testConvertFeeTransaction() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-annual-fee.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction, "Transaction should not be null");
+            assertEquals("PRIMARY ANNUAL FEE", transaction.getMerchantPayee(), "Merchant payee should match");
+            assertEquals(-99.00, transaction.getAmount(), 0.01, "Fee should be negative");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 10: Convert QFX interest charge to Transaction")
+    void testConvertInterestTransaction() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-interest-charge.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction, "Transaction should not be null");
+            assertEquals("INTEREST CHARGE-PURCHASES", transaction.getMerchantPayee(), "Merchant payee should match");
+            assertEquals(-237.23, transaction.getAmount(), 0.01, "Interest should be negative");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 11: Convert QFX reward credit to Transaction")
+    void testConvertRewardTransaction() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-reward-credit.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction, "Transaction should not be null");
+            assertEquals("AA 25% INFLIGHT CREDIT", transaction.getMerchantPayee(), "Merchant payee should match");
+            assertEquals(5.00, transaction.getAmount(), 0.01, "Reward should be positive");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 12: Transaction dates are converted correctly")
+    void testTransactionDates() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction.getDate(), "Transaction date should be set");
+            // Date should be 2025-12-10 based on test file
+            // Calendar months are 0-based, so December = 11
+            assertEquals(11, transaction.getDate().get(java.util.Calendar.MONTH), "Month should be December");
+            assertEquals(10, transaction.getDate().get(java.util.Calendar.DAY_OF_MONTH), "Day should be 10");
+            assertEquals(2025, transaction.getDate().get(java.util.Calendar.YEAR), "Year should be 2025");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 13: Transactions have unique import record IDs")
+    void testImportRecordIdUniqueness() throws Exception {
+        // This test would need a file with multiple transactions
+        // For now, just verify single transaction has an ID
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            // Act
+            Transaction transaction = barclays.next();
+
+            // Assert
+            assertNotNull(transaction.getImportRecordId(), "Import record ID should not be null");
+            assertFalse(transaction.getImportRecordId().isEmpty(), "Import record ID should not be empty");
+            // FITID from test file
+            assertEquals("554328650712053126673293001", transaction.getImportRecordId(),
+                "Import record ID should match FITID from QFX");
+
+        } finally {
+            barclays.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test 14: No provisional transactions for QFX (always cleared)")
+    void testNoProvisionalTransactions() throws Exception {
+        // Arrange
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            // Act
+            Transaction result = barclays.getMatchingProvisionalTransaction(mock(Transaction.class));
+
+            // Assert
+            assertNull(result, "QFX format does not support provisional transactions");
+
+        } finally {
             barclays.close();
         }
     }
