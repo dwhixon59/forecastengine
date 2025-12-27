@@ -300,7 +300,10 @@ public class MainController {
                         Forecast forecast = new Forecast(sessionController.getBudget(), startDate, numberOfMonths, startingBalance, minimumBalance);
                         forecastEngine.generateForecast(forecast, startDate);
                         sessionController.setForecast(forecast);
-                        view.say("The forecast was successfully generated");
+
+                        // Save the forecast and all its transactions to the database:
+                        forecast.saveAll();
+                        view.say("The forecast was successfully generated and saved to the database");
                         view.say("------------------------------------------------------------------------");
                         break;
 
