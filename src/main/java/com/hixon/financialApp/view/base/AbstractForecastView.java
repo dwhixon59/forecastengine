@@ -327,6 +327,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // Print out the forecast summary:
         getView().say("\nForecast Summary:");
 
+        // Check if we have any forecast transactions
+        if (lastForecastTransaction == null) {
+            getView().say("No forecast transactions found in the forecast period.");
+            getView().say("The starting balance is: " + Utility.formatRoundedDollarAmount(startingBalance));
+            return true;
+        }
+
         // Display the forecast summary period:
         int numberOfMonthsInForecast = Utility.monthsBetweenDatesInclusive(firstFirstOfMonth,
                 lastForecastTransaction.getPlannedDate());

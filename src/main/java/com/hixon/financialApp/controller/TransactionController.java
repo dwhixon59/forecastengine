@@ -899,6 +899,9 @@ public class TransactionController {
                 }
 
                 if (forecastToUse != null) {
+                    // Update the SessionController with the selected forecast
+                    sessionController.setForecast(forecastToUse);
+
                     ForecastController forecastController = new ForecastController(sessionController);
                     forecastController.reconcile(transaction, splits);
                     view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");

@@ -149,6 +149,8 @@ public class DataManagerController {
     private void ensureBudgetContext() throws Exception {
         if (budget == null && register != null) {
             budget = Budget.getById(register.getBudgetID());
+            // Update the SessionController with the budget
+            sessionController.setBudget(budget);
         } else if (budget == null) {
             // No register context, so select budget directly
             view.say("Please select a budget to work with:");
@@ -158,6 +160,8 @@ public class DataManagerController {
             }
             budget = view.selectByNameFromList("Select Budget", availableBudgets, DO_NOT_ALLOW_NONE,
                     ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            // Update the SessionController with the selected budget
+            sessionController.setBudget(budget);
         }
     }
 
@@ -171,6 +175,8 @@ public class DataManagerController {
         ensureBudgetContext();
         if (forecast == null) {
             forecast = Forecast.selectForecast(budget);
+            // Update the SessionController with the selected forecast
+            sessionController.setForecast(forecast);
         }
     }
 }

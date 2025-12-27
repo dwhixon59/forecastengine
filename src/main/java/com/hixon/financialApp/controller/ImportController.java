@@ -429,31 +429,37 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
-                            // If we found a merchant from the payee, use it
+                            // Determine the merchant for this transaction
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
                                 merchant = possibleMerchants.getFirst();
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-                            } else if (merchant != null) {
-                                // Use the merchant we already identified
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
+                            } else if (merchant == null) {
+                                // If we can't determine a unique merchant, we need to ask the user
+                                // Don't auto-save in this case - let the normal merchant assignment flow handle it
+                                // But we can still keep the splits for later use
+                                merchant = null;  // Explicitly set to null to skip auto-save
                             }
 
-                            // Save the transaction with merchant info
-                            currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                            // Only save and reconcile if we successfully identified a merchant
+                            if (merchant != null) {
+                                currentTransaction.setMerchant(merchant);
+                                currentTransaction.setIdMerchant(merchant.getId());
 
-                            // Save the splits
-                            for (TransactionSplit split : splits) {
-                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                // Save the transaction with merchant info
+                                currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                                // Save the splits
+                                for (TransactionSplit split : splits) {
+                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                }
+
+                                // Reconcile immediately with the forecast (no need to do it again in Phase 5)
+                                ForecastController forecastController = new ForecastController(sessionController);
+                                forecastController.reconcile(currentTransaction, splits);
+
+                                // Mark that we've auto-matched and already reconciled
+                                autoMatched = true;
                             }
-
-                            // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                            ForecastController forecastController = new ForecastController(sessionController);
-                            forecastController.reconcile(currentTransaction, splits);
-
-                            // Mark that we've auto-matched and already reconciled
-                            autoMatched = true;
+                            // If merchant is still null, splits will be saved later after merchant assignment
                         }
                     }
 
