@@ -915,6 +915,12 @@ public class ForecastController {
         // Get the first forecast transaction in the list:
         ForecastTransaction firstForecastTransaction = forecastTransactions.getNext();
 
+        // If there are no forecast transactions, we can't update the forecast dates
+        if (firstForecastTransaction == null) {
+            view.say("No forecast transactions found in the forecast. Forecast dates not updated.");
+            return;
+        }
+
         // Reset the forecast start date to the date of the first non-zero forecast transaction:
         forecast.setStartDate(firstForecastTransaction.getPlannedDate());
 
