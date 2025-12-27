@@ -1348,6 +1348,11 @@ public abstract class Item extends IndependentEntity {
                     nextDate.set(Calendar.DATE, Math.min(startDate.get(Calendar.DATE), nextDate.getActualMaximum(Calendar.DATE)));
                     break;
 
+                case ON_DEMAND:
+                    // ON_DEMAND items have no predictable next occurrence, so return null
+                    nextDate = null;
+                    break;
+
                 default:
                     throw new ForecastException("Can't get the next date because period " + period + " is unrecognized.");
             }
