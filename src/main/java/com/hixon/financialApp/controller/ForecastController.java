@@ -588,9 +588,10 @@ public class ForecastController {
             // Get the name and type of the source:
             //String sourceName = getForecastController().getUserSelectedString("Enter the name of the external source " +
             //        "of forecast transactions:");
-            // For now, hard code the name of the external source:
+            // For now, hard code the directory and construct the filename from the forecast name:
+            String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
             String sourceName = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
-                    "\\LongTermForecast-BillPayAccount.csv";
+                    "\\LongTermForecast-" + forecastName + ".csv";
 
             //String sourceType = getForecastController().getUserSelectedString("Enter the type of the external source " +
             //        "of forecast transactions:");
