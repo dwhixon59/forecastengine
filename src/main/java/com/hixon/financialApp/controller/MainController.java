@@ -301,6 +301,10 @@ public class MainController {
                         forecastEngine.generateForecast(forecast, startDate);
                         sessionController.setForecast(forecast);
 
+                        // Calculate and save running balances for all forecast transactions:
+                        forecastController = new ForecastController(sessionController);
+                        forecastController.calculateAndSaveRunningBalances(forecast);
+
                         // Save the forecast and all its transactions to the database:
                         forecast.saveAll();
                         view.say("The forecast was successfully generated and saved to the database");

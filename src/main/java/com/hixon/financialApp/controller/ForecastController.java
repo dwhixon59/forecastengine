@@ -58,6 +58,42 @@ public class ForecastController {
 
 
     /**
+     * Helper Methods for ForecastController:
+     */
+
+    /**
+     * Calculate and save running balances for all forecast transactions in the forecast.
+     * This method iterates through all forecast transactions in chronological order,
+     * calculates the running balance for each, and saves it to the database.
+     *
+     * @param forecast The forecast to calculate running balances for
+     * @throws Exception if an error occurs while calculating or saving running balances
+     */
+    public void calculateAndSaveRunningBalances(Forecast forecast) throws Exception {
+        // Get the starting balance from the first register associated with the budget
+        List<Register> registers = forecast.getBudget().getRegisters();
+        if (registers == null || registers.isEmpty()) {
+            return; // No registers, no running balance to calculate
+        }
+
+        double runningBalance = registers.getFirst().getBalance();
+
+        // Get all forecast transactions in chronological order
+        ForecastTransactionIterator forecastTransactions =
+            ForecastTransaction.getForecastTransactionsStartingOn(forecast, forecast.getStartDate());
+
+        ForecastTransaction forecastTransaction = forecastTransactions.getNext();
+
+        // Calculate and save running balance for each transaction
+        while (forecastTransaction != null) {
+            runningBalance += forecastTransaction.getRemainingAmount();
+            forecastTransaction.setRunningBalance(runningBalance);
+            forecastTransaction.save(UPDATE);
+            forecastTransaction = forecastTransactions.getNext();
+        }
+    }
+
+    /**
      * Main methods for ForecastController:
      */
     /**
@@ -906,6 +942,9 @@ public class ForecastController {
         // The forecast engine doesn't know that we are updating a forecast. It will have set the first occurrence
         // properly for a new forecast. Fix up the flags in the updated forecast.
         ForecastTransaction.cleanUpForecast(forecast);
+
+        // Calculate and save running balances for all forecast transactions:
+        calculateAndSaveRunningBalances(forecast);
 
         // Mark the forecast as in sync.
         forecast.setInSync(true);
