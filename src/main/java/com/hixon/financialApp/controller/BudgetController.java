@@ -536,6 +536,25 @@ public class BudgetController {
             budget, List<BudgetItemMerchant> budgetItemMerchants)
             throws Exception {
 
+        // If there are no budget items assigned to this merchant, we need to ask the user to assign one first:
+        if (budgetItemMerchants.isEmpty()) {
+            view.say("No budget items are currently assigned to merchant '" + merchant.getName() + "'.");
+            view.say("Please select a budget item to associate with this merchant.");
+
+            // Get all budget items from the budget and ask the user to select one:
+            List<BudgetItem> budgetItems = budget.getBudgetItems();
+            BudgetItem selectedBudgetItem = getUserSelectedBudgetItem(budgetItems);
+
+            // Create a new BudgetItemMerchant association:
+            BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(selectedBudgetItem.getId(),
+                    merchant.getId(), 0, 0);
+            budgetItemMerchant.save();
+            budgetItemMerchants.add(budgetItemMerchant);
+
+            view.say("Budget item '" + selectedBudgetItem.getPayee() + "' has been associated with merchant '" +
+                    merchant.getName() + "'.");
+        }
+
         // If we need to ask the user to enter the splits:
         List<TransactionSplit> splits = new ArrayList<>();
         if (
