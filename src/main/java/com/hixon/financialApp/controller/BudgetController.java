@@ -541,13 +541,11 @@ public class BudgetController {
             view.say("No budget items are currently assigned to merchant '" + merchant.getName() + "'.");
             view.say("Please select a budget item to associate with this merchant.");
 
-            // Get all budget items from the budget and ask the user to select one:
-            List<BudgetItem> budgetItems = budget.getBudgetItems();
-            BudgetItem selectedBudgetItem = getUserSelectedBudgetItem(budgetItems);
+            // Ask the user to select a budget item from the budget:
+            BudgetItem selectedBudgetItem = selectBudgetItemFromBudget(budget, ALLOW_CREATE);
 
             // Create a new BudgetItemMerchant association:
-            BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(selectedBudgetItem.getId(),
-                    merchant.getId(), 0, 0);
+            BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(selectedBudgetItem, merchant, 0, 0);
             budgetItemMerchant.save();
             budgetItemMerchants.add(budgetItemMerchant);
 
