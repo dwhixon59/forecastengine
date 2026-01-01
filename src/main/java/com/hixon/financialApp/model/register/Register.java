@@ -142,8 +142,9 @@ public class Register extends IndependentEntity {
     }
 
     public String getUpdateClause() {
+        String defaultViewValue = (default_view == null) ? "NULL" : "'" + default_view + "'";
         return "name = '" + name + "', nickname = '" + nickname + "', account_type = '" + accountType + "', " +
-                "default_view = '" + default_view + "', account_number = '" + accountNumber + "', balance = " +
+                "default_view = " + defaultViewValue + ", account_number = '" + accountNumber + "', balance = " +
                 balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" + financialInstitution +
                 "', trxImportFileName = '" + trxImportFileName + "', trxImportFileDirectory = '" +
                 Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
