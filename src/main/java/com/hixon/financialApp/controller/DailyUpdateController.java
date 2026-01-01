@@ -129,26 +129,30 @@ public class DailyUpdateController {
             }
 
             // Import the provisional transactions from the register:
-           view.sayH2("IMPORT PROVISIONAL TRANSACTIONS");
-            try {
-                if (view.existsFileWithRetry(Transaction.PROVISIONAL_TRANSACTIONS_FILE,
-                        register.getProvisionalTrxFileDirectory() + "\\" + register.getProvisionalTrxFileName()))
-                {
-                    // Then import them:
-                    boolean inSyncProv = importController.importCsvProvisionalTransactionFile();
-                   view.sayH4("The provisional transactions were successfully imported.");
-                    if (!inSyncProv) {
-                        inSync = false;
+            // Only attempt to import if a provisional transaction filename is configured
+            String provisionalFileName = register.getProvisionalTrxFileName();
+            if (provisionalFileName != null && !provisionalFileName.trim().isEmpty()) {
+               view.sayH2("IMPORT PROVISIONAL TRANSACTIONS");
+                try {
+                    if (view.existsFileWithRetry(Transaction.PROVISIONAL_TRANSACTIONS_FILE,
+                            register.getProvisionalTrxFileDirectory() + "\\" + provisionalFileName))
+                    {
+                        // Then import them:
+                        boolean inSyncProv = importController.importCsvProvisionalTransactionFile();
+                       view.sayH4("The provisional transactions were successfully imported.");
+                        if (!inSyncProv) {
+                            inSync = false;
+                        }
+                    } else {
+                       view.say("Import of provisional transactions skipped at user's request.");
                     }
-                } else {
-                   view.say("Import of provisional transactions skipped at user's request.");
-                }
-            } catch (QuitException qe) {
-                throw qe;
-            } catch (Exception e) {
-                if (!view.askContinue("The error '" + e + "' occurred while importing the provisional " +
-                        " transactions into the register.")) {
-                    throw e;
+                } catch (QuitException qe) {
+                    throw qe;
+                } catch (Exception e) {
+                    if (!view.askContinue("The error '" + e + "' occurred while importing the provisional " +
+                            " transactions into the register.")) {
+                        throw e;
+                    }
                 }
             }
 
