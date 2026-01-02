@@ -49,12 +49,13 @@ public class Budget extends IndependentEntity {
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return null;
+        String nameVal = budgetName != null ? "'" + budgetName + "'" : "NULL";
+        return "update budget set name = " + nameVal + " where idBudget = uuid_to_bin('" + id + "')";
     }
 
     @Override
     public String getDeleteByIdQuery() {
-        return null;
+        return "delete from budget where idBudget = uuid_to_bin('" + id + "')";
     }
 
     @Override

@@ -874,6 +874,11 @@ public class ForecastController {
         // Update the forecast start date:
         forecast.setStartDate(updateStartDate);
 
+        // Ensure numberOfMonths is set to a reasonable value (handle old forecasts that may have 0)
+        if (forecast.getNumberOfMonths() <= 0) {
+            forecast.setNumberOfMonths(12);  // Default to 12 months (1 year)
+        }
+
         // Update up the end date so that the forecast window will be the same number of months as it was originally
         // set to be.
         Calendar endDate = (Calendar) updateStartDate.clone();

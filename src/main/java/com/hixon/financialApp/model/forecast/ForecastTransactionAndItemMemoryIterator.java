@@ -19,10 +19,23 @@ public class ForecastTransactionAndItemMemoryIterator implements ForecastTransac
         if (forecast == null) throw new ForecastException("Forecast must not be null.");
         this.forecast = forecast;
         this.transactions = forecast.getTransactions();
-        int i =0;
-        while (transactions[i] == null && i < transactions.length) { i++; }
-        if (i == transactions.length) throw new ForecastException("No transactions in the forecast.");
-        nextTransaction = transactions[i];
+
+        // Handle empty or null transactions array (e.g., newly created forecast)
+        if (transactions == null || transactions.length == 0) {
+            nextTransaction = null;
+            return;
+        }
+
+        int i = 0;
+        while (i < transactions.length && transactions[i] == null) {
+            i++;
+        }
+        if (i == transactions.length) {
+            // No non-null transactions found
+            nextTransaction = null;
+        } else {
+            nextTransaction = transactions[i];
+        }
     }
 
     @Override

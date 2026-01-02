@@ -73,6 +73,7 @@ public class DataManagerController {
                 String prompt = "What type of entity would you like to manage?";
                 List<String> entityOptions = List.of(
                     "Budget items",
+                    "Budgets",
                     "Merchants",
                     "Transactions",
                     "Forecast transactions",
@@ -82,9 +83,15 @@ public class DataManagerController {
                         SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
                 switch(option) {
                     case "b":
+                        // Budget items - BudgetController handles its own budget selection
                         // Delegate to BudgetController
                         budgetController = new BudgetController(sessionController);
                         budgetController.manageBudgetItems();
+                        break;
+                    case "u":
+                        // Budgets are global entities - no specific context needed
+                        BudgetManagementController budgetManagementController = new BudgetManagementController(sessionController);
+                        budgetManagementController.manageBudgets();
                         break;
                     case "m":
                         // Merchants are global entities - no specific context needed

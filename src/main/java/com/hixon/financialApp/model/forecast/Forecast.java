@@ -156,6 +156,11 @@ public class Forecast extends IndependentEntity {
         return numberOfMonths;
     }
 
+    public void setNumberOfMonths(int numberOfMonths) {
+        this.numberOfMonths = numberOfMonths;
+        setDirty(true);
+    }
+
     public ForecastItem getFirstForecastItem() {
         return this.firstForecastItem = firstForecastItem;
     }
@@ -361,6 +366,7 @@ public class Forecast extends IndependentEntity {
                 newForecast.setForecastName(budget.getName() + " Forecast");
                 newForecast.setBudgetId(budget.getId());
                 newForecast.setStartDate(java.util.Calendar.getInstance());
+                newForecast.setNumberOfMonths(12);  // Default to 12 months (1 year) forecast period
 
                 try {
                     newForecast.insert();
