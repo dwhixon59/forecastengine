@@ -908,6 +908,16 @@ public class ForecastController {
         // forecast transactions.
         ForecastItem.expireOldForecastItems(forecast);
 
+        // Expire forecast items whose corresponding budget items are expired
+        // This handles cases where a budget item was moved to another budget and expired
+        String expireForecastItemsQuery = "UPDATE forecast_item fi " +
+                "INNER JOIN budget_item bi ON fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                "SET fi.endDate = bi.endDate " +
+                "WHERE fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "AND bi.endDate IS NOT NULL " +
+                "AND (fi.endDate IS NULL OR fi.endDate > bi.endDate)";
+        executeUpdate(expireForecastItemsQuery, "expiring forecast items with expired budget items");
+
         // Delete any expired forecast items that have no linked forecast transactions.
         ForecastItem.deleteExpiredUnusedForecastItems(forecast);
 
@@ -935,6 +945,20 @@ public class ForecastController {
                     ")";
         executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
+
+        // Delete forecast transactions that are past their forecast item's expiration date
+        // This handles cases where a budget item was expired but old forecast transactions still exist
+        String deleteExpiredQuery = "DELETE ft FROM forecast_transaction ft " +
+                "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "WHERE fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "AND fi.endDate IS NOT NULL " +
+                "AND ft.plannedDate > fi.endDate " +
+                "AND NOT ft.overridden " +
+                "AND NOT EXISTS (" +
+                    "SELECT 1 FROM forecast_transaction_split fts " +
+                    "WHERE fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction" +
+                ")";
+        executeUpdate(deleteExpiredQuery, "deleting forecast transactions past their item's expiration date");
 
         // Generate the updated portion of the forecast starting on the update start date.
         forecast.setTransactions(new ForecastTransaction[forecast.getNumberOfMonths() * 31]);

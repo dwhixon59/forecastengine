@@ -178,8 +178,10 @@ public class BudgetController {
                         }
 
                         // User selected an existing item - show action menu
-                        {
+                        while (true) {  // Outer loop to allow switching between items via search
                             boolean actionComplete = false;
+                            String nextSearchString = null;  // Store next search criteria
+
                             while (!actionComplete) {
                                 // Display the selected item with full details
                                 view.say();
@@ -193,10 +195,28 @@ public class BudgetController {
                                 }
 
                                 // Step 3: Ask what to do with this item
-                                String action = view.selectFromMenu("What would you like to do with this item?",
+                                // Use selectFromListByPositionOrMenuOrString to allow direct search criteria entry
+                                NumberOrStringResponse response = view.selectFromListByPositionOrMenuOrString(
+                                        null,  // Don't show the list here
+                                        null,  // No list to validate against
+                                        "What would you like to do with this item?",
                                         List.of("view details", "copy this item", "update this item", "delete this item",
                                                 "report spending on this item", "manage merchants", "search again"),
-                                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                                        ALLOW_CREATE,  // Allow multi-character strings as new search criteria
+                                        ALLOW_CANCEL,
+                                        ALLOW_QUIT,
+                                        DO_NOT_ALLOW_SKIP);
+
+                                // Check if user entered multi-character string (new search criteria)
+                                if (!response.isNumber() && response.getSearchString().length() > 1) {
+                                    // User entered new search criteria - store it and exit action menu
+                                    nextSearchString = response.getSearchString();
+                                    actionComplete = true;
+                                    continue;
+                                }
+
+                                // User selected a menu command
+                                String action = response.getSearchString();
 
                                 switch (action) {
                                     case "v":  // view details
@@ -359,12 +379,82 @@ public class BudgetController {
                                         break;
 
                                     case "s":  // search again
-                                        actionComplete = true;  // Go back to search/add menu
+                                        actionComplete = true;  // Exit action menu
+                                        nextSearchString = "";  // Empty string signals to exit outer loop too
                                         break;
 
                                     default:
                                         throw new InvalidEntryException("Unexpected option returned: " + action);
                                 }
+                            }
+
+                            // After action menu exits, check if user entered new search criteria
+                            if (nextSearchString != null && !nextSearchString.isEmpty()) {
+                                // User entered search criteria directly - search for next item
+                                SelectionController selectionController = new SelectionController(view);
+
+                                com.hixon.financialApp.model.entity.SearchQualifierProcessor processor =
+                                        new com.hixon.financialApp.model.entity.BudgetSearchQualifierProcessor(
+                                            selectedBudget.getId(),
+                                            "bi.Budget_idBudget"
+                                        );
+
+                                try {
+                                    BudgetItem nextItem = selectionController.getByNameFullText(
+                                            nextSearchString,  // Use the search string as seed
+                                            selectedBudget,
+                                            DO_NOT_ALLOW_NONE,
+                                            ALLOW_CREATE,
+                                            ALLOW_CANCEL,
+                                            ALLOW_QUIT,
+                                            DO_NOT_ALLOW_SKIP,
+                                            BudgetItem.getPrintableTypeName_static(),
+                                            BudgetItem::getDisplayString,
+                                            new MatchQuery(BudgetItem.getSelectQuery() + " WHERE bi.Budget_idBudget = uuid_to_bin('" +
+                                                    selectedBudget.getId() + "') AND ", "bi.payee",
+                                                    "bi.category, bi.payee, bi.memo", "", processor),
+                                            rs -> {
+                                                try {
+                                                    return new BudgetItem(rs);
+                                                } catch (BudgetException e) {
+                                                    throw new RuntimeException(e);
+                                                }
+                                            },
+                                            (IndependentEntity budgetObj, String newName) -> new BudgetItem((Budget) budgetObj, newName));
+
+                                    if (nextItem != null) {
+                                        // Check if this is a newly created item
+                                        if (nextItem.getId() == null) {
+                                            // User chose to create a new item - go to entry form
+                                            BudgetItem newItem = getBudgetItemFromUser();
+                                            if (newItem != null && newItem.isValid()) {
+                                                BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
+                                                if (confirmedItem != null) {
+                                                    confirmedItem.save(EntityInt.SaveMethod.INSERT);
+                                                    view.say("Budget item successfully added.");
+                                                    updateAssociatedForecasts(selectedBudget);
+                                                }
+                                            } else if (newItem != null) {
+                                                view.say("Budget item entered by user is invalid.");
+                                            }
+                                            // After create, exit both loops to go back to search/add menu
+                                            break;
+                                        } else {
+                                            // Found an existing item - set it and loop back to action menu
+                                            selectedItem = nextItem;
+                                            continue;  // Continue the outer while(true) loop with new item
+                                        }
+                                    } else {
+                                        // No item found or user cancelled - go back to search/add menu
+                                        break;
+                                    }
+                                } catch (CancelException e) {
+                                    // User cancelled - go back to search/add menu
+                                    break;
+                                }
+                            } else {
+                                // User selected "search again" or no search string - exit to search/add menu
+                                break;
                             }
                         }
                     } catch (CancelException e) {
