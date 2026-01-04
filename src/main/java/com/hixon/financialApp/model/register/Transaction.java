@@ -113,10 +113,11 @@ public class Transaction extends IndependentEntity {
      */
     @Override
     public String getInsertQuery() {
+        String merchantIdValue = (getIdMerchant() == null) ? "NULL" : "uuid_to_bin('" + getIdMerchant() + "')";
         return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
                 Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
                 checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", " + isNew + ", \"" +
-                importRecordId + "\", uuid_to_bin('" + getIdRegister() + "'), uuid_to_bin('" + getIdMerchant() + "'))";
+                importRecordId + "\", uuid_to_bin('" + getIdRegister() + "'), " + merchantIdValue + ")";
     }
 
     /**
@@ -126,12 +127,14 @@ public class Transaction extends IndependentEntity {
      */
     @Override
     public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
+        String merchantIdValue = (getIdMerchant() == null) ? "NULL" : "uuid_to_bin('" + getIdMerchant() + "')";
+        String merchantUpdateClause = (getIdMerchant() == null) ? "" : ", Merchant_idMerchant = " + merchantIdValue;
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
                 + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
                 + balance + ", isImproper = " + isImproper + ", isNew = " + isNew +
-                ", importRecordId = \"" + importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "'), " +
-                "Merchant_idMerchant = uuid_to_bin('" + getIdMerchant() + "')";
+                ", importRecordId = \"" + importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "')" +
+                merchantUpdateClause;
     }
 
     private static final String updateQuery =

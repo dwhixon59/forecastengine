@@ -588,15 +588,45 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
-                            // If we found a merchant from the payee, use it
+                            // Determine which merchant to use
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
-                                merchant = possibleMerchants.getFirst();  // Update local variable
+                                // We found exactly one merchant from the payee, use it
+                                merchant = possibleMerchants.getFirst();
                                 currentTransaction.setMerchant(merchant);
                                 currentTransaction.setIdMerchant(merchant.getId());
                             } else if (merchant != null) {
-                                // Use the merchant we already identified
+                                // Use the merchant we already identified (from provisional transaction)
                                 currentTransaction.setMerchant(merchant);
                                 currentTransaction.setIdMerchant(merchant.getId());
+                            } else {
+                                // No merchant identified yet - get it from the budget item
+                                BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
+                                List<BudgetItemMerchant> budgetItemMerchantList =
+                                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
+
+                                // Extract just the Merchant objects from BudgetItemMerchant list
+                                List<Merchant> budgetItemMerchants = new ArrayList<>();
+                                if (budgetItemMerchantList != null) {
+                                    for (BudgetItemMerchant bim : budgetItemMerchantList) {
+                                        budgetItemMerchants.add(Merchant.getById(bim.getIdMerchant()));
+                                    }
+                                }
+
+                                if (budgetItemMerchants.size() == 1) {
+                                    // Budget item has exactly one merchant assigned, use it
+                                    merchant = budgetItemMerchants.getFirst();
+                                    currentTransaction.setMerchant(merchant);
+                                    currentTransaction.setIdMerchant(merchant.getId());
+                                } else {
+                                    // Either multiple merchants or no merchants - ask user to identify merchant
+                                    MerchantController merchantController = new MerchantController(view, notificationService);
+                                    merchant = merchantController.assignMerchant(
+                                        currentTransaction.getMerchantPayee(),
+                                        currentTransaction.getPayee(),
+                                        currentTransaction.getAmount());
+                                    currentTransaction.setMerchant(merchant);
+                                    currentTransaction.setIdMerchant(merchant.getId());
+                                }
                             }
 
                             // Save the transaction with merchant info
