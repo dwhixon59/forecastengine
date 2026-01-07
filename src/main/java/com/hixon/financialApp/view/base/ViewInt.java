@@ -945,4 +945,46 @@ public interface ViewInt {
                                boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
                                Supplier<String> helpCallback)
             throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a date value in MM-DD-YYYY format.
+     * The prompt should be user-friendly and clearly indicate available options. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true.
+     *
+     * @param prompt          The prompt to display to the user.
+     * @param isCancelAllowed If true, the user may cancel the operation.
+     * @param isQuitAllowed   If true, the user may quit the operation.
+     * @param isSkipAllowed   If true, the user may skip the operation.
+     * @return The Calendar date entered by the user (or defaultValue if enter is pressed).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Calendar getResponseDate(String prompt,
+                             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException;
+
+    /**
+     * Prompts the user with a text box style input for a date value in MM-DD-YYYY format, with an optional help callback for providing context-sensitive help.
+     * The prompt should be user-friendly and clearly indicate available options. If a default value is provided,
+     * it is shown in square brackets and returned if the user just hits enter. Cancel/quit/skip options are only
+     * shown if showCancelQuitSkip is true. Validates date format and re-prompts on invalid input.
+     *
+     * @param prompt             The prompt to display to the user.
+     * @param defaultValue       The default value to show and return if the user just hits enter.
+     * @param allowNone          If true, the user may enter no value (empty string is accepted, returns null).
+     * @param showCancelQuitSkip Whether to show cancel/quit/skip options.
+     * @param isCancelAllowed    If true, the user may cancel the operation.
+     * @param isQuitAllowed      If true, the user may quit the operation.
+     * @param isSkipAllowed      If true, the user may skip the operation.
+     * @param helpCallback       Optional callback function to provide help text when user requests it.
+     * @return The Calendar date entered by the user (or defaultValue if enter is pressed, or null if allowNone and empty).
+     * @throws CancelException If the user cancels the operation.
+     * @throws QuitException   If the user chooses to quit.
+     * @throws SkipException   If the user chooses to skip.
+     */
+    Calendar getResponseDate(String prompt, Calendar defaultValue, boolean allowNone, boolean showCancelQuitSkip,
+                             boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
+                             Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException;
 }

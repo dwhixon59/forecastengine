@@ -1063,25 +1063,19 @@ public class BudgetController {
                     break;
 
                 case "s":  // start date
-                    String newStartDate = view.getResponseString("Enter new start date (MM-DD-YYYY)",
-                            budgetItem.getStartDate() != null ?
-                                    Utility.calendarDateToStringDate(budgetItem.getStartDate()) : "",
+                    Calendar newStartDate = view.getResponseDate("Enter new start date (MM-DD-YYYY)",
+                            budgetItem.getStartDate(),
                             DO_NOT_ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
-                    budgetItem.setStartDate(Utility.stringDateDashToCalendarDate(newStartDate));
+                    budgetItem.setStartDate(newStartDate);
                     break;
 
                 case "d":  // end date (en**d** date - e is taken by period)
-                    String newEndDate = view.getResponseString("Enter new end date (MM-DD-YYYY or 'none')",
-                            budgetItem.getEndDate() != null ?
-                                    Utility.calendarDateToStringDate(budgetItem.getEndDate()) : "none",
+                    Calendar newEndDate = view.getResponseDate("Enter new end date (MM-DD-YYYY or 'none')",
+                            budgetItem.getEndDate(),
                             ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
-                    if (newEndDate != null && !newEndDate.trim().isEmpty() && !newEndDate.trim().equalsIgnoreCase("none")) {
-                        budgetItem.setEndDate(Utility.stringDateDashToCalendarDate(newEndDate));
-                    } else {
-                        budgetItem.setEndDate(null);
-                    }
+                    budgetItem.setEndDate(newEndDate);
                     break;
 
                 case "n":  // number of payments

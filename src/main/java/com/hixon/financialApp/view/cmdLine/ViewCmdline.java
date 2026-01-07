@@ -767,6 +767,50 @@ public class ViewCmdline implements ViewInt {
         }
     }
 
+final     /**
+     * @inheritDoc
+     */
+    @Override
+    public Calendar getResponseDate(String prompt,
+                                    boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException {
+        return getResponseDate(prompt, null, DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, isCancelAllowed,
+                isQuitAllowed, isSkipAllowed, null);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    @Override
+    public Calendar getResponseDate(String prompt, Calendar defaultValue, boolean allowNone, boolean showCancelQuitSkip,
+                                    boolean isCancelAllowed, boolean isQuitAllowed, boolean isSkipAllowed,
+                                    Supplier<String> helpCallback)
+            throws CancelException, QuitException, SkipException {
+
+        // Format the default value as a date string for display
+        String defaultValueStr = (defaultValue != null) ? Utility.calendarDateToStringDate(defaultValue) : null;
+
+        // Until we get a valid date, keep asking:
+        while (true) {
+            try {
+                // Get the response string with the formatted default value
+                String response = getResponseString(prompt, defaultValueStr, allowNone, showCancelQuitSkip,
+                        isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
+
+                // If allowNone is true and response is empty/null, return null
+                if (allowNone && (response == null || response.trim().isEmpty())) {
+                    return null;
+                }
+
+                // Parse the date using the utility method
+                return Utility.stringDateDashToCalendarDate(response);
+
+            } catch (ParseException e) {
+                ask("Invalid date format. Please use MM-DD-YYYY format (e.g., 01-15-2026):  ");
+            }
+        }
+    }
+
     /**
      * Helper method to build the cancel/quit/skip prompt string.
      */
