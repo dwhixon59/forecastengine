@@ -125,34 +125,11 @@ public class BudgetController {
                 boolean doneBudget = false;
                 while (!doneBudget) {
                     try {
-                        // Ask whether to search for existing or create new
-                        String choice = view.selectFromMenu("What would you like to do?",
-                                List.of("search for existing item", "create new item"),
-                                DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
-
-                        if (choice.equals("c")) {
-                            // User chose to create a new item - go directly to entry form
-                            BudgetItem newItem = getBudgetItemFromUser();
-                            if (newItem != null && newItem.isValid()) {
-                                BudgetItem confirmedItem = confirmBudgetItem(newItem, "created");
-                                if (confirmedItem != null) {
-                                    confirmedItem.save(EntityInt.SaveMethod.INSERT);
-                                    view.say("Budget item successfully added.");
-
-                                    // Ask if user wants to update associated forecasts
-                                    updateAssociatedForecasts(selectedBudget);
-                                }
-                            } else if (newItem != null) {
-                                view.say("Budget item entered by user is invalid.");
-                            }
-                            continue; // Go back to search/add menu
-                        }
-
-                        // User chose to search - proceed with search (allow creating new if not found)
+                        // Search for budget item directly (allow creating new if not found)
                         BudgetItem selectedItem = selectBudgetItemFromBudget(selectedBudget, ALLOW_CREATE);
 
                         if (selectedItem == null) {
-                            // User cancelled the search - return to search/add menu
+                            // User cancelled the search - go back to budget selection
                             continue;
                         }
 
@@ -174,7 +151,7 @@ public class BudgetController {
                             } else if (newItem != null) {
                                 view.say("Budget item entered by user is invalid.");
                             }
-                            continue; // Go back to search/add menu
+                            continue; // Go back to search prompt
                         }
 
                         // User selected an existing item - show action menu
