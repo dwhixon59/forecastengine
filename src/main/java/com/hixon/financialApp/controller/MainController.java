@@ -153,8 +153,8 @@ public class MainController {
                         importController = new ImportController(sessionController);
 
 
-                        // Import the provisional transactions:
-                        inSync = importController.importCsvProvisionalTransactionFile();
+                        // Import the provisional transactions (auto-detects CSV/TSV format):
+                        inSync = importController.importProvisionalTransactionFile();
                         view.say("The provisional transactions were successfully imported.");
                         if (!inSync) {
                             forecastController = new ForecastController(

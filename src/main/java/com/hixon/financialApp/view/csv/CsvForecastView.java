@@ -119,13 +119,19 @@ public class CsvForecastView extends AbstractForecastView {
       int i = 0;
       List<ForecastTransaction> forecastTransactions = new ArrayList<>();
 
-      try (BOMInputStream bis = new BOMInputStream(new FileInputStream(new File(sourceName)))) {
+      try (BOMInputStream bis = BOMInputStream.builder()
+              .setInputStream(new FileInputStream(new File(sourceName)))
+              .get()) {
 
          getView().say("\nUpdate the forecast from the forecast transactions in the CSV file " + sourceName);
 
          // Iterate over the CSV records and create a list of forecast transactions from them:
          BufferedReader in = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
-         Iterable<CSVRecord> records = CSVFormat.EXCEL.withHeader(ForecastTransactionHeaders.class).parse(in);
+         Iterable<CSVRecord> records = CSVFormat.EXCEL.builder()
+                 .setHeader(ForecastTransactionHeaders.class)
+                 .setSkipHeaderRecord(true)
+                 .get()
+                 .parse(in);
          Calendar plannedDate = Calendar.getInstance();
          int previousMonth;
          boolean firstTime = true;

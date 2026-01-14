@@ -25,43 +25,30 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
     // Constructors:
     public GenericClassifer(ViewInt resolver) throws SQLException, BudgetException, EntityException {
 
-        // Create a prepared statement for using with the database:
-        Statement stmt = null;
-        try {
-            stmt = Utility.getDbConnection().createStatement();
-        } catch (SQLException e) {
-            System.out.println("[SEVERE]  dbConnection.createStatement() threw exception");
-            if (stmt != null) stmt.close();
-            throw e;
-        }
-
         // Create an arrary to hold them:
         budgetItems = new BudgetItem[BudgetItem.getItemCount()];
 
         // Create a result set containing all the budget items:
-        ResultSet rs = null;
-        try {
-            rs = stmt.executeQuery(BudgetItem.getSelectQuery() + "order by searchString desc");
+        try (Statement stmt = Utility.getDbConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(BudgetItem.getSelectQuery() + "order by searchString desc")) {
+
+            // Read all the items in the budget into an array for matching:
+            int i = 0;
+            BudgetItem budgetItem = null;
+            while (rs.next()) {
+
+                // Add the next item from the budget to the array of budget items:
+                budgetItems[i] = new BudgetItem().loadFromResultSet(rs);
+                //if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
+                //    budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
+                //}
+                i++;
+
+            } // End for each item in the budget.
         } catch (SQLException e) {
             System.out.println("[SEVERE]  SQL Error attempting to retrieve a list of items in the budget.");
-            stmt.close();
-            if (rs != null) rs.close();
             throw e;
         }
-
-        // Read all the items in the budget into an array for matching:
-        int i = 0;
-        BudgetItem budgetItem = null;
-        while (rs.next()) {
-
-            // Add the next item from the budget to the array of budget items:
-            budgetItems[i] = new BudgetItem().loadFromResultSet(rs);
-            //if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
-            //    budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
-            //}
-            i++;
-
-        } // End for each item in the budget.
     } // Classifer(Connection dbConnection).
 
 
@@ -103,6 +90,12 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
     @Override
     public Class<? extends Enum<?>> getCsvHeadersClass() {
         // Generic classifier doesn't have specific CSV headers
+        return null;
+    }
+
+    @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        // Generic classifier doesn't support CSV import
         return null;
     }
 

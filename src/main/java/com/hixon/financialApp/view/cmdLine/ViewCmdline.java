@@ -1963,7 +1963,7 @@ final     /**
      */
     @Override
     public Calendar parseCalendarDate(String prompt, Calendar defaultDate) {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("MM-dd-yyyy");
         dateFormat.setLenient(false);
 
         String defaultDateStr = defaultDate != null ? dateFormat.format(defaultDate.getTime()) : null;
@@ -1987,7 +1987,7 @@ final     /**
                 calendar.setTime(dateFormat.parse(dateInput));
                 return calendar;
             } catch (ParseException e) {
-                say("Invalid date format. Please use MM/dd/yyyy format.");
+                say("Invalid date format. Please use MM-dd-yyyy format.");
             }
         }
     }

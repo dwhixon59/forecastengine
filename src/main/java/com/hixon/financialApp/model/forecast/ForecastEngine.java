@@ -293,11 +293,11 @@ public class ForecastEngine {
                 } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
 
-        } catch (SQLException | BudgetException e) {
-            System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
-            e.printStackTrace();
-            throw e;
-        }
+            } catch (SQLException | BudgetException e) {
+                System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
+                e.printStackTrace();
+                throw e;
+            }
         return true;
     }
 } // End class ForecastEngine.

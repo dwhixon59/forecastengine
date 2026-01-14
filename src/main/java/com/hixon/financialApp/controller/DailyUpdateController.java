@@ -121,11 +121,29 @@ public class DailyUpdateController {
                inSync = importController.importRegisterTransactionFile();
              } catch (QuitException qe) {
                 throw qe;
+            } catch (java.io.FileNotFoundException fnfe) {
+                // Provide a user-friendly message for missing files
+                String message = "\nThe cleared transaction file could not be found.\n" +
+                        "This can happen if:\n" +
+                        "  • You haven't downloaded the file yet\n" +
+                        "  • The file is in a different location\n" +
+                        "  • The filename has changed (e.g., includes a date)\n\n" +
+                        "Expected file: " + fnfe.getMessage() + "\n\n" +
+                        "Would you like to skip importing cleared transactions and continue?";
+                if (!view.askContinue(message)) {
+                    // User chose not to continue - abort the daily update
+                   sessionController.getView().sayH4("Aborting the daily update process at the user's request.");
+                    return false;
+                }
+                // User chose to continue - skip cleared transaction import and proceed
+               view.say("Import of cleared transactions skipped.");
             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while importing new transactions " +
-                        "into the register.")) {
+                if (!view.askContinue("\nAn error occurred while importing cleared transactions:\n" +
+                        e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\n" +
+                        "Would you like to skip this step and continue?")) {
                     throw e;
                 }
+               view.say("Import of cleared transactions skipped.");
             }
 
             // Import the provisional transactions from the register:
@@ -137,8 +155,8 @@ public class DailyUpdateController {
                     if (view.existsFileWithRetry(Transaction.PROVISIONAL_TRANSACTIONS_FILE,
                             register.getProvisionalTrxFileDirectory() + "\\" + provisionalFileName))
                     {
-                        // Then import them:
-                        boolean inSyncProv = importController.importCsvProvisionalTransactionFile();
+                        // Import using format-agnostic method (detects CSV/TSV automatically)
+                        boolean inSyncProv = importController.importProvisionalTransactionFile();
                        view.sayH4("The provisional transactions were successfully imported.");
                         if (!inSyncProv) {
                             inSync = false;
@@ -149,10 +167,13 @@ public class DailyUpdateController {
                 } catch (QuitException qe) {
                     throw qe;
                 } catch (Exception e) {
-                    if (!view.askContinue("The error '" + e + "' occurred while importing the provisional " +
-                            " transactions into the register.")) {
+                    String message = "\nAn error occurred while importing provisional transactions:\n" +
+                            e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\n" +
+                            "Would you like to skip this step and continue?";
+                    if (!view.askContinue(message)) {
                         throw e;
                     }
+                   view.say("Import of provisional transactions skipped.");
                 }
             }
 

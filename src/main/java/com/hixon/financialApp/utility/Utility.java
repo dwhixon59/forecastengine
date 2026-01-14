@@ -696,9 +696,12 @@ public class Utility {
      * This method doubles the backslashes in a string.  This is necessary when passing a string to a database query.
      *
      * @param string The string to be modified.
-     * @return The modified string.
+     * @return The modified string, or null if the input string is null.
      */
     public static String doubleBackSlashes(String string) {
+        if (string == null) {
+            return null;
+        }
         return string.replace("\\", "\\\\");
     }
 

@@ -67,6 +67,8 @@ public interface EntityInt {
    }
 
    // The generic get operation:
+   // WARNING: This method returns a ResultSet that must be closed by the caller
+   // Consider refactoring to use a callback pattern instead
    static ResultSet getRS(String selectQuery, String exceptionMessage) throws EntityException {
 
       Statement statement = null;

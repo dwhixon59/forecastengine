@@ -281,13 +281,28 @@ public class Register extends IndependentEntity {
     }
 
     public String getUpdateClause() {
-        return "name = '" + name + "', nickname = '" + nickname + "', account_type = '" + accountType + "', " +
-                "default_view = '" + default_view + "', account_number = '" + accountNumber + "', balance = " +
-                balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" + financialInstitution +
-                "', trxImportFileName = '" + trxImportFileName + "', trxImportFileDirectory = '" +
-                Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
-                provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
-                Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+        // Helper method to safely convert null to empty string for SQL
+        String safeName = (name != null ? name : "");
+        String safeNickname = (nickname != null ? nickname : "");
+        String safeAccountType = (accountType != null ? accountType : "");
+        String safeDefaultView = (default_view != null ? default_view : "");
+        String safeAccountNumber = (accountNumber != null ? accountNumber : "");
+        String safeFinancialInstitution = (financialInstitution != null ? financialInstitution : "");
+        String safeTrxImportFileName = (trxImportFileName != null ? trxImportFileName : "");
+        String safeTrxImportFileDirectory = (trxImportFileDirectory != null ? Utility.doubleBackSlashes(trxImportFileDirectory) : "");
+        String safeProvisionalTrxFileName = (provisionalTrxFileName != null ? provisionalTrxFileName : "");
+        String safeProvisionalTrxFileDirectory = (provisionalTrxFileDirectory != null ? Utility.doubleBackSlashes(provisionalTrxFileDirectory) : "");
+
+        return "name = '" + safeName + "', nickname = '" + safeNickname +
+                "', account_type = '" + safeAccountType + "', " +
+                "default_view = '" + safeDefaultView + "', account_number = '" +
+                safeAccountNumber + "', balance = " + balance + ", skippedAmount = " +
+                skippedAmount + ", financialInstitution = '" + safeFinancialInstitution +
+                "', trxImportFileName = '" + safeTrxImportFileName +
+                "', trxImportFileDirectory = '" + safeTrxImportFileDirectory +
+                "', provisionalTrxFileName = '" + safeProvisionalTrxFileName +
+                "', provisionalTrxFileDirectory = '" + safeProvisionalTrxFileDirectory +
+                "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
                 "where idRegister = uuid_to_bin('" + id + "')";
     }
 
@@ -424,8 +439,7 @@ public class Register extends IndependentEntity {
     public static Register getByLastFourDigits(String lastFourDigits) throws RegisterException {
 
         String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
-        try {
-            Statement statement = Utility.getDbConnection().createStatement();
+        try (Statement statement = Utility.getDbConnection().createStatement()) {
             ResultSet rs = statement.executeQuery(query);
             if (rs.next()) {
                 return new Register(rs);
@@ -440,12 +454,9 @@ public class Register extends IndependentEntity {
 
     public static Register getByName(String registerName) throws RegisterException, SQLException {
         // Find the ID of the named budget:
-        PreparedStatement preparedStmt = null;
-        ResultSet rs = null;
         String query = selectQuery + " where r.name = \"" + registerName + "\"";
-        try {
-            preparedStmt = Utility.getDbConnection().prepareStatement(query);
-            rs = preparedStmt.executeQuery();
+        try (PreparedStatement preparedStmt = Utility.getDbConnection().prepareStatement(query);
+             ResultSet rs = preparedStmt.executeQuery()) {
             Register register = null;
             if (rs != null && rs.next()) {
                 register = new Register(rs);
@@ -453,8 +464,6 @@ public class Register extends IndependentEntity {
             return register;
         } catch (SQLException e) {
             RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.", e);
-            if (preparedStmt != null) preparedStmt.close();
-            if (rs != null) rs.close();
             throw re;
         }
     }

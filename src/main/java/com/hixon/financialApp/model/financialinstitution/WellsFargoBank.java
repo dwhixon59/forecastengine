@@ -170,6 +170,23 @@ public class WellsFargoBank extends FinancialInstitution {
     }
 
     /**
+     * Returns the CSV format configuration for Wells Fargo transaction files.
+     * Wells Fargo CSV files use RFC4180 format (standard CSV) with:
+     * - Comma delimiter
+     * - Headers in first row that match the Headers enum
+     * - Values trimmed of whitespace
+     *
+     * @return the CSVFormat configuration for parsing Wells Fargo CSV files
+     */
+    @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        return org.apache.commons.csv.CSVFormat.RFC4180.builder()
+                .setHeader(getCsvHeadersClass())
+                .setTrim(true)
+                .get();
+    }
+
+    /**
      * Generates a base name for a register import record using fields from the Wells Fargo CSV record.
      * The base name is used to uniquely identify and track imported transactions, helping to prevent
      * duplicate imports.

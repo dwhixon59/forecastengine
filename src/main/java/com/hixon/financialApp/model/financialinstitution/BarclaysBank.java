@@ -71,6 +71,11 @@ public class BarclaysBank extends FinancialInstitution {
     }
 
     @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        throw new UnsupportedOperationException("Barclays uses QFX format, not CSV");
+    }
+
+    @Override
     public String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException {
         throw new UnsupportedOperationException("Barclays uses QFX format, not CSV");
     }

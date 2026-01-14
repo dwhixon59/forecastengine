@@ -544,10 +544,9 @@ public class Forecast extends IndependentEntity {
         }
     } // End saveForecastItems().
 
-    // Save the forecast transactions to the database:, including all the forecast items and forecast transactions:
+    // Save the forecast transactions to the database:
     public void saveForecastTransactions() throws SQLException, BudgetException, EntityException, ForecastException {
         Connection dbConnection = Utility.getDbConnection();
-        PreparedStatement preparedStmt = null;
         String errorMessage = null;
         try {
             // Insert the forecast transaction tuples:
@@ -555,27 +554,27 @@ public class Forecast extends IndependentEntity {
             String query = "insert into forecast_transaction (idForecastTransaction, remainingAmount, " +
                     "plannedDate, runningBalance, firstOccurrence, memo, ForecastItem_idForecastItem) values (UUID_TO_BIN(?), " +
                     "?, ?, ?, ?, ?, UUID_TO_BIN(?))";
-            preparedStmt = dbConnection.prepareStatement(query);
-            for (ForecastTransaction transaction : this.transactions) {
-                if (transaction != null) {
-                    ForecastTransaction forecastTransaction = transaction;
-                    Utility.getView().say("Updating " + forecastTransaction.getForecastItem().toStringShort());
-                    while (forecastTransaction != null) {
-                        preparedStmt.setString(1, forecastTransaction.getId().toString());
-                        preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
-                        preparedStmt.setDate(3, new java.sql.Date(forecastTransaction.getPlannedDate().getTimeInMillis()));
-                        preparedStmt.setDouble(4, forecastTransaction.getRunningBalance());
-                        preparedStmt.setBoolean(5, forecastTransaction.isFirstOccurrence());
-                        preparedStmt.setString(6, forecastTransaction.getMemo());
-                        preparedStmt.setString(7, forecastTransaction.getForecastItem().getId().toString());
-                        preparedStmt.execute();
-                        forecastTransaction = forecastTransaction.getNextTransaction();
+            try (PreparedStatement preparedStmt = dbConnection.prepareStatement(query)) {
+                for (ForecastTransaction transaction : this.transactions) {
+                    if (transaction != null) {
+                        ForecastTransaction forecastTransaction = transaction;
+                        Utility.getView().say("Updating " + forecastTransaction.getForecastItem().toStringShort());
+                        while (forecastTransaction != null) {
+                            preparedStmt.setString(1, forecastTransaction.getId().toString());
+                            preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
+                            preparedStmt.setDate(3, new java.sql.Date(forecastTransaction.getPlannedDate().getTimeInMillis()));
+                            preparedStmt.setDouble(4, forecastTransaction.getRunningBalance());
+                            preparedStmt.setBoolean(5, forecastTransaction.isFirstOccurrence());
+                            preparedStmt.setString(6, forecastTransaction.getMemo());
+                            preparedStmt.setString(7, forecastTransaction.getForecastItem().getId().toString());
+                            preparedStmt.execute();
+                            forecastTransaction = forecastTransaction.getNextTransaction();
+                        }
                     }
                 }
             }
         } catch (SQLException | BudgetException | EntityException | ForecastException e) {
             System.out.println(errorMessage);
-            if (preparedStmt != null) preparedStmt.close();
             throw e;
         }
     } // End saveForecastTransactions().
@@ -794,33 +793,19 @@ public class Forecast extends IndependentEntity {
                         "WHERE fi.Forecast_idForecast = UUID_TO_BIN(?) " +
                         "AND ft.overridden = TRUE";
 
-        Connection conn = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-
-        try {
-            conn = Utility.getDbConnection();  // DO NOT close this; it's shared
-            ps = conn.prepareStatement(sql);
+        try (PreparedStatement ps = Utility.getDbConnection().prepareStatement(sql)) {
             ps.setString(1, this.getId().toString());
 
-            rs = ps.executeQuery();
-            while (rs.next()) {
-                UUID itemId = UUID.fromString(rs.getString("idForecastItem"));
-                LocalDate date = rs.getDate("plannedDate").toLocalDate();
-                result.add(new OverrideKey(itemId, date));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    UUID itemId = UUID.fromString(rs.getString("idForecastItem"));
+                    LocalDate date = rs.getDate("plannedDate").toLocalDate();
+                    result.add(new OverrideKey(itemId, date));
+                }
             }
         } catch (SQLException e) {
             // log as needed
             result = Collections.emptySet();
-        } finally {
-            // Close only the statement/result set; leave shared connection open
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (ps != null) {
-                try { ps.close(); } catch (SQLException ignored) {}
-            }
-            // DO NOT close conn
         }
 
         this.overriddenTransactionKeys = result;

@@ -6,6 +6,8 @@ import com.webcohesion.ofx4j.domain.data.MessageSetType;
 import com.webcohesion.ofx4j.domain.data.ResponseMessageSet;
 import com.webcohesion.ofx4j.domain.data.creditcard.CreditCardStatementResponseTransaction;
 import com.webcohesion.ofx4j.domain.data.creditcard.CreditCardResponseMessageSet;
+import com.webcohesion.ofx4j.domain.data.banking.BankStatementResponseTransaction;
+import com.webcohesion.ofx4j.domain.data.banking.BankingResponseMessageSet;
 import com.webcohesion.ofx4j.domain.data.common.Transaction;
 import com.webcohesion.ofx4j.domain.data.common.TransactionType;
 
@@ -51,7 +53,6 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
     // State management
     private boolean isOpen = false;
     private Iterator<QfxTransaction> transactionIterator;
-    private InputStream currentInputStream;
     private QfxStatement statement;
     /**
      * Creates a new QfxParser with default configuration.
@@ -79,9 +80,9 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
         if (isOpen) {
             throw new IllegalStateException("Parser is already open. Call close() first.");
         }
-        this.currentInputStream = input;
+
         try {
-            // Parse the QFX file using ofx4j
+            // Parse the QFX file using ofx4j - this reads all data into memory
             ResponseEnvelope envelope = unmarshaller.unmarshal(input);
 
             // Extract transactions from the envelope
@@ -102,9 +103,11 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
             // Create iterator over transactions
             this.transactionIterator = transactions.iterator();
             this.isOpen = true;
+
+            // Note: We don't store the input stream reference because all data
+            // has been loaded into memory. The caller is responsible for closing
+            // the stream (ideally using try-with-resources).
         } catch (Exception e) {
-            // Clean up on failure
-            closeInputStream();
             throw new QfxParseException("Failed to parse QFX file: " + e.getMessage(), e);
         }
     }
@@ -115,11 +118,29 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
     private List<QfxTransaction> extractTransactions(ResponseEnvelope envelope) {
         List<QfxTransaction> transactions = new ArrayList<>();
 
-        // Get credit card message set
-        ResponseMessageSet messageSet = envelope.getMessageSet(MessageSetType.creditcard);
-        if (messageSet == null) {
-            return transactions; // No credit card transactions
+        // Try bank transactions first
+        ResponseMessageSet bankMessageSet = envelope.getMessageSet(MessageSetType.banking);
+        if (bankMessageSet != null) {
+            System.out.println("Found banking message set");
+            transactions.addAll(extractBankTransactions(bankMessageSet));
         }
+
+        // Try credit card transactions
+        ResponseMessageSet ccMessageSet = envelope.getMessageSet(MessageSetType.creditcard);
+        if (ccMessageSet != null) {
+            System.out.println("Found credit card message set");
+            transactions.addAll(extractCreditCardTransactions(ccMessageSet));
+        }
+
+        System.out.println("Total transactions extracted: " + transactions.size());
+        return transactions;
+    }
+
+    /**
+     * Extracts transactions from a credit card message set.
+     */
+    private List<QfxTransaction> extractCreditCardTransactions(ResponseMessageSet messageSet) {
+        List<QfxTransaction> transactions = new ArrayList<>();
 
         CreditCardResponseMessageSet ccMessageSet = (CreditCardResponseMessageSet) messageSet;
 
@@ -133,6 +154,48 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
 
         // Process each statement response
         for (CreditCardStatementResponseTransaction statementResponse : statementResponses) {
+            if (statementResponse.getMessage() == null ||
+                statementResponse.getMessage().getTransactionList() == null) {
+                continue;
+            }
+
+            List<Transaction> ofxTransactions =
+                statementResponse.getMessage().getTransactionList().getTransactions();
+
+            if (ofxTransactions == null) {
+                continue;
+            }
+
+            // Convert each OFX transaction to QfxTransaction
+            for (Transaction ofxTxn : ofxTransactions) {
+                QfxTransaction qfxTxn = convertTransaction(ofxTxn);
+                if (qfxTxn != null) {
+                    transactions.add(qfxTxn);
+                }
+            }
+        }
+
+        return transactions;
+    }
+
+    /**
+     * Extracts transactions from a banking message set.
+     */
+    private List<QfxTransaction> extractBankTransactions(ResponseMessageSet messageSet) {
+        List<QfxTransaction> transactions = new ArrayList<>();
+
+        BankingResponseMessageSet bankMessageSet = (BankingResponseMessageSet) messageSet;
+
+        // Get statement response transactions
+        List<BankStatementResponseTransaction> statementResponses =
+            bankMessageSet.getStatementResponses();
+
+        if (statementResponses == null || statementResponses.isEmpty()) {
+            return transactions;
+        }
+
+        // Process each statement response
+        for (BankStatementResponseTransaction statementResponse : statementResponses) {
             if (statementResponse.getMessage() == null ||
                 statementResponse.getMessage().getTransactionList() == null) {
                 continue;
@@ -284,19 +347,28 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
      */
     private double extractLedgerBalance(ResponseEnvelope envelope) {
         try {
-            ResponseMessageSet messageSet = envelope.getMessageSet(MessageSetType.creditcard);
-            if (messageSet == null) {
-                return 0.0;
+            // Try banking message set first
+            ResponseMessageSet bankMessageSet = envelope.getMessageSet(MessageSetType.banking);
+            if (bankMessageSet != null) {
+                BankingResponseMessageSet bankingSet = (BankingResponseMessageSet) bankMessageSet;
+                List<BankStatementResponseTransaction> responses = bankingSet.getStatementResponses();
+                if (responses != null && !responses.isEmpty() &&
+                    responses.get(0).getMessage() != null &&
+                    responses.get(0).getMessage().getLedgerBalance() != null) {
+                    return responses.get(0).getMessage().getLedgerBalance().getAmount();
+                }
             }
 
-            CreditCardResponseMessageSet ccMessageSet = (CreditCardResponseMessageSet) messageSet;
-            List<CreditCardStatementResponseTransaction> responses =
-                ccMessageSet.getStatementResponses();
-
-            if (responses != null && !responses.isEmpty() &&
-                responses.get(0).getMessage() != null &&
-                responses.get(0).getMessage().getLedgerBalance() != null) {
-                return responses.get(0).getMessage().getLedgerBalance().getAmount();
+            // Try credit card message set
+            ResponseMessageSet ccMessageSet = envelope.getMessageSet(MessageSetType.creditcard);
+            if (ccMessageSet != null) {
+                CreditCardResponseMessageSet cardSet = (CreditCardResponseMessageSet) ccMessageSet;
+                List<CreditCardStatementResponseTransaction> responses = cardSet.getStatementResponses();
+                if (responses != null && !responses.isEmpty() &&
+                    responses.get(0).getMessage() != null &&
+                    responses.get(0).getMessage().getLedgerBalance() != null) {
+                    return responses.get(0).getMessage().getLedgerBalance().getAmount();
+                }
             }
         } catch (Exception e) {
             System.err.println("Warning: Failed to extract ledger balance: " + e.getMessage());
@@ -341,31 +413,16 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
      * {@link #open(InputStream)} before it can be used again.
      * 
      * <p>This method is idempotent - calling it multiple times is safe.
+     *
+     * <p>Note: The input stream is NOT closed by this method since it's
+     * the caller's responsibility to manage the stream lifecycle (ideally
+     * using try-with-resources).
      */
     @Override
     public void close() throws Exception {
-        try {
-            closeInputStream();
-        } finally {
-            isOpen = false;
-            transactionIterator = null;
-            statement = null;
-        }
-    }
-    /**
-     * Closes the input stream if it's open.
-     */
-    private void closeInputStream() {
-        if (currentInputStream != null) {
-            try {
-                currentInputStream.close();
-            } catch (Exception e) {
-                // Log but don't throw - we're cleaning up
-                System.err.println("Warning: Error closing input stream: " + e.getMessage());
-            } finally {
-                currentInputStream = null;
-            }
-        }
+        isOpen = false;
+        transactionIterator = null;
+        statement = null;
     }
     /**
      * Gets the parsed statement (for compatibility with existing code).

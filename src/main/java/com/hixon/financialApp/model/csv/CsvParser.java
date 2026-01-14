@@ -79,7 +79,7 @@ public class CsvParser implements TransactionParser<CsvTransaction> {
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setHeader()
                 .setSkipHeaderRecord(true)
-                .build();
+                .get();
 
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy");
 

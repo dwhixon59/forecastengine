@@ -61,6 +61,27 @@ public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoClos
      */
     Class<? extends Enum<?>> getCsvHeadersClass();
 
+    /**
+     * Returns the CSV format configuration for this financial institution.
+     * This defines how CSV files from this institution should be parsed, including:
+     * - Header format (enum class for column names)
+     * - Delimiter (comma, tab, etc.)
+     * - Quote character
+     * - Whether to skip header record
+     * - Trimming behavior
+     *
+     * <p>Example implementation:
+     * <pre>{@code
+     * return CSVFormat.RFC4180.builder()
+     *         .setHeader(getCsvHeadersClass())
+     *         .setTrim(true)
+     *         .build();
+     * }</pre>
+     *
+     * @return the CSVFormat configuration for parsing this institution's CSV files
+     */
+    org.apache.commons.csv.CSVFormat getCsvFormat();
+
     // Get the base name that will be used in constructing the import record ID:
     String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException;
 

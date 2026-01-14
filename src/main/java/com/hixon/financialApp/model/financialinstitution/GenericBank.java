@@ -54,6 +54,11 @@ public class GenericBank extends FinancialInstitution {
     }
 
     @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        throw new UnsupportedOperationException("GenericBank does not support CSV import. Use manual transaction entry.");
+    }
+
+    @Override
     public String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException {
         throw new UnsupportedOperationException("GenericBank does not support CSV import. Use manual transaction entry.");
     }

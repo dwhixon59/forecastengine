@@ -630,11 +630,8 @@ public class ImportController {
             // TODO: Save the import event:
 
         } catch (FileNotFoundException e) {
-            if (!view.getYesOrNo("Do you want to continue?")) {
-                QuitException qe = new QuitException("Import file " + importFilePath + " is invalid or not found.");
-                qe.initCause(e);
-                throw (qe);
-            }
+            // Re-throw FileNotFoundException so DailyUpdateController can handle it with a better message
+            throw e;
         } catch (IOException e) {
             ControllerException ce = new ControllerException("I/O error reading from the import file " +
                     importFilePath + " after " + j + " transaction(s).");
@@ -1157,6 +1154,72 @@ public class ImportController {
 
 
     /**
+     * Imports provisional (pending) transactions from the register's configured provisional import file.
+     *
+     * <p>This method automatically detects the file format based on the file extension and delegates
+     * to the appropriate format-specific import method. Currently supported formats:
+     * <ul>
+     *   <li>CSV (.csv) - Comma-separated values</li>
+     *   <li>TSV (.tsv) - Tab-separated values</li>
+     * </ul>
+     *
+     * <p>The file path is constructed from the register's provisional transaction directory and filename.
+     * If the register doesn't have a provisional transaction file configured (filename is null or empty),
+     * this method returns true without importing anything.</p>
+     *
+     * <p><strong>Note:</strong> Provisional transactions are only supported for certain financial institutions.
+     * For example:
+     * <ul>
+     *   <li><strong>Wells Fargo:</strong> Supports provisional transactions (TSV format)</li>
+     *   <li><strong>Barclays:</strong> Does not support provisional transactions (QFX contains all transactions as cleared)</li>
+     * </ul>
+     *
+     * @return true if the forecast is in sync after the import, false otherwise
+     * @throws FinancialAppException If any error occurs during the import process
+     * @throws IllegalArgumentException If the file format is not supported
+     * @see Register#getProvisionalTrxFileDirectory()
+     * @see Register#getProvisionalTrxFileName()
+     * @see #importCsvProvisionalTransactionFile(String)
+     */
+    public boolean importProvisionalTransactionFile() throws FinancialAppException {
+        // Get the configured provisional transaction filename
+        String filename = register.getProvisionalTrxFileName();
+
+        // If no provisional file is configured, return true (nothing to import)
+        if (filename == null || filename.trim().isEmpty()) {
+            return true;
+        }
+
+        // Construct full file path
+        String directory = register.getProvisionalTrxFileDirectory();
+        String fullPath = (directory != null && !directory.trim().isEmpty())
+                ? directory + "\\" + filename
+                : filename;
+
+        // Detect file format from extension
+        String extension = "";
+        int lastDot = filename.lastIndexOf('.');
+        if (lastDot > 0 && lastDot < filename.length() - 1) {
+            extension = filename.substring(lastDot + 1).toLowerCase();
+        }
+
+        // Delegate to appropriate format-specific method
+        switch (extension) {
+            case "csv", "tsv" -> {
+                // CSV/TSV format - use existing CSV import method (handles both comma and tab delimiters)
+                return importCsvProvisionalTransactionFile(fullPath);
+            }
+            default -> {
+                throw new IllegalArgumentException(
+                    "Unsupported provisional transaction file format: '" + extension + "'. " +
+                    "Supported formats: .csv, .tsv. " +
+                    "File: " + fullPath
+                );
+            }
+        }
+    }
+
+    /**
      * Imports provisional (pending) transactions from the register's default import file.
      *
      * <p>This is a convenience method that calls {@link #importCsvProvisionalTransactionFile(String)}
@@ -1166,7 +1229,9 @@ public class ImportController {
      * @throws FinancialAppException If any error occurs during the import process
      * @see Register#getProvisionalTrxFileDirectory()
      * @see Register#getProvisionalTrxFileName()
+     * @deprecated Use {@link #importProvisionalTransactionFile()} instead, which auto-detects file format
      */
+    @Deprecated
     public boolean importCsvProvisionalTransactionFile() throws FinancialAppException {
         return importCsvProvisionalTransactionFile(register.getProvisionalTrxFileDirectory() + "\\" +
                 register.getProvisionalTrxFileName());
@@ -1551,6 +1616,17 @@ public class ImportController {
                                         provisionalTransactions.get(provTrxIndex).setMerchant(merchant);
                                         // Get budget item merchants list for the newly identified merchant
                                         budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+
+                                        // If this is a new merchant with no budget items assigned yet, assign them now
+                                        if (budgetItemMerchants.isEmpty()) {
+                                            try {
+                                                budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
+                                            } catch (CancelException | SkipException e) {
+                                                // User cancelled or skipped budget item assignment, move to next transaction
+                                                provTrxIndex++;
+                                                continue;
+                                            }
+                                        }
                                     }
                                 } catch (CancelException ce) {
                                     // User cancelled, move to next transaction

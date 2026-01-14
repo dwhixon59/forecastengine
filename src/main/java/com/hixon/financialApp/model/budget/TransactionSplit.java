@@ -269,8 +269,9 @@ public class TransactionSplit extends DependentEntity {
 
         // Find out what budget items are associated with the transaction for this transaction:
         String query = getSelectQuery() + "where ts.Transaction_idTransaction = uuid_to_bin('" + transaction.getId() + "')";
+        Statement statement = null;
         try {
-            Statement statement = getDbConnection().createStatement();
+            statement = getDbConnection().createStatement();
             ResultSet rs = statement.executeQuery(query);
             List<TransactionSplit> transactionSplits = new ArrayList<>();
             while (rs.next()) {
@@ -282,6 +283,15 @@ public class TransactionSplit extends DependentEntity {
             RegisterException re = new RegisterException("Database error occurred trying to get the transaction splits for " +
                     "transaction " + transaction.getPayee() + " for $" + transaction.getAmount(), e);
             throw re;
+        } finally {
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    // Log the error but don't throw it as we're cleaning up
+                    e.printStackTrace();
+                }
+            }
         }
     }
 

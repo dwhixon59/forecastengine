@@ -4,7 +4,6 @@ import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.forecast.Forecast;
-import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.parser.TransactionParser;
 import com.hixon.financialApp.model.qfx.QfxParser;
 import com.hixon.financialApp.model.qfx.QfxTransaction;
@@ -13,12 +12,17 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
 
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 
@@ -67,8 +71,13 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
     // QFX import fields
     private TransactionParser<QfxTransaction> qfxParser;
-    private String qfxFilename;
     private boolean isQfxOpen = false;
+
+    // CSV import fields (using Apache Commons CSV directly)
+    private org.apache.commons.csv.CSVParser csvApacheParser;
+    private Iterator<CSVRecord> csvRecordIterator;
+    private InputStreamReader csvReader;
+    private boolean isCsvOpen = false;
 
     /**
      * Constructs a new FinancialInstitution with the specified dependencies.
@@ -197,16 +206,12 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         // Create appropriate parser based on file extension
         switch (extension) {
             case "qfx", "ofx" -> {
-                // QFX/OFX format - use inherited QFX import
+                // QFX/OFX format - use QFX parser
                 importQfxRegisterTrxFile(fullPath);
             }
             case "csv", "tsv" -> {
-                // CSV/TSV format - subclass must handle this
-                // This is institution-specific (WellsFargo has its own CSV parser)
-                throw new UnsupportedOperationException(
-                    "CSV/TSV import must be handled by institution-specific subclass. " +
-                    "File: " + fullPath
-                );
+                // CSV/TSV format - use CSV parser
+                importCsvRegisterTrxFile(fullPath);
             }
             default -> {
                 throw new IllegalArgumentException(
@@ -226,6 +231,9 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * Imports transactions from a QFX file.
      * This method is used by any financial institution that supports QFX/OFX format.
      *
+     * The QFX parser loads all transactions into memory during the open() call,
+     * so we can safely close the FileInputStream immediately after parsing.
+     *
      * @param filename the QFX file to import
      * @throws Exception if the file cannot be opened or parsed
      */
@@ -234,12 +242,101 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             throw new IllegalArgumentException("QFX filename cannot be null or empty");
         }
 
-        this.qfxFilename = filename;
         this.qfxParser = new QfxParser();
 
-        // Open the parser
-        this.qfxParser.open(new FileInputStream(filename));
+        // Use try-with-resources to ensure FileInputStream is properly closed after parsing
+        // The parser loads all transactions into memory, so we don't need to keep the stream open
+        try (FileInputStream fis = new FileInputStream(filename)) {
+            // Open the parser - this reads and parses the entire file into memory
+            this.qfxParser.open(fis);
+            // Stream is automatically closed here by try-with-resources
+        } catch (Exception e) {
+            // If opening fails, make sure we clean up
+            this.isQfxOpen = false;
+            this.qfxParser = null;
+            throw e;
+        }
+
+        // Mark as open only after successful parse and stream closure
         this.isQfxOpen = true;
+    }
+
+    // ========================================
+    // CSV Import Methods (shared by all institutions using CSV format)
+    // ========================================
+
+    /**
+     * Imports transactions from a CSV file.
+     * This method is used by any financial institution that supports CSV/TSV format.
+     *
+     * Unlike QFX, CSV files are parsed on-demand as we iterate through records,
+     * so we need to keep the file and reader open until iteration is complete.
+     *
+     * @param filename the CSV file to import
+     * @throws Exception if the file cannot be opened or parsed
+     */
+    protected void importCsvRegisterTrxFile(String filename) throws Exception {
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new IllegalArgumentException("CSV filename cannot be null or empty");
+        }
+
+        if (isCsvOpen) {
+            throw new IllegalStateException("CSV parser is already open. Call close() first.");
+        }
+
+        try {
+            // Create file input stream and reader
+            FileInputStream fis = new FileInputStream(filename);
+            this.csvReader = new InputStreamReader(fis, StandardCharsets.UTF_8);
+
+            // Get the institution-specific CSV format configuration
+            // This allows each bank to specify its own CSV format (delimiter, headers, etc.)
+            CSVFormat csvFormat = getCsvFormat();
+
+            // Create Apache Commons CSV parser
+            this.csvApacheParser = csvFormat.parse(csvReader);
+
+            // Create iterator over CSV records
+            this.csvRecordIterator = csvApacheParser.iterator();
+
+            // Mark as open
+            this.isCsvOpen = true;
+
+        } catch (Exception e) {
+            // If opening fails, make sure we clean up
+            closeCsvResources();
+            this.isCsvOpen = false;
+            throw e;
+        }
+    }
+
+    /**
+     * Closes CSV parsing resources (parser and reader).
+     */
+    private void closeCsvResources() {
+        try {
+            if (csvApacheParser != null) {
+                csvApacheParser.close();
+            }
+        } catch (IOException e) {
+            // Log but don't throw
+            System.err.println("Warning: Error closing CSV parser: " + e.getMessage());
+        } finally {
+            csvApacheParser = null;
+        }
+
+        try {
+            if (csvReader != null) {
+                csvReader.close();
+            }
+        } catch (IOException e) {
+            // Log but don't throw
+            System.err.println("Warning: Error closing CSV reader: " + e.getMessage());
+        } finally {
+            csvReader = null;
+        }
+
+        csvRecordIterator = null;
     }
 
     /**
@@ -284,45 +381,85 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         return transaction;
     }
 
+    /**
+     * Converts a CSVRecord to a Transaction domain object.
+     * This delegates to the institution-specific createFromCSVRecord method.
+     *
+     * @param csvRecord the CSV record
+     * @return a Transaction object
+     * @throws Exception if conversion fails
+     */
+    protected Transaction convertCsvToTransaction(CSVRecord csvRecord) throws Exception {
+        // Get the import record base name from the institution-specific method
+        String importRecordBaseName = getRegisterImportRecordBaseName(csvRecord);
+
+        // Create transaction using institution-specific logic
+        return createFromCSVRecord(csvRecord, importRecordBaseName);
+    }
+
     // ========================================
     // Iterator<Transaction> Implementation
     // ========================================
 
     @Override
     public boolean hasNext() {
-        if (!isQfxOpen || qfxParser == null) {
-            return false;
+        // Check QFX parser first
+        if (isQfxOpen && qfxParser != null) {
+            return qfxParser.hasNext();
         }
-        return qfxParser.hasNext();
+
+        // Check CSV parser
+        if (isCsvOpen && csvRecordIterator != null) {
+            return csvRecordIterator.hasNext();
+        }
+
+        // No parser is open
+        return false;
     }
 
     @Override
     public Transaction next() {
-        if (!isQfxOpen || qfxParser == null) {
-            throw new NoSuchElementException("QFX parser is not open");
-        }
-
         try {
-            // Get next QFX transaction from parser
-            QfxTransaction qfxTxn = qfxParser.getNext();
+            // Handle QFX format
+            if (isQfxOpen && qfxParser != null) {
+                // Get next QFX transaction from parser
+                QfxTransaction qfxTxn = qfxParser.getNext();
+                // Convert QfxTransaction to Transaction
+                return convertQfxToTransaction(qfxTxn);
+            }
 
-            // Convert QfxTransaction to Transaction
-            return convertQfxToTransaction(qfxTxn);
+            // Handle CSV format
+            if (isCsvOpen && csvRecordIterator != null) {
+                // Get next CSV record from iterator
+                CSVRecord csvRecord = csvRecordIterator.next();
+                // Convert CSVRecord to Transaction
+                return convertCsvToTransaction(csvRecord);
+            }
+
+            // No parser is open
+            throw new NoSuchElementException("No parser is open");
 
         } catch (Exception e) {
-            throw new RuntimeException("Error converting QFX transaction to Transaction: " + e.getMessage(), e);
+            throw new RuntimeException("Error converting transaction: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void close() throws Exception {
         try {
+            // Close QFX parser if open
             if (qfxParser != null) {
                 qfxParser.close();
+            }
+
+            // Close CSV resources if open
+            if (isCsvOpen) {
+                closeCsvResources();
             }
         } finally {
             isQfxOpen = false;
             qfxParser = null;
+            isCsvOpen = false;
         }
     }
 }

@@ -680,10 +680,19 @@ public class BudgetController {
             }
             line += Item.generatePeriodType(budgetItem.getPeriod());
             if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND && forecast != null) {
-                line += ", ";
-                line += Utility.calendarDateToStringDate(
+                // Get the applicable forecast transaction (may be null for expired items)
+                ForecastTransaction applicableForecastTransaction =
                         ForecastTransaction.getApplicableForecastTransaction(
-                                budgetItem.getId(), Calendar.getInstance()).getPlannedDate());
+                                budgetItem.getId(), Calendar.getInstance());
+
+                if (applicableForecastTransaction != null) {
+                    line += ", ";
+                    line += Utility.calendarDateToStringDate(
+                            applicableForecastTransaction.getPlannedDate());
+                } else {
+                    // For expired items with no forecast transaction, show "Not planned"
+                    line += ", Not planned";
+                }
             }
             if (budgetItem.getMemo() != null &&
                     !budgetItem.getMemo().isEmpty()) {
@@ -1643,6 +1652,28 @@ public class BudgetController {
      * @throws Exception if an error occurs during selection
      */
     public BudgetItem getUserSelectedBudgetItem(List<BudgetItem> budgetItems) throws Exception {
+        return getUserSelectedBudgetItem(budgetItems, false, false, false);
+    }
+
+    /**
+     * Prompts the user to select a budget item from a list.
+     * Displays the list and returns the selected item, or null if the list is empty.
+     *
+     * @param budgetItems the list of BudgetItem objects to select from
+     * @param isCancelAllowed whether the user can cancel the selection
+     * @param isQuitAllowed whether the user can quit the application
+     * @param isSkipAllowed whether the user can skip the selection
+     * @return the selected BudgetItem, or null if none was selected
+     * @throws CancelException if user cancels the operation
+     * @throws QuitException if user quits the application
+     * @throws SkipException if user skips the selection
+     * @throws Exception if an error occurs during selection
+     */
+    public BudgetItem getUserSelectedBudgetItem(List<BudgetItem> budgetItems,
+                                                boolean isCancelAllowed,
+                                                boolean isQuitAllowed,
+                                                boolean isSkipAllowed)
+            throws CancelException, QuitException, SkipException, Exception {
 
         BudgetItem selectedBudgetItem = null;
         // If there is only one budget item, then return it:
@@ -1653,10 +1684,12 @@ public class BudgetController {
             // Show a list of the budget items and ask the user to select one:
             List<String> displayableBudgetItemsList = generateDisplayableBudgetItemList(budgetItems);
             int index = view.selectByPositionFromList("Multiple budget items found.  Please select one:",
-                    displayableBudgetItemsList, false);
-            selectedBudgetItem = budgetItems.get(index);
+                    displayableBudgetItemsList, false, isCancelAllowed, isQuitAllowed, isSkipAllowed);
+            if (index >= 0) {
+                selectedBudgetItem = budgetItems.get(index);
+            }
         }
-        // Ask the user to select one of the budget items:
+        // Return the selected budget item (or null if none selected)
         return selectedBudgetItem;
     }
 
@@ -1717,11 +1750,15 @@ public class BudgetController {
     /**
      * Renews expired budget items by prompting the user to select one if multiple are found.
      * If a budget item is selected, it is un-expired.
+     * User can cancel or skip the renewal process.
      *
      * @param expiredBudgetItemMerchants the list of expired BudgetItemMerchant objects
+     * @throws CancelException if user cancels the renewal
+     * @throws SkipException if user skips the renewal
      * @throws Exception if an error occurs during the renewal process
      */
-    public void renewBudgetItems(List<BudgetItemMerchant> expiredBudgetItemMerchants) throws Exception {
+    public void renewBudgetItems(List<BudgetItemMerchant> expiredBudgetItemMerchants)
+            throws CancelException, SkipException, Exception {
 
         // If there are more than one expired budget items:
         BudgetItem budgetItem = null;
@@ -1733,9 +1770,9 @@ public class BudgetController {
                 expiredBudgetItems.add(budgetItemMerchant.getBudgetItem());
             }
 
-            // and ask the user to select one:
+            // and ask the user to select one (allow cancel and skip):
             view.say("Multiple expired budget items found.  Please select one:");
-            budgetItem = getUserSelectedBudgetItem(expiredBudgetItems);
+            budgetItem = getUserSelectedBudgetItem(expiredBudgetItems, true, false, true);
         }
 
         // and if they did select one:

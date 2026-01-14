@@ -276,7 +276,7 @@ public class ForecastTransaction extends IndependentEntity {
     // The select query:
     public static final String selectColumns = " bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', " +
             "ft.updatedTimeStamp as 'ft.version', ft.remainingAmount as 'ft.remainingAmount', ft.plannedDate as " +
-            "'ft.plannedDate', ft.memo as 'ft.memo', ft.runningBalance, ft.overridden as 'ft.overridden', " +
+            "'ft.plannedDate', ft.memo as 'ft.memo', ft.runningBalance as 'ft.runningBalance', ft.overridden as 'ft.overridden', " +
             "ft.firstOccurrence as 'ft.firstOccurrence', ft.found as 'ft.found', " +
             "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem' ";
 
