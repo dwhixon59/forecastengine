@@ -109,6 +109,11 @@ public class CsvForecastView extends AbstractForecastView {
 
    }
 
+   @Override
+   public void editLongTermForecast() throws Exception {
+      throw new ViewException("CSV forecast editing is not supported. Use Excel view instead.");
+   }
+
    // Forecast transaction headers in a CSV file:
    public enum ForecastTransactionHeaders {
       DATE, CATEGORY, PAYEE, MEMO, CREDIT, DEBIT, BALANCE, BLANK, IMPORTANCE, HOW_OCCURS, TRANSACTION_ID, VERSION, AMOUNT

@@ -438,8 +438,8 @@ public class Forecast extends IndependentEntity {
     public static Calendar getFirstNonZeroTransactionDate(Forecast forecast) throws EntityException, SQLException {
         String query =
                 "select MIN(plannedDate) as 'ft.plannedDate' " +
-                        "from forecast_transaction ft inner join forecast_item on ForecastItem_idForecastItem = idForecastItem " +
-                        "where remainingAmount <>0 and amount <>0";
+                        "from forecast_transaction ft inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                        "where ft.remainingAmount <>0 and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')";
         ResultSet rs = EntityInt.getSingletonRS(query, "Database error encountered trying to retrieve the " +
                 "forecast start date.");
         if (rs != null) {
@@ -449,10 +449,40 @@ public class Forecast extends IndependentEntity {
         }
     }
 
+    /**
+     * Gets the most recent forecast across ALL budgets in the system.
+     * @return The most recent forecast, or null if no forecasts exist
+     * @throws EntityException If a database error occurs
+     * @throws SQLException If a SQL error occurs
+     * @deprecated Use {@link #getMostRecent(Budget)} instead to avoid cross-budget contamination.
+     * This method retrieves the globally most recent forecast regardless of budget, which may not be
+     * what you want when working with a specific register/budget.
+     */
+    @Deprecated
     public static Forecast getMostRecent() throws EntityException, SQLException {
         String selectMostRecentQuery = selectQuery + "order by dateGenerated desc";
         ResultSet rs = getSingletonRS(selectMostRecentQuery, "Database error occurred " +
                 "trying to retrieve the most recent forecast.");
+        Forecast forecast = null;
+        if (rs != null) {
+            forecast = new Forecast(rs);
+        }
+        return forecast;
+    }
+
+    /**
+     * Gets the most recent forecast for a specific budget.
+     * @param budget The budget whose most recent forecast should be retrieved
+     * @return The most recent forecast for the budget, or null if no forecasts exist for that budget
+     * @throws EntityException If a database error occurs
+     * @throws SQLException If a SQL error occurs
+     */
+    public static Forecast getMostRecent(Budget budget) throws EntityException, SQLException {
+        String selectMostRecentQuery = selectQuery +
+                "where Budget_idBudget = uuid_to_bin('" + budget.getId() + "') " +
+                "order by dateGenerated desc";
+        ResultSet rs = getSingletonRS(selectMostRecentQuery, "Database error occurred " +
+                "trying to retrieve the most recent forecast for budget " + budget.getName() + ".");
         Forecast forecast = null;
         if (rs != null) {
             forecast = new Forecast(rs);
@@ -578,6 +608,73 @@ public class Forecast extends IndependentEntity {
             throw e;
         }
     } // End saveForecastTransactions().
+
+    /**
+     * Detects and reports duplicate forecast transactions.
+     * Finds transactions with the same ForecastItem + plannedDate combination but different IDs,
+     * which indicates logical duplicates that should not exist.
+     *
+     * NOTE: Transactions linked to different splits are NOT considered duplicates - they represent
+     * different actual transactions that matched the same forecast item on the same date.
+     */
+    public void checkForDuplicateTransactions() throws SQLException {
+        String query =
+            "SELECT " +
+            "    BIN_TO_UUID(fi.idForecastItem) as forecastItemId, " +
+            "    fi.category, " +
+            "    fi.payee, " +
+            "    ft.plannedDate, " +
+            "    COUNT(*) as duplicateCount, " +
+            "    GROUP_CONCAT(BIN_TO_UUID(ft.idForecastTransaction) ORDER BY ft.updatedTimeStamp DESC SEPARATOR ', ') as transactionIds, " +
+            "    COUNT(DISTINCT fts.Transaction_Split_idTransaction) as distinctTransactionCount " +
+            "FROM forecast_transaction ft " +
+            "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+            "LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction " +
+            "WHERE fi.Forecast_idForecast = UUID_TO_BIN('" + this.getId() + "') " +
+            "  AND ft.plannedDate >= " + Utility.calendarDateToSqlDateString(this.startDate) + " " +
+            "GROUP BY fi.idForecastItem, ft.plannedDate " +
+            "HAVING COUNT(*) > 1 " +
+            "  AND (COUNT(DISTINCT fts.Transaction_Split_idTransaction) <= 1 OR COUNT(DISTINCT fts.Transaction_Split_idTransaction) IS NULL) " +
+            "ORDER BY ft.plannedDate DESC, fi.category, fi.payee";
+
+        try (Statement statement = Utility.getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
+
+            boolean foundDuplicates = false;
+            while (rs.next()) {
+                if (!foundDuplicates) {
+                    Utility.getView().say("");
+                    Utility.getView().say("WARNING: Duplicate forecast transactions detected!");
+                    Utility.getView().say("=========================================");
+                    foundDuplicates = true;
+                }
+
+                String category = rs.getString("category");
+                String payee = rs.getString("payee");
+                LocalDate plannedDate = rs.getObject("plannedDate", LocalDate.class);
+                int count = rs.getInt("duplicateCount");
+                String transactionIds = rs.getString("transactionIds");
+
+                Utility.getView().say(String.format(
+                    "  [%s] %s - %s: %d duplicates",
+                    plannedDate.toString(),
+                    category,
+                    payee,
+                    count
+                ));
+                Utility.getView().say("    Transaction IDs: " + transactionIds);
+            }
+
+            if (foundDuplicates) {
+                Utility.getView().say("=========================================");
+                Utility.getView().say("Run cleanup_duplicate_forecast_transactions.sql to remove duplicates.");
+                Utility.getView().say("");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking for duplicate forecast transactions: " + e.getMessage());
+            throw e;
+        }
+    } // End checkForDuplicateTransactions().
 
     // Save the entire forecast to the database, including all the forecast items and forecast transactions:
     public void saveAll() throws SQLException, BudgetException, EntityException, ForecastException {
@@ -831,6 +928,54 @@ public class Forecast extends IndependentEntity {
 
         OverrideKey key = new OverrideKey(forecastItem.getId(), localDate);
         return overriddenTransactionKeys.contains(key);
+    }
+
+    /**
+     * Checks if this forecast contains a reconciled forecast transaction for the given forecast item and date.
+     * A reconciled transaction is one that has been matched to actual transactions (found=true or has splits).
+     * This prevents the forecast update process from creating duplicate transactions.
+     *
+     * @param forecastItem the forecast item
+     * @param date the planned date
+     * @return true if a reconciled transaction exists for this forecast item and date in this forecast, false otherwise
+     */
+    public boolean hasReconciledForecastTransactionOnDate(ForecastItem forecastItem, Calendar date) {
+        if (forecastItem == null || date == null) {
+            return false;
+        }
+
+        String sql =
+                "SELECT COUNT(*) as count " +
+                "FROM forecast_transaction ft " +
+                "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "WHERE fi.Forecast_idForecast = UUID_TO_BIN(?) " +
+                "  AND fi.idForecastItem = UUID_TO_BIN(?) " +
+                "  AND ft.plannedDate = ? " +
+                "  AND (ft.found = TRUE OR EXISTS (" +
+                "    SELECT 1 FROM forecast_transaction_split fts " +
+                "    WHERE fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction" +
+                "  ))";
+
+        try (PreparedStatement ps = Utility.getDbConnection().prepareStatement(sql)) {
+            ps.setString(1, this.getId().toString());
+            ps.setString(2, forecastItem.getId().toString());
+
+            LocalDate localDate = date.toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+            ps.setDate(3, java.sql.Date.valueOf(localDate));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("count") > 0;
+                }
+            }
+        } catch (SQLException e) {
+            // Log as needed, default to false to avoid blocking forecast generation
+            System.err.println("Error checking for reconciled forecast transaction: " + e.getMessage());
+        }
+
+        return false;
     }
 
 }

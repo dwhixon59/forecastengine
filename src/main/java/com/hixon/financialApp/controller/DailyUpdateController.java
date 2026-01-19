@@ -75,16 +75,6 @@ public class DailyUpdateController {
             ForecastController forecastController = new ForecastController(sessionController);
             boolean inSync = true;
 
-            // Update the forecast from the spreadsheet if the user made any updates to the spreadsheet:
-            view.sayH2("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE");
-            try {
-                forecastController.updateFromExternalSource();
-            } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
-                        "an external source.")) {
-                    throw e;
-                }
-            }
 
             // Process any transactions skipped in previous update runs:
            view.sayH2("REPROCESS SKIPPED TRANSACTIONS");
@@ -129,7 +119,7 @@ public class DailyUpdateController {
                         "  • The file is in a different location\n" +
                         "  • The filename has changed (e.g., includes a date)\n\n" +
                         "Expected file: " + fnfe.getMessage() + "\n\n" +
-                        "Would you like to skip importing cleared transactions and continue?";
+                        "Skip importing cleared transactions and continue with the daily update?";
                 if (!view.askContinue(message)) {
                     // User chose not to continue - abort the daily update
                    sessionController.getView().sayH4("Aborting the daily update process at the user's request.");
@@ -140,7 +130,7 @@ public class DailyUpdateController {
             } catch (Exception e) {
                 if (!view.askContinue("\nAn error occurred while importing cleared transactions:\n" +
                         e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\n" +
-                        "Would you like to skip this step and continue?")) {
+                        "Skip this step and continue with the daily update?")) {
                     throw e;
                 }
                view.say("Import of cleared transactions skipped.");
@@ -226,6 +216,35 @@ public class DailyUpdateController {
                 }
             }
 
+            // Open the forecast in Excel for review:
+           view.sayH2("OPEN THE FORECAST FOR REVIEW");
+            try {
+                sessionController.getForecastView().editLongTermForecast();
+            } catch (QuitException qe) {
+                throw qe;
+            } catch (Exception e) {
+                if (!view.askContinue("\nThe error '" + e + "' occurred while opening the forecast in Excel.")) {
+                    throw e;
+                }
+               view.say("Skipped opening forecast in Excel.");
+            }
+
+            // If the user made changes to the forecast, import them:
+            if (view.getYesOrNo("Did you make any changes to the forecast in Excel that you want to import?")) {
+               view.sayH2("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE");
+                try {
+                    forecastController.updateFromExternalSource();
+                   view.sayH4("The forecast was successfully updated from the external source.");
+                } catch (Exception e) {
+                    if (!view.askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
+                            "an external source.")) {
+                        throw e;
+                    }
+                }
+            } else {
+               view.say("Forecast changes not imported.");
+            }
+
             // Render the Spending Report for the current month:
             try {
                view.sayH2("RENDER THE SPENDING REPORT");
@@ -269,6 +288,18 @@ public class DailyUpdateController {
             } catch (Exception e) {
                 if (!view.askContinue("The error '" + e + "' occurred while rendering the New Transaction Summary " +
                         "Report.")) {
+                    throw e;
+                }
+            }
+
+            // Check for duplicate forecast transactions:
+            try {
+               view.sayH2("CHECKING FOR DUPLICATE FORECAST TRANSACTIONS");
+               forecast.checkForDuplicateTransactions();
+               view.sayH4("Duplicate forecast transaction check complete.");
+            } catch (Exception e) {
+                if (!view.askContinue("The error '" + e + "' occurred while checking for duplicate forecast " +
+                        "transactions.")) {
                     throw e;
                 }
             }

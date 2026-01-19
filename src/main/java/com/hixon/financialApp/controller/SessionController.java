@@ -29,22 +29,28 @@ import java.util.List;
  * register, budget, and forecast data.
  */
 @Getter
-@Setter
 public class SessionController {
 
     /*
      * Member variables:
      */
     private Register register = null;
+    @Setter
     private Budget budget = null;
+    @Setter
     private Forecast forecast = null;
     private FinancialInstitutionInt financialInstitution = null;
+    @Setter
     private ViewInt view;
+    @Setter
     private NotificationServiceInt notificationService;
 
     // Specialized views for interfacing with external agents:
+    @Setter
     private RegisterViewInt registerView;
+    @Setter
     private BudgetViewInt budgetView;
+    @Setter
     private ForecastViewInt forecastView;
 
 
@@ -164,6 +170,41 @@ public class SessionController {
      */
     public boolean hasForecast() {
         return forecast != null;
+    }
+
+    /**
+     * Sets the register for this session and recreates the financial institution to match.
+     * This ensures that when switching registers, the financial institution is properly updated
+     * to prevent cross-contamination between different registers' data.
+     *
+     * @param register The register to set for this session
+     */
+    public void setRegister(Register register) {
+        this.register = register;
+        // Recreate the financial institution when the register changes
+        if (register != null) {
+            try {
+                this.financialInstitution = FinancialInstitutionFactory.create(this);
+            } catch (Exception e) {
+                System.err.println("Error creating financial institution for register " +
+                    register.getName() + ": " + e.getMessage());
+                this.financialInstitution = null;
+            }
+        } else {
+            this.financialInstitution = null;
+        }
+    }
+
+    /**
+     * Sets the financial institution for this session.
+     * This allows manual override of the financial institution, which may be needed
+     * in specific scenarios like transaction parsing where a temporary session controller
+     * is created.
+     *
+     * @param financialInstitution The financial institution to set for this session
+     */
+    public void setFinancialInstitution(FinancialInstitutionInt financialInstitution) {
+        this.financialInstitution = financialInstitution;
     }
 
     /**

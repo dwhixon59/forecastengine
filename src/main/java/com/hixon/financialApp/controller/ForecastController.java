@@ -370,7 +370,7 @@ public class ForecastController {
 
                     // Create a forecast transaction and forecast item (if it doesn't already exist) for it so we have
                     // something to link the forecast transaction split to:
-                    ForecastItem forecastItem = ForecastItem.getByBudgetItemId(split.getIdBudgetItem());
+                    ForecastItem forecastItem = ForecastItem.getByBudgetItemId(forecast, split.getIdBudgetItem());
                     if (forecastItem == null) {
                         forecastItem = new ForecastItem(forecast, split.getBudgetItem());
                         forecastItem.setAmount(split.getAmount());
@@ -672,7 +672,8 @@ public class ForecastController {
 
                             // then if the forecast planned date has been modified, then update the database transaction:
                             boolean overwrite;
-                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
+                            if (Utility.dateOnlyCompare(ssForecastTransaction.getPlannedDate(),
+                                    dbForecastTransaction.getPlannedDate()) != 0) {
                                 // If the database forecast transaction was updated after it was sent to the external
                                 // source:
                                 overwrite = true;
@@ -921,8 +922,9 @@ public class ForecastController {
         // Delete any expired forecast items that have no linked forecast transactions.
         ForecastItem.deleteExpiredUnusedForecastItems(forecast);
 
-        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones
-        // and any that have been assigned splits:
+        // Delete all the forecast transactions that occur after the update start date, except for:
+        // - Overridden ones (user manually modified)
+        // - Reconciled ones (found=true or have splits assigned)
         String deleteQuery = ForecastTransaction.getDeleteQuery() +
                 "where " +
                     "ForecastItem_idForecastItem in (" +
@@ -935,6 +937,7 @@ public class ForecastController {
                     ") " +
                     "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
                     "and not overridden " +
+                    "and not found " +  // Don't delete reconciled transactions
                     "and not exists (" +
                         "select 1 " +
                         "from " +
@@ -967,6 +970,9 @@ public class ForecastController {
 
         // Save the updated portion of the forecast.
         forecast.saveForecastTransactions();
+
+        // Check for duplicate forecast transactions and warn the user
+        forecast.checkForDuplicateTransactions();
 
         // The forecast engine doesn't know that we are updating a forecast. It will have set the first occurrence
         // properly for a new forecast. Fix up the flags in the updated forecast.

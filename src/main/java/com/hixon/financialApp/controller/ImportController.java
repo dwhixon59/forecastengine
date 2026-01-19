@@ -329,7 +329,7 @@ public class ImportController {
                  */
                 // Track whether this is a new transaction (not previously imported)
                 String importRecordId = currentTransaction.getImportRecordId();
-                Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId);
+                Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
                 boolean isNewTransaction = (existingTransaction == null);
 
                 // Get the merchant and splits for this transaction if it already exists:
@@ -798,7 +798,7 @@ public class ImportController {
                 importRecordId = constructImportRecordId(map, financialInstitution.getRegisterImportRecordBaseName(record));
 
                 // Get the transaction for this import record ID:
-                currentTransaction = Transaction.getByImportRecordId(importRecordId);
+                currentTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
 
                 // Track whether this is a new transaction (not previously imported)
                 boolean isNewTransaction = (currentTransaction == null);
@@ -1379,7 +1379,8 @@ public class ImportController {
                  * Retrieve a list of the existing provisional transactions from the database and them sort them in ascending
                  * order by payee + amount :
                  */
-                ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() + " where tr.cleared = false",
+                ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() +
+                        " where tr.cleared = false AND tr.Register_idRegister = uuid_to_bin('" + register.getId() + "')",
                         "attempting to retrieve a list of provisional transactions.");
                 List<Transaction> registerTransactions = new ArrayList<>();
                 while (rs.next()) {

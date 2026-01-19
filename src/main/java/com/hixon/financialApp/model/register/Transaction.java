@@ -580,10 +580,31 @@ public class Transaction extends IndependentEntity {
      * @return the Transaction object, or null if not found
      * @throws EntityException if a database error occurs
      * @throws SQLException if a SQL error occurs
+     * @deprecated Use {@link #getByImportRecordId(String, UUID)} instead to avoid cross-register contamination
      */
+    @Deprecated
     public static Transaction getByImportRecordId(String importRecordId) throws EntityException, SQLException {
         ResultSet rs = getRS(getSelectQuery() + " where tr.importRecordId = \"" + importRecordId + "\"",
                 "Database error encountered trying to retrieve a transaction by importRecordId.");
+        Transaction transaction = null;
+        if (rs.next()) {
+            transaction = new Transaction(rs);
+        }
+        return transaction;
+    }
+
+    /**
+     * Retrieves a transaction by import record ID for a specific register.
+     * @param importRecordId the import record ID
+     * @param registerId the UUID of the register
+     * @return the Transaction object, or null if not found
+     * @throws EntityException if a database error occurs
+     * @throws SQLException if a SQL error occurs
+     */
+    public static Transaction getByImportRecordId(String importRecordId, UUID registerId) throws EntityException, SQLException {
+        ResultSet rs = getRS(getSelectQuery() + " where tr.importRecordId = \"" + importRecordId +
+                "\" and tr.Register_idRegister = uuid_to_bin(\"" + registerId.toString() + "\")",
+                "Database error encountered trying to retrieve a transaction by importRecordId and registerId.");
         Transaction transaction = null;
         if (rs.next()) {
             transaction = new Transaction(rs);

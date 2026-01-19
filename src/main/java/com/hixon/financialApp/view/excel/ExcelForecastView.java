@@ -382,6 +382,31 @@ public class ExcelForecastView extends AbstractForecastView {
     }
 
     @Override
+    public void editLongTermForecast() throws Exception {
+        if (longTermForecastFilename == null || longTermForecastFilename.trim().isEmpty()) {
+            throw new ViewException("Long term forecast filename is not set. Cannot open forecast for editing.");
+        }
+
+        File forecastFile = new File(longTermForecastFilename);
+        if (!forecastFile.exists()) {
+            throw new ViewException("Long term forecast file does not exist: " + longTermForecastFilename);
+        }
+
+        Utility.getView().say("Opening the forecast file in Excel: " + longTermForecastFilename);
+        Utility.getView().say("The process will resume after you close Excel.");
+
+        try {
+            // Open Excel and wait for it to close
+            Process process = Runtime.getRuntime().exec("cmd /c start /wait excel \"" + longTermForecastFilename + "\"");
+            process.waitFor();
+
+            Utility.getView().sayH4("Excel closed. Continuing...");
+        } catch (IOException | InterruptedException e) {
+            throw new ViewException("Error opening forecast file in Excel: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     // For now, defer to the CSV view for importing forecast transactions:
     public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
             BudgetException {

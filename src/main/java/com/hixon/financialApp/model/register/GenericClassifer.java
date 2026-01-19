@@ -74,8 +74,8 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
 //                ) {
 //                    // then we found the first match, so stop looking:
 //                    found = true;
-////                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
-////                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
+//                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
+//                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
 //                    break;
 //                }
 //            }

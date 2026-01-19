@@ -142,6 +142,8 @@ public class DataManagerController {
     private void ensureRegisterContext() throws Exception {
         if (register == null) {
             register = RegisterController.selectRegister(view);
+            // Update the SessionController with the selected register
+            sessionController.setRegister(register);
             // Also ensure budget and forecast since register implies those
             ensureBudgetContext();
         }

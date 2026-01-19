@@ -90,6 +90,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract void closeLongTermForecastOutput(String reportType) throws IOException, ForecastException;
 
+    public abstract void editLongTermForecast() throws Exception;
+
     public abstract void closeForecastTransactionSource(String sourceName) throws ViewException;
 
     public abstract List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException,

@@ -45,11 +45,6 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     protected SessionController sessionController;
 
     /**
-     * The register associated with this financial institution account.
-     */
-    protected Register register;
-
-    /**
      * The budget used for categorizing and tracking transactions.
      */
     protected Budget budget;
@@ -69,6 +64,16 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      */
     protected NotificationServiceInt notificationService;
 
+    /**
+     * Gets the register from the session controller.
+     * This ensures we always use the current register, even if it changes during the session.
+     *
+     * @return The current register from the session controller
+     */
+    protected Register getRegister() {
+        return sessionController.getRegister();
+    }
+
     // QFX import fields
     private TransactionParser<QfxTransaction> qfxParser;
     private boolean isQfxOpen = false;
@@ -86,7 +91,6 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      */
     protected FinancialInstitution(SessionController sessionController) {
         this.sessionController = sessionController;
-        this.register = sessionController.getRegister();
         this.budget = sessionController.getBudget();
         this.forecast = sessionController.getForecast();
         this.view = sessionController.getView();
@@ -187,11 +191,11 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      */
     public void importRegisterTrxFile() throws Exception {
         // Get full import file path from register
-        String fullPath = register.getTrxImportFilePath();
+        String fullPath = getRegister().getTrxImportFilePath();
 
         if (fullPath == null || fullPath.trim().isEmpty()) {
             throw new IllegalStateException(
-                "Register '" + register.getName() + "' does not have an import file path configured. " +
+                "Register '" + getRegister().getName() + "' does not have an import file path configured. " +
                 "Please set trxImportFileName and trxImportFileDirectory fields."
             );
         }
@@ -365,7 +369,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
         // Create the transaction
         Transaction transaction = new Transaction(
-            register,
+            getRegister(),
             postDate,
             payee,
             qfxTxn.getAmount(),

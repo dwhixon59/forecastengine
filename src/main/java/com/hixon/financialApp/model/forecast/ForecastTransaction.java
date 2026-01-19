@@ -690,15 +690,59 @@ public class ForecastTransaction extends IndependentEntity {
             String memoString =
                     (this.getForecastItem().getMemo() == null || this.getForecastItem().getMemo().isEmpty()) ?
                             "" : " Memo = " + this.getForecastItem().getMemo();
+
+            // Get split amount if splits exist
+            String splitString = "";
+            try {
+                double splitAmount = getTotalSplitAmount();
+                if (splitAmount != 0.0) {
+                    splitString = ", Split Amount = " + formatDollarAmount(splitAmount);
+                }
+            } catch (Exception e) {
+                // If we can't get split amount, just don't show it
+            }
+
             s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
                     + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
                     this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
                     ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
-                    formatDollarAmount(remainingAmount);
+                    formatDollarAmount(remainingAmount) + splitString;
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
+    }
+
+    /**
+     * Get the total amount of all splits associated with this forecast transaction.
+     * @return The total split amount, or 0.0 if no splits exist
+     */
+    private double getTotalSplitAmount() {
+        try {
+            String query = ForecastTransactionSplit.getSelectQuery() +
+                    " WHERE fts.ForecastTransaction_idForecastTransaction = uuid_to_bin('" + this.getId() + "')";
+            ResultSet rs = EntityInt.getRS(query, "getting forecast transaction splits for display");
+
+            double totalSplitAmount = 0.0;
+            if (rs != null) {
+                while (rs.next()) {
+                    ForecastTransactionSplit split = new ForecastTransactionSplit(rs);
+                    // Get the actual transaction split to get the amount
+                    String transSplitQuery = com.hixon.financialApp.model.budget.TransactionSplit.getSelectQuery() +
+                            "WHERE ts.BudgetItem_idBudgetItem = uuid_to_bin('" + split.getIdBudgetItem() + "') AND " +
+                            "ts.Transaction_idTransaction = uuid_to_bin('" + split.getIdTransaction() + "')";
+                    ResultSet tsRs = EntityInt.getRS(transSplitQuery, "getting transaction split amount");
+                    if (tsRs != null && tsRs.next()) {
+                        com.hixon.financialApp.model.budget.TransactionSplit transSplit =
+                                new com.hixon.financialApp.model.budget.TransactionSplit(tsRs);
+                        totalSplitAmount += transSplit.getAmount();
+                    }
+                }
+            }
+            return totalSplitAmount;
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 
     public String toStringVeryConcise() throws BudgetException, SQLException, EntityException, ForecastException {
@@ -1282,7 +1326,8 @@ public class ForecastTransaction extends IndependentEntity {
         // Get a result set from the database for the upcoming items.  Upcoming items are non-zero amount items that are
         // whose planned date is before three days from today:
         ForecastTransactionAndItemDatabaseIterator iterator = new ForecastTransactionAndItemDatabaseIterator(forecast,
-                forecast.getStartDate());
+                Forecast.getFirstNonZeroTransactionDate(forecast));
+
 
         // Load the retrieved items into a list. Exclude any items considered overdue:
         List<Entity> upcomingItemsList = new ArrayList<>();

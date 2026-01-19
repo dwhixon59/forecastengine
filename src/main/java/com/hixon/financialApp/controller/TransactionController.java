@@ -90,13 +90,14 @@ public class TransactionController {
      * @throws QuitException if the user chooses to quit
      */
     public void manageTransactions() throws Exception, QuitException {
+        // Use register from sessionController if already set (e.g., by DataManagerController.ensureRegisterContext())
         Register lastSelectedRegister = register;  // Track the last selected register across operations
         boolean done = false;
         String pendingSearchString = null;  // Track search string from action menu
 
         while (!done) {
             try {
-                // Step 1: Select which register to work with
+                // Step 1: Select which register to work with (only if not already set)
                 if (lastSelectedRegister == null) {
                     lastSelectedRegister = RegisterController.selectRegister(view);
                     register = lastSelectedRegister;

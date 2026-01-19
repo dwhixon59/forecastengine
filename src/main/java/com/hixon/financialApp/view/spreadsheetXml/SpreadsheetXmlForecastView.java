@@ -214,6 +214,11 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
         }
     }
 
+    @Override
+    public void editLongTermForecast() throws Exception {
+        throw new ViewException("SpreadsheetXML forecast editing is not supported. Use Excel view instead.");
+    }
+
     /*
      * Constructors:
      */

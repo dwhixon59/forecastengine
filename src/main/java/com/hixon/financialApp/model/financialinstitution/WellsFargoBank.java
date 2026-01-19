@@ -270,8 +270,11 @@ public class WellsFargoBank extends FinancialInstitution {
         } else {
             if (payeeTokens.length >= 3) {
                 firstFewWords = payeeTokens[0] + " " + payeeTokens[1] + " " + payeeTokens[2];
-            } else {
+            } else if (payeeTokens.length == 2) {
                 firstFewWords = payeeTokens[0] + " " + payeeTokens[1];
+            } else {
+                // Only 1 token
+                firstFewWords = payeeTokens[0];
             }
         }
         logger.debug("  First few words: '{}'", firstFewWords);
@@ -327,7 +330,7 @@ public class WellsFargoBank extends FinancialInstitution {
                     logger.debug("  Account number not found in payee string - will ask user");
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
-                    SessionController tempSessionController = new SessionController(register, budget, forecast, view, notificationService);
+                    SessionController tempSessionController = new SessionController(getRegister(), budget, forecast, view, notificationService);
                     tempSessionController.setFinancialInstitution(this);
                     RegisterController registerController = new RegisterController(tempSessionController);
                     transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
@@ -364,10 +367,10 @@ public class WellsFargoBank extends FinancialInstitution {
                 }
                 if (transferRegister != null) {
                     merchantPayee = "Transfer " + toFrom1 + " " + transferRegister.getName() + " " + toFrom2 + " " +
-                            register.getName();
+                            getRegister().getName();
                 } else {
                     merchantPayee = "Transfer " + toFrom1 + " " + accountNumber + " " + toFrom2 + " " +
-                            register.getName();
+                            getRegister().getName();
                 }
                 logger.debug("  Constructed merchantPayee: '{}'", merchantPayee);
                 break;
@@ -444,7 +447,7 @@ public class WellsFargoBank extends FinancialInstitution {
 
         // Use fuzzy matching based on payee, date, and amount only (no merchant ID)
         return TransactionUtilities.findMatchingProvisionalTransaction(
-                register.getId(),
+                getRegister().getId(),
                 clearedTransaction.getAmount(),
                 clearedTransaction.getDate(),
                 merchantPayee
@@ -614,7 +617,7 @@ public class WellsFargoBank extends FinancialInstitution {
         }
 
         // Create the transaction:
-        Transaction transaction = new Transaction(register, postDate, payee, amount, cleared, checkNumber, importRecordId);
+        Transaction transaction = new Transaction(getRegister(), postDate, payee, amount, cleared, checkNumber, importRecordId);
 
         // Tokenize the bank payee (single blank is the separator):
         payeeTokens = transaction.getPayee().split(" ");

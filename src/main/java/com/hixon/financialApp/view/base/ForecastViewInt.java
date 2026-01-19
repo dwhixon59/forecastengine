@@ -22,6 +22,9 @@ public interface ForecastViewInt {
     // Render the long term forecast:
     boolean renderLongTermForecast(Forecast forecast) throws Exception, EntityException, BudgetException, QuitException, RegisterException;
 
+    // Open the long term forecast in an editor (e.g., Excel) for review:
+    void editLongTermForecast() throws Exception;
+
     // Render items-of-interest report for a specific user:
     UserResource renderItemsOfInterestReport(User user) throws EntityException, Exception, BudgetException,
             ViewException, RegisterException;
