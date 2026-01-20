@@ -11,7 +11,7 @@
 USE forecastengine;
 
 -- Step 1: Report on duplicate importRecordIds across different registers
-SELECT '=== DUPLICATE IMPORTRECORDIDS ACROSS REGISTERS ===' as '';
+SELECT '=== DUPLICATE IMPORT RECORDIDS ACROSS REGISTERS ===' as '';
 SELECT
     t.importRecordId,
     COUNT(DISTINCT bin_to_uuid(t.Register_idRegister)) as register_count,

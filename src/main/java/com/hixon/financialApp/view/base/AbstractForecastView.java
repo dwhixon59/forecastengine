@@ -594,19 +594,10 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     public boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException,
             Exception, BudgetException, RegisterException {
 
-        // Calculate the end date.  The algorithm is that the end date is always the end of a pay period.  For the 25th
-        // through the 10th of the month, the end date is the 14th.  For the 10th through the 25th it is the end of the
-        // month.
+        // Calculate the end date: always the end of the month after the current month
         Calendar endDate = Calendar.getInstance();
-        if (endDate.get(Calendar.DATE) >= 20) {
-            endDate.add(Calendar.MONTH, 1);
-            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
-        } else if (endDate.get(Calendar.DATE) <= 5) {
-            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
-        } else {
-            endDate.add(Calendar.MONTH, 1);
-            endDate.set(Calendar.DATE, 14);
-        }
+        endDate.add(Calendar.MONTH, 1);  // Move to next month
+        endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));  // Set to last day of that month
 
         // Get a list of upcoming items through the end date:
         List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getItemsUpToDate(forecast, endDate));
