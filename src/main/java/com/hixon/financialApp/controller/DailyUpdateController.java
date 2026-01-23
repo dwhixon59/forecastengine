@@ -76,6 +76,38 @@ public class DailyUpdateController {
             boolean inSync = true;
 
 
+            // Check if user has modified the external forecast file since last render:
+           view.sayH2("CHECK FOR EXTERNAL FORECAST CHANGES");
+            try {
+                if (forecastController.isExternalForecastFileNewer()) {
+                   view.say("The external forecast file has been modified since it was last rendered.");
+                    if (view.getYesOrNo("Do you want to import the changes from the external file?")) {
+                       view.sayH2("IMPORT FORECAST CHANGES FROM EXTERNAL SOURCE");
+                        try {
+                            forecastController.updateFromExternalSource();
+                           view.sayH4("The forecast was successfully updated from the external source.");
+                        } catch (Exception e) {
+                            if (!view.askContinue("\nThe error '" + e + "' occurred while importing forecast " +
+                                    "changes from external source.")) {
+                                throw e;
+                            }
+                        }
+                    } else {
+                       view.sayH4("External forecast changes not imported.");
+                    }
+                } else {
+                   view.sayH4("External forecast file has not been modified since last render.");
+                }
+            } catch (QuitException qe) {
+                throw qe;
+            } catch (Exception e) {
+                if (!view.askContinue("\nThe error '" + e + "' occurred while checking for external " +
+                        "forecast changes.")) {
+                    throw e;
+                }
+            }
+
+
             // Process any transactions skipped in previous update runs:
            view.sayH2("REPROCESS SKIPPED TRANSACTIONS");
             // If there are skipped transactions from previous runs:
@@ -235,6 +267,17 @@ public class DailyUpdateController {
                 try {
                     forecastController.updateFromExternalSource();
                    view.sayH4("The forecast was successfully updated from the external source.");
+
+                    // Re-render the forecast to reflect the changes
+                   view.sayH2("RE-RENDER THE FORECAST");
+                    try {
+                        sessionController.getForecastView().renderLongTermForecast(forecast);
+                       view.say("\nSuccessfully re-rendered the long term forecast with your changes.");
+                    } catch (Exception re) {
+                        if (!view.askContinue("\nThe error '" + re + "' occurred while re-rendering the forecast.")) {
+                            throw re;
+                        }
+                    }
                 } catch (Exception e) {
                     if (!view.askContinue("\nThe error '" + e + "' occurred while updating the forecast from " +
                             "an external source.")) {

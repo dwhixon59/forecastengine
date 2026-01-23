@@ -438,6 +438,10 @@ public class MainController {
                     case "dailyUpdate":
                         view.sayH1("PERFORM THE DAILY UPDATE");
 
+                        // Clear session to ensure user selects the correct register
+                        // Without this, the forecast from a previous register would be used
+                        sessionController.clearSession();
+
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
                         DailyUpdateController dailyUpdateController = new DailyUpdateController(sessionController);

@@ -44,6 +44,7 @@ public class Forecast extends IndependentEntity {
     @Getter
     protected Calendar startDate;
     protected Calendar dateGenerated;
+    protected Calendar lastRenderedDate;  // Timestamp when forecast was last rendered to external file
     protected double startingBalance;
     @Getter
     protected Item.PeriodType payPeriod = Item.PeriodType.SEMIMONTHLY;
@@ -65,7 +66,7 @@ public class Forecast extends IndependentEntity {
     private boolean inSync = true;
 
     private static final String selectQuery = "select bin_to_uuid(idForecast) as idForecast, description, " +
-            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
+            "dateGenerated, startDate, lastRenderedDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
             "bin_to_uuid(Budget_idBudget) as idBudget from forecast ";
 
     public static String getSelectQuery() {
@@ -73,7 +74,7 @@ public class Forecast extends IndependentEntity {
     }
 
     private static final String insertQuery = "insert into forecast (idForecast, description, " +
-            "dateGenerated, startDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
+            "dateGenerated, startDate, lastRenderedDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
             "values (";
     private static final String updateQuery = "update forecast set ";
     private static final String deleteQuery = "delete from forecast where ";
@@ -128,6 +129,15 @@ public class Forecast extends IndependentEntity {
 
     public void setStartDate(Calendar forecastStartDate) {
         this.startDate = forecastStartDate;
+        setDirty(true);
+    }
+
+    public Calendar getLastRenderedDate() {
+        return lastRenderedDate;
+    }
+
+    public void setLastRenderedDate(Calendar lastRenderedDate) {
+        this.lastRenderedDate = lastRenderedDate;
         setDirty(true);
     }
 
@@ -233,12 +243,14 @@ public class Forecast extends IndependentEntity {
         String descVal = description != null ? "'" + description + "'" : "NULL";
         String dateGenVal = dateGenerated != null ? Utility.calendarDateToSqlDateString(dateGenerated) : "NULL";
         String startDateVal = startDate != null ? Utility.calendarDateToSqlDateString(startDate) : "NULL";
+        String lastRenderedDateVal = lastRenderedDate != null ? Utility.calendarToSqlDateTimeString(lastRenderedDate) : "NULL";
         String endDateVal = endDate != null ? Utility.calendarDateToSqlDateString(endDate) : "NULL";
 
         return insertQuery + "uuid_to_bin('" + id + "'), " +
                 descVal + ", " +
                 dateGenVal + ", " +
                 startDateVal + ", " +
+                lastRenderedDateVal + ", " +
                 startingBalance + ", " +
                 endDateVal + ", " +
                 endingBalance + ", " +
@@ -253,9 +265,11 @@ public class Forecast extends IndependentEntity {
 
     @Override
     public String getUpdateByIdQuery() {
+        String lastRenderedDateVal = lastRenderedDate != null ? Utility.calendarToSqlDateTimeString(lastRenderedDate) : "NULL";
         return updateQuery + "description = '" + description + "', " +
                 "dateGenerated = " + Utility.calendarDateToSqlDateString(dateGenerated) + ", startDate = " +
-                Utility.calendarDateToSqlDateString(startDate) + ", startingBalance = " + startingBalance + ", " +
+                Utility.calendarDateToSqlDateString(startDate) + ", lastRenderedDate = " + lastRenderedDateVal + ", " +
+                "startingBalance = " + startingBalance + ", " +
                 "endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", endingBalance = " + endingBalance +
                 ", numberOfMonths = " + numberOfMonths + ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
                 "where idForecast = uuid_to_bin('" + id + "')";
@@ -309,6 +323,16 @@ public class Forecast extends IndependentEntity {
         this.description = rs.getString("description");
         this.dateGenerated = Utility.localDateToCalendarDate(rs.getObject("dateGenerated", LocalDate.class));
         this.startDate = Utility.SqlDateToCalendarDate(rs.getDate("startDate"));
+
+        // Read lastRenderedDate as DATETIME (with time) instead of just DATE
+        java.sql.Timestamp lastRenderedTimestamp = rs.getTimestamp("lastRenderedDate");
+        if (lastRenderedTimestamp != null) {
+            this.lastRenderedDate = Calendar.getInstance();
+            this.lastRenderedDate.setTimeInMillis(lastRenderedTimestamp.getTime());
+        } else {
+            this.lastRenderedDate = null;
+        }
+
         this.startingBalance = rs.getDouble("startingBalance");
         this.endDate = Utility.localDateToCalendarDate(rs.getObject("endDate", LocalDate.class));
         this.endingBalance = rs.getDouble("endingBalance");

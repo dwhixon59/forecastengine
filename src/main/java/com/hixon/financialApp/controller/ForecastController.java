@@ -12,7 +12,9 @@ import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import com.hixon.financialApp.view.csv.CsvForecastView;
+import com.hixon.financialApp.view.excel.ExcelForecastView;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -608,6 +610,45 @@ public class ForecastController {
         return forecastTransaction.getRemainingAmount();
     }
 
+    /**
+     * Check if the external forecast file (Excel, CSV, TSV) has been modified since the last render.
+     * @return true if the external file exists and is newer than lastRenderedDate, false otherwise
+     */
+    public boolean isExternalForecastFileNewer() {
+        try {
+            // Construct the base directory and filename from the forecast name:
+            String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
+            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseFilename = "LongTermForecast-" + forecastName;
+
+            // Check for Excel files first (.xlsx, .xls), then CSV/TSV
+            String[] extensions = {".xlsx", ".xls", ".csv", ".tsv"};
+            for (String ext : extensions) {
+                File sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                if (sourceFile.exists()) {
+                    // Get the file's last modified time
+                    long fileModifiedTime = sourceFile.lastModified();
+
+                    // If we've never rendered this forecast, we can't compare
+                    if (forecast.getLastRenderedDate() == null) {
+                        return false;  // Don't prompt if we don't know when it was last rendered
+                    }
+
+                    // Compare file modified time to last rendered date
+                    long lastRenderedTime = forecast.getLastRenderedDate().getTimeInMillis();
+                    return fileModifiedTime > lastRenderedTime;
+                }
+            }
+
+            // No external file found
+            return false;
+
+        } catch (Exception e) {
+            view.say("Warning: Could not check external file modification time: " + e.getMessage());
+            return false;
+        }
+    }
+
     /*
      * Update the forecast from a list of forecast transactions from some external source:
      */
@@ -621,21 +662,50 @@ public class ForecastController {
             // We will need a BudgetController:
             BudgetController budgetController = new BudgetController(sessionController);
 
-            // Get the name and type of the source:
-            //String sourceName = getForecastController().getUserSelectedString("Enter the name of the external source " +
-            //        "of forecast transactions:");
-            // For now, hard code the directory and construct the filename from the forecast name:
+            // Construct the base directory and filename from the forecast name:
             String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
-            String sourceName = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
-                    "\\LongTermForecast-" + forecastName + ".csv";
+            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseFilename = "LongTermForecast-" + forecastName;
 
-            //String sourceType = getForecastController().getUserSelectedString("Enter the type of the external source " +
-            //        "of forecast transactions:");
-            // For now we are only supporting CSV as the external source:
+            // Try to find the source file, checking for Excel files first, then CSV/TSV
+            String sourceName = null;
+            AbstractForecastView externalSourceView = null;
+            File sourceFile;
 
-            // Instantiate the proper type of view for the external source:
-            // For now, hard code the type of the external source to be CSV:
-            AbstractForecastView externalSourceView = (AbstractForecastView) new CsvForecastView(forecast);
+            // Check for Excel files first (.xlsx, .xls)
+            String[] excelExtensions = {".xlsx", ".xls"};
+            for (String ext : excelExtensions) {
+                sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                if (sourceFile.exists()) {
+                    sourceName = sourceFile.getAbsolutePath();
+                    externalSourceView = new ExcelForecastView(forecast);
+                    view.say("Found Excel forecast file: " + sourceName);
+                    break;
+                }
+            }
+
+            // If no Excel file found, check for CSV/TSV
+            if (sourceName == null) {
+                String[] csvExtensions = {".csv", ".tsv"};
+                for (String ext : csvExtensions) {
+                    sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                    if (sourceFile.exists()) {
+                        sourceName = sourceFile.getAbsolutePath();
+                        externalSourceView = new CsvForecastView(forecast);
+                        view.say("Found CSV/TSV forecast file: " + sourceName);
+                        break;
+                    }
+                }
+            }
+
+            // If still no file found, throw an exception
+            if (sourceName == null) {
+                throw new ForecastException("No forecast file found. Looked for:\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".xlsx\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".xls\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".csv\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".tsv");
+            }
 
             // Open the external source and get a list of forecast transactions in it:
             List<ForecastTransaction> forecastTransactions = externalSourceView.openForecastTransactionSource(sourceName);
@@ -643,8 +713,8 @@ public class ForecastController {
             // If we were able to open the external source:
             if (forecastTransactions != null) {
 
-                // Mark all the forecast transactions in the forecast as not found:
-                ForecastTransaction.setAllFound(false);
+                // Mark all the forecast transactions in THIS forecast as not found:
+                ForecastTransaction.setAllFound(forecast, false);
 
                 // For each forecast transaction from the external source:
                 for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
@@ -758,14 +828,14 @@ public class ForecastController {
                     } else { // the forecast transaction does not have an ID (the creation case), so create one:
 
                         // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
-                        ForecastItem forecastItem = ForecastItem.getByName(ssForecastTransaction.getForecastItem().getForecast().getId(),
+                        ForecastItem forecastItem = ForecastItem.getByName(forecast.getId(),
                                 ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
                         if (forecastItem == null) {
 
                             // then create a forecast item, so we have something to link the forecast transaction to:
                             // Get a list of budget items that match the entered payee:
                             List<BudgetItem> budgetItemsForPayee = BudgetItem.getUnexpiredByPayee(
-                                    ssForecastTransaction.getForecastItem().getForecast().getBudget(),
+                                    forecast.getBudget(),
                                     ssForecastTransaction.getForecastItem().getPayee());
                             BudgetItem budgetItem;
                             if (budgetItemsForPayee.size() > 1) {
@@ -804,7 +874,7 @@ public class ForecastController {
                 // out in the spreadsheet:
                 ForecastTransactionController forecastTransactionController =
                         new ForecastTransactionController(sessionController);
-                forecastTransactionController.zeroNotFound();
+                forecastTransactionController.zeroNotFound(forecast);
 
                 // Close the external source of forecast transactions:
                 externalSourceView.closeForecastTransactionSource(sourceName);

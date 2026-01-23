@@ -797,8 +797,8 @@ final     /**
                 String response = getResponseString(prompt, defaultValueStr, allowNone, showCancelQuitSkip,
                         isCancelAllowed, isQuitAllowed, isSkipAllowed, helpCallback);
 
-                // If allowNone is true and response is empty/null, return null
-                if (allowNone && (response == null || response.trim().isEmpty())) {
+                // If allowNone is true and response is empty/null or "none", return null
+                if (allowNone && (response == null || response.trim().isEmpty() || response.trim().equalsIgnoreCase("none"))) {
                     return null;
                 }
 

@@ -852,12 +852,27 @@ public class ForecastTransactionController {
      */
     public void zeroNotFound()
             throws EntityException, RegisterException, SQLException, BudgetException {
+        zeroNotFound(sessionController.getForecast());
+    }
+
+    /**
+     * Zeros out the remaining amount of forecast transactions marked as not found in a specific forecast.
+     * This is used during import to zero out transactions that were deleted from the external source.
+     * @param forecast The forecast whose not-found transactions should be zeroed
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     * @throws SQLException If a SQL error occurs
+     * @throws BudgetException If a budget error occurs
+     */
+    public void zeroNotFound(Forecast forecast)
+            throws EntityException, RegisterException, SQLException, BudgetException {
 
         // List the forecast transactions that are about to be zeroed out for the user:
         ResultSet rs = EntityInt.getRS(ForecastTransaction.getSelectQuery() + " " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
                         "fi.idForecastItem " +
                         "where found = false and remainingAmount <> 0 " +
+                        "and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
                         "order by ft.plannedDate desc, fi.category asc, fi.payee asc",
                 "Forecast Transactions that are marked not found."
         );
@@ -872,9 +887,15 @@ public class ForecastTransactionController {
             getView().say(forecastTransaction.toStringConcise() + " .");
         }
 
-        // Zero out the forcast transactions that were deleted from the spreadsheet:
-        executeUpdate(ForecastTransaction.getUpdateQuery() + "remainingAmount = 0 where found = false and " +
-                "remainingAmount <> 0", "to zero the Forecast Transactions that are marked not found.");
+        // Zero out the forecast transactions that were deleted from the spreadsheet (only for this forecast):
+        executeUpdate(ForecastTransaction.getUpdateQuery() +
+                "remainingAmount = 0 " +
+                "where found = false and remainingAmount <> 0 " +
+                "and ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")",
+                "to zero the Forecast Transactions that are marked not found in forecast " + forecast.getId() + ".");
     }
 
     /**

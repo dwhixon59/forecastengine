@@ -126,10 +126,24 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     public static void setAllFound(boolean found) throws EntityException, RegisterException {
+        throw new EntityException("setAllFound(boolean) is deprecated and should not be used. Use setAllFound(Forecast, boolean) instead to avoid cross-forecast contamination.");
+    }
+
+    /**
+     * Sets the found flag for all forecast transactions in a specific forecast.
+     * @param forecast The forecast whose transactions should be updated
+     * @param found The value to set the found flag to
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     */
+    public static void setAllFound(Forecast forecast, boolean found) throws EntityException, RegisterException {
         String foundString = (found) ? "true" : "false";
-        String query = "update forecast_transaction ft set ft.found = " + foundString;
+        String query = "update forecast_transaction ft " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "set ft.found = " + foundString + " " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')";
         executeUpdate(query, "attempting to set all the Forecast Transaction found flags " +
-                "to " + foundString + ".");
+                "to " + foundString + " for forecast " + forecast.getId() + ".");
     }
 
     public double getRunningBalance() {
@@ -360,10 +374,31 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Main methods:
      */
-    // Zero out the running balances for all the Forecast Transactions:
+    /**
+     * Zero out the running balances for all forecast transactions (DEPRECATED - affects all forecasts).
+     * @deprecated Use {@link #zeroRunningBalances(Forecast)} instead to avoid cross-forecast contamination.
+     */
+    @Deprecated
     public static void zeroRunningBalances() throws EntityException, RegisterException {
-        executeUpdate(getUpdateQuery() + "runningBalance = 0", "to zero the " +
-                "running balances of all Forecast Transactions.");
+        throw new EntityException("zeroRunningBalances() is deprecated and should not be used. " +
+                "Use zeroRunningBalances(Forecast) instead to avoid cross-forecast contamination.");
+    }
+
+    /**
+     * Zero out the running balances for all forecast transactions in a specific forecast.
+     * @param forecast The forecast whose running balances should be zeroed
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     */
+    public static void zeroRunningBalances(Forecast forecast) throws EntityException, RegisterException {
+        String query = getUpdateQuery() +
+                "runningBalance = 0 " +
+                "where ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")";
+        executeUpdate(query, "to zero the running balances of all Forecast Transactions in forecast " +
+                forecast.getId() + ".");
     }
 
     public static ForecastTransactionIterator getForecastTransactionsStartingOn(Forecast forecast, Calendar startDate)
@@ -1245,9 +1280,15 @@ public class ForecastTransaction extends IndependentEntity {
      */
     public static void cleanUpForecast(Forecast forecast) throws EntityException, RegisterException, Exception, BudgetException {
 
-        // Set all the forecast transactions to "not the first occurrence".
-        EntityInt.executeUpdate(getUpdateQuery() + "firstOccurrence = false", "attempting to set " +
-                "the first occurrence flags to false in the forecast.");
+        // Set all the forecast transactions in THIS forecast to "not the first occurrence".
+        String query = getUpdateQuery() +
+                "firstOccurrence = false " +
+                "where ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")";
+        EntityInt.executeUpdate(query, "attempting to set " +
+                "the first occurrence flags to false in forecast " + forecast.getId() + ".");
 
         // Set the first occurrence of every forecast transaction to "first occurrence" and roll up any expired
         // transactions.  The algorithm used is to go get all the forecast items in the forecast then for each one get

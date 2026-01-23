@@ -190,8 +190,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         openLongTermForecastOutput(reportType);
         renderLongTermForecastFrontMatter(reportType);
 
-        // Set all the running balances to zero in the database:
-        ForecastTransaction.zeroRunningBalances();
+        // Set all the running balances to zero in the database for THIS forecast only:
+        ForecastTransaction.zeroRunningBalances(forecast);
 
         // Iterate over all the forecast transactions in chronological order beginning on the start date:
         ForecastTransactionIterator forecastTransactions =
@@ -478,6 +478,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
                         append(" account.").toString());
             }
+        }
+
+        // Update the forecast's lastRenderedDate to track when we rendered the file
+        forecast.setLastRenderedDate(Calendar.getInstance());
+        try {
+            forecast.save(EntityInt.SaveMethod.UPDATE);
+        } catch (Exception e) {
+            getView().say("Warning: Could not save lastRenderedDate: " + e.getMessage());
         }
 
         return true;
