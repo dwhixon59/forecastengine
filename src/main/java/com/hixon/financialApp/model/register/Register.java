@@ -97,11 +97,121 @@ public class Register extends IndependentEntity {
     }
 
     public String getTrxImportFilePath() {
-        return getTrxImportFileDirectory() + "\\" + getTrxImportFileName();
+        String directory = getTrxImportFileDirectory();
+        String filename = getTrxImportFileName();
+
+        // Check if filename contains date pattern (YYYYMMDD)
+        if (filename != null && filename.contains("YYYYMMDD")) {
+            // Find the most recent file matching the pattern
+            String actualFile = findMostRecentMatchingFile(directory, filename);
+            if (actualFile != null) {
+                System.out.println("Pattern '" + filename + "' matched file: " + actualFile);
+                return directory + "\\" + actualFile;
+            } else {
+                // No matching file found - warn user
+                System.err.println("WARNING: No files found matching pattern '" + filename + "' in directory '" + directory + "'");
+                System.err.println("Looking for files like: " + filename.replace("YYYYMMDD", "20251223"));
+                System.err.println("Please download the QFX file from Barclays and place it in the directory, or update the register's import file name.");
+            }
+        }
+
+        // Default behavior: return exact path (may not exist if pattern was specified)
+        return directory + "\\" + filename;
+    }
+
+    /**
+     * Find the most recently modified file matching a pattern with YYYYMMDD placeholder.
+     *
+     * @param directory The directory to search in
+     * @param pattern The filename pattern with YYYYMMDD as a date placeholder
+     * @return The filename of the most recently modified matching file, or null if none found
+     */
+    private String findMostRecentMatchingFile(String directory, String pattern) {
+        if (directory == null || pattern == null) {
+            System.err.println("DEBUG: findMostRecentMatchingFile called with null directory or pattern");
+            return null;
+        }
+
+        try {
+            java.io.File dir = new java.io.File(directory);
+            System.out.println("DEBUG: Searching directory: " + directory);
+            System.out.println("DEBUG: Directory exists: " + dir.exists() + ", is directory: " + dir.isDirectory());
+
+            if (!dir.exists() || !dir.isDirectory()) {
+                System.err.println("DEBUG: Directory does not exist or is not a directory");
+                return null;
+            }
+
+            // Convert pattern to regex: qdlYYYYMMDD.qfx -> qdl\d{8}\.qfx
+            String regexPattern = pattern
+                .replace(".", "\\.")  // Escape dots
+                .replace("YYYYMMDD", "\\d{8}");  // Replace date pattern with 8 digits
+
+            System.out.println("DEBUG: Pattern: " + pattern);
+            System.out.println("DEBUG: Regex pattern: " + regexPattern);
+
+            // List all files in directory for debugging
+            java.io.File[] allFiles = dir.listFiles();
+            if (allFiles != null) {
+                System.out.println("DEBUG: Total files in directory: " + allFiles.length);
+                for (java.io.File f : allFiles) {
+                    if (f.getName().toLowerCase().endsWith(".qfx")) {
+                        System.out.println("DEBUG: Found QFX file: " + f.getName() + " (matches: " + f.getName().matches(regexPattern) + ")");
+                    }
+                }
+            }
+
+            // Find all matching files
+            java.io.File[] matchingFiles = dir.listFiles((file, name) ->
+                name.matches(regexPattern));
+
+            if (matchingFiles == null || matchingFiles.length == 0) {
+                System.err.println("DEBUG: No files matched pattern " + regexPattern);
+                return null;
+            }
+
+            System.out.println("DEBUG: Found " + matchingFiles.length + " matching file(s)");
+
+            // Find the most recently modified file
+            java.io.File mostRecent = null;
+            long mostRecentTime = 0;
+
+            for (java.io.File file : matchingFiles) {
+                System.out.println("DEBUG: Checking file: " + file.getName() + " (modified: " + new java.util.Date(file.lastModified()) + ")");
+                if (file.lastModified() > mostRecentTime) {
+                    mostRecentTime = file.lastModified();
+                    mostRecent = file;
+                }
+            }
+
+            if (mostRecent != null) {
+                System.out.println("DEBUG: Selected most recent file: " + mostRecent.getName());
+            }
+
+            return mostRecent != null ? mostRecent.getName() : null;
+
+        } catch (Exception e) {
+            System.err.println("Error finding matching file for pattern " + pattern + ": " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
     }
 
     public String getProvisionalTrxFilePath() {
-        return getProvisionalTrxFileDirectory() + "\\" + getProvisionalTrxFileName();
+        String directory = getProvisionalTrxFileDirectory();
+        String filename = getProvisionalTrxFileName();
+
+        // Check if filename contains date pattern (YYYYMMDD)
+        if (filename != null && filename.contains("YYYYMMDD")) {
+            // Find the most recent file matching the pattern
+            String actualFile = findMostRecentMatchingFile(directory, filename);
+            if (actualFile != null) {
+                return directory + "\\" + actualFile;
+            }
+        }
+
+        // Default behavior: return exact path
+        return directory + "\\" + filename;
     }
 
     public UUID getBudgetID() {
@@ -126,7 +236,36 @@ public class Register extends IndependentEntity {
 
     @Override
     public String getInsertQuery() throws BudgetException, ForecastException {
-        return null;
+        // Handle null values properly for optional fields
+        String nameVal = name != null ? "'" + name + "'" : "NULL";
+        String nicknameVal = nickname != null ? "'" + nickname + "'" : "NULL";
+        String accountTypeVal = accountType != null ? "'" + accountType + "'" : "NULL";
+        String defaultViewVal = default_view != null ? "'" + default_view + "'" : "NULL";
+        String accountNumberVal = accountNumber != null ? "'" + accountNumber + "'" : "NULL";
+        String financialInstitutionVal = financialInstitution != null ? "'" + financialInstitution + "'" : "NULL";
+        String trxImportFileNameVal = trxImportFileName != null ? "'" + trxImportFileName + "'" : "NULL";
+        String trxImportFileDirectoryVal = trxImportFileDirectory != null ? "'" + Utility.doubleBackSlashes(trxImportFileDirectory) + "'" : "NULL";
+        String provisionalTrxFileNameVal = provisionalTrxFileName != null ? "'" + provisionalTrxFileName + "'" : "NULL";
+        String provisionalTrxFileDirectoryVal = provisionalTrxFileDirectory != null ? "'" + Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "'" : "NULL";
+        String idBudgetVal = idBudget != null ? "uuid_to_bin('" + idBudget + "')" : "NULL";
+
+        return "insert into register (idRegister, name, nickname, account_type, default_view, account_number, " +
+                "balance, skippedAmount, financialInstitution, trxImportFileName, trxImportFileDirectory, " +
+                "provisionalTrxFileName, provisionalTrxFileDirectory, Budget_idBudget) values (" +
+                "uuid_to_bin('" + id + "'), " +
+                nameVal + ", " +
+                nicknameVal + ", " +
+                accountTypeVal + ", " +
+                defaultViewVal + ", " +
+                accountNumberVal + ", " +
+                balance + ", " +
+                skippedAmount + ", " +
+                financialInstitutionVal + ", " +
+                trxImportFileNameVal + ", " +
+                trxImportFileDirectoryVal + ", " +
+                provisionalTrxFileNameVal + ", " +
+                provisionalTrxFileDirectoryVal + ", " +
+                idBudgetVal + ")";
     }
 
     @Override
@@ -142,14 +281,28 @@ public class Register extends IndependentEntity {
     }
 
     public String getUpdateClause() {
-        String defaultViewValue = (default_view == null) ? "NULL" : "'" + default_view + "'";
-        return "name = '" + name + "', nickname = '" + nickname + "', account_type = '" + accountType + "', " +
-                "default_view = " + defaultViewValue + ", account_number = '" + accountNumber + "', balance = " +
-                balance + ", skippedAmount = " + skippedAmount + ", financialInstitution = '" + financialInstitution +
-                "', trxImportFileName = '" + trxImportFileName + "', trxImportFileDirectory = '" +
-                Utility.doubleBackSlashes(trxImportFileDirectory) + "', provisionalTrxFileName = '" +
-                provisionalTrxFileName + "', provisionalTrxFileDirectory = '" +
-                Utility.doubleBackSlashes(provisionalTrxFileDirectory) + "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+        // Helper method to safely convert null to empty string for SQL
+        String safeName = (name != null ? name : "");
+        String safeNickname = (nickname != null ? nickname : "");
+        String safeAccountType = (accountType != null ? accountType : "");
+        String safeDefaultView = (default_view != null ? default_view : "");
+        String safeAccountNumber = (accountNumber != null ? accountNumber : "");
+        String safeFinancialInstitution = (financialInstitution != null ? financialInstitution : "");
+        String safeTrxImportFileName = (trxImportFileName != null ? trxImportFileName : "");
+        String safeTrxImportFileDirectory = (trxImportFileDirectory != null ? Utility.doubleBackSlashes(trxImportFileDirectory) : "");
+        String safeProvisionalTrxFileName = (provisionalTrxFileName != null ? provisionalTrxFileName : "");
+        String safeProvisionalTrxFileDirectory = (provisionalTrxFileDirectory != null ? Utility.doubleBackSlashes(provisionalTrxFileDirectory) : "");
+
+        return "name = '" + safeName + "', nickname = '" + safeNickname +
+                "', account_type = '" + safeAccountType + "', " +
+                "default_view = '" + safeDefaultView + "', account_number = '" +
+                safeAccountNumber + "', balance = " + balance + ", skippedAmount = " +
+                skippedAmount + ", financialInstitution = '" + safeFinancialInstitution +
+                "', trxImportFileName = '" + safeTrxImportFileName +
+                "', trxImportFileDirectory = '" + safeTrxImportFileDirectory +
+                "', provisionalTrxFileName = '" + safeProvisionalTrxFileName +
+                "', provisionalTrxFileDirectory = '" + safeProvisionalTrxFileDirectory +
+                "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
                 "where idRegister = uuid_to_bin('" + id + "')";
     }
 
@@ -286,8 +439,7 @@ public class Register extends IndependentEntity {
     public static Register getByLastFourDigits(String lastFourDigits) throws RegisterException {
 
         String query = selectQuery + " where r.Account_Number like '%" + lastFourDigits + "'";
-        try {
-            Statement statement = Utility.getDbConnection().createStatement();
+        try (Statement statement = Utility.getDbConnection().createStatement()) {
             ResultSet rs = statement.executeQuery(query);
             if (rs.next()) {
                 return new Register(rs);
@@ -302,12 +454,9 @@ public class Register extends IndependentEntity {
 
     public static Register getByName(String registerName) throws RegisterException, SQLException {
         // Find the ID of the named budget:
-        PreparedStatement preparedStmt = null;
-        ResultSet rs = null;
         String query = selectQuery + " where r.name = \"" + registerName + "\"";
-        try {
-            preparedStmt = Utility.getDbConnection().prepareStatement(query);
-            rs = preparedStmt.executeQuery();
+        try (PreparedStatement preparedStmt = Utility.getDbConnection().prepareStatement(query);
+             ResultSet rs = preparedStmt.executeQuery()) {
             Register register = null;
             if (rs != null && rs.next()) {
                 register = new Register(rs);
@@ -315,8 +464,6 @@ public class Register extends IndependentEntity {
             return register;
         } catch (SQLException e) {
             RegisterException re = new RegisterException("SQL error encountered trying to retrieve a list of registers.", e);
-            if (preparedStmt != null) preparedStmt.close();
-            if (rs != null) rs.close();
             throw re;
         }
     }

@@ -580,7 +580,7 @@ public class BudgetItemMerchantController {
         }
 
         // Use BudgetController's method to select a budget item
-        BudgetController budgetController = new BudgetController(sessionController, view);
+        BudgetController budgetController = new BudgetController(sessionController);
         BudgetItem selectedItem = budgetController.selectBudgetItem(selectedBudget);
 
         if (selectedItem == null) {
@@ -623,7 +623,7 @@ public class BudgetItemMerchantController {
         view.say("──── Add Merchant to " + budgetItem.getPayee() + " ────");
 
         // Use MerchantController's method to select a merchant
-        MerchantController merchantController = new MerchantController(sessionController, view, notificationService);
+        MerchantController merchantController = new MerchantController(sessionController);
         Merchant selectedMerchant = merchantController.selectMerchantPublic(ALLOW_CREATE);
 
         if (selectedMerchant == null) {

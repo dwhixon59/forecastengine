@@ -51,8 +51,9 @@ public class AddBudgetItemTest {
         when(mockBudget2.getId()).thenReturn(UUID.randomUUID());
         when(mockBudget2.getName()).thenReturn("Second Budget");
 
-        // Create controller
-        budgetController = new BudgetController(mockRegister, mockBudget, mockForecast, mockView, null);
+        // Create controller with SessionController
+        SessionController sessionController = new SessionController(mockRegister, mockBudget, mockForecast, mockView, null);
+        budgetController = new BudgetController(sessionController);
     }
 
     @Test

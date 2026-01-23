@@ -9,57 +9,46 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
+import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 
-public class GenericClassifer implements FinancialInstitutionInt {
+public class GenericClassifer implements FinancialInstitutionInt, Iterator<Transaction> {
 
     protected BudgetItem[] budgetItems;
 
     // Constructors:
     public GenericClassifer(ViewInt resolver) throws SQLException, BudgetException, EntityException {
 
-        // Create a prepared statement for using with the database:
-        Statement stmt = null;
-        try {
-            stmt = Utility.getDbConnection().createStatement();
-        } catch (SQLException e) {
-            System.out.println("[SEVERE]  dbConnection.createStatement() threw exception");
-            if (stmt != null) stmt.close();
-            throw e;
-        }
-
         // Create an arrary to hold them:
         budgetItems = new BudgetItem[BudgetItem.getItemCount()];
 
         // Create a result set containing all the budget items:
-        ResultSet rs = null;
-        try {
-            rs = stmt.executeQuery(BudgetItem.getSelectQuery() + "order by searchString desc");
+        try (Statement stmt = Utility.getDbConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(BudgetItem.getSelectQuery() + "order by searchString desc")) {
+
+            // Read all the items in the budget into an array for matching:
+            int i = 0;
+            BudgetItem budgetItem = null;
+            while (rs.next()) {
+
+                // Add the next item from the budget to the array of budget items:
+                budgetItems[i] = new BudgetItem().loadFromResultSet(rs);
+                //if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
+                //    budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
+                //}
+                i++;
+
+            } // End for each item in the budget.
         } catch (SQLException e) {
             System.out.println("[SEVERE]  SQL Error attempting to retrieve a list of items in the budget.");
-            stmt.close();
-            if (rs != null) rs.close();
             throw e;
         }
-
-        // Read all the items in the budget into an array for matching:
-        int i = 0;
-        BudgetItem budgetItem = null;
-        while (rs.next()) {
-
-            // Add the next item from the budget to the array of budget items:
-            budgetItems[i] = new BudgetItem().loadFromResultSet(rs);
-            //if (budgetItems[i].getSearchString() != null && budgetItems[i].getSearchString().length() > 0) {
-            //    budgetItems[i].setPattern(Pattern.compile(budgetItems[i].getSearchString(), Pattern.CASE_INSENSITIVE));
-            //}
-            i++;
-
-        } // End for each item in the budget.
     } // Classifer(Connection dbConnection).
 
 
@@ -85,8 +74,8 @@ public class GenericClassifer implements FinancialInstitutionInt {
 //                ) {
 //                    // then we found the first match, so stop looking:
 //                    found = true;
-////                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
-////                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
+//                    System.out.println("Matched search string " + budgetItems[i].getSearchString() + " from item " +
+//                            budgetItem.getPayee() + " to transaction " + transaction.getPayee());
 //                    break;
 //                }
 //            }
@@ -101,6 +90,12 @@ public class GenericClassifer implements FinancialInstitutionInt {
     @Override
     public Class<? extends Enum<?>> getCsvHeadersClass() {
         // Generic classifier doesn't have specific CSV headers
+        return null;
+    }
+
+    @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        // Generic classifier doesn't support CSV import
         return null;
     }
 
@@ -158,5 +153,28 @@ public class GenericClassifer implements FinancialInstitutionInt {
      */
     @Override
     public String extractAccountType(String payee) {return "";}
-}
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void importRegisterTrxFile() throws IOException {
+        throw new UnsupportedOperationException("GenericClassifier does not support file import");
+    }
+
+    // Iterator methods - not supported by GenericClassifier
+    @Override
+    public boolean hasNext() {
+        throw new UnsupportedOperationException("GenericClassifier does not support iterator pattern");
+    }
+
+    @Override
+    public Transaction next() {
+        throw new UnsupportedOperationException("GenericClassifier does not support iterator pattern");
+    }
+
+    @Override
+    public void close() throws Exception {
+        // No-op for GenericClassifier
+    }
+}

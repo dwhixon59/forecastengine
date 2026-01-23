@@ -61,8 +61,7 @@ public class MerchantUtilities {
         String query = Merchant.getSelectQuery() + " where LOWER(m.name) LIKE '%" + escapedPayee + "%' " +
                 "OR '" + escapedPayee + "' LIKE CONCAT('%', LOWER(m.name), '%')";
 
-        try {
-            Statement statement = getDbConnection().createStatement();
+        try (Statement statement = getDbConnection().createStatement()) {
             ResultSet rs = statement.executeQuery(query);
             while (rs.next()) {
                 possibleMerchants.add(new Merchant(rs));

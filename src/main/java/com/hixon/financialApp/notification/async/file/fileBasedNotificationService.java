@@ -36,10 +36,6 @@ public class fileBasedNotificationService implements NotificationServiceInt {
      */
     public static final String NOTIFICATION_FILE_POSTFIX = "_Notifications.txt";
     private static final String ENCODING = "UTF-8";
-    public static final String OVERDUE_AND_UPCOMING_ITEMS_REPORT = "OverdueAndUpcomingItemsReport.txt";
-    public static final String NEW_TRANSACTION_SUMMARY_REPORT = "NewTransactionSummaryReport.txt";
-    public static final String ITEMS_OF_INTEREST_REPORT = "ItemsOfInterestReport.txt";
-    public static final String ENVELOPE_REPORT = "EnvelopeReport.txt";
 
 
     /*
@@ -47,6 +43,82 @@ public class fileBasedNotificationService implements NotificationServiceInt {
      */
     private String getNotificationFilename(User user) {
         return user.getPersonalFileSystem() + "\\" + user.getFirstName() + NOTIFICATION_FILE_POSTFIX;
+    }
+
+    /**
+     * Generate the overdue and upcoming items report filename for a given forecast.
+     *
+     * @param forecast The forecast for which to generate the filename.
+     * @return The filename with the forecast/register name included.
+     * @throws EntityException If there's an error accessing the register.
+     * @throws BudgetException If there's an error accessing the budget.
+     * @throws RegisterException If there's an error accessing the register.
+     * @throws SQLException If there's a database error.
+     */
+    private String getOverdueAndUpcomingItemsReportFilename(Forecast forecast) throws EntityException, BudgetException, RegisterException, SQLException {
+        String registerName = forecast.getBudget().getRegister().getNickname();
+        if (registerName == null || registerName.trim().isEmpty()) {
+            registerName = forecast.getBudget().getRegister().getName();
+        }
+        // Replace spaces and special characters with underscores for valid filename
+        registerName = registerName.replaceAll("[\\s/\\\\:*?\"<>|]+", "_");
+        return "OverdueAndUpcomingItemsReport-" + registerName + ".txt";
+    }
+
+    /**
+     * Generate the new transaction summary report filename for a given register.
+     *
+     * @param register The register for which to generate the filename.
+     * @return The filename with the register name included.
+     */
+    private String getNewTransactionSummaryReportFilename(Register register) {
+        String registerName = register.getNickname();
+        if (registerName == null || registerName.trim().isEmpty()) {
+            registerName = register.getName();
+        }
+        // Replace spaces and special characters with underscores for valid filename
+        registerName = registerName.replaceAll("[\\s/\\\\:*?\"<>|]+", "_");
+        return "NewTransactionSummaryReport-" + registerName + ".txt";
+    }
+
+    /**
+     * Generate the envelope report filename for a given forecast.
+     *
+     * @param forecast The forecast for which to generate the filename.
+     * @return The filename with the forecast/register name included.
+     * @throws EntityException If there's an error accessing the register.
+     * @throws BudgetException If there's an error accessing the budget.
+     * @throws RegisterException If there's an error accessing the register.
+     * @throws SQLException If there's a database error.
+     */
+    private String getEnvelopeReportFilename(Forecast forecast) throws EntityException, BudgetException, RegisterException, SQLException {
+        String registerName = forecast.getBudget().getRegister().getNickname();
+        if (registerName == null || registerName.trim().isEmpty()) {
+            registerName = forecast.getBudget().getRegister().getName();
+        }
+        // Replace spaces and special characters with underscores for valid filename
+        registerName = registerName.replaceAll("[\\s/\\\\:*?\"<>|]+", "_");
+        return "EnvelopeReport-" + registerName + ".txt";
+    }
+
+    /**
+     * Generate the items of interest report filename for a given forecast.
+     *
+     * @param forecast The forecast for which to generate the filename.
+     * @return The filename with the forecast/register name included.
+     * @throws EntityException If there's an error accessing the register.
+     * @throws BudgetException If there's an error accessing the budget.
+     * @throws RegisterException If there's an error accessing the register.
+     * @throws SQLException If there's a database error.
+     */
+    private String getItemsOfInterestReportFilename(Forecast forecast) throws EntityException, BudgetException, RegisterException, SQLException {
+        String registerName = forecast.getBudget().getRegister().getNickname();
+        if (registerName == null || registerName.trim().isEmpty()) {
+            registerName = forecast.getBudget().getRegister().getName();
+        }
+        // Replace spaces and special characters with underscores for valid filename
+        registerName = registerName.replaceAll("[\\s/\\\\:*?\"<>|]+", "_");
+        return "ItemsOfInterestReport-" + registerName + ".txt";
     }
 
     /*
@@ -182,7 +254,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         List<UserResource> reports = forecastView.renderItemsOfInterestReport();
         for (UserResource userResource : reports
         ) {
-            sendFileToUser(userResource.getUser(), userResource.getFile(), ITEMS_OF_INTEREST_REPORT);
+            sendFileToUser(userResource.getUser(), userResource.getFile(), getItemsOfInterestReportFilename(forecast));
         }
     }
 
@@ -233,7 +305,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
 
             if (overdueAndUpcomingItemsReport != null) {
                 sendFileToUser(overdueAndUpcomingItemsReport.getUser(), overdueAndUpcomingItemsReport.getFile(),
-                        OVERDUE_AND_UPCOMING_ITEMS_REPORT);
+                        getOverdueAndUpcomingItemsReportFilename(forecast));
             } else {
                 Utility.getView().say("No overdue or upcoming items were found.  No report generated.");
             }
@@ -248,7 +320,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         List<UserResource> reports = registerView.renderNewTransactionSummaryReport();
         for (UserResource userResource : reports
         ) {
-            sendFileToUser(userResource.getUser(), userResource.getFile(), NEW_TRANSACTION_SUMMARY_REPORT);
+            sendFileToUser(userResource.getUser(), userResource.getFile(), getNewTransactionSummaryReportFilename(register));
             if (userResource.getFile().getAbsolutePath() == null) {
                 Utility.getView().say("No new transactions were found.  No report generated.");
             }
@@ -264,7 +336,7 @@ public class fileBasedNotificationService implements NotificationServiceInt {
         List<UserResource> reports = forecastView.renderEnvelopeReport(forecast);
         for (UserResource userResource : reports
         ) {
-            sendFileToUser(userResource.getUser(), userResource.getFile(), ENVELOPE_REPORT);
+            sendFileToUser(userResource.getUser(), userResource.getFile(), getEnvelopeReportFilename(forecast));
         }
 
         // If we successfully rendered the new transaction reports, then set the new transactions flags to false:

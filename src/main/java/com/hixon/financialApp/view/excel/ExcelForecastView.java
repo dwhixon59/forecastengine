@@ -14,16 +14,20 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.ViewException;
 import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.csv.CsvForecastView;
+import com.hixon.financialApp.view.csv.ForecastTransactionView;
 import com.hixon.financialApp.view.text.*;
 import com.hixon.financialApp.view.text.EnvelopeReport;
 import lombok.Getter;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
 
 public class ExcelForecastView extends AbstractForecastView {
 
@@ -200,6 +204,11 @@ public class ExcelForecastView extends AbstractForecastView {
         Utility.versionFile(longTermForecastFilename);
         workbook = new XSSFWorkbook();
         sheet = workbook.createSheet("Savings Envelopes");
+
+        // Reset state flags for new render
+        // Without this, re-rendering after import would have wrong state from previous render
+        firstItem = true;
+        firstItemInMonth = true;
      }
 
     @Override
@@ -211,7 +220,9 @@ public class ExcelForecastView extends AbstractForecastView {
     public void renderLongTermForecastMonthHeader(String reportType, Calendar plannedDate, double runningBalance) {
 
         // Month title row (e.g., "November - 2025")
-        Row titleRow = sheet.createRow(sheet.getLastRowNum() + 1);
+        // Get the next row number - if sheet is empty, getPhysicalNumberOfRows() returns 0
+        int nextRowNum = sheet.getPhysicalNumberOfRows();
+        Row titleRow = sheet.createRow(nextRowNum);
 
         // Set row height to 1.5 times the default (default is 15 points = 300 units in POI)
         titleRow.setHeightInPoints(22.5f); // 15 * 1.5 = 22.5
@@ -236,7 +247,8 @@ public class ExcelForecastView extends AbstractForecastView {
         startingBalanceCell.setCellStyle(balanceStyle);
 
         // Header row with column names
-        Row headerRow = sheet.createRow(sheet.getLastRowNum() + 1);
+        nextRowNum = sheet.getPhysicalNumberOfRows();
+        Row headerRow = sheet.createRow(nextRowNum);
 
         // Create a font for column headers (12 point, bold)
         Font headerFont = workbook.createFont();
@@ -264,7 +276,8 @@ public class ExcelForecastView extends AbstractForecastView {
             SQLException, ForecastException, BudgetException {
 
         // Create a new row:
-        Row row = sheet.createRow(sheet.getLastRowNum() + 1);
+        int nextRowNum = sheet.getPhysicalNumberOfRows();
+        Row row = sheet.createRow(nextRowNum);
 
         // The planned date of this forecast transaction:
         String dateString = Integer.toString(forecastTransaction.getPlannedDate().get(Calendar.DATE));
@@ -382,15 +395,287 @@ public class ExcelForecastView extends AbstractForecastView {
     }
 
     @Override
-    // For now, defer to the CSV view for importing forecast transactions:
-    public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
-            BudgetException {
-        return csvForecastView.openForecastTransactionSource(sourceName);
+    public void editLongTermForecast() throws Exception {
+        if (longTermForecastFilename == null || longTermForecastFilename.trim().isEmpty()) {
+            throw new ViewException("Long term forecast filename is not set. Cannot open forecast for editing.");
+        }
 
+        File forecastFile = new File(longTermForecastFilename);
+        if (!forecastFile.exists()) {
+            throw new ViewException("Long term forecast file does not exist: " + longTermForecastFilename);
+        }
 
+        Utility.getView().say("Opening the forecast file in Excel: " + longTermForecastFilename);
+        Utility.getView().say("The process will resume after you close Excel.");
+
+        try {
+            // Open Excel and wait for it to close
+            Process process = Runtime.getRuntime().exec("cmd /c start /wait excel \"" + longTermForecastFilename + "\"");
+            process.waitFor();
+
+            Utility.getView().sayH4("Excel closed. Continuing...");
+        } catch (IOException | InterruptedException e) {
+            throw new ViewException("Error opening forecast file in Excel: " + e.getMessage(), e);
+        }
     }
 
-    // For now, defer to the CSV view for importing forecast transactions:
+    @Override
+    public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
+            BudgetException {
+        int i = 0;
+        List<ForecastTransaction> forecastTransactions = new ArrayList<>();
+
+        // Adjust POI's zip bomb detection threshold
+        // Our Excel files have efficient compression that can trigger the default threshold
+        // Set to a lower ratio (0.001) to allow our files while still protecting against actual attacks
+        ZipSecureFile.setMinInflateRatio(0.001);
+
+        try (FileInputStream fis = new FileInputStream(sourceName);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            Utility.getView().say("\nUpdate the forecast from the forecast transactions in the Excel file " + sourceName);
+
+            // Get the first sheet
+            Sheet sheet = workbook.getSheetAt(0);
+
+            // Find the header row (look for "Date" in column A)
+            int headerRowNum = -1;
+            for (Row row : sheet) {
+                Cell firstCell = row.getCell(0);
+                if (firstCell != null && firstCell.getCellType() == CellType.STRING
+                    && firstCell.getStringCellValue().equalsIgnoreCase("Date")) {
+                    headerRowNum = row.getRowNum();
+                    break;
+                }
+            }
+
+            if (headerRowNum == -1) {
+                throw new ControllerException("Could not find header row in Excel file. Expected 'Date' in first column.");
+            }
+
+            // Iterate over rows starting after the header
+            Calendar plannedDate = Calendar.getInstance();
+            for (int rowNum = headerRowNum + 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                Row row = sheet.getRow(rowNum);
+                if (row == null) continue;
+
+                i++;
+
+                // Get the date cell
+                Cell dateCell = row.getCell(0);
+                if (dateCell != null) {
+                    String dateStr = getCellValueAsString(dateCell);
+                    if (!dateStr.isEmpty()) {
+                        // Check if this is a month header row
+                        try {
+                            plannedDate = Utility.MonthYearLongDateToCalendarDate(dateStr);
+                            continue;
+                        } catch (Exception pe) {
+                            // Not a month header, try to parse as day of month
+                            if (dateStr.matches("[0-9]{1,2}(st|nd|rd|th)")) {
+                                int length = dateStr.length() - 2;
+                                plannedDate.set(Calendar.DATE, Integer.parseInt(dateStr.substring(0, length)));
+                            } else {
+                                // This row doesn't have a valid date format, skip it
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // Get payee - if empty, skip this row
+                Cell payeeCell = row.getCell(2);
+                String payee = getCellValueAsString(payeeCell);
+                if (payee.isEmpty()) {
+                    continue;
+                }
+
+                // Parse the transaction ID first (Column 10)
+                String transactionIdStr = getCellValueAsString(row.getCell(10));
+                UUID transactionId = null;
+                if (!transactionIdStr.isEmpty()) {
+                    try {
+                        transactionId = UUID.fromString(transactionIdStr);
+                    } catch (IllegalArgumentException e) {
+                        // Invalid UUID format - warn and skip this row
+                        Utility.getView().say("WARNING: Row " + (rowNum + 1) + ": Invalid transaction ID format '" +
+                                transactionIdStr + "'. Skipping this row.");
+                        continue;
+                    }
+                }
+
+                // Create ForecastTransactionView
+                ForecastTransactionView forecastTransactionView;
+
+                if (transactionId == null) {
+                    // No ID provided - create new forecast transaction
+                    forecastTransactionView = new ForecastTransactionView();
+                    forecastTransactionView.getForecastItem().setForecast(forecast);
+                } else {
+                    // ID provided - load from database
+                    ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(transactionId);
+                    if (dbForecastTransaction == null) {
+                        // ID not found in database - warn and skip this row
+                        Utility.getView().say("WARNING: Row " + (rowNum + 1) + ": Transaction ID '" +
+                                transactionId + "' not found in database. Skipping this row.");
+                        continue;
+                    }
+
+                    // Found in database - create view from existing transaction
+                    forecastTransactionView = new ForecastTransactionView();
+                    // Copy all fields from database transaction to use as defaults
+                    forecastTransactionView.setId(dbForecastTransaction.getId());
+                    forecastTransactionView.setPlannedDate(dbForecastTransaction.getPlannedDate());
+                    forecastTransactionView.setRemainingAmount(dbForecastTransaction.getRemainingAmount());
+                    forecastTransactionView.setRunningBalance(dbForecastTransaction.getRunningBalance());
+                    forecastTransactionView.setVersion(dbForecastTransaction.getVersion());
+                    forecastTransactionView.setMemo(dbForecastTransaction.getMemo());
+                    forecastTransactionView.setOverridden(dbForecastTransaction.isOverridden());
+                    forecastTransactionView.setFound(dbForecastTransaction.isFound());
+                    forecastTransactionView.setIdForecastItem(dbForecastTransaction.getIdForecastItem());
+                    forecastTransactionView.setForecastItem(dbForecastTransaction.getForecastItem());
+                }
+
+                // Now overwrite with values from Excel spreadsheet
+
+                // Planned date
+                forecastTransactionView.setDate((Calendar) plannedDate.clone());
+
+                // Column 1: Category
+                String category = getCellValueAsString(row.getCell(1));
+                if (!category.isEmpty()) {
+                    forecastTransactionView.setCategory(category);
+                }
+
+                // Column 2: Payee
+                forecastTransactionView.setPayee(payee);
+
+                // Column 3: Memo
+                String memo = getCellValueAsString(row.getCell(3));
+                if (!memo.isEmpty()) {
+                    forecastTransactionView.setMemo(memo);
+                }
+
+                // Column 4: Credit
+                double credit = getCellValueAsDouble(row.getCell(4));
+                forecastTransactionView.setCredit(credit);
+
+                // Column 5: Debit
+                double debit = getCellValueAsDouble(row.getCell(5));
+                forecastTransactionView.setDebit(debit);
+
+                // Column 6: Balance (running balance)
+                double balance = getCellValueAsDouble(row.getCell(6));
+                if (balance != 0.0) {
+                    forecastTransactionView.setRunningBalance(balance);
+                }
+
+                // Column 8: Importance
+                String importanceStr = getCellValueAsString(row.getCell(8));
+                if (!importanceStr.isEmpty()) {
+                    forecastTransactionView.setHowImportant(Item.parseHowImportant(importanceStr));
+                }
+
+                // Column 9: How Occurs
+                String howOccursStr = getCellValueAsString(row.getCell(9));
+                if (!howOccursStr.isEmpty()) {
+                    forecastTransactionView.setHowOccurs(Item.parseHowOccurs(howOccursStr));
+                }
+
+                // Column 11: Version
+                String versionStr = getCellValueAsString(row.getCell(11));
+                if (!versionStr.isEmpty()) {
+                    forecastTransactionView.setVersion(Utility.stringTimeStampToCalendarDate(versionStr));
+                }
+
+                // Column 12: Amount (only set if explicitly provided)
+                String amountStr = getCellValueAsString(row.getCell(12));
+                if (!amountStr.isEmpty()) {
+                    forecastTransactionView.setAmount(Utility.parseDollarAmount(amountStr));
+                }
+
+                // Add to the list
+                forecastTransactions.add(forecastTransactionView);
+            }
+
+        } catch (FileNotFoundException e) {
+            throw new ControllerException("Excel file not found: " + sourceName);
+        } catch (IOException e) {
+            ControllerException ce = new ControllerException("I/O error reading Excel file " + sourceName + " at row " + i);
+            ce.initCause(e);
+            throw ce;
+        } catch (Exception e) {
+            ControllerException ce = new ControllerException("Exception processing Excel file " + sourceName + " at row " + i);
+            ce.initCause(e);
+            throw ce;
+        }
+
+        return forecastTransactions;
+    }
+
+    /**
+     * Helper method to get cell value as string, handling different cell types
+     */
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) return "";
+
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toString();
+                }
+                // Format number without decimal if it's a whole number
+                double numValue = cell.getNumericCellValue();
+                if (numValue == (long) numValue) {
+                    return String.format("%d", (long) numValue);
+                } else {
+                    return String.valueOf(numValue);
+                }
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                try {
+                    return cell.getStringCellValue().trim();
+                } catch (IllegalStateException e) {
+                    try {
+                        return String.valueOf(cell.getNumericCellValue());
+                    } catch (IllegalStateException e2) {
+                        return "";
+                    }
+                }
+            case BLANK:
+            default:
+                return "";
+        }
+    }
+
+    /**
+     * Helper method to get cell value as double, handling different cell types
+     */
+    private double getCellValueAsDouble(Cell cell) {
+        if (cell == null) return 0.0;
+
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                return cell.getNumericCellValue();
+            case STRING:
+                String strValue = cell.getStringCellValue().trim();
+                return Utility.parseDollarAmount(strValue);
+            case FORMULA:
+                try {
+                    return cell.getNumericCellValue();
+                } catch (IllegalStateException e) {
+                    return 0.0;
+                }
+            case BLANK:
+            default:
+                return 0.0;
+        }
+    }
+
+    // For now, defer to the CSV view for closing (nothing to do for Excel):
     @Override
     public void closeForecastTransactionSource(String sourceName) throws ViewException {
         csvForecastView.closeForecastTransactionSource(sourceName);

@@ -38,9 +38,10 @@ public class TransactionController {
     /*
      * Member variables for the Transaction Controller:
      */
-    private Register register;
-    private Budget budget;
-    private Forecast forecast;
+    protected SessionController sessionController;
+    protected Register register;
+    protected Budget budget;
+    protected Forecast forecast;
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
 
@@ -62,13 +63,13 @@ public class TransactionController {
     /*
      * Constructors and destructor for the Transaction Controller:
      */
-    public TransactionController(Register register, Budget budget, Forecast forecast, ViewInt view,
-                                  NotificationServiceInt notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public TransactionController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
     /*
@@ -89,13 +90,14 @@ public class TransactionController {
      * @throws QuitException if the user chooses to quit
      */
     public void manageTransactions() throws Exception, QuitException {
+        // Use register from sessionController if already set (e.g., by DataManagerController.ensureRegisterContext())
         Register lastSelectedRegister = register;  // Track the last selected register across operations
         boolean done = false;
         String pendingSearchString = null;  // Track search string from action menu
 
         while (!done) {
             try {
-                // Step 1: Select which register to work with
+                // Step 1: Select which register to work with (only if not already set)
                 if (lastSelectedRegister == null) {
                     lastSelectedRegister = RegisterController.selectRegister(view);
                     register = lastSelectedRegister;
@@ -721,7 +723,7 @@ public class TransactionController {
         }
 
         // Use MerchantController to assign a merchant
-        MerchantController merchantController = new MerchantController(view, notificationService);
+        MerchantController merchantController = new MerchantController(sessionController);
 
         // Parse the merchant payee string for creating the MerchantPayee mapping
         // Note: merchantPayee is not stored in the transaction table, but is used to create
@@ -733,9 +735,9 @@ public class TransactionController {
 
             // For now, hardcode WellsFargoBank since that's what's currently used
             // TODO: Make this configurable based on register's financial institution
+            SessionController tempSession = new SessionController(transactionRegister, budget, forecast, view, notificationService);
             com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt financialInstitution =
-                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(
-                            transactionRegister, budget, forecast, view, notificationService);
+                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(tempSession);
 
             // Parse the merchant payee from the raw payee to get a cleaned, shortened version
             // Example: "PURCHASE AUTHORIZED ON 11/18 TARGET T-0799..." -> "TARGET T-0799 Sarasota FL"
@@ -842,7 +844,7 @@ public class TransactionController {
      * @throws SkipException if the user skips the reconciliation
      */
     public void reconcileTransaction(Transaction transaction) throws Exception, SkipException {
-        BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+        BudgetController budgetController = new BudgetController(sessionController);
 
         Merchant merchant = transaction.getMerchant();
 
@@ -898,7 +900,10 @@ public class TransactionController {
                 }
 
                 if (forecastToUse != null) {
-                    ForecastController forecastController = new ForecastController(register, budget, forecastToUse, view, notificationService);
+                    // Update the SessionController with the selected forecast
+                    sessionController.setForecast(forecastToUse);
+
+                    ForecastController forecastController = new ForecastController(sessionController);
                     forecastController.reconcile(transaction, splits);
                     view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");
                 } else {

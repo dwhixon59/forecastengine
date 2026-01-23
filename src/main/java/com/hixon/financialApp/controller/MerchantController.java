@@ -30,25 +30,12 @@ public class MerchantController {
     /**
      * Constructor for MerchantController.
      *
-     * @param sessionController The session controller for accessing user and budget information
-     * @param view The view interface for user interaction
-     * @param notificationService The notification service for sending notifications
+     * @param sessionController The session controller for accessing register, budget, and forecast information
      */
-    public MerchantController(SessionController sessionController, ViewInt view, NotificationServiceInt notificationService) {
+    public MerchantController(SessionController sessionController) {
         this.sessionController = sessionController;
-        this.view = view;
-        this.notificationService = notificationService;
-    }
-
-    /**
-     * Constructor for MerchantController (backwards compatibility).
-     *
-     * @param view The view interface for user interaction
-     * @param notificationService The notification service for sending notifications
-     */
-    public MerchantController(ViewInt view, NotificationServiceInt notificationService) {
-        this.view = view;
-        this.notificationService = notificationService;
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
     /**

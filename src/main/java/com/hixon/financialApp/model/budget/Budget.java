@@ -38,7 +38,8 @@ public class Budget extends IndependentEntity {
 
     @Override
     public String getInsertQuery() throws BudgetException, ForecastException {
-        return null;
+        String nameVal = budgetName != null ? "'" + budgetName + "'" : "NULL";
+        return "insert into budget (idBudget, name) values (uuid_to_bin('" + id + "'), " + nameVal + ")";
     }
 
     @Override
@@ -48,12 +49,13 @@ public class Budget extends IndependentEntity {
 
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
-        return null;
+        String nameVal = budgetName != null ? "'" + budgetName + "'" : "NULL";
+        return "update budget set name = " + nameVal + " where idBudget = uuid_to_bin('" + id + "')";
     }
 
     @Override
     public String getDeleteByIdQuery() {
-        return null;
+        return "delete from budget where idBudget = uuid_to_bin('" + id + "')";
     }
 
     @Override
@@ -104,6 +106,23 @@ public class Budget extends IndependentEntity {
         ResultSet rs = EntityInt.getSingletonRS(selectQuery + "where name = '" + name + "'",
                 "No budget found with name " + name);
         return new Budget(rs);
+    }
+
+    public static List<Budget> getListOf() throws BudgetException, SQLException {
+        try (java.sql.Statement statement = com.hixon.financialApp.utility.Utility.getDbConnection().createStatement()) {
+            ResultSet rs = statement.executeQuery(selectQuery + "order by name");
+            List<Budget> budgets = new ArrayList<>();
+            while (rs.next()) {
+                Budget budget = new Budget(rs);
+                budgets.add(budget);
+            }
+            return budgets;
+        } catch (SQLException | BudgetException e) {
+            BudgetException be = new BudgetException("Database error occurred trying to retrieve budgets with the " +
+                    "sql statement " + selectQuery);
+            be.initCause(e);
+            throw be;
+        }
     }
 
 

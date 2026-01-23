@@ -31,39 +31,30 @@ public class DataManagerController {
     /*
      * Fields of the DataManagerController:
      */
-    private Register register;
-    private Budget budget;
-    private Forecast forecast;
-    private ViewInt view;
-    private NotificationServiceInt notificationService;
-    private BudgetController budgetController;
-    private SessionController sessionController;
+    protected Register register;
+    protected Budget budget;
+    protected Forecast forecast;
+    protected ViewInt view;
+    protected NotificationServiceInt notificationService;
+    protected BudgetController budgetController;
+    protected SessionController sessionController;
 
     
-    /*
-     * Constructors and destructor for the data manager controller:
-     */
     /**
-     * Create a data manager controller with optional register, budget, and forecast context.
-     * These can be null and will be prompted for only when needed by specific entity operations.
+     * Create a data manager controller with SessionController.
      *
-     * @param register The register context (can be null)
-     * @param budget The budget context (can be null)
-     * @param forecast The forecast context (can be null)
-     * @param view The view interface for user interaction (required)
-     * @param notificationService The notification service (required)
+     * @param sessionController The session controller for accessing register, budget, and forecast information
      */
-    DataManagerController(Register register, Budget budget, Forecast forecast, ViewInt view, 
-                          NotificationServiceInt notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
-        this.sessionController = new SessionController(register, budget, forecast, view, notificationService);
+    DataManagerController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
-    
-    
+
+
     /*
      * Main methods of the data manager controller:
      */
@@ -82,6 +73,7 @@ public class DataManagerController {
                 String prompt = "What type of entity would you like to manage?";
                 List<String> entityOptions = List.of(
                     "Budget items",
+                    "Budgets",
                     "Merchants",
                     "Transactions",
                     "Forecast transactions",
@@ -91,13 +83,19 @@ public class DataManagerController {
                         SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
                 switch(option) {
                     case "b":
+                        // Budget items - BudgetController handles its own budget selection
                         // Delegate to BudgetController
-                        budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+                        budgetController = new BudgetController(sessionController);
                         budgetController.manageBudgetItems();
+                        break;
+                    case "u":
+                        // Budgets are global entities - no specific context needed
+                        BudgetManagementController budgetManagementController = new BudgetManagementController(sessionController);
+                        budgetManagementController.manageBudgets();
                         break;
                     case "m":
                         // Merchants are global entities - no specific context needed
-                        MerchantController merchantController = new MerchantController(sessionController, view, notificationService);
+                        MerchantController merchantController = new MerchantController(sessionController);
                         merchantController.manageMerchants();
                         break;
                     case "t":
@@ -105,7 +103,7 @@ public class DataManagerController {
                         ensureRegisterContext();
 
                         // Delegate to TransactionController
-                        TransactionController transactionController = new TransactionController(register, budget, forecast, view, notificationService);
+                        TransactionController transactionController = new TransactionController(sessionController);
                         transactionController.manageTransactions();
                         break;
                     case "f":
@@ -114,12 +112,12 @@ public class DataManagerController {
 
                         // Delegate to ForecastTransactionController
                         ForecastTransactionController forecastTransactionController =
-                                new ForecastTransactionController(register, budget, forecast, view, notificationService);
+                                new ForecastTransactionController(sessionController);
                         forecastTransactionController.manageForecastTransactions();
                         break;
                     case "r":
                         // Registers are global entities - no specific context needed
-                        RegisterController registerController = new RegisterController(sessionController, view, notificationService);
+                        RegisterController registerController = new RegisterController(sessionController);
                         registerController.manageRegisters();
                         break;
                     case "q":
@@ -144,6 +142,8 @@ public class DataManagerController {
     private void ensureRegisterContext() throws Exception {
         if (register == null) {
             register = RegisterController.selectRegister(view);
+            // Update the SessionController with the selected register
+            sessionController.setRegister(register);
             // Also ensure budget and forecast since register implies those
             ensureBudgetContext();
         }
@@ -158,6 +158,8 @@ public class DataManagerController {
     private void ensureBudgetContext() throws Exception {
         if (budget == null && register != null) {
             budget = Budget.getById(register.getBudgetID());
+            // Update the SessionController with the budget
+            sessionController.setBudget(budget);
         } else if (budget == null) {
             // No register context, so select budget directly
             view.say("Please select a budget to work with:");
@@ -167,6 +169,8 @@ public class DataManagerController {
             }
             budget = view.selectByNameFromList("Select Budget", availableBudgets, DO_NOT_ALLOW_NONE,
                     ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+            // Update the SessionController with the selected budget
+            sessionController.setBudget(budget);
         }
     }
 
@@ -180,6 +184,8 @@ public class DataManagerController {
         ensureBudgetContext();
         if (forecast == null) {
             forecast = Forecast.selectForecast(budget);
+            // Update the SessionController with the selected forecast
+            sessionController.setForecast(forecast);
         }
     }
 }

@@ -90,6 +90,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract void closeLongTermForecastOutput(String reportType) throws IOException, ForecastException;
 
+    public abstract void editLongTermForecast() throws Exception;
+
     public abstract void closeForecastTransactionSource(String sourceName) throws ViewException;
 
     public abstract List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException,
@@ -188,8 +190,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         openLongTermForecastOutput(reportType);
         renderLongTermForecastFrontMatter(reportType);
 
-        // Set all the running balances to zero in the database:
-        ForecastTransaction.zeroRunningBalances();
+        // Set all the running balances to zero in the database for THIS forecast only:
+        ForecastTransaction.zeroRunningBalances(forecast);
 
         // Iterate over all the forecast transactions in chronological order beginning on the start date:
         ForecastTransactionIterator forecastTransactions =
@@ -326,6 +328,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Print out the forecast summary:
         getView().say("\nForecast Summary:");
+
+        // Check if we have any forecast transactions
+        if (lastForecastTransaction == null) {
+            getView().say("No forecast transactions found in the forecast period.");
+            getView().say("The starting balance is: " + Utility.formatRoundedDollarAmount(startingBalance));
+            return true;
+        }
 
         // Display the forecast summary period:
         int numberOfMonthsInForecast = Utility.monthsBetweenDatesInclusive(firstFirstOfMonth,
@@ -471,6 +480,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             }
         }
 
+        // Update the forecast's lastRenderedDate to track when we rendered the file
+        forecast.setLastRenderedDate(Calendar.getInstance());
+        try {
+            forecast.save(EntityInt.SaveMethod.UPDATE);
+        } catch (Exception e) {
+            getView().say("Warning: Could not save lastRenderedDate: " + e.getMessage());
+        }
+
         return true;
     }
 
@@ -585,19 +602,10 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     public boolean renderUpcomingItemsReport(Forecast forecast, User user, File file) throws EntityException, ViewException,
             Exception, BudgetException, RegisterException {
 
-        // Calculate the end date.  The algorithm is that the end date is always the end of a pay period.  For the 25th
-        // through the 10th of the month, the end date is the 14th.  For the 10th through the 25th it is the end of the
-        // month.
+        // Calculate the end date: always the end of the month after the current month
         Calendar endDate = Calendar.getInstance();
-        if (endDate.get(Calendar.DATE) >= 20) {
-            endDate.add(Calendar.MONTH, 1);
-            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
-        } else if (endDate.get(Calendar.DATE) <= 5) {
-            endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));
-        } else {
-            endDate.add(Calendar.MONTH, 1);
-            endDate.set(Calendar.DATE, 14);
-        }
+        endDate.add(Calendar.MONTH, 1);  // Move to next month
+        endDate.set(Calendar.DATE, endDate.getActualMaximum(Calendar.DATE));  // Set to last day of that month
 
         // Get a list of upcoming items through the end date:
         List<Entity> items = Collections.unmodifiableList(ForecastTransaction.getItemsUpToDate(forecast, endDate));

@@ -41,9 +41,8 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
                 "Transaction.BudgetItem_idBudgetItem = Budget_Item.idBudgetItem and Budget_Item.Budget_idBudget = " +
                 "Budget.idBudget and Transaction.actualDate >= " + Utility.calendarDateToSqlDateString(startDate) + "order by" +
                 " 1 asc";
-        try {
-            Statement statement = Utility.getDbConnection().createStatement();
-            ResultSet rs = statement.executeQuery(query);
+        try (Statement statement = Utility.getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
 
             // For each transaction in the list of transactions:
             int i = 0;

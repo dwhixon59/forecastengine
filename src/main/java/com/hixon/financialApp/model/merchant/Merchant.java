@@ -263,9 +263,8 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
         // Find the ID of the merchant that uses the passed in payee:
         String escapedPayee = Utility.escapeSqlString(payee);
         String query = selectJoinPayeeQuery + "where mp.payee = '" + escapedPayee + "'";
-        try {
-            Statement statement = getDbConnection().createStatement();
-            ResultSet rs = statement.executeQuery(query);
+        try (Statement statement = getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
             if (rs.next()) {
                 return new Merchant(rs);
             } else {
@@ -283,8 +282,7 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
         // Find the ID of the merchant that uses the passed in name:
         String escapedName = Utility.escapeSqlString(name);
         String query = selectQuery + " where m.name = '" + escapedName + "'";
-        try {
-            Statement statement = getDbConnection().createStatement();
+        try (Statement statement = getDbConnection().createStatement()) {
             ResultSet rs = statement.executeQuery(query);
             if (rs.next()) {
                 return new Merchant(rs);

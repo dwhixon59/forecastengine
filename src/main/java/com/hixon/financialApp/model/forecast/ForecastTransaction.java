@@ -126,10 +126,24 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     public static void setAllFound(boolean found) throws EntityException, RegisterException {
+        throw new EntityException("setAllFound(boolean) is deprecated and should not be used. Use setAllFound(Forecast, boolean) instead to avoid cross-forecast contamination.");
+    }
+
+    /**
+     * Sets the found flag for all forecast transactions in a specific forecast.
+     * @param forecast The forecast whose transactions should be updated
+     * @param found The value to set the found flag to
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     */
+    public static void setAllFound(Forecast forecast, boolean found) throws EntityException, RegisterException {
         String foundString = (found) ? "true" : "false";
-        String query = "update forecast_transaction ft set ft.found = " + foundString;
+        String query = "update forecast_transaction ft " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "set ft.found = " + foundString + " " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')";
         executeUpdate(query, "attempting to set all the Forecast Transaction found flags " +
-                "to " + foundString + ".");
+                "to " + foundString + " for forecast " + forecast.getId() + ".");
     }
 
     public double getRunningBalance() {
@@ -276,7 +290,7 @@ public class ForecastTransaction extends IndependentEntity {
     // The select query:
     public static final String selectColumns = " bin_to_uuid(ft.idForecastTransaction) as 'ft.idForecastTransaction', " +
             "ft.updatedTimeStamp as 'ft.version', ft.remainingAmount as 'ft.remainingAmount', ft.plannedDate as " +
-            "'ft.plannedDate', ft.memo as 'ft.memo', ft.runningBalance, ft.overridden as 'ft.overridden', " +
+            "'ft.plannedDate', ft.memo as 'ft.memo', ft.runningBalance as 'ft.runningBalance', ft.overridden as 'ft.overridden', " +
             "ft.firstOccurrence as 'ft.firstOccurrence', ft.found as 'ft.found', " +
             "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem' ";
 
@@ -360,10 +374,31 @@ public class ForecastTransaction extends IndependentEntity {
     /*
      *  Main methods:
      */
-    // Zero out the running balances for all the Forecast Transactions:
+    /**
+     * Zero out the running balances for all forecast transactions (DEPRECATED - affects all forecasts).
+     * @deprecated Use {@link #zeroRunningBalances(Forecast)} instead to avoid cross-forecast contamination.
+     */
+    @Deprecated
     public static void zeroRunningBalances() throws EntityException, RegisterException {
-        executeUpdate(getUpdateQuery() + "runningBalance = 0", "to zero the " +
-                "running balances of all Forecast Transactions.");
+        throw new EntityException("zeroRunningBalances() is deprecated and should not be used. " +
+                "Use zeroRunningBalances(Forecast) instead to avoid cross-forecast contamination.");
+    }
+
+    /**
+     * Zero out the running balances for all forecast transactions in a specific forecast.
+     * @param forecast The forecast whose running balances should be zeroed
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     */
+    public static void zeroRunningBalances(Forecast forecast) throws EntityException, RegisterException {
+        String query = getUpdateQuery() +
+                "runningBalance = 0 " +
+                "where ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")";
+        executeUpdate(query, "to zero the running balances of all Forecast Transactions in forecast " +
+                forecast.getId() + ".");
     }
 
     public static ForecastTransactionIterator getForecastTransactionsStartingOn(Forecast forecast, Calendar startDate)
@@ -690,15 +725,59 @@ public class ForecastTransaction extends IndependentEntity {
             String memoString =
                     (this.getForecastItem().getMemo() == null || this.getForecastItem().getMemo().isEmpty()) ?
                             "" : " Memo = " + this.getForecastItem().getMemo();
+
+            // Get split amount if splits exist
+            String splitString = "";
+            try {
+                double splitAmount = getTotalSplitAmount();
+                if (splitAmount != 0.0) {
+                    splitString = ", Split Amount = " + formatDollarAmount(splitAmount);
+                }
+            } catch (Exception e) {
+                // If we can't get split amount, just don't show it
+            }
+
             s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
                     + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
                     this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
                     ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
-                    formatDollarAmount(remainingAmount);
+                    formatDollarAmount(remainingAmount) + splitString;
         } catch (Exception e) {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
+    }
+
+    /**
+     * Get the total amount of all splits associated with this forecast transaction.
+     * @return The total split amount, or 0.0 if no splits exist
+     */
+    private double getTotalSplitAmount() {
+        try {
+            String query = ForecastTransactionSplit.getSelectQuery() +
+                    " WHERE fts.ForecastTransaction_idForecastTransaction = uuid_to_bin('" + this.getId() + "')";
+            ResultSet rs = EntityInt.getRS(query, "getting forecast transaction splits for display");
+
+            double totalSplitAmount = 0.0;
+            if (rs != null) {
+                while (rs.next()) {
+                    ForecastTransactionSplit split = new ForecastTransactionSplit(rs);
+                    // Get the actual transaction split to get the amount
+                    String transSplitQuery = com.hixon.financialApp.model.budget.TransactionSplit.getSelectQuery() +
+                            "WHERE ts.BudgetItem_idBudgetItem = uuid_to_bin('" + split.getIdBudgetItem() + "') AND " +
+                            "ts.Transaction_idTransaction = uuid_to_bin('" + split.getIdTransaction() + "')";
+                    ResultSet tsRs = EntityInt.getRS(transSplitQuery, "getting transaction split amount");
+                    if (tsRs != null && tsRs.next()) {
+                        com.hixon.financialApp.model.budget.TransactionSplit transSplit =
+                                new com.hixon.financialApp.model.budget.TransactionSplit(tsRs);
+                        totalSplitAmount += transSplit.getAmount();
+                    }
+                }
+            }
+            return totalSplitAmount;
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 
     public String toStringVeryConcise() throws BudgetException, SQLException, EntityException, ForecastException {
@@ -1201,9 +1280,15 @@ public class ForecastTransaction extends IndependentEntity {
      */
     public static void cleanUpForecast(Forecast forecast) throws EntityException, RegisterException, Exception, BudgetException {
 
-        // Set all the forecast transactions to "not the first occurrence".
-        EntityInt.executeUpdate(getUpdateQuery() + "firstOccurrence = false", "attempting to set " +
-                "the first occurrence flags to false in the forecast.");
+        // Set all the forecast transactions in THIS forecast to "not the first occurrence".
+        String query = getUpdateQuery() +
+                "firstOccurrence = false " +
+                "where ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")";
+        EntityInt.executeUpdate(query, "attempting to set " +
+                "the first occurrence flags to false in forecast " + forecast.getId() + ".");
 
         // Set the first occurrence of every forecast transaction to "first occurrence" and roll up any expired
         // transactions.  The algorithm used is to go get all the forecast items in the forecast then for each one get
@@ -1282,7 +1367,8 @@ public class ForecastTransaction extends IndependentEntity {
         // Get a result set from the database for the upcoming items.  Upcoming items are non-zero amount items that are
         // whose planned date is before three days from today:
         ForecastTransactionAndItemDatabaseIterator iterator = new ForecastTransactionAndItemDatabaseIterator(forecast,
-                forecast.getStartDate());
+                Forecast.getFirstNonZeroTransactionDate(forecast));
+
 
         // Load the retrieved items into a list. Exclude any items considered overdue:
         List<Entity> upcomingItemsList = new ArrayList<>();

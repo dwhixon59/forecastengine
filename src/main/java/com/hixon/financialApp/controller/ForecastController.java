@@ -12,7 +12,9 @@ import com.hixon.financialApp.view.base.AbstractForecastView;
 import com.hixon.financialApp.view.base.UserResponse;
 import com.hixon.financialApp.view.base.ViewInt;
 import com.hixon.financialApp.view.csv.CsvForecastView;
+import com.hixon.financialApp.view.excel.ExcelForecastView;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -36,6 +38,7 @@ public class ForecastController {
     /*
      * Fields for ForecastController:
      */
+    protected SessionController sessionController;
     protected Register register;
     protected Budget budget;
     protected Forecast forecast;
@@ -46,15 +49,51 @@ public class ForecastController {
     /**
      * Constructors and destructor for ForecastController:
      */
-    public ForecastController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public ForecastController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
+
+    /**
+     * Helper Methods for ForecastController:
+     */
+
+    /**
+     * Calculate and save running balances for all forecast transactions in the forecast.
+     * This method iterates through all forecast transactions in chronological order,
+     * calculates the running balance for each, and saves it to the database.
+     *
+     * @param forecast The forecast to calculate running balances for
+     * @throws Exception if an error occurs while calculating or saving running balances
+     */
+    public void calculateAndSaveRunningBalances(Forecast forecast) throws Exception {
+        // Get the starting balance from the first register associated with the budget
+        List<Register> registers = forecast.getBudget().getRegisters();
+        if (registers == null || registers.isEmpty()) {
+            return; // No registers, no running balance to calculate
+        }
+
+        double runningBalance = registers.getFirst().getBalance();
+
+        // Get all forecast transactions in chronological order
+        ForecastTransactionIterator forecastTransactions =
+            ForecastTransaction.getForecastTransactionsStartingOn(forecast, forecast.getStartDate());
+
+        ForecastTransaction forecastTransaction = forecastTransactions.getNext();
+
+        // Calculate and save running balance for each transaction
+        while (forecastTransaction != null) {
+            runningBalance += forecastTransaction.getRemainingAmount();
+            forecastTransaction.setRunningBalance(runningBalance);
+            forecastTransaction.save(UPDATE);
+            forecastTransaction = forecastTransactions.getNext();
+        }
+    }
 
     /**
      * Main methods for ForecastController:
@@ -324,7 +363,7 @@ public class ForecastController {
 
                 // Find the forecast transaction in the list that this split applies to:
                 ForecastTransactionController forecastTransactionController =
-                        new ForecastTransactionController(register, budget, forecast, view, notificationService);
+                        new ForecastTransactionController(sessionController);
                 ForecastTransaction forecastTransaction =
                         forecastTransactionController.getApplicableForecastTransaction(forecast, split);
 
@@ -333,7 +372,7 @@ public class ForecastController {
 
                     // Create a forecast transaction and forecast item (if it doesn't already exist) for it so we have
                     // something to link the forecast transaction split to:
-                    ForecastItem forecastItem = ForecastItem.getByBudgetItemId(split.getIdBudgetItem());
+                    ForecastItem forecastItem = ForecastItem.getByBudgetItemId(forecast, split.getIdBudgetItem());
                     if (forecastItem == null) {
                         forecastItem = new ForecastItem(forecast, split.getBudgetItem());
                         forecastItem.setAmount(split.getAmount());
@@ -571,6 +610,45 @@ public class ForecastController {
         return forecastTransaction.getRemainingAmount();
     }
 
+    /**
+     * Check if the external forecast file (Excel, CSV, TSV) has been modified since the last render.
+     * @return true if the external file exists and is newer than lastRenderedDate, false otherwise
+     */
+    public boolean isExternalForecastFileNewer() {
+        try {
+            // Construct the base directory and filename from the forecast name:
+            String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
+            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseFilename = "LongTermForecast-" + forecastName;
+
+            // Check for Excel files first (.xlsx, .xls), then CSV/TSV
+            String[] extensions = {".xlsx", ".xls", ".csv", ".tsv"};
+            for (String ext : extensions) {
+                File sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                if (sourceFile.exists()) {
+                    // Get the file's last modified time
+                    long fileModifiedTime = sourceFile.lastModified();
+
+                    // If we've never rendered this forecast, we can't compare
+                    if (forecast.getLastRenderedDate() == null) {
+                        return false;  // Don't prompt if we don't know when it was last rendered
+                    }
+
+                    // Compare file modified time to last rendered date
+                    long lastRenderedTime = forecast.getLastRenderedDate().getTimeInMillis();
+                    return fileModifiedTime > lastRenderedTime;
+                }
+            }
+
+            // No external file found
+            return false;
+
+        } catch (Exception e) {
+            view.say("Warning: Could not check external file modification time: " + e.getMessage());
+            return false;
+        }
+    }
+
     /*
      * Update the forecast from a list of forecast transactions from some external source:
      */
@@ -582,22 +660,52 @@ public class ForecastController {
 
         try {
             // We will need a BudgetController:
-            BudgetController budgetController = new BudgetController(register, budget, forecast, view, notificationService);
+            BudgetController budgetController = new BudgetController(sessionController);
 
-            // Get the name and type of the source:
-            //String sourceName = getForecastController().getUserSelectedString("Enter the name of the external source " +
-            //        "of forecast transactions:");
-            // For now, hard code the name of the external source:
-            String sourceName = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses" +
-                    "\\LongTermForecast-BillPayAccount.csv";
+            // Construct the base directory and filename from the forecast name:
+            String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
+            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseFilename = "LongTermForecast-" + forecastName;
 
-            //String sourceType = getForecastController().getUserSelectedString("Enter the type of the external source " +
-            //        "of forecast transactions:");
-            // For now we are only supporting CSV as the external source:
+            // Try to find the source file, checking for Excel files first, then CSV/TSV
+            String sourceName = null;
+            AbstractForecastView externalSourceView = null;
+            File sourceFile;
 
-            // Instantiate the proper type of view for the external source:
-            // For now, hard code the type of the external source to be CSV:
-            AbstractForecastView externalSourceView = (AbstractForecastView) new CsvForecastView(forecast);
+            // Check for Excel files first (.xlsx, .xls)
+            String[] excelExtensions = {".xlsx", ".xls"};
+            for (String ext : excelExtensions) {
+                sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                if (sourceFile.exists()) {
+                    sourceName = sourceFile.getAbsolutePath();
+                    externalSourceView = new ExcelForecastView(forecast);
+                    view.say("Found Excel forecast file: " + sourceName);
+                    break;
+                }
+            }
+
+            // If no Excel file found, check for CSV/TSV
+            if (sourceName == null) {
+                String[] csvExtensions = {".csv", ".tsv"};
+                for (String ext : csvExtensions) {
+                    sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
+                    if (sourceFile.exists()) {
+                        sourceName = sourceFile.getAbsolutePath();
+                        externalSourceView = new CsvForecastView(forecast);
+                        view.say("Found CSV/TSV forecast file: " + sourceName);
+                        break;
+                    }
+                }
+            }
+
+            // If still no file found, throw an exception
+            if (sourceName == null) {
+                throw new ForecastException("No forecast file found. Looked for:\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".xlsx\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".xls\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".csv\n" +
+                        "  - " + baseDirectory + "\\" + baseFilename + ".tsv");
+            }
 
             // Open the external source and get a list of forecast transactions in it:
             List<ForecastTransaction> forecastTransactions = externalSourceView.openForecastTransactionSource(sourceName);
@@ -605,8 +713,8 @@ public class ForecastController {
             // If we were able to open the external source:
             if (forecastTransactions != null) {
 
-                // Mark all the forecast transactions in the forecast as not found:
-                ForecastTransaction.setAllFound(false);
+                // Mark all the forecast transactions in THIS forecast as not found:
+                ForecastTransaction.setAllFound(forecast, false);
 
                 // For each forecast transaction from the external source:
                 for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
@@ -634,7 +742,8 @@ public class ForecastController {
 
                             // then if the forecast planned date has been modified, then update the database transaction:
                             boolean overwrite;
-                            if (ssForecastTransaction.getPlannedDate().compareTo(dbForecastTransaction.getPlannedDate()) != 0) {
+                            if (Utility.dateOnlyCompare(ssForecastTransaction.getPlannedDate(),
+                                    dbForecastTransaction.getPlannedDate()) != 0) {
                                 // If the database forecast transaction was updated after it was sent to the external
                                 // source:
                                 overwrite = true;
@@ -719,14 +828,14 @@ public class ForecastController {
                     } else { // the forecast transaction does not have an ID (the creation case), so create one:
 
                         // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
-                        ForecastItem forecastItem = ForecastItem.getByName(ssForecastTransaction.getForecastItem().getForecast().getId(),
+                        ForecastItem forecastItem = ForecastItem.getByName(forecast.getId(),
                                 ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
                         if (forecastItem == null) {
 
                             // then create a forecast item, so we have something to link the forecast transaction to:
                             // Get a list of budget items that match the entered payee:
                             List<BudgetItem> budgetItemsForPayee = BudgetItem.getUnexpiredByPayee(
-                                    ssForecastTransaction.getForecastItem().getForecast().getBudget(),
+                                    forecast.getBudget(),
                                     ssForecastTransaction.getForecastItem().getPayee());
                             BudgetItem budgetItem;
                             if (budgetItemsForPayee.size() > 1) {
@@ -764,8 +873,8 @@ public class ForecastController {
                 // Set all the forecast transactions deleted from the spreadsheet to zero because the user zeroed them
                 // out in the spreadsheet:
                 ForecastTransactionController forecastTransactionController =
-                        new ForecastTransactionController(register, budget, forecast, view, notificationService);
-                forecastTransactionController.zeroNotFound();
+                        new ForecastTransactionController(sessionController);
+                forecastTransactionController.zeroNotFound(forecast);
 
                 // Close the external source of forecast transactions:
                 externalSourceView.closeForecastTransactionSource(sourceName);
@@ -836,6 +945,11 @@ public class ForecastController {
         // Update the forecast start date:
         forecast.setStartDate(updateStartDate);
 
+        // Ensure numberOfMonths is set to a reasonable value (handle old forecasts that may have 0)
+        if (forecast.getNumberOfMonths() <= 0) {
+            forecast.setNumberOfMonths(12);  // Default to 12 months (1 year)
+        }
+
         // Update up the end date so that the forecast window will be the same number of months as it was originally
         // set to be.
         Calendar endDate = (Calendar) updateStartDate.clone();
@@ -865,11 +979,22 @@ public class ForecastController {
         // forecast transactions.
         ForecastItem.expireOldForecastItems(forecast);
 
+        // Expire forecast items whose corresponding budget items are expired
+        // This handles cases where a budget item was moved to another budget and expired
+        String expireForecastItemsQuery = "UPDATE forecast_item fi " +
+                "INNER JOIN budget_item bi ON fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+                "SET fi.endDate = bi.endDate " +
+                "WHERE fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "AND bi.endDate IS NOT NULL " +
+                "AND (fi.endDate IS NULL OR fi.endDate > bi.endDate)";
+        executeUpdate(expireForecastItemsQuery, "expiring forecast items with expired budget items");
+
         // Delete any expired forecast items that have no linked forecast transactions.
         ForecastItem.deleteExpiredUnusedForecastItems(forecast);
 
-        // Delete all the forecast transactions that occur after the update start date, except for the overridden ones
-        // and any that have been assigned splits:
+        // Delete all the forecast transactions that occur after the update start date, except for:
+        // - Overridden ones (user manually modified)
+        // - Reconciled ones (found=true or have splits assigned)
         String deleteQuery = ForecastTransaction.getDeleteQuery() +
                 "where " +
                     "ForecastItem_idForecastItem in (" +
@@ -882,6 +1007,7 @@ public class ForecastController {
                     ") " +
                     "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
                     "and not overridden " +
+                    "and not found " +  // Don't delete reconciled transactions
                     "and not exists (" +
                         "select 1 " +
                         "from " +
@@ -893,6 +1019,20 @@ public class ForecastController {
         executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
 
+        // Delete forecast transactions that are past their forecast item's expiration date
+        // This handles cases where a budget item was expired but old forecast transactions still exist
+        String deleteExpiredQuery = "DELETE ft FROM forecast_transaction ft " +
+                "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "WHERE fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "AND fi.endDate IS NOT NULL " +
+                "AND ft.plannedDate > fi.endDate " +
+                "AND NOT ft.overridden " +
+                "AND NOT EXISTS (" +
+                    "SELECT 1 FROM forecast_transaction_split fts " +
+                    "WHERE fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction" +
+                ")";
+        executeUpdate(deleteExpiredQuery, "deleting forecast transactions past their item's expiration date");
+
         // Generate the updated portion of the forecast starting on the update start date.
         forecast.setTransactions(new ForecastTransaction[forecast.getNumberOfMonths() * 31]);
         ForecastEngine forecastEngine = new ForecastEngine();
@@ -901,9 +1041,15 @@ public class ForecastController {
         // Save the updated portion of the forecast.
         forecast.saveForecastTransactions();
 
+        // Check for duplicate forecast transactions and warn the user
+        forecast.checkForDuplicateTransactions();
+
         // The forecast engine doesn't know that we are updating a forecast. It will have set the first occurrence
         // properly for a new forecast. Fix up the flags in the updated forecast.
         ForecastTransaction.cleanUpForecast(forecast);
+
+        // Calculate and save running balances for all forecast transactions:
+        calculateAndSaveRunningBalances(forecast);
 
         // Mark the forecast as in sync.
         forecast.setInSync(true);
@@ -913,6 +1059,12 @@ public class ForecastController {
 
         // Get the first forecast transaction in the list:
         ForecastTransaction firstForecastTransaction = forecastTransactions.getNext();
+
+        // If there are no forecast transactions, we can't update the forecast dates
+        if (firstForecastTransaction == null) {
+            view.say("No forecast transactions found in the forecast. Forecast dates not updated.");
+            return;
+        }
 
         // Reset the forecast start date to the date of the first non-zero forecast transaction:
         forecast.setStartDate(firstForecastTransaction.getPlannedDate());

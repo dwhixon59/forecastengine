@@ -1,8 +1,8 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionFactory;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
-import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
@@ -15,6 +15,8 @@ import com.hixon.financialApp.view.excel.ExcelForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -26,26 +28,29 @@ import java.util.List;
  * This controller can be used across multiple controllers that need access to the current session's
  * register, budget, and forecast data.
  */
+@Getter
 public class SessionController {
 
     /*
      * Member variables:
      */
     private Register register = null;
+    @Setter
     private Budget budget = null;
+    @Setter
     private Forecast forecast = null;
     private FinancialInstitutionInt financialInstitution = null;
+    @Setter
     private ViewInt view;
+    @Setter
     private NotificationServiceInt notificationService;
 
-    // Controllers:
-    private BudgetController budgetController;
-    private MerchantController merchantController;
-    private ForecastController forecastController;
-
     // Specialized views for interfacing with external agents:
+    @Setter
     private RegisterViewInt registerView;
+    @Setter
     private BudgetViewInt budgetView;
+    @Setter
     private ForecastViewInt forecastView;
 
 
@@ -54,7 +59,8 @@ public class SessionController {
      */
 
     /**
-     * Creates a new SessionController with the specified view and notification service.
+     * Creates a new SessionController with the specified view and notification service.  This constructor is used up
+     * front before the register, budget, and forecast are known.
      *
      * @param view The view interface for user interaction
      * @param notificationService The notification service for sending notifications
@@ -80,107 +86,6 @@ public class SessionController {
         this.forecast = forecast;
         this.view = view;
         this.notificationService = notificationService;
-    }
-
-
-    /*
-     * Getters and setters:
-     */
-
-    public Register getRegister() {
-        return register;
-    }
-
-    public void setRegister(Register register) {
-        this.register = register;
-    }
-
-    public Budget getBudget() {
-        return budget;
-    }
-
-    public void setBudget(Budget budget) {
-        this.budget = budget;
-    }
-
-    public Forecast getForecast() {
-        return forecast;
-    }
-
-    public void setForecast(Forecast forecast) {
-        this.forecast = forecast;
-    }
-
-    public FinancialInstitutionInt getFinancialInstitution() {
-        return financialInstitution;
-    }
-
-    public void setFinancialInstitution(FinancialInstitutionInt financialInstitution) {
-        this.financialInstitution = financialInstitution;
-    }
-
-    public ViewInt getView() {
-        return view;
-    }
-
-    public void setView(ViewInt view) {
-        this.view = view;
-    }
-
-    public NotificationServiceInt getNotificationService() {
-        return notificationService;
-    }
-
-    public void setNotificationService(NotificationServiceInt notificationService) {
-        this.notificationService = notificationService;
-    }
-
-    public BudgetController getBudgetController() {
-        return budgetController;
-    }
-
-    public void setBudgetController(BudgetController budgetController) {
-        this.budgetController = budgetController;
-    }
-
-    public MerchantController getMerchantController() {
-        return merchantController;
-    }
-
-    public void setMerchantController(MerchantController merchantController) {
-        this.merchantController = merchantController;
-    }
-
-    public ForecastController getForecastController() {
-        return forecastController;
-    }
-
-    public void setForecastController(ForecastController forecastController) {
-        this.forecastController = forecastController;
-    }
-
-    public RegisterViewInt getRegisterView() {
-        return registerView;
-    }
-
-    public void setRegisterView(RegisterViewInt registerView) {
-        this.registerView = registerView;
-    }
-
-    public BudgetViewInt getBudgetView() {
-        return budgetView;
-    }
-
-    public void setBudgetView(BudgetViewInt budgetView) {
-        this.budgetView = budgetView;
-    }
-
-    public ForecastViewInt getForecastView() {
-        return forecastView;
-    }
-
-    public void setForecastView(ForecastViewInt forecastView) {
-        this.forecastView = forecastView;
     }
 
 
@@ -225,22 +130,7 @@ public class SessionController {
             forecastView = new ExcelForecastView(forecast);
 
             // and set the financial institution associated with the selected register (after forecast is retrieved)
-            financialInstitution = new WellsFargoBank(register, budget, forecast, view, notificationService);
-        }
-        else {
-            // If the budget is null, then get the budget associated with the selected register the user wants to work
-            // with:
-            if (budget == null) {
-                budget = Budget.getById(register.getBudgetID());
-                budgetView = new SpreadsheetXmlBudgetView(budget);
-            }
-
-            // If the forecast is null, then get the forecast associated with the selected register that the user wants
-            // to work with:
-            if (forecast == null) {
-                forecast = Forecast.selectForecast(budget);
-                forecastView = new SpreadsheetXmlForecastView(forecast);
-            }
+            financialInstitution = FinancialInstitutionFactory.create(this);
         }
     }
 
@@ -280,6 +170,41 @@ public class SessionController {
      */
     public boolean hasForecast() {
         return forecast != null;
+    }
+
+    /**
+     * Sets the register for this session and recreates the financial institution to match.
+     * This ensures that when switching registers, the financial institution is properly updated
+     * to prevent cross-contamination between different registers' data.
+     *
+     * @param register The register to set for this session
+     */
+    public void setRegister(Register register) {
+        this.register = register;
+        // Recreate the financial institution when the register changes
+        if (register != null) {
+            try {
+                this.financialInstitution = FinancialInstitutionFactory.create(this);
+            } catch (Exception e) {
+                System.err.println("Error creating financial institution for register " +
+                    register.getName() + ": " + e.getMessage());
+                this.financialInstitution = null;
+            }
+        } else {
+            this.financialInstitution = null;
+        }
+    }
+
+    /**
+     * Sets the financial institution for this session.
+     * This allows manual override of the financial institution, which may be needed
+     * in specific scenarios like transaction parsing where a temporary session controller
+     * is created.
+     *
+     * @param financialInstitution The financial institution to set for this session
+     */
+    public void setFinancialInstitution(FinancialInstitutionInt financialInstitution) {
+        this.financialInstitution = financialInstitution;
     }
 
     /**

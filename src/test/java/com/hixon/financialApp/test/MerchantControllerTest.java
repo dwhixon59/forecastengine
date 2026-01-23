@@ -3,6 +3,7 @@ package com.hixon.financialApp.test;
 import com.hixon.financialApp.controller.CancelException;
 import com.hixon.financialApp.controller.MerchantController;
 import com.hixon.financialApp.controller.QuitException;
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.merchant.Merchant;
@@ -42,9 +43,9 @@ public class MerchantControllerTest {
         // Create a MerchantControllerTest object:
         MerchantControllerTest merchantControllerTest = new MerchantControllerTest(testController);
 
-        // Create the MerchantController:
-        MerchantController merchantController = new MerchantController(testController.getView(),
-                testController.getNotificationService());
+        // Create the MerchantController with SessionController
+        SessionController sessionController = testController.getSessionController();
+        MerchantController merchantController = new MerchantController(sessionController);
         Merchant merchant = null;
         while (true) {
             try {

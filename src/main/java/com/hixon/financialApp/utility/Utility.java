@@ -180,6 +180,25 @@ public class Utility {
         return dateFormatted;
     }
 
+    /**
+     * Convert a Calendar date to a SQL DATETIME string with full timestamp.
+     * Format: 'yyyy-MM-dd HH:mm:ss'
+     *
+     * @param calendar The Calendar object to convert
+     * @return SQL DATETIME string with quotes, or "null" if calendar is null
+     */
+    public static String calendarToSqlDateTimeString(Calendar calendar) {
+        String dateTimeFormatted;
+        if (calendar != null) {
+            SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            fmt.setCalendar(calendar);
+            dateTimeFormatted = "'" + fmt.format(calendar.getTime()) + "'";
+        } else {
+            dateTimeFormatted = "null";
+        }
+        return dateTimeFormatted;
+    }
+
     // Convert a Java String date in MM-DD-YY format to a Calendar object:
     public static Calendar sqlDateStringToCalendarDate(String stringDate) throws ParseException {
         Calendar calendarDate = null;
@@ -696,9 +715,12 @@ public class Utility {
      * This method doubles the backslashes in a string.  This is necessary when passing a string to a database query.
      *
      * @param string The string to be modified.
-     * @return The modified string.
+     * @return The modified string, or null if the input string is null.
      */
     public static String doubleBackSlashes(String string) {
+        if (string == null) {
+            return null;
+        }
         return string.replace("\\", "\\\\");
     }
 

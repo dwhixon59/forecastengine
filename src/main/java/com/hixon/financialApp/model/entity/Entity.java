@@ -133,30 +133,21 @@ public abstract class Entity implements EntityInt {
    // Execute a query using the SQL call executeUpdate():
    public void executeQueryForThis(String query, String exceptionMessage) throws RegisterException, EntityException {
 
-      Statement statement = null;
-      ResultSet rs = null;
-
       try {
          if (isDirty()) {
-            statement = Utility.getDbConnection().createStatement();
-            statement.executeUpdate(query);
-            setDirty(false);
+            try (Statement statement = Utility.getDbConnection().createStatement()) {
+               statement.executeUpdate(query);
+               setDirty(false);
+            }
          } else {
             System.out.println("Attempt to execute a query on an entity of type " + getPrintableTypeName() +
                     " that isn't dirty.  Skipped.");
          }
       } catch (SQLException e) {
-
-         // Close the database connections if possible:
-         try {
-            if (statement != null) statement.close();
-            if (rs != null) rs.close();
-         } finally {
-            EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
-                    "statement was " + query);
-            ee.initCause(e);
-            throw ee;
-         }
+         EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +
+                 "statement was " + query);
+         ee.initCause(e);
+         throw ee;
       }
    }
 

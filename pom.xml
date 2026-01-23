@@ -88,6 +88,13 @@
             <version>1.11.0</version>
         </dependency>
 
+        <!-- OFX4J - for parsing QFX/OFX files (Barclays Bank) -->
+        <dependency>
+            <groupId>com.webcohesion.ofx4j</groupId>
+            <artifactId>ofx4j</artifactId>
+            <version>1.36</version>
+        </dependency>
+
         <!-- Apache POI -->
         <dependency>
             <groupId>org.apache.poi</groupId>

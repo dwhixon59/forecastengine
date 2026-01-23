@@ -1,6 +1,7 @@
 package com.hixon.financialApp.model.financialinstitution;
 
 import com.hixon.financialApp.controller.RegisterController;
+import com.hixon.financialApp.controller.SessionController;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -147,15 +148,10 @@ public class WellsFargoBank extends FinancialInstitution {
     /**
      * Constructs a new WellsFargoBank instance for processing Wells Fargo transactions.
      *
-     * @param register The register (bank account) associated with this financial institution
-     * @param budget The budget to use for categorizing transactions
-     * @param forecast The forecast for planning future transactions
-     * @param view The view interface for user interaction (following MVC pattern)
-     * @param notificationService The service for sending asynchronous notifications to users
+     * @param sessionController The session controller containing register, budget, forecast, view, and notificationService
      */
-    public WellsFargoBank(Register register, Budget budget, Forecast forecast, ViewInt view,
-                          NotificationServiceInt notificationService) {
-        super(register, budget, forecast, view, notificationService);
+    public WellsFargoBank(SessionController sessionController) {
+        super(sessionController);
     }
 
     /*
@@ -171,6 +167,23 @@ public class WellsFargoBank extends FinancialInstitution {
     @Override
     public Class<? extends Enum<?>> getCsvHeadersClass() {
         return Headers.class;
+    }
+
+    /**
+     * Returns the CSV format configuration for Wells Fargo transaction files.
+     * Wells Fargo CSV files use RFC4180 format (standard CSV) with:
+     * - Comma delimiter
+     * - Headers in first row that match the Headers enum
+     * - Values trimmed of whitespace
+     *
+     * @return the CSVFormat configuration for parsing Wells Fargo CSV files
+     */
+    @Override
+    public org.apache.commons.csv.CSVFormat getCsvFormat() {
+        return org.apache.commons.csv.CSVFormat.RFC4180.builder()
+                .setHeader(getCsvHeadersClass())
+                .setTrim(true)
+                .get();
     }
 
     /**
@@ -257,8 +270,11 @@ public class WellsFargoBank extends FinancialInstitution {
         } else {
             if (payeeTokens.length >= 3) {
                 firstFewWords = payeeTokens[0] + " " + payeeTokens[1] + " " + payeeTokens[2];
-            } else {
+            } else if (payeeTokens.length == 2) {
                 firstFewWords = payeeTokens[0] + " " + payeeTokens[1];
+            } else {
+                // Only 1 token
+                firstFewWords = payeeTokens[0];
             }
         }
         logger.debug("  First few words: '{}'", firstFewWords);
@@ -314,8 +330,9 @@ public class WellsFargoBank extends FinancialInstitution {
                     logger.debug("  Account number not found in payee string - will ask user");
 
                     // The account number isn't in the payee string, so ask the user which register it came from:
-                    RegisterController registerController = new RegisterController(register, this,
-                            budget, forecast, view, notificationService);
+                    SessionController tempSessionController = new SessionController(getRegister(), budget, forecast, view, notificationService);
+                    tempSessionController.setFinancialInstitution(this);
+                    RegisterController registerController = new RegisterController(tempSessionController);
                     transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
 
                     // If we were able to determine the register this transaction was transferred to/from:
@@ -350,10 +367,10 @@ public class WellsFargoBank extends FinancialInstitution {
                 }
                 if (transferRegister != null) {
                     merchantPayee = "Transfer " + toFrom1 + " " + transferRegister.getName() + " " + toFrom2 + " " +
-                            register.getName();
+                            getRegister().getName();
                 } else {
                     merchantPayee = "Transfer " + toFrom1 + " " + accountNumber + " " + toFrom2 + " " +
-                            register.getName();
+                            getRegister().getName();
                 }
                 logger.debug("  Constructed merchantPayee: '{}'", merchantPayee);
                 break;
@@ -430,7 +447,7 @@ public class WellsFargoBank extends FinancialInstitution {
 
         // Use fuzzy matching based on payee, date, and amount only (no merchant ID)
         return TransactionUtilities.findMatchingProvisionalTransaction(
-                register.getId(),
+                getRegister().getId(),
                 clearedTransaction.getAmount(),
                 clearedTransaction.getDate(),
                 merchantPayee
@@ -600,7 +617,7 @@ public class WellsFargoBank extends FinancialInstitution {
         }
 
         // Create the transaction:
-        Transaction transaction = new Transaction(register, postDate, payee, amount, cleared, checkNumber, importRecordId);
+        Transaction transaction = new Transaction(getRegister(), postDate, payee, amount, cleared, checkNumber, importRecordId);
 
         // Tokenize the bank payee (single blank is the separator):
         payeeTokens = transaction.getPayee().split(" ");

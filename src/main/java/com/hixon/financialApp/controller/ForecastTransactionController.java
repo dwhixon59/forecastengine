@@ -38,6 +38,7 @@ public class ForecastTransactionController {
     /*
      * Fields for ForecastTransactionController:
      */
+    protected SessionController sessionController;
     protected Register register;
     protected Budget budget;
     protected Forecast forecast;
@@ -48,13 +49,13 @@ public class ForecastTransactionController {
     /**
      * Constructors and destructor for ForecastTransactionController:
      */
-    public ForecastTransactionController(Register register, Budget budget, Forecast forecast, ViewInt view, NotificationServiceInt
-            notificationService) {
-        this.register = register;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
+    public ForecastTransactionController(SessionController sessionController) {
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -115,8 +116,8 @@ public class ForecastTransactionController {
                         }
 
                         NumberOrStringResponse response = view.selectFromListByPositionOrMenuOrString(
-                                null,  // Don't show the list here since we're in the action menu
-                                transactionDisplayStrings,  // Transaction display strings for validation
+                                "Select a forecast transaction",  // Show the list so 'R' redisplay works
+                                transactionDisplayStrings,
                                 "What would you like to do with this forecast transaction?",
                                 List.of("view details", "update this transaction", "delete this transaction",
                                         "manage splits/dispositions"),
@@ -207,6 +208,12 @@ public class ForecastTransactionController {
                         } catch (CancelException e) {
                             // User cancelled from selection - go back to search
                             selectingFromCurrentSearch = false;
+                        } catch (QuitException e) {
+                            // User quit from selection - exit the entire management operation
+                            return;
+                        } catch (SkipException e) {
+                            // User skipped from selection - go back to search
+                            selectingFromCurrentSearch = false;
                         }
                     }
                 }
@@ -242,6 +249,8 @@ public class ForecastTransactionController {
             if (searchString == null) {
                 view.say();
                 view.say("--- Forecast Transaction Search ---");
+                view.say("Current forecast: " + forecast.getDescription());
+                view.say();
                 view.say("You can search by:");
                 view.say("  • Planned date range:");
                 view.say("      - Full dates: '2024-01-01 to 2024-12-31'");
@@ -249,11 +258,12 @@ public class ForecastTransactionController {
                 view.say("      - Day only: '15 to 20' (defaults to current month, wraps to next month if needed)");
                 view.say("  • Category, payee, or memo");
                 view.say("  • Or press Enter to see all forecast transactions");
+                view.say("  • Type 'F' to select a different forecast");
                 view.say();
 
                 try {
                     searchString = view.getResponseString(
-                            "Search for forecast transaction (date range, category, payee, memo, or filters)",
+                            "Search for forecast transaction (date range, category, payee, memo, filters, or 'F' for different forecast)",
                             "",  // Empty default value - allows user to press Enter
                             ALLOW_NONE,  // Allow empty input to show all transactions
                             DO_NOT_SHOW_CANCEL_QUIT_SKIP,
@@ -261,6 +271,22 @@ public class ForecastTransactionController {
                             null);  // No supplier
                 } catch (CancelException e) {
                     throw e; // Let it bubble up to exit the whole manage operation
+                }
+
+                // Check if user wants to change forecast
+                if (searchString != null && searchString.trim().equalsIgnoreCase("F")) {
+                    // Allow user to select a different forecast
+                    try {
+                        forecast = Forecast.selectForecast(budget);
+                        sessionController.setForecast(forecast);
+                        view.say("Forecast changed to: " + forecast.getDescription());
+                        searchString = null; // Reset to show menu again
+                        continue;
+                    } catch (Exception e) {
+                        view.say("Error selecting forecast: " + e.getMessage());
+                        searchString = null;
+                        continue;
+                    }
                 }
             }
 
@@ -333,35 +359,32 @@ public class ForecastTransactionController {
      * @param transactions The list of transactions to select from
      * @return The selected transaction
      * @throws CancelException if user cancels
+     * @throws QuitException if user quits
+     * @throws SkipException if user skips
      */
-    private ForecastTransaction selectFromCachedList(List<ForecastTransaction> transactions) throws CancelException {
+    private ForecastTransaction selectFromCachedList(List<ForecastTransaction> transactions)
+            throws CancelException, QuitException, SkipException {
         // Build display strings
         List<String> displayStrings = new ArrayList<>();
         for (ForecastTransaction t : transactions) {
             displayStrings.add(t.toStringConcise());
         }
 
-        try {
-            NumberOrStringResponse result = view.selectFromListByPositionOrMenuOrString(
-                    "Select another forecast transaction from current list",
-                    displayStrings,
-                    "", // No menu
-                    List.of(), // No menu options
-                    DO_NOT_ALLOW_CREATE, // Don't allow search strings here
-                    ALLOW_CANCEL,
-                    ALLOW_QUIT,
-                    DO_NOT_ALLOW_SKIP);
+        NumberOrStringResponse result = view.selectFromListByPositionOrMenuOrString(
+                "Select another forecast transaction from current list",
+                displayStrings,
+                "", // No menu
+                List.of(), // No menu options
+                DO_NOT_ALLOW_CREATE, // Don't allow search strings here
+                ALLOW_CANCEL,
+                ALLOW_QUIT,
+                DO_NOT_ALLOW_SKIP);
 
-            if (result.isNumber()) {
-                int index = result.getSelectedIndex();
-                return transactions.get(index);
-            } else {
-                throw new CancelException("User cancelled selection");
-            }
-        } catch (QuitException e) {
-            throw new RuntimeException(e);
-        } catch (SkipException e) {
-            throw new RuntimeException(e);
+        if (result.isNumber()) {
+            int index = result.getSelectedIndex();
+            return transactions.get(index);
+        } else {
+            throw new CancelException("User cancelled selection");
         }
     }
 
@@ -780,12 +803,39 @@ public class ForecastTransactionController {
                 List.of("ADJUST", "ASSIGN", "IGNORE", "DISPUTE", "ROLL_FORWARD", "ZERO_OUT"),
                 DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
-        if (newDispositionStr.equals("c")) {
-            return;  // User cancelled
+        // Check for cancel/quit (capital letters only - allows lowercase c/q as menu options)
+        if (newDispositionStr.equals("C") || newDispositionStr.equals("Q")) {
+            return;  // User cancelled or quit
+        }
+
+        // Map menu shortcuts to full disposition names (lowercase for menu matching)
+        String dispositionName;
+        switch (newDispositionStr.toLowerCase()) {
+            case "a":
+                dispositionName = "ADJUST";
+                break;
+            case "s":
+                dispositionName = "ASSIGN";
+                break;
+            case "i":
+                dispositionName = "IGNORE";
+                break;
+            case "d":
+                dispositionName = "DISPUTE";
+                break;
+            case "r":
+                dispositionName = "ROLL_FORWARD";
+                break;
+            case "z":
+                dispositionName = "ZERO_OUT";
+                break;
+            default:
+                view.say("Invalid disposition selection: " + newDispositionStr);
+                return;
         }
 
         ForecastTransactionSplit.SplitDisposition newDisposition =
-                ForecastTransactionSplit.SplitDisposition.valueOf(newDispositionStr.toUpperCase());
+                ForecastTransactionSplit.SplitDisposition.valueOf(dispositionName);
 
         split.setDisposition(newDisposition);
         split.save(UPDATE);
@@ -802,12 +852,27 @@ public class ForecastTransactionController {
      */
     public void zeroNotFound()
             throws EntityException, RegisterException, SQLException, BudgetException {
+        zeroNotFound(sessionController.getForecast());
+    }
+
+    /**
+     * Zeros out the remaining amount of forecast transactions marked as not found in a specific forecast.
+     * This is used during import to zero out transactions that were deleted from the external source.
+     * @param forecast The forecast whose not-found transactions should be zeroed
+     * @throws EntityException If a database error occurs
+     * @throws RegisterException If a register error occurs
+     * @throws SQLException If a SQL error occurs
+     * @throws BudgetException If a budget error occurs
+     */
+    public void zeroNotFound(Forecast forecast)
+            throws EntityException, RegisterException, SQLException, BudgetException {
 
         // List the forecast transactions that are about to be zeroed out for the user:
         ResultSet rs = EntityInt.getRS(ForecastTransaction.getSelectQuery() + " " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
                         "fi.idForecastItem " +
                         "where found = false and remainingAmount <> 0 " +
+                        "and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
                         "order by ft.plannedDate desc, fi.category asc, fi.payee asc",
                 "Forecast Transactions that are marked not found."
         );
@@ -822,9 +887,15 @@ public class ForecastTransactionController {
             getView().say(forecastTransaction.toStringConcise() + " .");
         }
 
-        // Zero out the forcast transactions that were deleted from the spreadsheet:
-        executeUpdate(ForecastTransaction.getUpdateQuery() + "remainingAmount = 0 where found = false and " +
-                "remainingAmount <> 0", "to zero the Forecast Transactions that are marked not found.");
+        // Zero out the forecast transactions that were deleted from the spreadsheet (only for this forecast):
+        executeUpdate(ForecastTransaction.getUpdateQuery() +
+                "remainingAmount = 0 " +
+                "where found = false and remainingAmount <> 0 " +
+                "and ForecastItem_idForecastItem in (" +
+                    "select idForecastItem from forecast_item " +
+                    "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
+                ")",
+                "to zero the Forecast Transactions that are marked not found in forecast " + forecast.getId() + ".");
     }
 
     /**
@@ -896,8 +967,8 @@ public class ForecastTransactionController {
                             if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                ForecastController forecastController = new ForecastController(register, budget, forecast,
-                                        view, notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 UserResponse resp = forecastController.assignSplitDateToForecastTransaction(split,
                                         forecastTransaction);
                                 split.setDisposition(resp.getDisposition());
@@ -987,8 +1058,8 @@ public class ForecastTransactionController {
                             if (!split.getBudgetItem().isWithinNormalDateVariance(variance)) {
 
                                 // Ask the user to determine if the split is an occurrence of the forecast transaction:
-                                ForecastController forecastController = new ForecastController(register, budget, forecast,
-                                        view, notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 UserResponse resp = forecastController.assignSplitDateToForecastTransaction(split, forecastTransaction);
                                 split.setDisposition(resp.getDisposition());
                                 switch (split.getDisposition()) {

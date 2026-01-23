@@ -138,9 +138,11 @@ public class ForecastEngine {
                 boolean firstOccurrence = true;
                 while (forecast.fallsWithinForecastWindow(nextDate) && !forecastItem.isExpired(nextDate)) {
 
-                    // If there is an overridden forecast transaction in the database for this date, skip *adding* it,
-                    // but still advance to the next date.
-                    if (forecast.hasOverriddenForecastTransactionOnDate(forecastItem, nextDate)) {
+                    // If there is an overridden or reconciled forecast transaction in the database for this date,
+                    // skip *adding* it, but still advance to the next date.
+                    // This prevents duplicates when updating a forecast that has already been reconciled.
+                    if (forecast.hasOverriddenForecastTransactionOnDate(forecastItem, nextDate) ||
+                        forecast.hasReconciledForecastTransactionOnDate(forecastItem, nextDate)) {
                         firstOccurrence = false; // we did "see" the first occurrence
                         nextDate = forecastItem.getNextDateOfOccurrence(nextDate);
                         continue;
@@ -293,11 +295,11 @@ public class ForecastEngine {
                 } // End for each instance of this item in the forecast window.
             } // End for each item in the budget.
 
-        } catch (SQLException | BudgetException e) {
-            System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
-            e.printStackTrace();
-            throw e;
-        }
+            } catch (SQLException | BudgetException e) {
+                System.out.println("[SEVERE]  Database error on 'select * from item where Budget_ID = 2'");
+                e.printStackTrace();
+                throw e;
+            }
         return true;
     }
 } // End class ForecastEngine.

@@ -19,6 +19,8 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.FinancialAppException;
 import com.hixon.financialApp.utility.ForecastTransactionMatcher;
 import com.hixon.financialApp.view.base.ViewInt;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -92,6 +94,8 @@ import static com.hixon.financialApp.utility.Utility.*;
  *   <li>File versioning preserves original import files for recovery</li>
  * </ul>
  *
+ * @author David Hixon
+ * @version 2.0
  * @see Transaction
  * @see Register
  * @see Merchant
@@ -99,141 +103,109 @@ import static com.hixon.financialApp.utility.Utility.*;
  * @see ForecastTransaction
  * @see FinancialInstitutionInt
  * @see ViewInt
- *
- * @author David Hixon
- * @version 2.0
  * @since 1.0
  */
+@Getter
+@Setter
 public class ImportController {
 
     // Logger:
-    /** Logger for tracking import events and actions during the import process */
+    /**
+     * Logger for tracking import events and actions during the import process
+     */
     private final ImportLog importLog = new ImportLog();
 
 
     // Fields:
+
     /**
      * Enumeration of possible termination conditions for the import process.
      * These values indicate how a particular operation or transaction processing was terminated.
      */
     public enum TerminationCondition {
-        /** Send an inquiry notification to a user for assistance */
+        /**
+         * Send an inquiry notification to a user for assistance
+         */
         INQUIRE,
-        /** Restart processing of the current transaction */
+        /**
+         * Restart processing of the current transaction
+         */
         RESTART,
-        /** Successfully found and processed the required data */
+        /**
+         * Successfully found and processed the required data
+         */
         FOUND,
-        /** User cancelled the current operation */
+        /**
+         * User cancelled the current operation
+         */
         CANCEL,
-        /** User chose to skip the current transaction */
+        /**
+         * User chose to skip the current transaction
+         */
         SKIP,
-        /** User chose to quit the entire import process */
+        /**
+         * User chose to quit the entire import process
+         */
         QUIT
     }
 
-    /** The current termination condition, determines how the import process should proceed */
+    /**
+     * The current termination condition, determines how the import process should proceed
+     */
     public TerminationCondition terminationCondition = QUIT;
 
-    /** The register (bank account) into which transactions are being imported */
+    /**
+     * The session controller managing the overall application session
+     */
+    private final SessionController sessionController;
+
+    /**
+     * The register (bank account) into which transactions are being imported
+     */
     private final Register register;
 
-    /** The financial institution providing the transaction data (e.g., Wells Fargo) */
+    /**
+     * The financial institution providing the transaction data (e.g., Wells Fargo)
+     */
     private final FinancialInstitutionInt financialInstitution;
 
-    /** The budget associated with this register */
+    /**
+     * The budget associated with this register
+     */
     private final Budget budget;
 
-    /** The forecast used for reconciling imported transactions */
+    /**
+     * The forecast used for reconciling imported transactions
+     */
     private final Forecast forecast;
 
-    /** The view interface for all user interactions */
+    /**
+     * The view interface for all user interactions
+     */
     private final ViewInt view;
 
-    /** Service for sending notifications to users */
+    /**
+     * Service for sending notifications to users
+     */
     private final NotificationServiceInt notificationService;
 
 
     // Constructors:
+
     /**
      * Creates a new ImportController for importing transactions into a specific register.
      *
-     * @param register The register (bank account) to import transactions into
-     * @param financialInstitution The financial institution implementation for parsing transactions
-     * @param budget The budget to use for categorizing transactions
-     * @param forecast The forecast to reconcile transactions against
-     * @param view The view interface for user interactions
-     * @param notificationService Service for sending notifications to users
+     * @param sessionController The session controller managing the application session
      */
-    ImportController(Register register, FinancialInstitutionInt financialInstitution, Budget budget, Forecast forecast,
-                     ViewInt view, NotificationServiceInt notificationService) {
+    ImportController(SessionController sessionController) {
 
-        this.register = register;
-        this.financialInstitution = financialInstitution;
-        this.budget = budget;
-        this.forecast = forecast;
-        this.view = view;
-        this.notificationService = notificationService;
-    }
-
-
-    // Getters and setters:
-
-
-    /*
-     * Strategy-Based Import Methods (New Architecture)
-     */
-
-    /**
-     * Imports cleared transactions using an automatically detected import strategy.
-     *
-     * <p>This method examines the file extension and selects the appropriate import
-     * strategy (CSV, QFX, OFX, QIF, etc.). This is the recommended method for
-     * importing transactions as it supports multiple file formats.</p>
-     *
-     * <p>Supported formats:</p>
-     * <ul>
-     *   <li>.csv, .tsv, .txt - CSV/Tab-separated values</li>
-     *   <li>.qfx - Quicken Web Connect (OFX 2.x XML)</li>
-     *   <li>.ofx - Open Financial Exchange (SGML or XML)</li>
-     *   <li>.qif - Quicken Interchange Format (text)</li>
-     * </ul>
-     *
-     * @param filename The full path to the transaction file
-     * @return true if the forecast is in sync after import, false otherwise
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public boolean importRegisterTransactions(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        return strategy.importRegisterTransactions(filename, register, budget, forecast, view, notificationService);
-    }
-
-    /**
-     * Imports provisional transactions using an automatically detected import strategy.
-     *
-     * <p>Provisional transactions are those that have been authorized but not yet posted.
-     * Not all formats support provisional transactions separately from cleared ones.</p>
-     *
-     * @param filename The full path to the provisional transaction file
-     * @return true if the forecast is in sync after import, false otherwise
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public boolean importProvisionalTransactions(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        return strategy.importProvisionalTransactions(filename, register, budget, forecast, view, notificationService);
-    }
-
-    /**
-     * Imports budget items using an automatically detected import strategy.
-     *
-     * @param filename The full path to the budget items file
-     * @throws FinancialAppException If any error occurs during import
-     */
-    public void importBudgetItems(String filename) throws FinancialAppException {
-        ImportStrategy strategy = ImportStrategyFactory.getStrategyForFile(filename);
-        view.say("Using import strategy: " + strategy.getStrategyName());
-        strategy.importBudgetItems(filename, budget, view);
+        this.sessionController = sessionController;
+        this.register = sessionController.getRegister();
+        this.financialInstitution = sessionController.getFinancialInstitution();
+        this.budget = sessionController.getBudget();
+        this.forecast = sessionController.getForecast();
+        this.view = sessionController.getView();
+        this.notificationService = sessionController.getNotificationService();
     }
 
 
@@ -254,10 +226,10 @@ public class ImportController {
      *   <li>Third occurrence: "2025-11-15\t-50.00\tWalmart\t3"</li>
      * </ul>
      *
-     * @param map A HashMap tracking instance numbers for each base record ID.
-     *            The key is the base record ID, the value is the highest instance number seen.
+     * @param map                  A HashMap tracking instance numbers for each base record ID.
+     *                             The key is the base record ID, the value is the highest instance number seen.
      * @param importRecordBaseName The base record ID without an instance number.
-     *                              Typically includes date, amount, and payee information.
+     *                             Typically includes date, amount, and payee information.
      * @return The full import record ID with instance number appended
      */
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
@@ -287,9 +259,9 @@ public class ImportController {
      * compares to their planned spending.</p>
      *
      * @param forecast The forecast containing the forecast transactions to check against
-     * @param splits The list of transaction splits to log
-     * @throws SQLException If a database error occurs while retrieving forecast transaction data
-     * @throws EntityException If an error occurs while accessing entity data
+     * @param splits   The list of transaction splits to log
+     * @throws SQLException      If a database error occurs while retrieving forecast transaction data
+     * @throws EntityException   If an error occurs while accessing entity data
      * @throws ForecastException If an error occurs while accessing forecast data
      */
     private void logSplitsAndReconciliation(Forecast forecast, List<TransactionSplit> splits)
@@ -318,18 +290,374 @@ public class ImportController {
      */
 
     /**
-     * Imports cleared (posted) transactions from the register's default CSV import file.
-     *
-     * <p>This is a convenience method that calls {@link #importCsvRegisterTransactionFile(String)}
-     * with the file path specified in the register's configuration.</p>
+     * Imports transactions from the register's import file.
      *
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
-     * @throws QuitException If the user quits the import process
+     * @throws QuitException       If the user quits the import process
+     * @throws Exception           If an error occurs closing the financial institution
      * @see Register#getTrxImportFilePath()
      */
-    public boolean importCsvRegisterTransactionFile() throws ControllerException, QuitException {
-        return importCsvRegisterTransactionFile(register.getTrxImportFilePath());
+    public boolean importRegisterTransactionFile() throws ControllerException, QuitException, Exception {
+
+        resolver.say("Beginning register balance:  " + formatDollarAmount(register.getBalance()));
+
+        // Tell the financial institution to import the register transaction file:
+        financialInstitution.importRegisterTrxFile();
+
+        /*
+         * Import transactions using the iterator pattern:
+         */
+        int j = 0;  // Transaction counter
+        String importFilePath = register.getTrxImportFilePath();
+
+        try {
+            Transaction currentTransaction;
+            Merchant merchant;
+            boolean firstTransaction = true;
+
+            // Process each transaction in the import file:
+            while (financialInstitution.hasNext()) {
+                currentTransaction = financialInstitution.next();
+
+                // Set up for processing this transaction:
+                merchant = null;
+                boolean autoMatched = false;  // Track if we auto-matched and already reconciled in Phase 2.5
+
+                /*
+                 * Phase 1:  The transaction has already been created by the financial institution
+                 */
+                // Track whether this is a new transaction (not previously imported)
+                String importRecordId = currentTransaction.getImportRecordId();
+                Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
+                boolean isNewTransaction = (existingTransaction == null);
+
+                // Get the merchant and splits for this transaction if it already exists:
+                List<TransactionSplit> splits = null;
+                if (existingTransaction != null) {
+                    // This transaction has already been imported, use the existing one
+                    currentTransaction = existingTransaction;
+                    merchant = currentTransaction.getMerchant();
+                    splits = TransactionSplit.getSplitsForTransaction(currentTransaction);
+                }
+
+                // It is expected that transactions will be downloaded almost daily, so if the first transaction is more
+                // than a week old, ask the user to verify that they indeed want to import these old transactions:
+                if (firstTransaction) {
+                    Calendar oneWeekAgo = Calendar.getInstance();
+                    oneWeekAgo.add(Calendar.DATE, -7);
+                    if (currentTransaction.getDate().before(oneWeekAgo)) {
+                        view.say("\nThe earliest transaction in the import file seems old.");
+                        view.say(currentTransaction.toStringConcise());
+                        if (!view.getYesOrNo("Are you sure you want to import it?")) {
+                            throw new FileNotFoundException("Specified import file contains old transactions.");
+                        }
+                    }
+                    firstTransaction = false;
+                }
+
+                // Let the resolver know we are beginning a new item:
+                resolver.beginImportItem(currentTransaction);
+
+                // If we haven't already assigned the splits to this transaction in a previous run:
+                if (splits == null) {
+
+                    /*
+                     * Phase 2:  Reconcile the transaction with any existing provisional transactions
+                     */
+                    // Get matching provisional transaction and reconcile it with the cleared transaction.
+                    Transaction provisionalTransaction =
+                            financialInstitution.getMatchingProvisionalTransaction(currentTransaction);
+
+                    // If we found a provisional transaction:
+                    boolean reconciledWithProvisional = false;
+                    if (provisionalTransaction != null) {
+
+                        // The merchant from a provisional transaction should never be null, but just in case:
+                        if (provisionalTransaction.getMerchant() == null) {
+                            throw new ControllerException("Provisional transaction has no merchant assigned.");
+                        }
+
+                        // If the merchant is the unknown merchant:
+                        if (provisionalTransaction.getMerchant().getName().equals(Merchant.UNKNOWN)) {
+                            // then get the merchant with the help of the user:
+                            merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
+                            currentTransaction.setMerchant(merchant);
+                        } else {
+                            merchant = provisionalTransaction.getMerchant();
+                        }
+
+                        // Get the splits from the provisional transaction:
+                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransaction);
+
+                        // Let the financial institution reconcile the provisional with cleared transaction
+                        reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
+                                currentTransaction, provisionalTransaction, register, splits);
+                    }
+
+                    // If no provisional transaction was found and this is a new transaction,
+                    // update the register balance
+                    if (!reconciledWithProvisional && isNewTransaction) {
+                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
+                        register.update();
+                    }
+
+                    /*
+                     * Phase 2.5: Auto-match with forecast transactions (if enabled)
+                     */
+                    if (splits == null) {
+                        // Get possible merchants from the transaction payee (0, 1, or more matches)
+                        List<Merchant> possibleMerchants =
+                                MerchantUtilities.getPossibleMerchantsByPayee(
+                                        currentTransaction.getMerchantPayee());
+
+                        // Try to find a matching forecast transaction within ±5 days
+                        ForecastTransaction matchedForecast =
+                                ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                        currentTransaction, forecast, possibleMerchants, 5, 5);
+
+                        // If we found a confident match
+                        if (matchedForecast != null) {
+                            // Get the budget item from the forecast transaction
+                            UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
+
+                            // Create the split automatically
+                            splits = new ArrayList<>();
+                            splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
+                                    currentTransaction.getId(), null));
+
+                            // Inform the user about the auto-match as a heading
+                            view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+
+                            // Determine the merchant for this transaction
+                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
+                                merchant = possibleMerchants.getFirst();
+                            } else if (merchant == null) {
+                                // If we can't determine a unique merchant, we need to ask the user
+                                // Don't auto-save in this case - let the normal merchant assignment flow handle it
+                                // But we can still keep the splits for later use
+                                merchant = null;  // Explicitly set to null to skip auto-save
+                            }
+
+                            // Only save and reconcile if we successfully identified a merchant
+                            if (merchant != null) {
+                                currentTransaction.setMerchant(merchant);
+                                currentTransaction.setIdMerchant(merchant.getId());
+
+                                // Save the transaction with merchant info
+                                currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                                // Save the splits
+                                for (TransactionSplit split : splits) {
+                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                }
+
+                                // Reconcile immediately with the forecast (no need to do it again in Phase 5)
+                                ForecastController forecastController = new ForecastController(sessionController);
+                                forecastController.reconcile(currentTransaction, splits);
+
+                                // Mark that we've auto-matched and already reconciled
+                                autoMatched = true;
+                            }
+                            // If merchant is still null, splits will be saved later after merchant assignment
+                        }
+                    }
+
+                    // If we haven't determined the merchant yet, then assign or create one:
+                    if (merchant == null) {
+                        try {
+                            MerchantController merchantController = new MerchantController(sessionController);
+                            merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
+                                    currentTransaction.getPayee(), currentTransaction.getAmount());
+                            currentTransaction.setIdMerchant(merchant.getId());
+                            currentTransaction.setMerchant(merchant);
+                        } catch (CancelException ce) {
+                            terminationCondition = CANCEL;
+                        } catch (SkipException se) {
+                            terminationCondition = SKIP;
+                        } catch (QuitException qe) {
+                            terminationCondition = QUIT;
+                        }
+
+                        // If the user aborted the merchant assignment process, then figure out what to do:
+                        if (merchant == null) {
+                            switch (terminationCondition) {
+
+                                case INQUIRE:
+                                    List<User> users = User.getAllUsers();
+                                    User user = view.getUser("Select the user to send the notification to",
+                                            users, true);
+                                    if (user != null) {
+                                        notificationService.requestIdentifyMerchant(user, currentTransaction);
+                                    }
+                                    continue;
+
+                                case CANCEL:
+                                    // Can't restart with iterator pattern - just skip this transaction
+                                    continue;
+
+                                case SKIP:
+                                    merchant = Merchant.getByName(Merchant.UNKNOWN);
+                                    if (merchant != null) {
+                                        currentTransaction.setMerchant(merchant);
+                                        currentTransaction.setIdMerchant(merchant.getId());
+                                    }
+                                    currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                                    register.setBalance(register.getBalance() + currentTransaction.getAmount());
+                                    register.update();
+                                    continue;
+
+                                case QUIT:
+                                    throw new QuitException("User quit during merchant assignment");
+
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during transaction import");
+                            }
+                        }
+                    }
+
+                    // At this point the transaction is complete, so save it off:
+                    currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                    // Tell the user what we just did:
+                    importLog.logImportEvent(currentTransaction, isNewTransaction);
+
+                    /*
+                     * Phase 3:  Get the assigned budget items for this merchant:
+                     */
+                    // If there was a provisional transaction with assigned splits, then the splits are already assigned.
+                    // If that is not the case then we need to assign the splits now.
+                    if (splits == null) {
+                        // Declare BudgetController here since it's only needed in this block
+                        BudgetController budgetController = new BudgetController(sessionController);
+
+                        // Get the assigned budget items for the merchant:
+                        List<BudgetItemMerchant> budgetItemsForMerchant =
+                                BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+
+                        // If we couldn't find any matching items, get some help from the user:
+                        if (budgetItemsForMerchant.isEmpty()) {
+                            try {
+                                budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                            } catch (CancelException ce) {
+                                // Can't restart with iterator pattern - just skip this transaction
+                                continue;
+                            } catch (SkipException se) {
+                                continue;
+                            }
+                            if (budgetItemsForMerchant.isEmpty()) {
+                                List<User> users = User.getAllUsers();
+                                User user = view.getUser("Select the user to send the notification to",
+                                        users, true);
+                                if (user != null) {
+                                    notificationService.requestAssignBudgetItems(user, merchant);
+                                }
+                            }
+                        }
+
+                        /*
+                         * Phase 4:  Assign the splits to the transaction:
+                         */
+                        // Get the splits for the transaction.  Create them if they don't already exist:
+                        splits = budgetController.assignAmountsToBudgetItems(currentTransaction, merchant, budget,
+                                budgetItemsForMerchant);
+
+                        // If the user aborted the split assignment process, then figure out what to do:
+                        if (splits == null) {
+                            switch (budgetController.getTerminationCondition()) {
+                                case CANCEL:
+                                    // Can't restart with iterator pattern - just skip this transaction
+                                    continue;
+
+                                case SKIP:
+                                    continue;
+
+                                case INQUIRE:
+                                    List<User> users = User.getAllUsers();
+                                    User user = view.getUser("Select the user to send the notification to",
+                                            users, true);
+                                    if (user != null) {
+                                        notificationService.requestAssignSplits(user, currentTransaction, budget);
+                                    }
+                                    continue;
+
+                                case QUIT:
+                                    throw new QuitException("User quit during split assignment");
+
+                                default:
+                                    throw new ControllerException("Invalid termination condition " +
+                                            resolver.getTerminationCondition() + " during split assignment.");
+                            }
+                        }
+
+                        // Save the splits using INSERT_ON_DUPLICATE_UPDATE to handle both new and existing splits
+                        for (TransactionSplit split : splits) {
+                            split.save(INSERT_ON_DUPLICATE_UPDATE);
+                        }
+                    } else {
+                        view.say("Already assigned splits.");
+                    }
+                } else {
+                    // Tell the user what we just did:
+                    importLog.logImportEvent(currentTransaction, false);
+                }
+
+                /*
+                 * Phase 5:  Reconcile the transaction with the forecast:
+                 */
+                // Only reconcile if we didn't already reconcile in Phase 2.5
+                if (!autoMatched) {
+                    // Reconcile this transaction with the forecast:
+                    ForecastController forecastController = new ForecastController(sessionController);
+                    forecastController.reconcile(currentTransaction, splits);
+                }
+
+                j++; // Increment transaction counter
+            } // End while hasNext()
+
+            /*
+             * Phase 6:  Perform any tasks that are necessitated by the results of the update:
+             */
+            // TODO: Process any significant events that occurred during reconciliation:
+
+            /*
+             * Phase 7:  Clean up and terminate:
+             */
+            // Create a save version of the import file:
+            versionFile(importFilePath);
+
+            // TODO: Save the import event:
+
+        } catch (FileNotFoundException e) {
+            // Re-throw FileNotFoundException so DailyUpdateController can handle it with a better message
+            throw e;
+        } catch (IOException e) {
+            ControllerException ce = new ControllerException("I/O error reading from the import file " +
+                    importFilePath + " after " + j + " transaction(s).");
+            ce.initCause(e);
+            throw (ce);
+        } catch (FinancialAppException e) {
+            ControllerException ve = new ControllerException("Error occurred while creating a previous version of the " +
+                    "import file.");
+            ve.initCause(e);
+            throw ve;
+        } catch (Exception e) {
+            ControllerException ce = new ControllerException("Exception while processing the import file " +
+                    importFilePath + " after " + j + " transaction(s).");
+            ce.initCause(e);
+            throw ce;
+        } finally {
+            // Always close the financial institution iterator
+            financialInstitution.close();
+        }
+
+        // Return the number of transactions imported:
+        if (j > 0) {
+            view.say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
+                    register.getName() + " from file " + importFilePath + ".");
+        }
+        return forecast.getInSync();
     }
 
     /**
@@ -411,7 +739,7 @@ public class ImportController {
      * @param clearedTransactionsFilename The full path to the CSV file containing cleared transactions
      * @return true if the forecast is in sync after the import, false otherwise
      * @throws ControllerException If a controller logic error occurs during import
-     * @throws QuitException If the user chooses to quit the import process
+     * @throws QuitException       If the user chooses to quit the import process
      * @see Transaction
      * @see Register
      * @see Merchant
@@ -470,7 +798,7 @@ public class ImportController {
                 importRecordId = constructImportRecordId(map, financialInstitution.getRegisterImportRecordBaseName(record));
 
                 // Get the transaction for this import record ID:
-                currentTransaction = Transaction.getByImportRecordId(importRecordId);
+                currentTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
 
                 // Track whether this is a new transaction (not previously imported)
                 boolean isNewTransaction = (currentTransaction == null);
@@ -541,8 +869,7 @@ public class ImportController {
                             // then get the merchant with the help of the user:
                             merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
                             currentTransaction.setMerchant(merchant);
-                        }
-                        else {
+                        } else {
                             merchant = provisionalTransaction.getMerchant();
                         }
 
@@ -567,13 +894,13 @@ public class ImportController {
                     if (splits == null) {
                         // Get possible merchants from the transaction payee (0, 1, or more matches)
                         List<Merchant> possibleMerchants =
-                            MerchantUtilities.getPossibleMerchantsByPayee(
-                                currentTransaction.getMerchantPayee());
+                                MerchantUtilities.getPossibleMerchantsByPayee(
+                                        currentTransaction.getMerchantPayee());
 
                         // Try to find a matching forecast transaction within ±5 days
                         ForecastTransaction matchedForecast =
-                            ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                currentTransaction, forecast, possibleMerchants, 5, 5);
+                                ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                        currentTransaction, forecast, possibleMerchants, 5, 5);
 
                         // If we found a confident match
                         if (matchedForecast != null) {
@@ -638,8 +965,8 @@ public class ImportController {
                             }
 
                             // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                            ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);
+                            ForecastController forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.reconcile(currentTransaction, splits);
 
                             // Mark that we've auto-matched and already reconciled
@@ -650,7 +977,7 @@ public class ImportController {
                     // If we haven't determined the merchant yet, then assign or create one:
                     if (merchant == null) {
                         try {
-                            MerchantController merchantController = new MerchantController(view, notificationService);
+                            MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(), currentTransaction.getPayee(),
                                     currentTransaction.getAmount());
                             currentTransaction.setIdMerchant(merchant.getId());
@@ -717,8 +1044,7 @@ public class ImportController {
                     // If that is not the case then we need to assign the splits now.
                     if (splits == null) {
                         // Declare BudgetController here since it's only needed in this block
-                        BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                                notificationService);
+                        BudgetController budgetController = new BudgetController(sessionController);
 
                         // Get the assigned budget items for the merchant:
                         List<BudgetItemMerchant> budgetItemsForMerchant =
@@ -803,8 +1129,8 @@ public class ImportController {
                 // Only reconcile if we didn't already reconcile in Phase 2.5
                 if (!autoMatched) {
                     // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                            notificationService);
+                    ForecastController forecastController = new ForecastController(
+                            sessionController);
                     forecastController.reconcile(currentTransaction, splits);
                 }
 
@@ -858,6 +1184,72 @@ public class ImportController {
 
 
     /**
+     * Imports provisional (pending) transactions from the register's configured provisional import file.
+     *
+     * <p>This method automatically detects the file format based on the file extension and delegates
+     * to the appropriate format-specific import method. Currently supported formats:
+     * <ul>
+     *   <li>CSV (.csv) - Comma-separated values</li>
+     *   <li>TSV (.tsv) - Tab-separated values</li>
+     * </ul>
+     *
+     * <p>The file path is constructed from the register's provisional transaction directory and filename.
+     * If the register doesn't have a provisional transaction file configured (filename is null or empty),
+     * this method returns true without importing anything.</p>
+     *
+     * <p><strong>Note:</strong> Provisional transactions are only supported for certain financial institutions.
+     * For example:
+     * <ul>
+     *   <li><strong>Wells Fargo:</strong> Supports provisional transactions (TSV format)</li>
+     *   <li><strong>Barclays:</strong> Does not support provisional transactions (QFX contains all transactions as cleared)</li>
+     * </ul>
+     *
+     * @return true if the forecast is in sync after the import, false otherwise
+     * @throws FinancialAppException If any error occurs during the import process
+     * @throws IllegalArgumentException If the file format is not supported
+     * @see Register#getProvisionalTrxFileDirectory()
+     * @see Register#getProvisionalTrxFileName()
+     * @see #importCsvProvisionalTransactionFile(String)
+     */
+    public boolean importProvisionalTransactionFile() throws FinancialAppException {
+        // Get the configured provisional transaction filename
+        String filename = register.getProvisionalTrxFileName();
+
+        // If no provisional file is configured, return true (nothing to import)
+        if (filename == null || filename.trim().isEmpty()) {
+            return true;
+        }
+
+        // Construct full file path
+        String directory = register.getProvisionalTrxFileDirectory();
+        String fullPath = (directory != null && !directory.trim().isEmpty())
+                ? directory + "\\" + filename
+                : filename;
+
+        // Detect file format from extension
+        String extension = "";
+        int lastDot = filename.lastIndexOf('.');
+        if (lastDot > 0 && lastDot < filename.length() - 1) {
+            extension = filename.substring(lastDot + 1).toLowerCase();
+        }
+
+        // Delegate to appropriate format-specific method
+        switch (extension) {
+            case "csv", "tsv" -> {
+                // CSV/TSV format - use existing CSV import method (handles both comma and tab delimiters)
+                return importCsvProvisionalTransactionFile(fullPath);
+            }
+            default -> {
+                throw new IllegalArgumentException(
+                    "Unsupported provisional transaction file format: '" + extension + "'. " +
+                    "Supported formats: .csv, .tsv. " +
+                    "File: " + fullPath
+                );
+            }
+        }
+    }
+
+    /**
      * Imports provisional (pending) transactions from the register's default import file.
      *
      * <p>This is a convenience method that calls {@link #importCsvProvisionalTransactionFile(String)}
@@ -867,7 +1259,9 @@ public class ImportController {
      * @throws FinancialAppException If any error occurs during the import process
      * @see Register#getProvisionalTrxFileDirectory()
      * @see Register#getProvisionalTrxFileName()
+     * @deprecated Use {@link #importProvisionalTransactionFile()} instead, which auto-detects file format
      */
+    @Deprecated
     public boolean importCsvProvisionalTransactionFile() throws FinancialAppException {
         return importCsvProvisionalTransactionFile(register.getProvisionalTrxFileDirectory() + "\\" +
                 register.getProvisionalTrxFileName());
@@ -943,10 +1337,10 @@ public class ImportController {
      *
      * @param filename The full path to the TSV file containing provisional transactions
      * @return true if the forecast is in sync after the import, false otherwise
-     * @throws RegisterException If an error occurs while updating the register
-     * @throws ControllerException If a controller logic error occurs during import
-     * @throws EntityException If a database error occurs
-     * @throws BudgetException If an error occurs while processing budget items
+     * @throws RegisterException     If an error occurs while updating the register
+     * @throws ControllerException   If a controller logic error occurs during import
+     * @throws EntityException       If a database error occurs
+     * @throws BudgetException       If an error occurs while processing budget items
      * @throws FinancialAppException If any other error occurs during the import process
      * @see #importCsvRegisterTransactionFile(String)
      * @see Transaction
@@ -1015,7 +1409,8 @@ public class ImportController {
                  * Retrieve a list of the existing provisional transactions from the database and them sort them in ascending
                  * order by payee + amount :
                  */
-                ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() + " where tr.cleared = false",
+                ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() +
+                        " where tr.cleared = false AND tr.Register_idRegister = uuid_to_bin('" + register.getId() + "')",
                         "attempting to retrieve a list of provisional transactions.");
                 List<Transaction> registerTransactions = new ArrayList<>();
                 while (rs.next()) {
@@ -1031,10 +1426,8 @@ public class ImportController {
                 view.say("\n----------\nCategorize the provisional transactions.");
                 int regTrxIndex = 0;
                 List<TransactionSplit> splits;
-                RegisterController registerController = new RegisterController(register, financialInstitution, budget,
-                        forecast, view, notificationService);
-                BudgetController budgetController = new BudgetController(register, budget, forecast, view,
-                        notificationService);
+                RegisterController registerController = new RegisterController(sessionController);
+                BudgetController budgetController = new BudgetController(sessionController);
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
 
@@ -1111,13 +1504,13 @@ public class ImportController {
                         if (splits == null) {
                             // Get possible merchants from the transaction payee (0, 1, or more matches)
                             List<Merchant> possibleMerchants =
-                                MerchantUtilities.getPossibleMerchantsByPayee(
-                                    provisionalTransactions.get(provTrxIndex).getMerchantPayee());
+                                    MerchantUtilities.getPossibleMerchantsByPayee(
+                                            provisionalTransactions.get(provTrxIndex).getMerchantPayee());
 
                             // Try to find a matching forecast transaction within ±5 days
                             ForecastTransaction matchedForecast =
-                                ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                    provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
+                                    ForecastTransactionMatcher.findMatchingForecastTransaction(
+                                            provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
 
                             // If we found a confident match
                             if (matchedForecast != null) {
@@ -1156,8 +1549,8 @@ public class ImportController {
                                 }
 
                                 // Reconcile immediately with the forecast (no need to do it again later)
-                                ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                        notificationService);
+                                ForecastController forecastController = new ForecastController(
+                                        sessionController);
                                 forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
 
                                 // Move to the next provisional transaction since we're done with this one
@@ -1218,8 +1611,7 @@ public class ImportController {
                                         }
                                     }
                                 }
-                            }
-                            catch (SkipException se) {
+                            } catch (SkipException se) {
                                 // Move to the next provisional transaction:
                                 provTrxIndex++;
                                 continue;
@@ -1229,7 +1621,7 @@ public class ImportController {
                             if (budgetItemMerchants.isEmpty()) {
                                 try {
                                     budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
-                                } catch (CancelException|SkipException ce) {
+                                } catch (CancelException | SkipException ce) {
 
                                     // Move to the next provisional transaction:
                                     provTrxIndex++;
@@ -1244,7 +1636,7 @@ public class ImportController {
                             // If we still don't have a merchant, ask the user to identify it
                             if (merchant == null) {
                                 try {
-                                    MerchantController merchantController = new MerchantController(view, notificationService);
+                                    MerchantController merchantController = new MerchantController(sessionController);
                                     Merchant assignedMerchant = merchantController.assignMerchant(
                                             provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
                                             provisionalTransactions.get(provTrxIndex).getPayee(),
@@ -1255,6 +1647,17 @@ public class ImportController {
                                         provisionalTransactions.get(provTrxIndex).setMerchant(merchant);
                                         // Get budget item merchants list for the newly identified merchant
                                         budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+
+                                        // If this is a new merchant with no budget items assigned yet, assign them now
+                                        if (budgetItemMerchants.isEmpty()) {
+                                            try {
+                                                budgetController.assignBudgetItemsToMerchant(merchant, budgetItemMerchants);
+                                            } catch (CancelException | SkipException e) {
+                                                // User cancelled or skipped budget item assignment, move to next transaction
+                                                provTrxIndex++;
+                                                continue;
+                                            }
+                                        }
                                     }
                                 } catch (CancelException ce) {
                                     // User cancelled, move to next transaction
@@ -1332,8 +1735,8 @@ public class ImportController {
                             }
 
                             // and then reconcile the splits with the forecast:
-                            ForecastController forecastController = new ForecastController(register, budget, forecast, view,
-                                    notificationService);
+                            ForecastController forecastController = new ForecastController(
+                                    sessionController);
                             forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
                         }
 

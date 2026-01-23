@@ -20,15 +20,14 @@ public class EnvelopeReport {
 
         String excelFilePath = "C:\\Users\\dwhix\\Downloads\\SavingsEnvelopesReport.xlsx";
 
-        try  {
-            String sql = "SELECT r.Name AS Envelope, t.postDate AS Date, " +
-                    "t.payee AS Payee, t.amount AS Amount, t.balance AS Balance " +
-                    "FROM register r " +
-                    "JOIN transaction t ON r.idRegister = t.Register_idRegister " +
-                    "ORDER BY t.postDate DESC";
+        String sql = "SELECT r.Name AS Envelope, t.postDate AS Date, " +
+                "t.payee AS Payee, t.amount AS Amount, t.balance AS Balance " +
+                "FROM register r " +
+                "JOIN transaction t ON r.idRegister = t.Register_idRegister " +
+                "ORDER BY t.postDate DESC";
 
-            Statement statement = m_Connection.createStatement();
-            ResultSet resultSet = statement.executeQuery(sql);
+        try (Statement statement = m_Connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
 
             Workbook workbook = new XSSFWorkbook();
             Sheet sheet = workbook.createSheet("Savings Envelopes");

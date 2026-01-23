@@ -99,8 +99,9 @@ public class TestController {
         sessionController.setForecastView(new SpreadsheetXmlForecastView(testForecast));
 
         // Set the financial institution associated with the test:
-        FinancialInstitutionInt testFinancialInstitution = new WellsFargoBank(testRegister, testBudget,
-                testForecast, view, notificationService);
+        // Create a temporary SessionController for WellsFargoBank initialization
+        SessionController tempSession = new SessionController(testRegister, testBudget, testForecast, view, notificationService);
+        FinancialInstitutionInt testFinancialInstitution = new WellsFargoBank(tempSession);
         sessionController.setFinancialInstitution(testFinancialInstitution);
     }
 

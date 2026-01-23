@@ -68,6 +68,11 @@ public class ForecastView extends AbstractForecastView {
     }
 
     @Override
+    public void editLongTermForecast() throws Exception {
+        throw new ViewException("Text forecast editing is not supported. Use Excel view instead.");
+    }
+
+    @Override
     public void closeForecastTransactionSource(String sourceName) throws ViewException {
 
     }

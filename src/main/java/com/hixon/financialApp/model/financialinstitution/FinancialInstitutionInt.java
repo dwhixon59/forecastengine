@@ -10,9 +10,48 @@ import org.apache.commons.csv.CSVRecord;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 
-public interface FinancialInstitutionInt {
+/**
+ * Interface for financial institution implementations that handle transaction imports.
+ *
+ * <p>This interface extends {@link Iterator} to provide format-agnostic sequential access
+ * to transactions. Financial institutions can import from various formats (CSV, QFX, etc.)
+ * and expose transactions through the iterator pattern.
+ *
+ * <p><strong>Usage by ImportController:</strong>
+ * <pre>{@code
+ * FinancialInstitutionInt institution = // ... created by factory
+ * while (institution.hasNext()) {
+ *     Transaction t = institution.next();
+ *     // Process transaction...
+ * }
+ * institution.close();
+ * }</pre>
+ */
+public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoCloseable {
+
+    /**
+     * Imports transactions from the import file associated with the register.
+     *
+     * <p>This method reads the import filename and directory from the register,
+     * determines the file type by extension, creates the appropriate parser,
+     * and loads transactions into memory for iteration.
+     *
+     * <p>The import file location is specified in the register's:
+     * <ul>
+     *   <li>{@code trxImportFileName} - filename (e.g., "transactions.csv", "data.qfx")</li>
+     *   <li>{@code trxImportFileDirectory} - directory path (optional)</li>
+     * </ul>
+     *
+     * <p>After calling this method, use the Iterator methods ({@code hasNext()}, {@code next()})
+     * to retrieve transactions one at a time.
+     *
+     * @throws Exception if the file cannot be found, opened, or parsed
+     * @throws IllegalStateException if register doesn't have import file configured
+     */
+    void importRegisterTrxFile() throws Exception;
 
     /**
      * Returns the enum class representing CSV column headers for this financial institution.
@@ -21,6 +60,27 @@ public interface FinancialInstitutionInt {
      * @return the Class object for the CSV headers enum
      */
     Class<? extends Enum<?>> getCsvHeadersClass();
+
+    /**
+     * Returns the CSV format configuration for this financial institution.
+     * This defines how CSV files from this institution should be parsed, including:
+     * - Header format (enum class for column names)
+     * - Delimiter (comma, tab, etc.)
+     * - Quote character
+     * - Whether to skip header record
+     * - Trimming behavior
+     *
+     * <p>Example implementation:
+     * <pre>{@code
+     * return CSVFormat.RFC4180.builder()
+     *         .setHeader(getCsvHeadersClass())
+     *         .setTrim(true)
+     *         .build();
+     * }</pre>
+     *
+     * @return the CSVFormat configuration for parsing this institution's CSV files
+     */
+    org.apache.commons.csv.CSVFormat getCsvFormat();
 
     // Get the base name that will be used in constructing the import record ID:
     String getRegisterImportRecordBaseName(CSVRecord record) throws ParseException;

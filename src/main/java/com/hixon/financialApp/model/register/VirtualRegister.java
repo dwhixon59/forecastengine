@@ -39,22 +39,20 @@ public class VirtualRegister extends Register {
         this.dbConnection = dbConnection;
 
         // Find the ID of the named budget:
-        PreparedStatement preparedStmt = null;
-        ResultSet rs = null;
         try {
             String query = "select bin_to_uuid(idBudget) from budget where name = ?";
-            preparedStmt = dbConnection.prepareStatement(query);
-            preparedStmt.setString(1, budgetName);
-            rs = preparedStmt.executeQuery();
-            if (rs != null && rs.next()) {
-                this.idBudget = UUID.fromString(rs.getString(1));
-            } else {
-                throw new RegisterException("Budget named " + budgetName + " not found in the database.");
+            try (PreparedStatement preparedStmt = dbConnection.prepareStatement(query)) {
+                preparedStmt.setString(1, budgetName);
+                try (ResultSet rs = preparedStmt.executeQuery()) {
+                    if (rs != null && rs.next()) {
+                        this.idBudget = UUID.fromString(rs.getString(1));
+                    } else {
+                        throw new RegisterException("Budget named " + budgetName + " not found in the database.");
+                    }
+                }
             }
         } catch (SQLException e) {
             System.out.println("[SEVERE]  SQL error encountered trying to retrieve the budget ID.");
-            if (preparedStmt != null) preparedStmt.close();
-            if (rs != null) rs.close();
             throw e;
         }
 
