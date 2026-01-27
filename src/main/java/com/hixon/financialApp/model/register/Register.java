@@ -80,6 +80,9 @@ public class Register extends IndependentEntity {
     protected ViewInt view = null;
     protected NotificationServiceInt notificationService = null;
 
+    // Cache for the resolved import file path to avoid redundant file searches
+    private String cachedTrxImportFilePath = null;
+
 
     /*
      * Getters and setters:
@@ -96,7 +99,22 @@ public class Register extends IndependentEntity {
         this.default_view = default_view;
     }
 
+    /**
+     * Get the full path to the transaction import file.
+     * If the filename contains a date pattern (YYYYMMDD), this method will search for
+     * the most recently modified file matching the pattern.
+     *
+     * The result is cached to avoid redundant file system searches during the same import session.
+     * Call clearTrxImportFilePathCache() to force a fresh search.
+     *
+     * @return The full path to the import file
+     */
     public String getTrxImportFilePath() {
+        // Return cached path if available
+        if (cachedTrxImportFilePath != null) {
+            return cachedTrxImportFilePath;
+        }
+
         String directory = getTrxImportFileDirectory();
         String filename = getTrxImportFileName();
 
@@ -106,7 +124,8 @@ public class Register extends IndependentEntity {
             String actualFile = findMostRecentMatchingFile(directory, filename);
             if (actualFile != null) {
                 System.out.println("Pattern '" + filename + "' matched file: " + actualFile);
-                return directory + "\\" + actualFile;
+                cachedTrxImportFilePath = directory + "\\" + actualFile;
+                return cachedTrxImportFilePath;
             } else {
                 // No matching file found - warn user
                 System.err.println("WARNING: No files found matching pattern '" + filename + "' in directory '" + directory + "'");
@@ -116,7 +135,18 @@ public class Register extends IndependentEntity {
         }
 
         // Default behavior: return exact path (may not exist if pattern was specified)
-        return directory + "\\" + filename;
+        // Cache this result as well
+        cachedTrxImportFilePath = directory + "\\" + filename;
+        return cachedTrxImportFilePath;
+    }
+
+    /**
+     * Clears the cached transaction import file path, forcing the next call to
+     * getTrxImportFilePath() to perform a fresh file search.
+     * This should be called when you expect a new file might be available.
+     */
+    public void clearTrxImportFilePathCache() {
+        cachedTrxImportFilePath = null;
     }
 
     /**

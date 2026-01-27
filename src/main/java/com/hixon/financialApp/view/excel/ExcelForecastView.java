@@ -423,6 +423,8 @@ public class ExcelForecastView extends AbstractForecastView {
     public List<ForecastTransaction> openForecastTransactionSource(String sourceName) throws IOException, ControllerException,
             BudgetException {
         int i = 0;
+        int missingIdCount = 0;
+        int totalRowsWithIds = 0;
         List<ForecastTransaction> forecastTransactions = new ArrayList<>();
 
         // Adjust POI's zip bomb detection threshold
@@ -494,6 +496,7 @@ public class ExcelForecastView extends AbstractForecastView {
                 String transactionIdStr = getCellValueAsString(row.getCell(10));
                 UUID transactionId = null;
                 if (!transactionIdStr.isEmpty()) {
+                    totalRowsWithIds++;
                     try {
                         transactionId = UUID.fromString(transactionIdStr);
                     } catch (IllegalArgumentException e) {
@@ -515,7 +518,8 @@ public class ExcelForecastView extends AbstractForecastView {
                     // ID provided - load from database
                     ForecastTransaction dbForecastTransaction = ForecastTransaction.getById(transactionId);
                     if (dbForecastTransaction == null) {
-                        // ID not found in database - warn and skip this row
+                        // ID not found in database - track and warn
+                        missingIdCount++;
                         Utility.getView().say("WARNING: Row " + (rowNum + 1) + ": Transaction ID '" +
                                 transactionId + "' not found in database. Skipping this row.");
                         continue;
@@ -596,6 +600,32 @@ public class ExcelForecastView extends AbstractForecastView {
 
                 // Add to the list
                 forecastTransactions.add(forecastTransactionView);
+            }
+
+            // Check if most/all transaction IDs were not found - this indicates the forecast was updated
+            // after the Excel file was rendered, causing all UUIDs to change
+            if (totalRowsWithIds > 0 && missingIdCount > 0) {
+                double missingPercentage = (double) missingIdCount / totalRowsWithIds * 100;
+                if (missingPercentage > 50) {
+                    Utility.getView().say("\n" +
+                            "╔════════════════════════════════════════════════════════════════════════════╗\n" +
+                            "║ WARNING: Most forecast transaction IDs were not found in the database     ║\n" +
+                            "║                                                                            ║\n" +
+                            "║ " + String.format("%-74s", missingIdCount + " out of " + totalRowsWithIds + " transaction IDs were not found.") + " ║\n" +
+                            "║                                                                            ║\n" +
+                            "║ This usually means the forecast was UPDATED after this Excel file was     ║\n" +
+                            "║ rendered. When a forecast is updated, all transactions are regenerated    ║\n" +
+                            "║ with new IDs, making the IDs in this Excel file obsolete.                 ║\n" +
+                            "║                                                                            ║\n" +
+                            "║ RECOMMENDED SOLUTION:                                                      ║\n" +
+                            "║ 1. RENDER the forecast again to create a new Excel file with current IDs  ║\n" +
+                            "║ 2. Make your changes in the NEWLY rendered Excel file                     ║\n" +
+                            "║ 3. Import changes from the new file                                       ║\n" +
+                            "║                                                                            ║\n" +
+                            "║ Or, if you want to proceed with the few transactions that were found,     ║\n" +
+                            "║ you can continue, but most of your changes will not be imported.          ║\n" +
+                            "╚════════════════════════════════════════════════════════════════════════════╝\n");
+                }
             }
 
         } catch (FileNotFoundException e) {

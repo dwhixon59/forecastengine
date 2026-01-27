@@ -126,7 +126,8 @@ public class SelectionController {
                 // Try to get an entity that is an exact match for the name, this won't work on the first time through
                 // the loop, but it could work on later iterations if the user has entered a new name.  If we find an
                 // exact match, then ask the user to confirm that it is the correct entity, and if so, return the entity:
-                if (!firstTime) {
+                // Note: Only attempt this if entity is not null (stringEntityCreator may return null when creation is not supported)
+                if (!firstTime && entity != null) {
                     boolean loaded = entity.loadByName(scope, seedName);
                     if (loaded) {
                         if (view.getYesOrNo(typeName + " with the name " + entity.getName() + " found.  " +

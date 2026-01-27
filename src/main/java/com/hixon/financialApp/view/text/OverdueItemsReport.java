@@ -27,8 +27,19 @@ public class OverdueItemsReport extends ForecastReport {
      */
     @Override
     public void renderReportFrontMatter() {
-        pw.println("OVERDUE ITEMS:");
-        pw.println("-------------");
+        String title = "OVERDUE ITEMS - " + forecast.getDescription();
+        pw.println(title);
+
+        // Calculate the visual width of the title on iPhone and create an underline that matches
+        double titleWidth = 0.0;
+        for (int i = 0; i < title.length(); i++) {
+            titleWidth += iPhone11FontSizes[title.charAt(i)];
+        }
+
+        // Calculate how many equals signs we need to match the title width
+        double equalsWidth = iPhone11FontSizes['='];
+        int numEquals = (int) Math.round(titleWidth / equalsWidth);
+        pw.println("=".repeat(numEquals));
     }
 
     @Override

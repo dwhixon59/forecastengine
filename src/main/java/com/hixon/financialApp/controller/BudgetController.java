@@ -1496,6 +1496,9 @@ public class BudgetController {
         for (int index : selectedIndices) {
             try {
                 Forecast forecastToUpdate = forecasts.get(index);
+                // Set the forecast and its budget in the session controller before creating the ForecastController
+                sessionController.setForecast(forecastToUpdate);
+                sessionController.setBudget(forecastToUpdate.getBudget());
                 ForecastController forecastController = new ForecastController(
                         sessionController);
                 forecastController.updateForecast(firstOfNextMonth);

@@ -634,9 +634,21 @@ public class ForecastController {
                         return false;  // Don't prompt if we don't know when it was last rendered
                     }
 
-                    // Compare file modified time to last rendered date
+                    // Get the last rendered time
                     long lastRenderedTime = forecast.getLastRenderedDate().getTimeInMillis();
-                    return fileModifiedTime > lastRenderedTime;
+
+                    // Truncate both times to seconds (remove millisecond precision)
+                    // This is necessary because the database stores timestamps with second precision,
+                    // but file modification times have millisecond precision
+                    long fileModifiedTimeSeconds = (fileModifiedTime / 1000) * 1000;
+                    long lastRenderedTimeSeconds = (lastRenderedTime / 1000) * 1000;
+
+                    // Add a 2-second tolerance to avoid false positives from Excel
+                    // touching the file timestamp when opened (without actual modifications)
+                    long differenceInSeconds = (fileModifiedTimeSeconds - lastRenderedTimeSeconds) / 1000;
+
+                    // Only consider the file modified if it's more than 2 seconds newer
+                    return differenceInSeconds > 2;
                 }
             }
 
@@ -994,7 +1006,8 @@ public class ForecastController {
 
         // Delete all the forecast transactions that occur after the update start date, except for:
         // - Overridden ones (user manually modified)
-        // - Reconciled ones (found=true or have splits assigned)
+        // - Reconciled ones (have splits assigned, which indicates reconciliation data exists)
+        // Note: The 'found' flag is NOT used here - it's only for the "Update from External Source" process
         String deleteQuery = ForecastTransaction.getDeleteQuery() +
                 "where " +
                     "ForecastItem_idForecastItem in (" +
@@ -1007,7 +1020,6 @@ public class ForecastController {
                     ") " +
                     "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
                     "and not overridden " +
-                    "and not found " +  // Don't delete reconciled transactions
                     "and not exists (" +
                         "select 1 " +
                         "from " +

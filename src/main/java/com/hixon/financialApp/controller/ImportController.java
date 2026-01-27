@@ -946,7 +946,7 @@ public class ImportController {
                                     currentTransaction.setIdMerchant(merchant.getId());
                                 } else {
                                     // Either multiple merchants or no merchants - ask user to identify merchant
-                                    MerchantController merchantController = new MerchantController(view, notificationService);
+                                    MerchantController merchantController = new MerchantController(sessionController);
                                     merchant = merchantController.assignMerchant(
                                         currentTransaction.getMerchantPayee(),
                                         currentTransaction.getPayee(),

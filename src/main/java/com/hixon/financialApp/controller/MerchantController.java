@@ -666,9 +666,17 @@ public class MerchantController {
         view.say();
         view.say("You are about to delete payee: " + payee.getPayee());
 
-        String confirm = view.getResponseString("Are you sure you want to delete this payee? (yes/no):",
-                "no", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+        String confirm;
+        while (true) {
+            confirm = view.getResponseString("Are you sure you want to delete this payee? (yes/no):",
+                    "no", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+            if (confirm.equalsIgnoreCase("yes") || confirm.equalsIgnoreCase("no")) {
+                break;
+            }
+            view.say("Please enter 'yes' or 'no'.");
+        }
 
         if (confirm.equalsIgnoreCase("yes")) {
             MerchantPayee.deleteByMerchantAndPayee(merchant, payee.getPayee());

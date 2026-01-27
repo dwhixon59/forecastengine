@@ -956,7 +956,7 @@ public class Forecast extends IndependentEntity {
 
     /**
      * Checks if this forecast contains a reconciled forecast transaction for the given forecast item and date.
-     * A reconciled transaction is one that has been matched to actual transactions (found=true or has splits).
+     * A reconciled transaction is one that has been matched to actual transactions (has splits).
      * This prevents the forecast update process from creating duplicate transactions.
      *
      * @param forecastItem the forecast item
@@ -975,10 +975,10 @@ public class Forecast extends IndependentEntity {
                 "WHERE fi.Forecast_idForecast = UUID_TO_BIN(?) " +
                 "  AND fi.idForecastItem = UUID_TO_BIN(?) " +
                 "  AND ft.plannedDate = ? " +
-                "  AND (ft.found = TRUE OR EXISTS (" +
+                "  AND EXISTS (" +
                 "    SELECT 1 FROM forecast_transaction_split fts " +
                 "    WHERE fts.ForecastTransaction_idForecastTransaction = ft.idForecastTransaction" +
-                "  ))";
+                "  )";
 
         try (PreparedStatement ps = Utility.getDbConnection().prepareStatement(sql)) {
             ps.setString(1, this.getId().toString());
