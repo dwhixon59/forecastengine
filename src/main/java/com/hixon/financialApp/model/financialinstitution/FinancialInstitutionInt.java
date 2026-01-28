@@ -139,5 +139,14 @@ public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoClos
      * @return a string representing the extracted account type
      */
     String extractAccountType(String payee);
+
+    /**
+     * Gets the ledger balance from the imported transaction file (if available).
+     * This is only available for QFX/OFX files after calling importRegisterTrxFile().
+     *
+     * @return the ledger balance from the import file, or null if not available
+     *         (e.g., for CSV files or before import)
+     */
+    Double getImportedLedgerBalance();
 }
 

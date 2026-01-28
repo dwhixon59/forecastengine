@@ -158,6 +158,15 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
      * {@inheritDoc}
      */
     @Override
+    public Double getImportedLedgerBalance() {
+        // GenericClassifier doesn't support file import, so no balance available
+        return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void importRegisterTrxFile() throws IOException {
         throw new UnsupportedOperationException("GenericClassifier does not support file import");
     }

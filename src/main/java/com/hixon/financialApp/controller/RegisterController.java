@@ -269,20 +269,75 @@ public class RegisterController {
         if (!Utility.isEqualCurrency(register.getBalance(), dbRegister.getBalance())) {
             view.say("The in memory register balance is " + Utility.formatDollarAmount(
                     register.getBalance()) + " but the register balance in the database is " + Utility.formatDollarAmount(
-                    register.getBalance()) + ".  You should update it.");
+                    dbRegister.getBalance()) + ".  You should update it.");
         }
 
-        view.sayH4("The current balance of the " + register.getName() + " is " +
+        // Get the balance from QFX file if available
+        Double qfxBalance = sessionController.getFinancialInstitution().getImportedLedgerBalance();
+
+        view.sayH4("Current balance of " + register.getName() + ": " +
                 Utility.formatDollarAmount(register.getBalance()));
 
-        Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
-                register.getBalance(), true, true, false, false, false, null);
+        if (qfxBalance != null) {
+            view.say("Balance from import file (QFX): " + Utility.formatDollarAmount(qfxBalance));
 
-        if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
-            register.setBalance(newBalance);
-            register.update();
-            wasCorrect = false;
+            // Check if balances differ
+            if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
+                view.say("\nThe balances differ!");
+
+                // Offer user three choices
+                String[] choices = {
+                    "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
+                    "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
+                    "3 - Enter a different balance"
+                };
+
+                view.say("\nWhat would you like to do?");
+                for (String choice : choices) {
+                    view.say("  " + choice);
+                }
+
+                String response = view.getResponseString("Enter your choice (1-3)", null,
+                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+                Double newBalance = null;
+                switch (response) {
+                    case "1":
+                        newBalance = qfxBalance;
+                        break;
+                    case "2":
+                        // Keep current balance - do nothing
+                        break;
+                    case "3":
+                        newBalance = view.getResponseCurrency("Enter new balance",
+                                register.getBalance(), true, true, false, false, false, null);
+                        break;
+                    default:
+                        view.say("Invalid choice. Keeping current balance.");
+                        break;
+                }
+
+                if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
+                    register.setBalance(newBalance);
+                    register.update();
+                    wasCorrect = false;
+                }
+            } else {
+                view.say("Balance matches QFX file. No update needed.");
+            }
+        } else {
+            // QFX balance not available (CSV file or other format)
+            Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
+                    register.getBalance(), true, true, false, false, false, null);
+
+            if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
+                register.setBalance(newBalance);
+                register.update();
+                wasCorrect = false;
+            }
         }
+
         return wasCorrect;
     }
 

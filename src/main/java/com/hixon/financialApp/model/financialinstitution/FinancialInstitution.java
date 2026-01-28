@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.parser.TransactionParser;
 import com.hixon.financialApp.model.qfx.QfxParser;
+import com.hixon.financialApp.model.qfx.QfxStatement;
 import com.hixon.financialApp.model.qfx.QfxTransaction;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
@@ -446,6 +447,32 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         } catch (Exception e) {
             throw new RuntimeException("Error converting transaction: " + e.getMessage(), e);
         }
+    }
+    /**
+     * Gets the ledger balance from the imported transaction file (if available).
+     * This is only available for QFX/OFX files after calling importRegisterTrxFile().
+     *
+     * @return the ledger balance from the import file, or null if not available
+     *         (e.g., for CSV files or before import)
+     */
+    @Override
+    public Double getImportedLedgerBalance() {
+        if (qfxParser != null && isQfxOpen) {
+            try {
+                // Cast to QfxParser to access getStatement method
+                if (qfxParser instanceof QfxParser) {
+                    QfxStatement statement = ((QfxParser) qfxParser).getStatement();
+                    if (statement != null) {
+                        return statement.getLedgerBalance();
+                    }
+                }
+            } catch (Exception e) {
+                // If we can't get the balance, return null
+                return null;
+            }
+        }
+        // Return null for CSV files or if QFX not open
+        return null;
     }
 
     @Override

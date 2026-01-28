@@ -2,6 +2,7 @@ package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
@@ -914,9 +915,151 @@ public class ForecastTransactionController {
      * @throws BudgetException
      * @throws RegisterException
      */
+    /**
+     * Calculate a match score for a forecast transaction against a transaction split.
+     * Higher scores indicate better matches.
+     *
+     * @param forecastTransaction The forecast transaction to score
+     * @param split The transaction split to match
+     * @return The match score (higher is better, negative means disqualified)
+     */
+    private int calculateMatchScore(ForecastTransaction forecastTransaction, TransactionSplit split)
+            throws Exception {
+        int score = 0;
+
+        // MERCHANT MATCHING (Primary Factor)
+        try {
+            com.hixon.financialApp.model.merchant.Merchant transactionMerchant = split.getTransaction().getMerchant();
+            if (transactionMerchant != null) {
+                // Get merchants associated with the forecast transaction's budget item
+                List<BudgetItemMerchant> budgetMerchants =
+                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(forecastTransaction.getForecastItem().getBudgetItem());
+
+                boolean merchantMatches = false;
+                for (BudgetItemMerchant bim : budgetMerchants) {
+                    if (bim.getIdMerchant().equals(transactionMerchant.getId())) {
+                        merchantMatches = true;
+                        break;
+                    }
+                }
+
+                if (merchantMatches) {
+                    score += 100;  // Strong merchant match
+                } else if (!budgetMerchants.isEmpty()) {
+                    // Merchant doesn't match and budget item HAS merchants - disqualify
+                    return -1000;
+                }
+                // If budget item has no merchants, don't penalize (score += 0)
+            }
+        } catch (Exception e) {
+            // If we can't get merchant info, proceed without merchant scoring
+        }
+
+        // DATE PROXIMITY with OVERDUE BIAS
+        Calendar transactionDate = split.getTransaction().getDate();
+        Calendar plannedDate = forecastTransaction.getPlannedDate();
+        int daysDifference = Utility.daysBetween(plannedDate, transactionDate);
+
+        if (daysDifference > 0) {
+            // Transaction is AFTER planned date (overdue/late) - BONUS points
+            if (daysDifference <= 3) {
+                score += 50;
+            } else if (daysDifference <= 7) {
+                score += 40;
+            } else if (daysDifference <= 14) {
+                score += 30;
+            } else if (daysDifference <= 30) {
+                score += 20;
+            } else {
+                score += 10;
+            }
+        } else if (daysDifference == 0) {
+            // Exact date match
+            score += 30;
+        } else {
+            // Transaction is BEFORE planned date (early) - lower points
+            int daysEarly = Math.abs(daysDifference);
+            if (daysEarly <= 3) {
+                score += 20;
+            } else if (daysEarly <= 7) {
+                score += 10;
+            } else if (daysEarly <= 14) {
+                score += 5;
+            }
+            // More than 14 days early: 0 points
+        }
+
+        // AMOUNT MATCHING (Secondary Factor)
+        double splitAmount = Math.abs(split.getAmount());
+        double forecastAmount = Math.abs(forecastTransaction.getRemainingAmount());
+
+        if (forecastAmount > 0) {
+            double amountDifference = Math.abs(splitAmount - forecastAmount);
+            double percentDifference = amountDifference / forecastAmount;
+
+            if (amountDifference < 0.01) {
+                score += 20;  // Exact amount match
+            } else if (percentDifference <= 0.10) {
+                score += 10;  // Within 10%
+            } else if (percentDifference <= 0.25) {
+                score += 5;   // Within 25%
+            }
+            // Beyond 25%: 0 points
+        }
+
+        return score;
+    }
+
     public ForecastTransaction getApplicableForecastTransaction(Forecast forecast, TransactionSplit split)
             throws EntityException, Exception, BudgetException, RegisterException {
 
+        // SCORING-BASED MATCHING: Try to find the best match using merchant and date scoring
+        // Get ALL non-zero forecast transactions for this budget item (not just first one)
+        ForecastTransactionIterator scoringIterator =
+                ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(split.getIdBudgetItem(), forecast.getId());
+
+        ForecastTransaction bestMatch = null;
+        int bestScore = -1;
+
+        ForecastTransaction candidate = scoringIterator.getNext();
+        while (candidate != null) {
+            int score = calculateMatchScore(candidate, split);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = candidate;
+            }
+            candidate = scoringIterator.getNext();
+        }
+
+        // If we found a good match (score > 0), validate it with the existing logic
+        if (bestMatch != null && bestScore > 0) {
+            // Use the best match from scoring and apply the existing validation logic
+            ForecastTransaction.Timing timing = bestMatch.fallsWithinWindow(split.getTransaction().getDate());
+
+            // For most cases with good scores, we can skip the interactive prompts
+            // unless the variance is extreme
+            switch (timing) {
+                case WITHIN:
+                    split.setDisposition(ASSIGN);
+                    return bestMatch;
+
+                case PRIOR_TO:
+                case AFTER:
+                    // Only ask user if score is marginal or variance is extreme
+                    int variance = Math.abs(Utility.daysBetween(bestMatch.getPlannedDate(),
+                            split.getTransaction().getDate()));
+
+                    if (bestScore >= 100 || split.getBudgetItem().isWithinNormalDateVariance(variance)) {
+                        // High confidence match or within normal variance - auto-assign
+                        split.setDisposition(ASSIGN);
+                        return bestMatch;
+                    }
+                    // Otherwise fall through to existing logic below
+                    break;
+            }
+        }
+
+        // FALLBACK: Use the original sequential matching logic if scoring didn't find a good match
         // Get a list of forecast transactions beginning with the earliest non-zero amount occurrence of a forecast
         // transaction in the forecast for the budget item associated with the split:
         ForecastTransactionIterator it =
