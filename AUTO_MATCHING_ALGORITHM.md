@@ -128,3 +128,89 @@ This ensures that if merchant data is available, it's the primary determining fa
 3. **Pattern Recognition:** Recognize recurring transaction patterns
 4. **Confidence Display:** Show match confidence to user when asking for confirmation
 5. **Tunable Weights:** Make scoring weights configurable per user preference
+
+---
+
+## Relevancy Scoring for Budget Item Suggestions
+
+When presenting budget items to the user for classification, a separate relevancy scoring system is used (in `TransactionSplitsController.java`). This scoring helps rank budget items by likelihood of being the correct match.
+
+### Relevancy Score Components (Total: 100 points)
+
+#### 1. Amount Similarity (0-60 points)
+- Perfect match: 60 points
+- 10% difference: 54 points
+- 25% difference: 45 points
+- 50% difference: 30 points
+- 100%+ difference: 0 points
+- On-demand items (no set amount): 30 baseline points
+
+**Rationale:** Amount is a strong indicator but not definitive (amounts can vary slightly).
+
+#### 2. Date Proximity (0-20 points)
+**NEW IMPROVED ALGORITHM:** Calculates absolute distance from the nearest expected occurrence.
+
+For periodic budget items:
+1. Calculate which period the transaction falls into
+2. Find the nearest expected occurrence (could be current or next period)
+3. Calculate absolute days from that occurrence
+4. Score based on distance:
+   - **0-3 days**: 20 points (very likely)
+   - **4-7 days**: 15 points (likely)
+   - **8-14 days**: 10 points (possible)
+   - **15-30 days**: 5 points (unlikely)
+   - **>30 days**: Exponential decay (very unlikely)
+
+For on-demand items: 10 baseline points
+
+**Why This Matters:**
+The previous algorithm used a cyclic modulo approach that gave similar scores to different occurrences of the same budget item. For example:
+- "David's net pay 1" due in 2 days: scored 78.84
+- "David's net pay 2" due in 16 days: scored 76.71
+
+With the new algorithm, the scoring properly reflects the distance:
+- "David's net pay 1" due in 2 days: ~20 points for date proximity (within 0-3 days)
+- "David's net pay 2" due in 16 days: ~5 points for date proximity (15-30 days range)
+
+This creates a meaningful 15-point spread that, combined with amount scoring, helps the algorithm correctly prioritize the nearer occurrence.
+
+#### 3. Category Priority (0-20 points)
+Based on importance level:
+- VARIABLE_ESSENTIAL: 20 points
+- FIXED_ESSENTIAL: 18 points
+- DISCRETIONARY_ESSENTIAL: 15 points
+- VARIABLE_NONESSENTIAL: 12 points
+- FIXED_NONESSENTIAL: 8 points
+- DISCRETIONARY_NONESSENTIAL: 5 points
+- Default: 10 points
+
+**Rationale:** More essential items are more likely to be paid regularly.
+
+### Example: Two Semimonthly Paychecks
+
+**Scenario:**
+- Today: January 30, 2026
+- Transaction: $4,280.32 paycheck
+- Budget Item 1: "David's net pay 1" - $4,486, semimonthly, next due February 1 (2 days away)
+- Budget Item 2: "David's net pay 2" - $4,486, semimonthly, next due February 15 (16 days away)
+
+**Scoring:**
+
+*David's net pay 1:*
+- Amount: ~57 points (slight variance from $4,486)
+- Date: **20 points** (2 days from expected = within 0-3 day range)
+- Category: 20 points (income is essential)
+- **Total: ~97 points**
+
+*David's net pay 2:*
+- Amount: ~57 points (same amount variance)
+- Date: **~4 points** (16 days from expected = 15-30 day range)
+- Category: 20 points (income is essential)
+- **Total: ~81 points**
+
+**Result:** Clear 16-point separation makes it obvious which paycheck this is!
+
+### Key Insight
+The date proximity scoring must calculate the **absolute distance to the next expected occurrence**, not use a cyclic period-based calculation. This ensures that multiple occurrences of the same budget item (like two paychecks per month) are properly differentiated based on which one is actually closer to the transaction date.
+
+

@@ -284,7 +284,12 @@ public class MerchantController {
                         throw new RuntimeException(e);
                     }
                 },
-                (scope, newName) -> new Merchant(newName));
+                (scope, newName) -> {
+                    Merchant newMerchant = new Merchant(newName);
+                    // Default new merchants to "ask always" = true during daily update
+                    newMerchant.setAskAlways(true);
+                    return newMerchant;
+                });
     }
 
     /**
@@ -309,7 +314,7 @@ public class MerchantController {
 
         // Ask if should always ask before using this merchant
         String askAlwaysStr = view.getResponseString("Always ask before using this merchant? (y/n):",
-                "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
         boolean askAlways = askAlwaysStr.equalsIgnoreCase("y");
 

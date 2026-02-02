@@ -430,40 +430,50 @@ public class TransactionSplitsController {
                 score += 30;
             }
 
-            // 2. Period/Date Proximity Score (0-20 points) - decreased weight, frequency-adjusted
+            // 2. Period/Date Proximity Score (0-20 points) - based on distance from next expected occurrence
             if (budgetItem.getPeriod() != null && budgetItem.getStartDate() != null) {
                 try {
-                    // Calculate days since the budget item's start date
-                    long transactionTime = transactionDate.getTimeInMillis();
-                    long startTime = budgetItem.getStartDate().getTimeInMillis();
-                    long daysSinceStart = (transactionTime - startTime) / (1000 * 60 * 60 * 24);
-
                     // Determine the period length in days
                     int periodDays = getPeriodDays(budgetItem.getPeriod());
 
                     if (periodDays > 0) {
-                        // Calculate how many periods have passed
-                        long daysSinceLastPeriod = daysSinceStart % periodDays;
+                        // Calculate days between transaction date and budget start date
+                        long transactionTime = transactionDate.getTimeInMillis();
+                        long startTime = budgetItem.getStartDate().getTimeInMillis();
+                        long daysSinceStart = (transactionTime - startTime) / (1000 * 60 * 60 * 24);
 
-                        // Score higher if transaction is near the expected date
-                        // Within 7 days = full points, scaling down to 0 at half-period
-                        double daysFromExpected = Math.min(daysSinceLastPeriod, periodDays - daysSinceLastPeriod);
-                        double proximityRatio = 1 - (daysFromExpected / (periodDays / 2.0));
+                        // Find the next expected occurrence (could be in past, present, or future)
+                        long periodsPassed = daysSinceStart / periodDays;
+                        long daysIntoCurrentPeriod = daysSinceStart % periodDays;
 
-                        // Apply frequency multiplier - more frequent items get higher scores
-                        // Daily/Weekly = 1.0x, Biweekly = 0.9x, Monthly = 0.8x, Quarterly = 0.5x, Annual = 0.3x
-                        double frequencyMultiplier = 1.0;
-                        if (periodDays >= 365) {  // Annual
-                            frequencyMultiplier = 0.3;
-                        } else if (periodDays >= 90) {  // Quarterly
-                            frequencyMultiplier = 0.5;
-                        } else if (periodDays >= 28) {  // Monthly
-                            frequencyMultiplier = 0.8;
-                        } else if (periodDays >= 14) {  // Biweekly
-                            frequencyMultiplier = 0.9;
+                        // Calculate distance to nearest expected occurrence (either current or next period)
+                        long daysToNextOccurrence = (daysIntoCurrentPeriod <= periodDays / 2)
+                            ? -daysIntoCurrentPeriod  // Closer to current period's occurrence (negative = past)
+                            : periodDays - daysIntoCurrentPeriod;  // Closer to next period's occurrence (positive = future)
+
+                        long absDaysFromExpected = Math.abs(daysToNextOccurrence);
+
+                        // Scoring based on absolute distance from expected date
+                        // 0-3 days = 20 points, 4-7 days = 15 points, 8-14 days = 10 points,
+                        // 15-30 days = 5 points, >30 days = 0 points
+                        double proximityScore;
+                        if (absDaysFromExpected <= 3) {
+                            proximityScore = 20.0;
+                        } else if (absDaysFromExpected <= 7) {
+                            // Linear scale from 20 to 15 points
+                            proximityScore = 20.0 - ((absDaysFromExpected - 3) * 1.25);
+                        } else if (absDaysFromExpected <= 14) {
+                            // Linear scale from 15 to 10 points
+                            proximityScore = 15.0 - ((absDaysFromExpected - 7) * 0.714);
+                        } else if (absDaysFromExpected <= 30) {
+                            // Linear scale from 10 to 5 points
+                            proximityScore = 10.0 - ((absDaysFromExpected - 14) * 0.3125);
+                        } else {
+                            // Exponential decay after 30 days
+                            proximityScore = 5.0 * Math.exp(-(absDaysFromExpected - 30) / 30.0);
                         }
 
-                        score += Math.max(0, 20 * proximityRatio * frequencyMultiplier);
+                        score += Math.max(0, proximityScore);
                     } else {
                         // On-demand items get baseline score
                         score += 10;
