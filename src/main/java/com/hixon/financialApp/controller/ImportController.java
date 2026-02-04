@@ -608,9 +608,25 @@ public class ImportController {
                  */
                 // Only reconcile if we didn't already reconcile in Phase 2.5
                 if (!autoMatched) {
-                    // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(sessionController);
-                    forecastController.reconcile(currentTransaction, splits);
+                    // Filter out splits that are already reconciled before calling reconcile()
+                    // This prevents prompting the user for information (like register for transfers)
+                    // when the split has already been reconciled
+                    List<TransactionSplit> splitsToReconcile = new ArrayList<>();
+                    for (TransactionSplit split : splits) {
+                        ForecastTransactionSplit existingReconciliation =
+                                ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
+                        if (existingReconciliation == null) {
+                            // Not yet reconciled - add to list
+                            splitsToReconcile.add(split);
+                        }
+                    }
+
+                    // Only call reconcile if there are splits that need reconciling
+                    if (!splitsToReconcile.isEmpty()) {
+                        // Reconcile this transaction with the forecast:
+                        ForecastController forecastController = new ForecastController(sessionController);
+                        forecastController.reconcile(currentTransaction, splitsToReconcile);
+                    }
                 }
 
                 j++; // Increment transaction counter
@@ -1128,10 +1144,26 @@ public class ImportController {
 
                 // Only reconcile if we didn't already reconcile in Phase 2.5
                 if (!autoMatched) {
-                    // Reconcile this transaction with the forecast:
-                    ForecastController forecastController = new ForecastController(
-                            sessionController);
-                    forecastController.reconcile(currentTransaction, splits);
+                    // Filter out splits that are already reconciled before calling reconcile()
+                    // This prevents prompting the user for information (like register for transfers)
+                    // when the split has already been reconciled
+                    List<TransactionSplit> splitsToReconcile = new ArrayList<>();
+                    for (TransactionSplit split : splits) {
+                        ForecastTransactionSplit existingReconciliation =
+                                ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
+                        if (existingReconciliation == null) {
+                            // Not yet reconciled - add to list
+                            splitsToReconcile.add(split);
+                        }
+                    }
+
+                    // Only call reconcile if there are splits that need reconciling
+                    if (!splitsToReconcile.isEmpty()) {
+                        // Reconcile this transaction with the forecast:
+                        ForecastController forecastController = new ForecastController(
+                                sessionController);
+                        forecastController.reconcile(currentTransaction, splitsToReconcile);
+                    }
                 }
 
             } // End for each record in the transaction file.
