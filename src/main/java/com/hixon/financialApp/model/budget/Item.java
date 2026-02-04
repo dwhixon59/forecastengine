@@ -156,6 +156,63 @@ public abstract class Item extends IndependentEntity {
         TRANSFER // "TX"
     }
 
+    /**
+     * IMPORTANT: Relationship between Period and HowOccurs
+     * =====================================================
+     *
+     * There is a semantic dependency between the Period and HowOccurs fields:
+     *
+     * 1. If HowOccurs = UNPLANNED:
+     *    - Period MUST be ON_DEMAND
+     *    - Rationale: Unplanned items have no predictable schedule
+     *
+     * 2. If Period = ON_DEMAND:
+     *    - HowOccurs SHOULD typically be UNPLANNED
+     *    - Exception: Could be ENVELOPE if saving for something with no set schedule
+     *
+     * 3. If HowOccurs = PERIODIC, VARIABLE_PERIODIC, COLLECTION, or ENVELOPE:
+     *    - Period MUST NOT be ON_DEMAND (must be a scheduled period like WEEKLY, MONTHLY, etc.)
+     *    - Rationale: These occurrence types require a predictable schedule
+     *
+     * Invalid combinations that should never occur:
+     * - HowOccurs = UNPLANNED with Period = WEEKLY (or any scheduled period)
+     * - HowOccurs = PERIODIC with Period = ON_DEMAND
+     * - HowOccurs = COLLECTION with Period = ON_DEMAND
+     *
+     * Use validatePeriodHowOccursConsistency() to check for these issues.
+     */
+
+    /**
+     * Validates that the Period and HowOccurs fields are semantically consistent.
+     *
+     * @throws BudgetException if the combination of Period and HowOccurs is invalid
+     */
+    public void validatePeriodHowOccursConsistency() throws BudgetException {
+        if (period == null || howOccurs == null) {
+            return; // Can't validate if fields aren't set yet
+        }
+
+        // Rule 1: UNPLANNED items must have ON_DEMAND period
+        if (howOccurs == UNPLANNED && period != ON_DEMAND) {
+            throw new BudgetException(String.format(
+                "Invalid combination: HowOccurs = UNPLANNED requires Period = ON_DEMAND, but found Period = %s " +
+                "(Item: %s, Category: %s)",
+                period, payee, category));
+        }
+
+        // Rule 2: Scheduled occurrences cannot have ON_DEMAND period
+        if (period == ON_DEMAND && (howOccurs == PERIODIC || howOccurs == VARIABLE_PERIODIC || howOccurs == COLLECTION)) {
+            throw new BudgetException(String.format(
+                "Invalid combination: HowOccurs = %s requires a scheduled Period (not ON_DEMAND) " +
+                "(Item: %s, Category: %s)",
+                howOccurs, payee, category));
+        }
+
+        // Rule 3: ENVELOPE with ON_DEMAND is allowed but worth noting
+        // (saving for something without a set schedule, like vacation fund)
+        // No validation error needed for this case
+    }
+
     public static boolean isIncomeCategory(String name) {
         return name.equalsIgnoreCase(Item.INCOME_CATEGORY_NAME);
     }

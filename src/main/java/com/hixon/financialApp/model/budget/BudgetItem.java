@@ -576,6 +576,13 @@ public class BudgetItem extends Item {
     @Override
     public void save(SaveMethod method) throws SQLException, EntityException {
 
+        // Validate that Period and HowOccurs are consistent before saving
+        try {
+            validatePeriodHowOccursConsistency();
+        } catch (BudgetException e) {
+            throw new EntityException("Cannot save budget item due to validation error: " + e.getMessage(), e);
+        }
+
         // Save this budget item:
         super.save(method);
 
@@ -587,6 +594,9 @@ public class BudgetItem extends Item {
     }
 
     public void update() throws BudgetException, SQLException {
+
+        // Validate that Period and HowOccurs are consistent before updating
+        validatePeriodHowOccursConsistency();
 
         String query = updateQuery + "category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo +
                 "\", period = '" + generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " +

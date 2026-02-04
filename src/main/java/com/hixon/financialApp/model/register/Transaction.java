@@ -67,7 +67,7 @@ public class Transaction extends IndependentEntity {
     /** The merchant object associated with the transaction. */
     private Merchant merchant;
 
-1    // Transient fields (not persisted to database)
+    // Transient fields (not persisted to database)
     /** Tip amount detected during provisional/cleared reconciliation (transient, for display purposes only). */
     private transient Double tipAmount = null;
     /** Provisional amount before tip was added (transient, for display purposes only). */
