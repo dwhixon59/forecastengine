@@ -712,9 +712,9 @@ public class ForecastTransactionController {
                 if (splits.isEmpty()) {
                     view.say("No splits currently associated with this forecast transaction.");
                     view.say("Splits are created during forecast reconciliation.");
-
-                    view.getResponseString("Press Enter to return (or 'C' to cancel, 'Q' to quit):",
-                            ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+                    view.say();
+                    view.say("Press Enter to return...");
+                    view.getResponseString();
                     done = true;
                     continue;
                 }

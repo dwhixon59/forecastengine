@@ -52,21 +52,22 @@ public class ForecastTransactionSplit extends DependentEntity {
    }
 
    // The update query:
-   private static final String updateQuery = "update forecast_transaction set ";
+   private static final String updateQuery = "update forecast_transaction_split set ";
    @Override
    public String getUpdateByIdQuery() {
-      return updateQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +
-              "ForecastItem_idForecastItem = uuid_to_bin('" + idBudgetItem + "')Transaction_Split_idBudgetItem = " +
-              "uuid_to_bin('" + idTransaction + "'), disposition = '" + disposition.name() + ")";
+      return updateQuery + "disposition = '" + disposition.name() + "' " +
+              "where ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "') " +
+              "and Transaction_Split_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') " +
+              "and Transaction_Split_idTransaction = uuid_to_bin('" + idTransaction + "')";
    }
 
    // The delete query:
-   private static final String deleteQuery = "delete from forecast_transaction where ";
+   private static final String deleteQuery = "delete from forecast_transaction_split where ";
    @Override
    public String getDeleteByIdQuery() {
-      return deleteQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "'), " +
-              "and ForecastItem_idForecastItem = uuid_to_bin('" + idBudgetItem + "')" +
-              "and Transaction_Split_idBudgetItem = uuid_to_bin('" + idTransaction + "'))";
+      return deleteQuery + "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "') " +
+              "and Transaction_Split_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') " +
+              "and Transaction_Split_idTransaction = uuid_to_bin('" + idTransaction + "')";
    }
 
    // The entity type attributes:
