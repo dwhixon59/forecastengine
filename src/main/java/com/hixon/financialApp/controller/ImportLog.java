@@ -55,5 +55,13 @@ public class ImportLog {
                         calendarDateToStringDate(transaction.getAuthorizationDate()) :
                         calendarDateToStringDate(transaction.getPostDate())) +
                 " (Import Record ID: " + transaction.getImportRecordId() + ")");
+
+        // If a tip was detected during provisional/cleared reconciliation, display it now
+        if (transaction.hasTipInfo()) {
+            getView().say(String.format("Tip detected: %s (Provisional: %s, Cleared: %s)",
+                    formatDollarAmount(transaction.getTipAmount()),
+                    formatDollarAmount(transaction.getProvisionalAmount()),
+                    formatDollarAmount(transaction.getAmount())));
+        }
     }
 }

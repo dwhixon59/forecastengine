@@ -149,11 +149,10 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             register.setBalance(register.getBalance() + tipAmount);
             register.update();
 
-            // Log the tip for the user
-            view.say(String.format("Tip detected: %s (Provisional: %s, Cleared: %s)",
-                    formatDollarAmount(tipAmount),
-                    formatDollarAmount(provisionalTransaction.getAmount()),
-                    formatDollarAmount(clearedTransaction.getAmount())));
+            // Store the tip information on the transaction for display later
+            // (after the transaction log heading is shown)
+            clearedTransaction.setTipAmount(tipAmount);
+            clearedTransaction.setProvisionalAmount(provisionalTransaction.getAmount());
 
             // If splits exist, we need to adjust them to account for the tip
             // The tip will be added to the first split (typically the meal/service charge)

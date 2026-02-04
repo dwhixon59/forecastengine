@@ -67,6 +67,11 @@ public class Transaction extends IndependentEntity {
     /** The merchant object associated with the transaction. */
     private Merchant merchant;
 
+1    // Transient fields (not persisted to database)
+    /** Tip amount detected during provisional/cleared reconciliation (transient, for display purposes only). */
+    private transient Double tipAmount = null;
+    /** Provisional amount before tip was added (transient, for display purposes only). */
+    private transient Double provisionalAmount = null;
 
     private static final String selectColumns = "bin_to_uuid(tr.idTransaction) as 'tr.idTransaction', " +
             "tr.postDate as 'tr.postDate', tr.authorizationDate as 'tr.authorizationDate', tr.amount as 'tr.amount', " +
@@ -425,6 +430,46 @@ public class Transaction extends IndependentEntity {
      */
     public String getMerchantPayee() {
         return merchantPayee;
+    }
+
+    /**
+     * Gets the tip amount if one was detected during provisional/cleared reconciliation.
+     * @return tip amount or null if no tip
+     */
+    public Double getTipAmount() {
+        return tipAmount;
+    }
+
+    /**
+     * Sets the tip amount (used during provisional/cleared reconciliation).
+     * @param tipAmount the tip amount
+     */
+    public void setTipAmount(Double tipAmount) {
+        this.tipAmount = tipAmount;
+    }
+
+    /**
+     * Gets the provisional amount before tip was added.
+     * @return provisional amount or null if no tip
+     */
+    public Double getProvisionalAmount() {
+        return provisionalAmount;
+    }
+
+    /**
+     * Sets the provisional amount (used during provisional/cleared reconciliation).
+     * @param provisionalAmount the provisional amount
+     */
+    public void setProvisionalAmount(Double provisionalAmount) {
+        this.provisionalAmount = provisionalAmount;
+    }
+
+    /**
+     * Checks if the transaction has tip information.
+     * @return true if tip information is available
+     */
+    public boolean hasTipInfo() {
+        return tipAmount != null && provisionalAmount != null;
     }
 
     /**
