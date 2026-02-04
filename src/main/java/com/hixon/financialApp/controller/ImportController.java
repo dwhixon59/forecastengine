@@ -597,6 +597,14 @@ public class ImportController {
                         }
                     } else {
                         view.say("Already assigned splits.");
+
+                        // If splits were modified during provisional reconciliation (e.g., tip adjustment),
+                        // they need to be saved to persist the changes
+                        for (TransactionSplit split : splits) {
+                            if (split.isDirty()) {
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                            }
+                        }
                     }
                 } else {
                     // Tell the user what we just did:
