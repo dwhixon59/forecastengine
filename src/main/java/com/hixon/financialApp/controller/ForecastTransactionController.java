@@ -738,7 +738,7 @@ public class ForecastTransactionController {
                 }
 
                 Integer selectedIndex = view.selectByPositionFromList(
-                        "Select a split to update its disposition:",
+                        "Select a split to manage:",
                         splitDisplayList,
                         DO_NOT_ALLOW_NONE,
                         ALLOW_CANCEL,
@@ -752,8 +752,26 @@ public class ForecastTransactionController {
 
                 ForecastTransactionSplit selectedSplit = splits.get(selectedIndex);
 
-                // Update the disposition
-                updateSplitDisposition(selectedSplit);
+                // Ask what to do with the split
+                String action = view.selectFromMenu("What would you like to do with this split?",
+                        List.of("update disposition", "delete split"),
+                        DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+                if (action.equals("C") || action.equals("Q")) {
+                    continue;  // User cancelled or quit
+                }
+
+                switch (action.toLowerCase()) {
+                    case "u":  // update disposition
+                        updateSplitDisposition(selectedSplit);
+                        break;
+                    case "d":  // delete split
+                        deleteSplit(selectedSplit, splits);
+                        break;
+                    default:
+                        view.say("Invalid action selection: " + action);
+                        break;
+                }
 
             } catch (CancelException e) {
                 done = true;
@@ -841,6 +859,49 @@ public class ForecastTransactionController {
         split.setDisposition(newDisposition);
         split.save(UPDATE);
         view.say("Split disposition successfully updated.");
+    }
+
+    /**
+     * Delete a forecast transaction split.
+     *
+     * @param split The split to delete
+     * @param splits The list of splits (to remove the deleted split from)
+     * @throws Exception if any error occurs
+     */
+    private void deleteSplit(ForecastTransactionSplit split, List<ForecastTransactionSplit> splits) throws Exception {
+        // Get the transaction split details for display
+        String query = TransactionSplit.getSelectQuery() +
+                "WHERE ts.BudgetItem_idBudgetItem = uuid_to_bin('" + split.getIdBudgetItem() + "') AND " +
+                "ts.Transaction_idTransaction = uuid_to_bin('" + split.getIdTransaction() + "')";
+        ResultSet rs = EntityInt.getRS(query, "getting transaction split for deletion");
+
+        String splitDescription = "this split";
+        if (rs != null && rs.next()) {
+            TransactionSplit transSplit = new TransactionSplit(rs);
+            splitDescription = formatDollarAmount(transSplit.getAmount()) + " → " +
+                    transSplit.getBudgetItem().getPayee();
+        }
+
+        // Confirm deletion
+        view.say();
+        view.say("You are about to delete: " + splitDescription);
+        boolean confirm = view.getYesOrNo(
+                "Are you sure you want to delete this split?",
+                ALLOW_CANCEL,
+                ALLOW_QUIT,
+                DO_NOT_ALLOW_SKIP);
+
+        if (confirm) {
+            // Delete the split from database
+            split.delete();
+
+            // Remove from the list so it doesn't show up in the menu anymore
+            splits.remove(split);
+
+            view.say("Split successfully deleted.");
+        } else {
+            view.say("Deletion cancelled.");
+        }
     }
 
     /**
