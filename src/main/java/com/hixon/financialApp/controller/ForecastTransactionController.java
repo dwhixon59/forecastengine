@@ -596,7 +596,7 @@ public class ForecastTransactionController {
             // Ask what to update
             String choice = view.selectFromMenu("What would you like to update?",
                     List.of("planned date", "remaining amount", "running balance", "memo",
-                            "overridden flag", "found flag", "done - save changes"),
+                            "overridden flag", "found flag", "Save changes"),
                     DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             switch (choice) {
@@ -645,7 +645,7 @@ public class ForecastTransactionController {
                     transaction.setFound(foundStr.equalsIgnoreCase("y"));
                     break;
 
-                case "d":  // done
+                case "S":  // Save changes
                     if (transaction.isDirty()) {
                         transaction.save(UPDATE);
                         view.say("Forecast transaction successfully updated.");

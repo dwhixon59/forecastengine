@@ -382,7 +382,7 @@ public class MerchantController {
 
             // Ask what to update
             String choice = view.selectFromMenu("What would you like to update?",
-                    List.of("name", "ask always setting", "assigned user", "done - save changes"),
+                    List.of("name", "ask always setting", "assigned user", "Save changes"),
                     DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             switch (choice) {
@@ -413,7 +413,7 @@ public class MerchantController {
                     }
                     break;
 
-                case "d":  // done
+                case "S":  // Save changes
                     if (merchant.isDirty()) {
                         merchant.save();
                         view.say("Merchant successfully updated.");
