@@ -980,7 +980,7 @@ public class BudgetController {
             String choice = view.selectFromMenu("What would you like to update?",
                     List.of("category", "payee", "memo", "period", "amount", "running balance",
                             "minimum balance", "start date", "end date", "number of payments",
-                            "item type", "how important", "how occurs", "how paid", "budget", "Save changes"),
+                            "item type", "how important", "how occurs", "how paid", "budget", "saVe changes"),
                     DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             switch (choice) {
@@ -1123,7 +1123,7 @@ public class BudgetController {
                     }
                     break;
 
-                case "S":  // Save changes
+                case "v":  // saVe changes
                     if (budgetItem.isDirty()) {
                         budgetItem.update();
                         view.say("Budget item successfully updated.");

@@ -279,7 +279,7 @@ public class RegisterController {
                 Utility.formatDollarAmount(register.getBalance()));
 
         if (qfxBalance != null) {
-            view.say("Balance from import file (QFX): " + Utility.formatDollarAmount(qfxBalance));
+            view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
             // Check if balances differ
             if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {

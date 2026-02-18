@@ -108,6 +108,20 @@ public class ForecastTransactionMatcher {
             return null;
         }
 
+        // Filter out forecast transactions that have already been fully reconciled (remaining amount = 0)
+        List<ForecastTransaction> unreconciledTransactions = new ArrayList<>();
+        for (ForecastTransaction ft : candidateForecastTransactions) {
+            if (ft.getRemainingAmount() != 0.0) {
+                unreconciledTransactions.add(ft);
+            }
+        }
+        candidateForecastTransactions = unreconciledTransactions;
+
+        // If no unreconciled candidates, return null
+        if (candidateForecastTransactions.isEmpty()) {
+            return null;
+        }
+
         // Filter by merchant if we have a merchant list (but not if it's null - null means "no info")
         if (possibleMerchants != null && !possibleMerchants.isEmpty()) {
             List<ForecastTransaction> filteredTransactions = new ArrayList<>();
@@ -239,6 +253,16 @@ public class ForecastTransactionMatcher {
             ForecastTransaction forecastTransaction,
             List<Merchant> possibleMerchants) throws Exception {
 
+        // **CRITICAL: Check sign compatibility FIRST before any scoring**
+        // A positive transaction (deposit/credit) should NEVER match a negative forecast (expense/debit)
+        // and vice versa. This prevents catastrophic mismatches like $500 deposit matching -$125 expense.
+        double transactionAmount = amount;
+        double forecastAmount = forecastTransaction.getRemainingAmount();
+
+        if (Math.signum(transactionAmount) != Math.signum(forecastAmount)) {
+            return 0.0;  // Incompatible signs - absolutely no match
+        }
+
         double score = 0.0;
 
         // 1. Date Proximity Score (0-40 points)
@@ -259,13 +283,7 @@ public class ForecastTransactionMatcher {
         score += Math.max(0, 40 - (businessDaysDiff * 8)); // -8 points per business day difference
 
         // 2. Amount Similarity Score (0-40 points)
-        double transactionAmount = amount;
-        double forecastAmount = forecastTransaction.getForecastItem().getAmount();
-        // Check sign: if signs differ, return score 0 (no match)
-        if (Math.signum(transactionAmount) != Math.signum(forecastAmount)) {
-            return 0.0;
-        }
-        // Use absolute values for similarity scoring
+        // Use absolute values for similarity scoring (sign already checked above)
         transactionAmount = Math.abs(transactionAmount);
         forecastAmount = Math.abs(forecastAmount);
         double amountDiff = Math.abs(transactionAmount - forecastAmount);

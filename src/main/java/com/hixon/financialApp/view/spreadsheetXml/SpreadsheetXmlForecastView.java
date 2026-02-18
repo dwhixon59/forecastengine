@@ -224,9 +224,9 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
      */
     public SpreadsheetXmlForecastView() throws EntityException, SQLException {
         super(Forecast.getMostRecent());
-        shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        shortTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "ShortTermForecast-" + forecast.getDescription().replaceAll("\\s", "");
-        longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        longTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "");
         encoding = "UTF-8";
         csvForecastView = new CsvForecastView(forecast);
@@ -235,9 +235,9 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
 
     public SpreadsheetXmlForecastView(Forecast forecast) throws EntityException, SQLException {
         super(forecast);
-        shortTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        shortTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "ShortTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xml";
-        longTermForecastFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        longTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "LongTermForecast-" + forecast.getDescription().replaceAll("\\s", "");
         encoding = "UTF-8";
         csvForecastView = new CsvForecastView(forecast);

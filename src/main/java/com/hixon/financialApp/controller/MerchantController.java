@@ -286,8 +286,6 @@ public class MerchantController {
                 },
                 (scope, newName) -> {
                     Merchant newMerchant = new Merchant(newName);
-                    // Default new merchants to "ask always" = true during daily update
-                    newMerchant.setAskAlways(true);
                     return newMerchant;
                 });
     }
@@ -413,7 +411,7 @@ public class MerchantController {
                     }
                     break;
 
-                case "S":  // Save changes
+                case "s":  // Save changes
                     if (merchant.isDirty()) {
                         merchant.save();
                         view.say("Merchant successfully updated.");

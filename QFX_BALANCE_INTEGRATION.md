@@ -68,7 +68,7 @@ Enter new balance (or press Enter to keep current balance): [user must type]
 ```
 VERIFY REGISTER BALANCE
 Current balance of AAdvantage Aviator Mastercard: $-5,355.74
-Balance from import file (QFX): $-5,355.74
+Downloaded balance: $-5,355.74
 Balance matches QFX file. No update needed.
 ```
 
@@ -76,7 +76,7 @@ Balance matches QFX file. No update needed.
 ```
 VERIFY REGISTER BALANCE
 Current balance of AAdvantage Aviator Mastercard: $-5,300.00
-Balance from import file (QFX): $-5,355.74
+Downloaded balance: $-5,355.74
 
 The balances differ!
 

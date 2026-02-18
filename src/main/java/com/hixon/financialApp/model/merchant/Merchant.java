@@ -52,7 +52,7 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
             "User_idUser) values (";
 
     private String name = null;
-    boolean askAlways = false;
+    boolean askAlways = true;
     private UUID idUser;
     private List<MerchantPayee> merchantPayees = new LinkedList<>();
 

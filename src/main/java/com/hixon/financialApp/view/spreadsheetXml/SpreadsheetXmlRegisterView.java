@@ -30,7 +30,7 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
     public boolean renderTransactionReport(Calendar startDate) throws FileNotFoundException, UnsupportedEncodingException,
             ViewException {
 
-        PrintWriter writer = new PrintWriter("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
+        PrintWriter writer = new PrintWriter("C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\" +
                 "Finances\\Expenses\\Register.tsv", "UTF-8");
 
         // Get a list of forecast transactions starting on the start date:
@@ -83,7 +83,7 @@ public class SpreadsheetXmlRegisterView extends AbstractRegisterView {
         }
 
         // Create a summary report of the register transactions starting on the start date for 30 days:
-        writer = new PrintWriter("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\" +
+        writer = new PrintWriter("C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\" +
                 "Expenses\\Summary.tsv", "UTF-8");
         Calendar endDate = new GregorianCalendar();
         endDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),

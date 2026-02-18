@@ -395,9 +395,20 @@ public class ForecastController {
                     deductSplitAmount(forecastTransaction, split);
                 }
 
-                // and link the split to the forecast transaction for historical purposes:
-                forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
-                forecastTransactionSplit.save(INSERT_ON_DUPLICATE_SKIP);
+                // Link the split to the forecast transaction for historical purposes:
+                // First check if this split is already linked to a different forecast transaction
+                ForecastTransactionSplit existingSplit = ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
+                if (existingSplit != null) {
+                    // Split is already reconciled to a different forecast transaction
+                    // This can happen if the same transaction is processed twice or if there's a data issue
+                    view.say("WARNING: Split " + split.toStringConcise() + " is already reconciled to " +
+                            "forecast transaction " + existingSplit.getForecastTransaction().toStringConcise() +
+                            ". Skipping duplicate reconciliation.");
+                } else {
+                    // Create and save the split link
+                    forecastTransactionSplit = new ForecastTransactionSplit(forecastTransaction, split);
+                    forecastTransactionSplit.save(INSERT);
+                }
 
                 // And finally, if the forecast item is an envelope type item:
                 if (forecastTransaction.getForecastItem().getHowOccurs() == Item.HowOccurs.ENVELOPE) {
@@ -618,7 +629,7 @@ public class ForecastController {
         try {
             // Construct the base directory and filename from the forecast name:
             String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
-            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseDirectory = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses";
             String baseFilename = "LongTermForecast-" + forecastName;
 
             // Check for Excel files first (.xlsx, .xls), then CSV/TSV
@@ -676,7 +687,7 @@ public class ForecastController {
 
             // Construct the base directory and filename from the forecast name:
             String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
-            String baseDirectory = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses";
+            String baseDirectory = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses";
             String baseFilename = "LongTermForecast-" + forecastName;
 
             // Try to find the source file, checking for Excel files first, then CSV/TSV
@@ -832,12 +843,25 @@ public class ForecastController {
                             // and save the updated forecast transaction to the database:
                             dbForecastTransaction.update();
 
-                        } else { // No matching transaction was found meaning that it has been deleted from the database:
-                            view.say("The following forecast transaction was updated, but it falls outside of " +
-                                    "your short term horizon and has been invalidated by the last forecast update.  You " +
-                                    "will have to remake this change" + "\n" + ssForecastTransaction);
+                        } else {
+                            // No matching transaction was found in the database.
+                            // This can happen when a user manually adds a row in the spreadsheet
+                            // and Excel generates an ID (or the user copies a row with an existing ID).
+                            // Treat this as a NEW forecast transaction creation rather than an error.
+                            view.say("Forecast transaction has an ID but was not found in database - treating as new creation.");
+                            view.say("  ID: " + ssForecastTransaction.getId());
+                            view.say("  " + ssForecastTransaction.toStringConcise());
+
+                            // Clear the ID so it will be treated as a new transaction
+                            ssForecastTransaction.setId(null);
+
+                            // Fall through to the creation logic below by NOT continuing
+                            // This will allow the code at line 851+ to handle it as a new transaction
                         }
-                    } else { // the forecast transaction does not have an ID (the creation case), so create one:
+                    }
+
+                    // Handle creation of new forecast transactions (ID is null or was cleared above)
+                    if (ssForecastTransaction.getId() == null) {
 
                         // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
                         ForecastItem forecastItem = ForecastItem.getByName(forecast.getId(),
@@ -879,7 +903,7 @@ public class ForecastController {
                         view.say("The following forecast transaction was not in the forecast so it has been " +
                                 "added to the forecast:  \n" + ssForecastTransaction.toStringConcise());
 
-                    } // End else the forecast transaction does not have an ID.
+                    } // End if forecast transaction ID is null (new creation)
                 } // End for each forecast transaction in the external source.
 
                 // Set all the forecast transactions deleted from the spreadsheet to zero because the user zeroed them

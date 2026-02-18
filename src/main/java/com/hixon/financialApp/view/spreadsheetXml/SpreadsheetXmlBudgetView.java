@@ -148,7 +148,7 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
      *   <li>Spending report filename includes current month and year</li>
      *   <li>Budget summary report uses a fixed filename</li>
      *   <li>Character encoding set to UTF-8</li>
-     *   <li>Output directory points to user's Dropbox folder</li>
+     *   <li>Output directory points to user's OneDrive folder</li>
      * </ul>
      *
      * @param budget the Budget object containing budget data to be rendered
@@ -157,9 +157,9 @@ public class SpreadsheetXmlBudgetView extends AbstractBudgetView {
 
     public SpreadsheetXmlBudgetView(Budget budget) {
         super(budget);
-        this.spendingReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        this.spendingReportFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "SpendingReport_" + Utility.calendarDateToMonthYearDate(Calendar.getInstance()) + ".xml";
-        this.budgetSummaryReportFilename = "C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\Finances\\Expenses\\" +
+        this.budgetSummaryReportFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "BudgetSummaryReport.xml";
         this.encoding = "UTF-8";
     }

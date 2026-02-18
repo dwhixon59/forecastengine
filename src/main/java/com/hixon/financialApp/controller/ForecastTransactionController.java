@@ -645,7 +645,7 @@ public class ForecastTransactionController {
                     transaction.setFound(foundStr.equalsIgnoreCase("y"));
                     break;
 
-                case "S":  // Save changes
+                case "s":  // Save changes
                     if (transaction.isDirty()) {
                         transaction.save(UPDATE);
                         view.say("Forecast transaction successfully updated.");

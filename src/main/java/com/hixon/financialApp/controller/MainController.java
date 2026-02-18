@@ -191,8 +191,7 @@ public class MainController {
 
 
                         // Import the budget items:
-                        importController.importCsvBudgetItemFile("C:\\Users\\dwhix\\Dropbox\\Hixon Family Personal Business\\" +
-                                "Finances\\Expenses\\BudgetItems.csv");
+                        importController.importCsvBudgetItemFile("C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\BudgetItems.csv");
                         view.say("The budget items were successfully imported.");
                         view.say("------------------------------------------------------------------------");
                         break;
