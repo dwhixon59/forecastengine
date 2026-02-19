@@ -78,6 +78,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     // QFX import fields
     private TransactionParser<QfxTransaction> qfxParser;
     private boolean isQfxOpen = false;
+    private Double cachedLedgerBalance = null;
 
     // CSV import fields (using Apache Commons CSV directly)
     private org.apache.commons.csv.CSVParser csvApacheParser;
@@ -247,17 +248,28 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         }
 
         this.qfxParser = new QfxParser();
+        this.cachedLedgerBalance = null;
 
         // Use try-with-resources to ensure FileInputStream is properly closed after parsing
         // The parser loads all transactions into memory, so we don't need to keep the stream open
         try (FileInputStream fis = new FileInputStream(filename)) {
             // Open the parser - this reads and parses the entire file into memory
             this.qfxParser.open(fis);
+
+            // Cache the ledger balance immediately after parsing while we have access
+            if (qfxParser instanceof QfxParser) {
+                QfxStatement statement = ((QfxParser) qfxParser).getStatement();
+                if (statement != null) {
+                    this.cachedLedgerBalance = statement.getLedgerBalance();
+                }
+            }
+
             // Stream is automatically closed here by try-with-resources
         } catch (Exception e) {
             // If opening fails, make sure we clean up
             this.isQfxOpen = false;
             this.qfxParser = null;
+            this.cachedLedgerBalance = null;
             throw e;
         }
 
@@ -456,6 +468,10 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      */
     @Override
     public Double getImportedLedgerBalance() {
+        if (cachedLedgerBalance != null) {
+            return cachedLedgerBalance;
+        }
+
         if (qfxParser != null && isQfxOpen) {
             try {
                 // Cast to QfxParser to access getStatement method
