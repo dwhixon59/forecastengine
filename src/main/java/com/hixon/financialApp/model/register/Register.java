@@ -607,4 +607,20 @@ public class Register extends IndependentEntity {
 
         return items;
     }
+
+    /**
+     * Gets the sum of all provisional (uncleared) transactions for this register.
+     * @return the sum of provisional transaction amounts
+     * @throws EntityException if a database error occurs
+     * @throws SQLException if a SQL error occurs
+     */
+    public double getProvisionalBalance() throws EntityException, SQLException {
+        String query = "select sum(amount) from transaction where Register_idRegister = uuid_to_bin('" + id + "') and cleared = false";
+        ResultSet rs = getRS(query, "Database error encountered trying to get provisional balance.");
+        if (rs.next()) {
+            return rs.getDouble(1);
+        }
+        return 0.0;
+    }
+
 }

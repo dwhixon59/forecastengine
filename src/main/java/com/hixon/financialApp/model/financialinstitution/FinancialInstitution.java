@@ -468,17 +468,18 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      */
     @Override
     public Double getImportedLedgerBalance() {
+        Double balance = null;
         if (cachedLedgerBalance != null) {
-            return cachedLedgerBalance;
+            balance = cachedLedgerBalance;
         }
 
-        if (qfxParser != null && isQfxOpen) {
+        if (balance == null && qfxParser != null && isQfxOpen) {
             try {
                 // Cast to QfxParser to access getStatement method
                 if (qfxParser instanceof QfxParser) {
                     QfxStatement statement = ((QfxParser) qfxParser).getStatement();
                     if (statement != null) {
-                        return statement.getLedgerBalance();
+                        balance = statement.getLedgerBalance();
                     }
                 }
             } catch (Exception e) {
@@ -486,8 +487,31 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
                 return null;
             }
         }
-        // Return null for CSV files or if QFX not open
-        return null;
+
+        // If we have a balance, adjust it by adding provisional transactions
+        if (balance != null) {
+            try {
+                // Add provisional transactions to the balance to match App Register Balance
+                // The QFX balance is typically the "Posted Balance" (cleared transactions only).
+                // The App Register Balance includes both Cleared and Provisional (pending) transactions.
+                // To compare them, we must add the provisional transactions to the QFX balance.
+                // Examples:
+                // 1. Expense: QFX Balance = $1000. Pending Expense = -$50. App Balance = $950.
+                //    Adjusted QFX = $1000 + (-$50) = $950. Match.
+                // 2. Deposit: QFX Balance = $1000. Pending Deposit = +$100. App Balance = $1100.
+                //    Adjusted QFX = $1000 + (+$100) = $1100. Match.
+                Register register = getRegister();
+                if (register != null) {
+                    double provisionalBalance = register.getProvisionalBalance();
+                    balance += provisionalBalance;
+                }
+            } catch (Exception e) {
+                // Log error but return unadjusted balance to avoid blocking the flow
+                System.err.println("Warning: Failed to adjust ledger balance with provisional transactions: " + e.getMessage());
+            }
+        }
+
+        return balance;
     }
 
     @Override
