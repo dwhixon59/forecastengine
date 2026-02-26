@@ -31,7 +31,7 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.*;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.*;
+import static com.hixon.financialApp.controller.TerminationCondition.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_SKIP;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.utility.Utility.*;
@@ -118,36 +118,6 @@ public class ImportController {
 
     // Fields:
 
-    /**
-     * Enumeration of possible termination conditions for the import process.
-     * These values indicate how a particular operation or transaction processing was terminated.
-     */
-    public enum TerminationCondition {
-        /**
-         * Send an inquiry notification to a user for assistance
-         */
-        INQUIRE,
-        /**
-         * Restart processing of the current transaction
-         */
-        RESTART,
-        /**
-         * Successfully found and processed the required data
-         */
-        FOUND,
-        /**
-         * User cancelled the current operation
-         */
-        CANCEL,
-        /**
-         * User chose to skip the current transaction
-         */
-        SKIP,
-        /**
-         * User chose to quit the entire import process
-         */
-        QUIT
-    }
 
     /**
      * The current termination condition, determines how the import process should proceed

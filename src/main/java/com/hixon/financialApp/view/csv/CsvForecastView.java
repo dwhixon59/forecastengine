@@ -110,6 +110,11 @@ public class CsvForecastView extends AbstractForecastView {
    }
 
    @Override
+   protected String getLongTermForecastFilename() {
+      return null;
+   }
+
+   @Override
    public void editLongTermForecast() throws Exception {
       throw new ViewException("CSV forecast editing is not supported. Use Excel view instead.");
    }

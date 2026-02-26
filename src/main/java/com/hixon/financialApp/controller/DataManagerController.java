@@ -135,18 +135,27 @@ public class DataManagerController {
 
     /**
      * Ensures that a register, budget, and forecast context are available.
-     * Prompts the user to select them if not already set.
+     * Always prompts the user to select a register from the list. If a register was previously
+     * selected, it is shown as the default so the user can press Enter to keep it.
      *
      * @throws Exception if an error occurs while selecting the register, budget, or forecast
      */
     private void ensureRegisterContext() throws Exception {
-        if (register == null) {
-            register = RegisterController.selectRegister(view);
-            // Update the SessionController with the selected register
-            sessionController.setRegister(register);
-            // Also ensure budget and forecast since register implies those
-            ensureBudgetContext();
+        // Always prompt for register selection, passing current register as default
+        Register previousRegister = register;
+        register = RegisterController.selectRegister(view, previousRegister);
+        sessionController.setRegister(register);
+
+        // If the register changed, clear the associated budget and forecast
+        if (previousRegister != null && !register.getId().equals(previousRegister.getId())) {
+            budget = null;
+            forecast = null;
+            sessionController.setBudget(null);
+            sessionController.setForecast(null);
         }
+
+        // Ensure budget context is set for the selected register
+        ensureBudgetContext();
     }
 
     /**
@@ -175,17 +184,19 @@ public class DataManagerController {
     }
 
     /**
-     * Ensures that a forecast context is available (including budget).
-     * Prompts the user to select them if not already set.
+     * Ensures that a forecast context is available (including budget and register).
+     * Always prompts the user to select a register (with the current one as default),
+     * then always prompts for a forecast (with the current one as default).
      *
      * @throws Exception if an error occurs while selecting the forecast
      */
     private void ensureForecastContext() throws Exception {
-        ensureBudgetContext();
-        if (forecast == null) {
-            forecast = Forecast.selectForecast(budget);
-            // Update the SessionController with the selected forecast
-            sessionController.setForecast(forecast);
-        }
+        // Ensure register and budget context first (always prompts with default)
+        ensureRegisterContext();
+
+        // Always prompt for forecast selection, passing current forecast as default
+        Forecast previousForecast = forecast;
+        forecast = Forecast.selectForecast(budget, previousForecast);
+        sessionController.setForecast(forecast);
     }
 }

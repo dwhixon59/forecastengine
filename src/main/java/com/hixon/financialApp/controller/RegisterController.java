@@ -28,7 +28,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.*;
+import static com.hixon.financialApp.controller.TerminationCondition.*;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.INSERT_ON_DUPLICATE_UPDATE;
 import static com.hixon.financialApp.model.entity.EntityInt.SaveMethod.UPDATE;
 import static com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition.*;
@@ -40,7 +40,7 @@ public class RegisterController {
     /*
      * Fields for RegisterController:
      */
-    private ImportController.TerminationCondition terminationCondition;
+    private TerminationCondition terminationCondition;
     protected Register register;
     protected FinancialInstitutionInt financialInstitution;
     protected Budget budget;
@@ -53,7 +53,7 @@ public class RegisterController {
     /*
      * Getters and setters for RegisterController:
      */
-    public ImportController.TerminationCondition getTerminationCondition() {
+    public TerminationCondition getTerminationCondition() {
         return terminationCondition;
     }
 
@@ -235,6 +235,22 @@ public class RegisterController {
      * @throws EntityException   If there is an error non-database error.
      */
     public static Register selectRegister(ViewInt view) throws RegisterException, SQLException, EntityException {
+        return selectRegister(view, null);
+    }
+
+    /**
+     * Select a register by name from a list of all the registers in the database, with an optional default value.
+     * If a default register is provided, it will be shown in square brackets and selected if the user presses enter.
+     *
+     * @param view            The view interface for user interaction.
+     * @param defaultRegister The default register to pre-select (can be null).
+     * @return Register The register that was selected.
+     * @throws RegisterException If there are no registers in the database or if no register was selected.
+     * @throws SQLException      If there is a database error.
+     * @throws EntityException   If there is an error non-database error.
+     */
+    public static Register selectRegister(ViewInt view, Register defaultRegister)
+            throws RegisterException, SQLException, EntityException {
 
         // Get a list of all the registers:
         List<Register> registers = Register.getListOf();
@@ -249,9 +265,20 @@ public class RegisterController {
             return registers.get(0);
         }
 
-        // Otherwise, let the user select a register:
-        Register register = view.selectByNameFromList("Select a register:", registers,
-                ViewInt.DO_NOT_ALLOW_NONE);
+        // Otherwise, let the user select a register (with optional default):
+        Register register;
+        try {
+            if (defaultRegister != null) {
+                register = view.selectByNameFromList("Select a register:", registers,
+                        defaultRegister, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+            } else {
+                register = view.selectByNameFromList("Select a register:", registers,
+                        ViewInt.DO_NOT_ALLOW_NONE);
+            }
+        } catch (CancelException | QuitException | SkipException e) {
+            throw new RegisterException("No register was selected.");
+        }
 
         // If a register was selected, return it, else throw an exception:
         if (register != null) {
@@ -858,7 +885,7 @@ public class RegisterController {
                 if (merchant == null) {
                     merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                     if (merchant == null) {
-                        ImportController.TerminationCondition terminationCondition = FOUND;
+                        TerminationCondition terminationCondition = FOUND;
                         try {
                             MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),
@@ -1005,7 +1032,7 @@ public class RegisterController {
                 if (merchant == null) {
                     merchant = Merchant.getByPayee(transaction.getMerchantPayee());
                     if (merchant == null) {
-                        ImportController.TerminationCondition terminationCondition = FOUND;
+                        TerminationCondition terminationCondition = FOUND;
                         try {
                             MerchantController merchantController = new MerchantController(sessionController);
                             merchant = merchantController.assignMerchant(transaction.getMerchantPayee(),

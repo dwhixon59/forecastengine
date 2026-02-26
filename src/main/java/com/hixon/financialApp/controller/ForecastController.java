@@ -654,12 +654,15 @@ public class ForecastController {
                     long fileModifiedTimeSeconds = (fileModifiedTime / 1000) * 1000;
                     long lastRenderedTimeSeconds = (lastRenderedTime / 1000) * 1000;
 
-                    // Add a 2-second tolerance to avoid false positives from Excel
-                    // touching the file timestamp when opened (without actual modifications)
+                    // Add a 60-second tolerance to avoid false positives from OneDrive sync
+                    // or Excel AutoSave touching the file timestamp after the app writes it.
+                    // OneDrive can take several seconds (or longer) to sync a newly written file
+                    // to the cloud, and during this process it may update the file's lastModified
+                    // timestamp. A 60-second window accounts for typical sync delays.
                     long differenceInSeconds = (fileModifiedTimeSeconds - lastRenderedTimeSeconds) / 1000;
 
-                    // Only consider the file modified if it's more than 2 seconds newer
-                    return differenceInSeconds > 2;
+                    // Only consider the file modified if it's more than 60 seconds newer
+                    return differenceInSeconds > 60;
                 }
             }
 

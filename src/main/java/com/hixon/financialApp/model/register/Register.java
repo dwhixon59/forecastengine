@@ -616,7 +616,7 @@ public class Register extends IndependentEntity {
      */
     public double getProvisionalBalance() throws EntityException, SQLException {
         String query = "select sum(amount) from transaction where Register_idRegister = uuid_to_bin('" + id + "') and cleared = false";
-        ResultSet rs = getRS(query, "Database error encountered trying to get provisional balance.");
+        ResultSet rs = EntityInt.getRS(query, "Database error encountered trying to get provisional balance.");
         if (rs.next()) {
             return rs.getDouble(1);
         }

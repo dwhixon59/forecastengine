@@ -90,6 +90,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
     protected abstract void closeLongTermForecastOutput(String reportType) throws IOException, ForecastException;
 
+    /**
+     * Returns the filename of the long term forecast output file.
+     * Used to read the file's lastModified timestamp after rendering.
+     *
+     * @return The full path to the long term forecast output file, or null if not set.
+     */
+    protected abstract String getLongTermForecastFilename();
+
     public abstract void editLongTermForecast() throws Exception;
 
     public abstract void closeForecastTransactionSource(String sourceName) throws ViewException;
@@ -480,8 +488,20 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             }
         }
 
-        // Update the forecast's lastRenderedDate to track when we rendered the file
-        forecast.setLastRenderedDate(Calendar.getInstance());
+        // Update the forecast's lastRenderedDate to track when we rendered the file.
+        // Use the file's actual lastModified timestamp rather than the current time, so that
+        // the comparison in isExternalForecastFileNewer() compares the file's timestamp against
+        // itself. This prevents false positives caused by OneDrive sync updating the file's
+        // lastModified timestamp after we write it.
+        Calendar renderedDate = Calendar.getInstance();
+        String outputFilename = getLongTermForecastFilename();
+        if (outputFilename != null) {
+            File outputFile = new File(outputFilename);
+            if (outputFile.exists()) {
+                renderedDate.setTimeInMillis(outputFile.lastModified());
+            }
+        }
+        forecast.setLastRenderedDate(renderedDate);
         try {
             forecast.save(EntityInt.SaveMethod.UPDATE);
         } catch (Exception e) {

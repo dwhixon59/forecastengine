@@ -4,6 +4,7 @@ import com.hixon.financialApp.controller.CancelException;
 import com.hixon.financialApp.controller.ImportController;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
+import com.hixon.financialApp.controller.TerminationCondition;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.register.Transaction;
@@ -73,7 +74,7 @@ public interface ViewInt {
      */
     void sayH4(String s);
 
-    ImportController.TerminationCondition getTerminationCondition();
+    TerminationCondition getTerminationCondition();
 
     /**
      * Ask the user a question.  Getting the answer is handled by a different method: (getYesOrNo(), getNumberBetween(),

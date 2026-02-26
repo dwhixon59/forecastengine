@@ -1,7 +1,7 @@
 package com.hixon.financialApp.view.cmdLine;
 
 import com.hixon.financialApp.controller.CancelException;
-import com.hixon.financialApp.controller.ImportController.TerminationCondition;
+import com.hixon.financialApp.controller.TerminationCondition;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -25,7 +25,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
+import static com.hixon.financialApp.controller.TerminationCondition.QUIT;
 
 public class ViewCmdline implements ViewInt {
 
@@ -52,10 +52,10 @@ public class ViewCmdline implements ViewInt {
     private static final Properties helpText = new Properties();
 
     static {
-        try (InputStream input = ViewCmdline.class.getClassLoader()
-                .getResourceAsStream("help-text.properties")) {
+        try (InputStream input = ViewCmdline.class.getResourceAsStream("/help-text.properties")) {
             if (input == null) {
-                throw new RuntimeException("Unable to find help-text.properties");
+                // detailed error message to help debugging
+                throw new RuntimeException("Unable to find help-text.properties at root of classpath. Checked path: /help-text.properties");
             }
             helpText.load(input);
         } catch (IOException ex) {

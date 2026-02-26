@@ -14,14 +14,14 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.*;
+import static com.hixon.financialApp.controller.TerminationCondition.*;
 
 public class TransactionSplitsController {
 
     /*
      * Fields for SplitsController:
      */
-    private ImportController.TerminationCondition terminationCondition;
+    private TerminationCondition terminationCondition;
     protected SessionController sessionController;
     protected Register register;
     protected Budget budget;
@@ -33,7 +33,7 @@ public class TransactionSplitsController {
     /*
      * Getters and setters for SplitsController:
      */
-    public ImportController.TerminationCondition getTerminationCondition() {
+    public TerminationCondition getTerminationCondition() {
         return terminationCondition;
     }
 

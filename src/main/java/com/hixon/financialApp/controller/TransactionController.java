@@ -809,8 +809,9 @@ public class TransactionController {
                 view.say("Existing splits deleted.");
             }
 
-            // Process the transaction to create new splits
-            reconcileTransaction(transaction);
+            // Process the transaction to create new splits, forcing manual selection
+            // so the user can choose different budget items than the previous categorization
+            reconcileTransaction(transaction, true);
 
             // If we got here without exception, commit the transaction
             conn.commit();
@@ -844,6 +845,22 @@ public class TransactionController {
      * @throws SkipException if the user skips the reconciliation
      */
     public void reconcileTransaction(Transaction transaction) throws Exception, SkipException {
+        reconcileTransaction(transaction, false);
+    }
+
+    /**
+     * Reconciles a single transaction by assigning budget items and creating splits.
+     * This method is extracted from RegisterController.processUnreconciledTransactions() to allow
+     * reuse for recategorizing individual transactions.
+     *
+     * @param transaction       The transaction to reconcile
+     * @param forceManualSplits If true, always prompt the user for manual split assignment even when
+     *                          auto-assignment would normally apply. Used during recategorization so the
+     *                          user can select different budget items than the previous categorization.
+     * @throws Exception if any error occurs during reconciliation
+     * @throws SkipException if the user skips the reconciliation
+     */
+    public void reconcileTransaction(Transaction transaction, boolean forceManualSplits) throws Exception, SkipException {
         BudgetController budgetController = new BudgetController(sessionController);
 
         Merchant merchant = transaction.getMerchant();
@@ -869,10 +886,16 @@ public class TransactionController {
             budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
         }
 
-        // Get or create the splits for the transaction
-        List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
+        // Get or create the splits for the transaction.
+        // When forcing manual splits (recategorization), skip checking for existing splits since
+        // they were already deleted and we want the user to create new ones.
+        List<TransactionSplit> splits = null;
+        if (!forceManualSplits) {
+            splits = TransactionSplit.getSplitsForTransaction(transaction);
+        }
         if (splits == null || splits.isEmpty()) {
-            splits = budgetController.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItemsForMerchant);
+            splits = budgetController.assignAmountsToBudgetItems(transaction, merchant, budget,
+                    budgetItemsForMerchant, forceManualSplits);
         }
 
         // Mark the transaction as new so it appears in the new transaction report

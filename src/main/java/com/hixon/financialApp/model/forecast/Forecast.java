@@ -1,5 +1,6 @@
 package com.hixon.financialApp.model.forecast;
 
+import com.hixon.financialApp.controller.CancelException;
 import com.hixon.financialApp.controller.QuitException;
 import com.hixon.financialApp.controller.SkipException;
 import com.hixon.financialApp.model.budget.Budget;
@@ -375,6 +376,25 @@ public class Forecast extends IndependentEntity {
      */
     public static Forecast selectForecast(Budget budget) throws ForecastException, SQLException, EntityException,
             SkipException, QuitException {
+        return selectForecast(budget, null);
+    }
+
+    /**
+     * Select a forecast by name from a list of all the forecasts for a particular budget in the database,
+     * with an optional default value. If a default forecast is provided, it will be shown in square brackets
+     * and selected if the user presses enter.
+     *
+     * @param budget          The budget to get forecasts for.
+     * @param defaultForecast The default forecast to pre-select (can be null).
+     * @return Forecast The forecast that was selected.
+     * @throws ForecastException If there are no forecasts in the database or if no forecast was selected.
+     * @throws SQLException      If there is a database error.
+     * @throws EntityException   If there is an error non-database error.
+     * @throws SkipException     If the user skips the selection.
+     * @throws QuitException     If the user quits.
+     */
+    public static Forecast selectForecast(Budget budget, Forecast defaultForecast) throws ForecastException,
+            SQLException, EntityException, SkipException, QuitException {
 
         // Get a list of all the forecasts for the budget:
         List<Forecast> forecasts = Forecast.getListOf(budget);
@@ -409,9 +429,20 @@ public class Forecast extends IndependentEntity {
             return forecasts.get(0);
         }
 
-        // Otherwise, let the user select a forecast:
-        Forecast forecast = Utility.getView().selectByNameFromList("Select a forecast:", forecasts,
-                ViewInt.DO_NOT_ALLOW_NONE);
+        // Otherwise, let the user select a forecast (with optional default):
+        Forecast forecast;
+        try {
+            if (defaultForecast != null) {
+                forecast = Utility.getView().selectByNameFromList("Select a forecast:", forecasts,
+                        defaultForecast, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+            } else {
+                forecast = Utility.getView().selectByNameFromList("Select a forecast:", forecasts,
+                        ViewInt.DO_NOT_ALLOW_NONE);
+            }
+        } catch (CancelException e) {
+            throw new ForecastException("No forecast was selected.");
+        }
 
         // If a forecast was selected, return it, else throw an exception:
         if (forecast != null) {

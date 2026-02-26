@@ -26,7 +26,7 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.*;
 
-import static com.hixon.financialApp.controller.ImportController.TerminationCondition.QUIT;
+import static com.hixon.financialApp.controller.TerminationCondition.QUIT;
 import static com.hixon.financialApp.model.budget.BudgetItemMerchant.isBudgetItemInList;
 import static com.hixon.financialApp.model.budget.BudgetUtilities.getAllBudgets;
 import static com.hixon.financialApp.utility.Utility.stringDateDashToCalendarDate;
@@ -43,7 +43,7 @@ public class BudgetController {
     /*
      * Fields for BudgetController:
      */
-    private ImportController.TerminationCondition terminationCondition;
+    private TerminationCondition terminationCondition;
     Register register;
     Budget budget;
     Forecast forecast;
@@ -55,10 +55,10 @@ public class BudgetController {
     private static final Properties helpText = new Properties();
 
     static {
-        try (InputStream input = BudgetController.class.getClassLoader()
-                .getResourceAsStream("help-text.properties")) {
+        try (InputStream input = BudgetController.class.getResourceAsStream("/help-text.properties")) {
             if (input == null) {
-                throw new RuntimeException("Unable to find help-text.properties");
+                // detailed error message to help debugging
+                throw new RuntimeException("Unable to find help-text.properties at root of classpath. Checked path: /help-text.properties");
             }
             helpText.load(input);
         } catch (IOException ex) {
@@ -94,7 +94,7 @@ public class BudgetController {
      *
      * @return the current termination condition (SKIP, QUIT, CANCEL, etc.)
      */
-    public ImportController.TerminationCondition getTerminationCondition() {
+    public TerminationCondition getTerminationCondition() {
         return terminationCondition;
     }
 
@@ -594,6 +594,27 @@ public class BudgetController {
     public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget
             budget, List<BudgetItemMerchant> budgetItemMerchants)
             throws Exception {
+        return assignAmountsToBudgetItems(transaction, merchant, budget, budgetItemMerchants, false);
+    }
+
+    /**
+     * Assigns transaction amounts to budget items for a merchant.
+     * Handles both fixed amounts and percentages, and prompts the user for manual splits if needed.
+     * Ensures splits balance with the transaction amount.
+     *
+     * @param transaction         the Transaction to split
+     * @param merchant            the Merchant associated with the transaction
+     * @param budget              the Budget context
+     * @param budgetItemMerchants the list of BudgetItemMerchant associations
+     * @param forceManualSplits   if true, always prompt the user for manual split assignment even when
+     *                            auto-assignment would normally apply. This is used during recategorization
+     *                            to ensure the user can choose different budget items.
+     * @return a list of TransactionSplit objects representing the splits, or null if none
+     * @throws Exception if an error occurs
+     */
+    public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget
+            budget, List<BudgetItemMerchant> budgetItemMerchants, boolean forceManualSplits)
+            throws Exception {
 
         // If there are no budget items assigned to this merchant, we need to ask the user to assign one first:
         if (budgetItemMerchants.isEmpty()) {
@@ -615,7 +636,8 @@ public class BudgetController {
         // If we need to ask the user to enter the splits:
         List<TransactionSplit> splits = new ArrayList<>();
         if (
-                merchant.isAskAlways() || // If this is a merchant that the user wants to be asked about every time,
+                forceManualSplits || // If we are forcing manual splits (e.g., during recategorization),
+                        merchant.isAskAlways() || // or this is a merchant that the user wants to be asked about every time,
                         (
                                 // or there is more than one budget item:
                                 (budgetItemMerchants.size() > 1) &&
