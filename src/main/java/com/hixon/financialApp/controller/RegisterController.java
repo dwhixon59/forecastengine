@@ -1065,8 +1065,9 @@ public class RegisterController {
                     transaction.setIdMerchant(merchant.getId());
                 }
 
-                // If there is a provisional transaction for this transaction, then use the same ID:
-                transaction.reconcileWithProvisional();
+                // Note: Do NOT call reconcileWithProvisional() here. These are existing transactions
+                // being reprocessed, not new transactions from import. Changing the ID would cause a
+                // duplicate key violation on the importRecord_UNIQUE constraint.
 
                 // Tell the user about the bank transaction we are processing:
                 importLog.logImportEvent(transaction);
@@ -1080,7 +1081,7 @@ public class RegisterController {
                     try {
                         budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
                     } catch (SkipException se) {
-                        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                        transaction.save(UPDATE);
                         continue;
                     }
                 }
@@ -1097,7 +1098,7 @@ public class RegisterController {
                 transaction.setIsNew(true);
 
                 // Save the transaction and associated items:
-                transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                transaction.save(UPDATE);
                 if (splits != null) {
                     for (TransactionSplit split : splits) {
                         split.save();

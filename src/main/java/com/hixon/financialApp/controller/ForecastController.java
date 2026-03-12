@@ -686,7 +686,7 @@ public class ForecastController {
 
         try {
             // We will need a BudgetController:
-            BudgetController budgetController = new BudgetController(sessionController);
+            BudgetController budgetController = createBudgetController();
 
             // Construct the base directory and filename from the forecast name:
             String forecastName = forecast.getName().replace(" ", "");  // Remove spaces from forecast name
@@ -696,15 +696,14 @@ public class ForecastController {
             // Try to find the source file, checking for Excel files first, then CSV/TSV
             String sourceName = null;
             AbstractForecastView externalSourceView = null;
-            File sourceFile;
 
             // Check for Excel files first (.xlsx, .xls)
             String[] excelExtensions = {".xlsx", ".xls"};
             for (String ext : excelExtensions) {
-                sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
-                if (sourceFile.exists()) {
-                    sourceName = sourceFile.getAbsolutePath();
-                    externalSourceView = new ExcelForecastView(forecast);
+                String filePath = baseDirectory + "\\" + baseFilename + ext;
+                if (fileExists(filePath)) {
+                    sourceName = filePath;
+                    externalSourceView = createExcelForecastView(forecast);
                     view.say("Found Excel forecast file: " + sourceName);
                     break;
                 }
@@ -714,10 +713,10 @@ public class ForecastController {
             if (sourceName == null) {
                 String[] csvExtensions = {".csv", ".tsv"};
                 for (String ext : csvExtensions) {
-                    sourceFile = new File(baseDirectory + "\\" + baseFilename + ext);
-                    if (sourceFile.exists()) {
-                        sourceName = sourceFile.getAbsolutePath();
-                        externalSourceView = new CsvForecastView(forecast);
+                    String filePath = baseDirectory + "\\" + baseFilename + ext;
+                    if (fileExists(filePath)) {
+                        sourceName = filePath;
+                        externalSourceView = createCsvForecastView(forecast);
                         view.say("Found CSV/TSV forecast file: " + sourceName);
                         break;
                     }
@@ -740,7 +739,7 @@ public class ForecastController {
             if (forecastTransactions != null) {
 
                 // Mark all the forecast transactions in THIS forecast as not found:
-                ForecastTransaction.setAllFound(forecast, false);
+                setAllFound(forecast, false);
 
                 // For each forecast transaction from the external source:
                 for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
@@ -753,7 +752,7 @@ public class ForecastController {
 
                         // then get the matching forecast transaction from the database:
                         ForecastTransaction dbForecastTransaction =
-                                ForecastTransaction.getById(ssForecastTransaction.getId());
+                                lookupForecastTransactionById(ssForecastTransaction.getId());
 
                         // and if a matching forecast transaction was found in the database:
                         if (dbForecastTransaction != null) {
@@ -799,8 +798,9 @@ public class ForecastController {
                                     view.say("New date is:  " +
                                             Utility.calendarDateToStringDate(ssForecastTransaction.getPlannedDate()));
                                     dbForecastTransaction.setPlannedDate(ssForecastTransaction.getPlannedDate());
-                                    // TODO:  Set the "override" flag on the forecast transaction to prevent it from
+                                    // Set the "override" flag on the forecast transaction to prevent it from
                                     // being deleted during the forecast update process:
+                                    dbForecastTransaction.setOverridden(true);
                                 }
                             }
 
@@ -844,7 +844,7 @@ public class ForecastController {
                             }
 
                             // and save the updated forecast transaction to the database:
-                            dbForecastTransaction.update();
+                            updateForecastTransaction(dbForecastTransaction);
 
                         } else {
                             // No matching transaction was found in the database.
@@ -867,13 +867,13 @@ public class ForecastController {
                     if (ssForecastTransaction.getId() == null) {
 
                         // If there isn't already an instance of the forecast item for this forecast transaction in the forecast:
-                        ForecastItem forecastItem = ForecastItem.getByName(forecast.getId(),
+                        ForecastItem forecastItem = lookupForecastItemByName(forecast.getId(),
                                 ssForecastTransaction.getForecastItem().getCategory(), ssForecastTransaction.getForecastItem().getPayee());
                         if (forecastItem == null) {
 
                             // then create a forecast item, so we have something to link the forecast transaction to:
                             // Get a list of budget items that match the entered payee:
-                            List<BudgetItem> budgetItemsForPayee = BudgetItem.getUnexpiredByPayee(
+                            List<BudgetItem> budgetItemsForPayee = lookupBudgetItemsByPayee(
                                     forecast.getBudget(),
                                     ssForecastTransaction.getForecastItem().getPayee());
                             BudgetItem budgetItem;
@@ -891,7 +891,7 @@ public class ForecastController {
                             // then get the budget item from the user (adding a new one if required):
 
                             ssForecastTransaction.getForecastItem().setIdBudgetItem(budgetItem.getId());
-                            ssForecastTransaction.getForecastItem().insert();
+                            insertForecastItem(ssForecastTransaction.getForecastItem());
                         } else {
                             ssForecastTransaction.setForecastItem(forecastItem);
                         }
@@ -900,7 +900,7 @@ public class ForecastController {
                         ssForecastTransaction.setId(UUID.randomUUID());
                         ssForecastTransaction.setFound(true);
                         ssForecastTransaction.setOverridden(true);
-                        ssForecastTransaction.insert();
+                        insertForecastTransaction(ssForecastTransaction);
 
                         // Let the user know what we did:
                         view.say("The following forecast transaction was not in the forecast so it has been " +
@@ -912,7 +912,7 @@ public class ForecastController {
                 // Set all the forecast transactions deleted from the spreadsheet to zero because the user zeroed them
                 // out in the spreadsheet:
                 ForecastTransactionController forecastTransactionController =
-                        new ForecastTransactionController(sessionController);
+                        createForecastTransactionController();
                 forecastTransactionController.zeroNotFound(forecast);
 
                 // Close the external source of forecast transactions:
@@ -937,6 +937,77 @@ public class ForecastController {
         }
 
     } // End updateFromExternalSource(Connection dbConnection).
+
+    /*
+     * Protected factory/lookup methods used by updateFromExternalSource.
+     * These methods exist to provide testability seams — they can be overridden in test subclasses
+     * to supply mock objects without requiring static mocking of JDK classes or complex model classes.
+     */
+
+    /** Check if a file at the given path exists on disk. */
+    protected boolean fileExists(String filePath) {
+        return new File(filePath).exists();
+    }
+
+    /** Create an ExcelForecastView for reading forecast transactions from an Excel file. */
+    protected AbstractForecastView createExcelForecastView(Forecast forecast) throws EntityException, SQLException {
+        return new ExcelForecastView(forecast);
+    }
+
+    /** Create a CsvForecastView for reading forecast transactions from a CSV/TSV file. */
+    protected AbstractForecastView createCsvForecastView(Forecast forecast) throws EntityException, SQLException {
+        return new CsvForecastView(forecast);
+    }
+
+    /** Create a BudgetController for user interaction during import. */
+    protected BudgetController createBudgetController() {
+        return new BudgetController(sessionController);
+    }
+
+    /** Create a ForecastTransactionController for post-processing. */
+    protected ForecastTransactionController createForecastTransactionController() {
+        return new ForecastTransactionController(sessionController);
+    }
+
+    /** Look up a ForecastTransaction by its ID in the database. */
+    protected ForecastTransaction lookupForecastTransactionById(UUID id)
+            throws ForecastException, EntityException, SQLException {
+        return ForecastTransaction.getById(id);
+    }
+
+    /** Mark all forecast transactions in the given forecast as found or not found. */
+    protected void setAllFound(Forecast forecast, boolean found) throws EntityException, RegisterException {
+        ForecastTransaction.setAllFound(forecast, found);
+    }
+
+    /** Look up a ForecastItem by name (category + payee) in the given forecast. */
+    protected ForecastItem lookupForecastItemByName(UUID idForecast, String category, String payee)
+            throws EntityException, BudgetException, SQLException, ForecastException {
+        return ForecastItem.getByName(idForecast, category, payee);
+    }
+
+    /** Look up unexpired BudgetItems matching the given payee. */
+    protected List<BudgetItem> lookupBudgetItemsByPayee(Budget budget, String payee) throws BudgetException {
+        return BudgetItem.getUnexpiredByPayee(budget, payee);
+    }
+
+    /** Persist a forecast transaction update to the database. */
+    protected void updateForecastTransaction(ForecastTransaction ft)
+            throws EntityException, BudgetException, SQLException, RegisterException {
+        ft.update();
+    }
+
+    /** Persist a new forecast transaction to the database. */
+    protected void insertForecastTransaction(ForecastTransaction ft)
+            throws ForecastException, BudgetException, EntityException, RegisterException, SQLException {
+        ft.insert();
+    }
+
+    /** Persist a new forecast item to the database. */
+    protected void insertForecastItem(ForecastItem fi)
+            throws ForecastException, BudgetException, EntityException, RegisterException, SQLException {
+        fi.insert();
+    }
 
     /**
      * Updates the long-term forecast. This means to regenerate the portion of the forecast from the update start date
