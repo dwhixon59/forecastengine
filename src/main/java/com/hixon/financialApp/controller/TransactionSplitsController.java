@@ -15,6 +15,7 @@ import java.util.Calendar;
 import java.util.List;
 
 import static com.hixon.financialApp.controller.TerminationCondition.*;
+import static com.hixon.financialApp.view.base.ViewInt.*;
 
 public class TransactionSplitsController {
 
@@ -120,8 +121,10 @@ public class TransactionSplitsController {
                 double totalAmountAssigned = 0;
                 for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
                     if (budgetItemMerchant.getAmount() > 0) {
+                        // Enhancement 5: default split memo from the budget item's memo field
+                        String defaultMemo = getBudgetItemMemo(budgetItemMerchant);
                         splits.add(new TransactionSplit(budgetItemMerchant.getAmount(), budgetItemMerchant,
-                                transaction, null));
+                                transaction, defaultMemo));
                         totalAmountAssigned += budgetItemMerchant.getAmount();
                     }
                 }
@@ -131,8 +134,9 @@ public class TransactionSplitsController {
                 // Process the percentages as percentages of the amount left:
                 for (BudgetItemMerchant budgetItemMerchant : budgetItemsForMerchant) {
                     if (budgetItemMerchant.getPercentage() > 0) {
+                        String defaultMemo = getBudgetItemMemo(budgetItemMerchant);
                         splits.add(new TransactionSplit(budgetItemMerchant.getPercentage() / 100 * amountLeft,
-                                budgetItemMerchant, transaction, null));
+                                budgetItemMerchant, transaction, defaultMemo));
                     }
                 }
             }
@@ -393,6 +397,44 @@ public class TransactionSplitsController {
                 }
             }
         }
+
+        // Enhancement 5: After successful split assignment, offer to lock this merchant
+        // into auto-assign mode when merchant has askAlways=true and exactly one budget item.
+        if (!splits.isEmpty() && merchant.isAskAlways() && budgetItemsForMerchant.size() == 1) {
+            try {
+                String setDefault = view.getResponseString(
+                        "Always auto-assign '" + merchant.getName() + "' to this budget item? (y/n) [n]:",
+                        "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+                if (setDefault.equalsIgnoreCase("y")) {
+                    merchant.setAskAlways(false);
+                    merchant.save();
+                    view.say("✓ '" + merchant.getName() + "' will be auto-assigned silently next time.");
+                }
+            } catch (CancelException | QuitException | SkipException e) {
+                // User cancelled the "set as default" prompt — continue without changing
+            }
+        }
+    }
+
+    /**
+     * Enhancement 5: Returns the memo from the budget item associated with the given BudgetItemMerchant,
+     * or null if the budget item has no memo or cannot be retrieved.
+     *
+     * @param budgetItemMerchant the budget item merchant association
+     * @return the budget item's memo, or null
+     */
+    private String getBudgetItemMemo(BudgetItemMerchant budgetItemMerchant) {
+        try {
+            BudgetItem budgetItem = budgetItemMerchant.getBudgetItem();
+            if (budgetItem != null) {
+                String memo = budgetItem.getMemo();
+                return (memo != null && !memo.isBlank()) ? memo : null;
+            }
+        } catch (Exception e) {
+            // Silently ignore — memo defaulting is a best-effort feature
+        }
+        return null;
     }
 
     /**

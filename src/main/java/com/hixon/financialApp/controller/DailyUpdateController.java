@@ -114,19 +114,16 @@ public class DailyUpdateController {
             try {
                 if (register.isSkippedTransactions(forecast)) {
 
-                    // Then ask the user if they want to reprocess them now:
-                    if (view.getYesOrNo("There are skipped transactions in the register.  " +
-                            "Do you want to process them now?")) {
-                        inSync = registerController.processUnreconciledTransactions();
-                        if (!inSync) {
-                            forecastController.updateForecast();
-                        }
-                       view.sayH4("The skipped transactions were successfully updated.");
-                    } else {
-                       view.sayH4("The skipped transactions were not processed.");
+                    // Enhancement 7: Auto-default reprocess skipped transactions to yes
+                    // during a daily update, since the user almost always wants to process them.
+                    view.say("There are skipped transactions in the register. Auto-reprocessing...");
+                    inSync = registerController.processUnreconciledTransactions();
+                    if (!inSync) {
+                        forecastController.updateForecast();
                     }
+                   view.sayH4("The skipped transactions were successfully updated.");
                 } else {
-                   view.sayH4("The are no skipped transactions.");
+                   view.sayH4("There are no skipped transactions.");
                 }
             } catch (QuitException qe) {
                 throw qe;
@@ -199,8 +196,25 @@ public class DailyUpdateController {
                 }
             }
 
+            // Show import summary and allow the user to recategorize transactions:
+            view.sayH2("REVIEW IMPORTED TRANSACTIONS");
+            try {
+                ImportSummaryController importSummaryController =
+                        new ImportSummaryController(sessionController, importController.getImportLog());
+                boolean recatChanged = importSummaryController.showSummaryAndRecategorize();
+                if (recatChanged && inSync) {
+                    inSync = false;
+                }
+            } catch (QuitException qe) {
+                throw qe;
+            } catch (Exception e) {
+                if (!view.askContinue("\nThe error '" + e + "' occurred while reviewing imported transactions.")) {
+                    throw e;
+                }
+            }
+
             // Verify the register balance:
-           view.sayH2("VERIFY REGISTER BALANCE");
+            view.sayH2("VERIFY REGISTER BALANCE");
             try {
                  if (!registerController.verifyRegisterBalance(register)) {
                    view.sayH4("The balance of the register " + register.getName() + " was " +

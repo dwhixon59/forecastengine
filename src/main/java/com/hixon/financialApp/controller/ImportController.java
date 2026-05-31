@@ -314,9 +314,9 @@ public class ImportController {
                 // It is expected that transactions will be downloaded almost daily, so if the first transaction is more
                 // than a week old, ask the user to verify that they indeed want to import these old transactions:
                 if (firstTransaction) {
-                    Calendar oneWeekAgo = Calendar.getInstance();
-                    oneWeekAgo.add(Calendar.DATE, -7);
-                    if (currentTransaction.getDate().before(oneWeekAgo)) {
+                    // Enhancement 6: use lastImportDate-based threshold instead of a fixed 7-day window.
+                    Calendar warningThreshold = computeOldTransactionWarningThreshold(register);
+                    if (currentTransaction.getDate().before(warningThreshold)) {
                         view.say("\nThe earliest transaction in the import file seems old.");
                         view.say(currentTransaction.toStringConcise());
                         if (!view.getYesOrNo("Are you sure you want to import it?")) {
@@ -331,7 +331,6 @@ public class ImportController {
 
                 // If we haven't already assigned the splits to this transaction in a previous run:
                 if (splits == null) {
-
                     /*
                      * Phase 2:  Reconcile the transaction with any existing provisional transactions
                      */
@@ -350,6 +349,7 @@ public class ImportController {
 
                         // If the merchant is the unknown merchant:
                         if (provisionalTransaction.getMerchant().getName().equals(Merchant.UNKNOWN)) {
+
                             // then get the merchant with the help of the user:
                             merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
                             currentTransaction.setMerchant(merchant);
@@ -646,12 +646,36 @@ public class ImportController {
             financialInstitution.close();
         }
 
-        // Return the number of transactions imported:
+        // Enhancement 6: Update lastImportDate so future sessions use the accurate threshold
         if (j > 0) {
+            register.setLastImportDate(Calendar.getInstance());
+            register.update();
             view.say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
                     register.getName() + " from file " + importFilePath + ".");
         }
         return forecast.getInSync();
+    }
+
+    /**
+     * Enhancement 6: Compute the threshold date before which a transaction is considered "old."
+     * If the register has a lastImportDate, use lastImportDate minus 30 days as the threshold
+     * so normal import gaps don't trigger warnings. If no lastImportDate is known, fall back
+     * to 7 days ago (the original behavior).
+     *
+     * @param register the register being imported
+     * @return a Calendar representing the oldest acceptable transaction date
+     */
+    private Calendar computeOldTransactionWarningThreshold(Register register) {
+        Calendar threshold = Calendar.getInstance();
+        if (register.getLastImportDate() != null) {
+            // Allow up to 30 days before the last import without warning
+            threshold = (Calendar) register.getLastImportDate().clone();
+            threshold.add(Calendar.DATE, -30);
+        } else {
+            // No prior import recorded — use the original 7-day window
+            threshold.add(Calendar.DATE, -7);
+        }
+        return threshold;
     }
 
     /**
@@ -838,13 +862,10 @@ public class ImportController {
 
                 // If we haven't already assigned the splits to this transaction in a previous run:
                 if (splits == null) {
-
                     /*
                      * Phase 2:  Reconcile the transaction with any existing provisional transactions
                      */
                     // Get matching provisional transaction and reconcile it with the cleared transaction.
-                    // The financial institution class handles all the details including tip detection
-                    // and balance adjustments. Matching is now done purely on payee, date, and amount.
                     Transaction provisionalTransaction =
                             financialInstitution.getMatchingProvisionalTransaction(currentTransaction);
 
@@ -909,62 +930,37 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
-                            // Determine which merchant to use
+                            // Determine the merchant for this transaction
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
-                                // We found exactly one merchant from the payee, use it
                                 merchant = possibleMerchants.getFirst();
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-                            } else if (merchant != null) {
-                                // Use the merchant we already identified (from provisional transaction)
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-                            } else {
-                                // No merchant identified yet - get it from the budget item
-                                BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
-                                List<BudgetItemMerchant> budgetItemMerchantList =
-                                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
-
-                                // Extract just the Merchant objects from BudgetItemMerchant list
-                                List<Merchant> budgetItemMerchants = new ArrayList<>();
-                                if (budgetItemMerchantList != null) {
-                                    for (BudgetItemMerchant bim : budgetItemMerchantList) {
-                                        budgetItemMerchants.add(Merchant.getById(bim.getIdMerchant()));
-                                    }
-                                }
-
-                                if (budgetItemMerchants.size() == 1) {
-                                    // Budget item has exactly one merchant assigned, use it
-                                    merchant = budgetItemMerchants.getFirst();
-                                    currentTransaction.setMerchant(merchant);
-                                    currentTransaction.setIdMerchant(merchant.getId());
-                                } else {
-                                    // Either multiple merchants or no merchants - ask user to identify merchant
-                                    MerchantController merchantController = new MerchantController(sessionController);
-                                    merchant = merchantController.assignMerchant(
-                                        currentTransaction.getMerchantPayee(),
-                                        currentTransaction.getPayee(),
-                                        currentTransaction.getAmount());
-                                    currentTransaction.setMerchant(merchant);
-                                    currentTransaction.setIdMerchant(merchant.getId());
-                                }
+                            } else if (merchant == null) {
+                                // If we can't determine a unique merchant, we need to ask the user
+                                // Don't auto-save in this case - let the normal merchant assignment flow handle it
+                                // But we can still keep the splits for later use
+                                merchant = null;  // Explicitly set to null to skip auto-save
                             }
 
-                            // Save the transaction with merchant info
-                            currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+                            // Only save and reconcile if we successfully identified a merchant
+                            if (merchant != null) {
+                                currentTransaction.setMerchant(merchant);
+                                currentTransaction.setIdMerchant(merchant.getId());
 
-                            // Save the splits
-                            for (TransactionSplit split : splits) {
-                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                // Save the transaction with merchant info
+                                currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                                // Save the splits
+                                for (TransactionSplit split : splits) {
+                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                }
+
+                                // Reconcile immediately with the forecast (no need to do it again in Phase 5)
+                                ForecastController forecastController = new ForecastController(sessionController);
+                                forecastController.reconcile(currentTransaction, splits);
+
+                                // Mark that we've auto-matched and already reconciled
+                                autoMatched = true;
                             }
-
-                            // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                            ForecastController forecastController = new ForecastController(
-                                    sessionController);
-                            forecastController.reconcile(currentTransaction, splits);
-
-                            // Mark that we've auto-matched and already reconciled
-                            autoMatched = true;
+                            // If merchant is still null, splits will be saved later after merchant assignment
                         }
                     }
 
@@ -972,8 +968,8 @@ public class ImportController {
                     if (merchant == null) {
                         try {
                             MerchantController merchantController = new MerchantController(sessionController);
-                            merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(), currentTransaction.getPayee(),
-                                    currentTransaction.getAmount());
+                            merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
+                                    currentTransaction.getPayee(), currentTransaction.getAmount());
                             currentTransaction.setIdMerchant(merchant.getId());
                             currentTransaction.setMerchant(merchant);
                         } catch (CancelException ce) {
@@ -998,9 +994,7 @@ public class ImportController {
                                     continue;
 
                                 case CANCEL:
-                                    // Restart processing of the current reocrd:
-                                    i++;
-                                    j--;
+                                    // Can't restart with iterator pattern - just skip this transaction
                                     continue;
 
                                 case SKIP:
@@ -1025,7 +1019,6 @@ public class ImportController {
                     }
 
                     // At this point the transaction is complete, so save it off:
-                    // Only save if we didn't already save in Phase 2.5
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
 
                     // Tell the user what we just did:
@@ -1049,9 +1042,7 @@ public class ImportController {
                             try {
                                 budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
                             } catch (CancelException ce) {
-                                // Restart processing of the current record:
-                                i++;
-                                j--;
+                                // Can't restart with iterator pattern - just skip this transaction
                                 continue;
                             } catch (SkipException se) {
                                 continue;
@@ -1077,9 +1068,7 @@ public class ImportController {
                         if (splits == null) {
                             switch (budgetController.getTerminationCondition()) {
                                 case CANCEL:
-                                    // Restart processing of the current record:
-                                    i++;
-                                    j--;
+                                    // Can't restart with iterator pattern - just skip this transaction
                                     continue;
 
                                 case SKIP:
@@ -1109,9 +1098,16 @@ public class ImportController {
                         }
                     } else {
                         view.say("Already assigned splits.");
+
+                        // If splits were modified during provisional reconciliation (e.g., tip adjustment),
+                        // they need to be saved to persist the changes
+                        for (TransactionSplit split : splits) {
+                            if (split.isDirty()) {
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
+                            }
+                        }
                     }
                 } else {
-
                     // Tell the user what we just did:
                     importLog.logImportEvent(currentTransaction, false);
                 }
@@ -1119,7 +1115,6 @@ public class ImportController {
                 /*
                  * Phase 5:  Reconcile the transaction with the forecast:
                  */
-
                 // Only reconcile if we didn't already reconcile in Phase 2.5
                 if (!autoMatched) {
                     // Filter out splits that are already reconciled before calling reconcile()
@@ -1138,8 +1133,7 @@ public class ImportController {
                     // Only call reconcile if there are splits that need reconciling
                     if (!splitsToReconcile.isEmpty()) {
                         // Reconcile this transaction with the forecast:
-                        ForecastController forecastController = new ForecastController(
-                                sessionController);
+                        ForecastController forecastController = new ForecastController(sessionController);
                         forecastController.reconcile(currentTransaction, splitsToReconcile);
                     }
                 }
@@ -1584,6 +1578,56 @@ public class ImportController {
                         List<BudgetItemMerchant> budgetItemMerchants = new ArrayList<>();
                         if (merchant != null) {
                             budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                        }
+
+                        // Check for unexpired budget items that have no applicable forecast transaction
+                        // (their forecast coverage has expired even though the budget item itself hasn't).
+                        // Separate them out and treat them like expired items:
+                        if (splits == null && !budgetItemMerchants.isEmpty() && merchant != null) {
+                            List<BudgetItemMerchant> forecastExpiredItems = new ArrayList<>();
+                            Iterator<BudgetItemMerchant> iter = budgetItemMerchants.iterator();
+                            while (iter.hasNext()) {
+                                BudgetItemMerchant bim = iter.next();
+                                BudgetItem bi = bim.getBudgetItem();
+                                if (bi.getPeriod() != null && bi.getPeriod() != Item.PeriodType.ON_DEMAND) {
+                                    ForecastTransaction ft = ForecastTransaction.getApplicableForecastTransaction(
+                                            bi.getId(), Calendar.getInstance());
+                                    if (ft == null) {
+                                        forecastExpiredItems.add(bim);
+                                        iter.remove();
+                                    }
+                                }
+                            }
+
+                            // If any budget items had no forecast transaction, offer to renew them:
+                            if (!forecastExpiredItems.isEmpty()) {
+                                try {
+                                    if (forecastExpiredItems.size() == 1) {
+                                        BudgetItem budgetItem = BudgetItem.getById(forecastExpiredItems.getFirst().getIdBudgetItem());
+                                        if (view.getYesOrNo("The budget item " + budgetItem.toStringVeryConcise() +
+                                                " has expired forecast coverage.\nDo you want to renew it?")) {
+                                            budgetItem.renew();
+                                            forecast.setInSync(false);
+                                            budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                                        }
+                                    } else {
+                                        if (view.getYesOrNo("There are budget items with expired forecast coverage " +
+                                                "assigned to the merchant " + merchant.getName() +
+                                                ".  Do you want to view them?")) {
+                                            try {
+                                                budgetController.renewBudgetItems(forecastExpiredItems);
+                                                forecast.setInSync(false);
+                                                budgetItemMerchants = BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
+                                            } catch (CancelException ce) {
+                                                // User canceled the renewal, continue without it.
+                                            }
+                                        }
+                                    }
+                                } catch (SkipException se) {
+                                    provTrxIndex++;
+                                    continue;
+                                }
+                            }
                         }
 
                         // If we couldn't find any matching items, get some help from the user:

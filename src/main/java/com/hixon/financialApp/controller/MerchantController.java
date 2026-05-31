@@ -3,6 +3,7 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.entity.MatchQuery;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.merchant.MerchantPayee;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
@@ -83,8 +84,21 @@ public class MerchantController {
         Merchant merchant = Merchant.getByPayee(merchantPayeeString);
 
         if (merchant != null) {
-            // Merchant found - check if we should ask before using it
-            boolean shouldAsk = requireConfirmation || merchant.isAskAlways();
+            // Merchant found - check if we should ask before using it.
+            // Enhancement 4: Never ask for confirmation when the payee is a transfer payee
+            // (e.g., "Transfer to Danni's Spending Account from Bill Pay Danni"). The merchant
+            // name is derived directly from the resolved register name, so confirmation is redundant.
+            // Also skip when the merchant's name matches a known register (e.g., payee "TO" resolved
+            // to "Joint Savings Account" — the merchant IS the register, confirmation adds no value).
+            boolean isTransferPayee = merchantPayeeString != null
+                    && (merchantPayeeString.toLowerCase().startsWith("transfer to ")
+                        || merchantPayeeString.toLowerCase().startsWith("transfer from "));
+            if (!isTransferPayee && merchant.getName() != null) {
+                try {
+                    isTransferPayee = Register.getByName(merchant.getName()) != null;
+                } catch (Exception ignored) { /* don't let a DB error break merchant assignment */ }
+            }
+            boolean shouldAsk = !isTransferPayee && (requireConfirmation || merchant.isAskAlways());
 
             if (shouldAsk) {
                 String confirm = view.getResponseString(
@@ -119,11 +133,14 @@ public class MerchantController {
                 merchant.save();
             }
 
-            // Add the payee to this merchant if not already associated
+            // Add the payee to this merchant if not already associated.
+            // Use exact match on payee string — a "contains" check would incorrectly treat
+            // "ZELLE FROM X ON" as already covering "ZELLE FROM X", preventing the new-format
+            // payee from being saved and causing repeated prompts in the same session.
             List<MerchantPayee> existingPayees = merchant.getPayees();
             boolean payeeExists = false;
             for (MerchantPayee existingPayee : existingPayees) {
-                if (existingPayee.toString().contains(merchantPayeeString)) {
+                if (merchantPayeeString.equals(existingPayee.getPayee())) {
                     payeeExists = true;
                     break;
                 }

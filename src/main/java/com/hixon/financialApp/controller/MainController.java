@@ -6,11 +6,11 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastEngine;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.DatabaseConnectionManager;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import com.hixon.financialApp.view.excel.EnvelopeReport;
 
-import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Calendar;
 
@@ -36,10 +36,10 @@ public class MainController {
     /*
      * Constructors:
      */
-    public MainController(String username, Connection dbConnection, ViewInt view,
+    public MainController(String username, DatabaseConnectionManager connectionManager, ViewInt view,
                           NotificationServiceInt notificationService) throws SQLException, EntityException {
 
-        Utility.setDbConnection(dbConnection);
+        Utility.setConnectionManager(connectionManager);
         Utility.setUser(User.getByName(username));
         Utility.setView(view);
 
@@ -460,24 +460,18 @@ public class MainController {
 
             // Close the connection to the database:
             System.out.println("\nClose the connection to the database.");
-            Utility.getDbConnection().close();
+            Utility.closeConnectionManager();
 
         } catch (QuitException qe) {
-            if (Utility.getDbConnection() != null) {
-                Utility.getDbConnection().close();
-            }
+            Utility.closeConnectionManager();
             view.say("\nProcessing aborted at user's request.");
 
         } catch (CancelException ce) {
-            if (Utility.getDbConnection() != null) {
-                Utility.getDbConnection().close();
-            }
+            Utility.closeConnectionManager();
             view.say("\nOperation cancelled by user.");
 
         } catch (Exception e) {
-            if (Utility.getDbConnection() != null) {
-                Utility.getDbConnection().close();
-            }
+            Utility.closeConnectionManager();
             e.printStackTrace();
         }
     }  // End main().

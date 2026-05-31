@@ -141,6 +141,14 @@ public class WellsFargoBank extends FinancialInstitution {
      */
     private String[] payeeTokens;
 
+    /**
+     * Enhancement 3: Session-level transfer resolution cache.
+     * Keyed on normalized_payee + "|" + formatted_amount.
+     * Once a transfer is resolved to a register within a session, subsequent identical
+     * transfers are auto-resolved without prompting the user again.
+     */
+    private final Map<String, Register> sessionTransferCache = new HashMap<>();
+
     /*
      * Constructors:
      */
@@ -327,20 +335,36 @@ public class WellsFargoBank extends FinancialInstitution {
                 Register transferRegister;
                 String accountNumber = "";
                 if (i == payeeTokens.length) {
-                    logger.debug("  Account number not found in payee string - will ask user");
+                    logger.debug("  Account number not found in payee string - checking session cache / asking user");
 
-                    // The account number isn't in the payee string, so ask the user which register it came from:
-                    SessionController tempSessionController = new SessionController(getRegister(), budget, forecast, view, notificationService);
-                    tempSessionController.setFinancialInstitution(this);
-                    RegisterController registerController = new RegisterController(tempSessionController);
-                    transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
+                    // Enhancement 3: check session cache before prompting the user
+                    String cacheKey = payee.trim().toUpperCase() + "|" + String.format("%.2f", amount);
+                    if (sessionTransferCache.containsKey(cacheKey)) {
+                        transferRegister = sessionTransferCache.get(cacheKey);
+                        logger.debug("  Session cache HIT: '{}' → '{}'", cacheKey,
+                                transferRegister != null ? transferRegister.getName() : "null");
+                        if (transferRegister != null) {
+                            view.say("Using cached transfer destination: " + transferRegister.getName());
+                        }
+                    } else {
+                        // The account number isn't in the payee string, so ask the user which register it came from:
+                        SessionController tempSessionController = new SessionController(getRegister(), budget, forecast, view, notificationService);
+                        tempSessionController.setFinancialInstitution(this);
+                        RegisterController registerController = new RegisterController(tempSessionController);
+                        transferRegister = registerController.resolveUnmatchedAccount(date, amount, payee, recurring);
+
+                        // Store the result in the session cache (even if null) to avoid re-asking
+                        sessionTransferCache.put(cacheKey, transferRegister);
+                        logger.debug("  Session cache STORE: '{}' → '{}'", cacheKey,
+                                transferRegister != null ? transferRegister.getName() : "null");
+                    }
 
                     // If we were able to determine the register this transaction was transferred to/from:
                     if (transferRegister != null) {
 
                         // Then get the account number from the register:
                         accountNumber = transferRegister.getAccountNumber();
-                        logger.debug("  User selected register: {} (account: {})", transferRegister.getName(), accountNumber);
+                        logger.debug("  Resolved register: {} (account: {})", transferRegister.getName(), accountNumber);
                     }
                 }
                 else {

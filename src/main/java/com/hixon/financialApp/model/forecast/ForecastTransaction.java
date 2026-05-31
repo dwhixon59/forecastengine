@@ -239,6 +239,7 @@ public class ForecastTransaction extends IndependentEntity {
         plannedDate = (Calendar) nextDate.clone();
         memo = forecastItem.getMemo();
         this.firstOccurrence = firstOccurrence;
+        this.version = Calendar.getInstance();
     }
 
     public ForecastTransaction(ResultSet rs) throws SQLException {

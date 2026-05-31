@@ -19,6 +19,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -77,6 +79,16 @@ public class Register extends IndependentEntity {
     @Getter
     @Setter
     private List<Transaction> significantEvents = new ArrayList<>();
+
+    /**
+     * Enhancement 6: The date of the most recent successful transaction import.
+     * Used to determine whether the "old transaction" warning should be shown.
+     * Null if no import has ever been performed for this register.
+     */
+    @Getter
+    @Setter
+    private Calendar lastImportDate = null;
+
     protected ViewInt view = null;
     protected NotificationServiceInt notificationService = null;
 
@@ -257,7 +269,8 @@ public class Register extends IndependentEntity {
             "r.account_number as 'r.account_number', r.balance as 'r.balance', r.skippedAmount as 'r.skippedAmount', " +
             "r.financialInstitution as 'r.financialInstitution', r.trxImportFileName as 'r.trxImportFileName', " +
             "r.trxImportFileDirectory as 'r.trxImportFileDirectory', r.provisionalTrxFileName as 'r.provisionalTrxFileName', " +
-            "r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', bin_to_uuid(r.Budget_idBudget) as 'r.idBudget' " +
+            "r.provisionalTrxFileDirectory as 'r.provisionalTrxFileDirectory', bin_to_uuid(r.Budget_idBudget) as 'r.idBudget', " +
+            "r.lastImportDate as 'r.lastImportDate' " +
             "from register r";
 
     public static String getSelectQuery() {
@@ -332,8 +345,10 @@ public class Register extends IndependentEntity {
                 "', trxImportFileDirectory = '" + safeTrxImportFileDirectory +
                 "', provisionalTrxFileName = '" + safeProvisionalTrxFileName +
                 "', provisionalTrxFileDirectory = '" + safeProvisionalTrxFileDirectory +
-                "', Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
-                "where idRegister = uuid_to_bin('" + id + "')";
+                "', Budget_idBudget = uuid_to_bin('" + idBudget + "')" +
+                ", lastImportDate = " + (lastImportDate != null ?
+                        Utility.calendarDateToSqlDateString(lastImportDate) : "NULL") +
+                " where idRegister = uuid_to_bin('" + id + "')";
     }
 
     @Override
@@ -382,6 +397,13 @@ public class Register extends IndependentEntity {
                 this.provisionalTrxFileName = rs.getString("r.provisionalTrxFileName");
                 this.provisionalTrxFileDirectory = rs.getString("r.provisionalTrxFileDirectory");
                 this.idBudget = UUID.fromString(rs.getString("r.idBudget"));
+
+                // Enhancement 6: read lastImportDate (nullable)
+                java.sql.Date lastImportSqlDate = rs.getDate("r.lastImportDate");
+                if (lastImportSqlDate != null) {
+                    this.lastImportDate = Calendar.getInstance();
+                    this.lastImportDate.setTime(lastImportSqlDate);
+                }
 
             } else {
                 throw new RegisterException("Result set passed into Register(rs) is empty or null.");

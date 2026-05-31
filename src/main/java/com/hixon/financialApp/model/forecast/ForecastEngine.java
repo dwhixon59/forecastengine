@@ -17,8 +17,8 @@ public class ForecastEngine {
 
     // Constructor:
     public ForecastEngine() throws Exception {
-        if (Utility.getDbConnection() == null) {
-            throw new Exception("[SEVERE]  Database connection must not be null.");
+        if (!Utility.isConnectionManagerSet()) {
+            throw new Exception("[SEVERE]  Database connection manager must be initialised before using ForecastEngine.");
         }
     } // End ForecastEngine().
 

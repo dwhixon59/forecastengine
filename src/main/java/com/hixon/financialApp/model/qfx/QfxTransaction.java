@@ -14,6 +14,7 @@ import java.util.Objects;
  *   <li>type - Transaction type (DEBIT/CREDIT)</li>
  *   <li>fitId - Financial Institution Transaction ID (unique identifier)</li>
  *   <li>userDate - Optional user date (may differ from posted date)</li>
+ *   <li>memo - Optional memo/description field (may contain account numbers for transfers)</li>
  * </ul>
  * 
  * <p><strong>Immutability:</strong> All fields are final and set via builder pattern.
@@ -29,6 +30,9 @@ public class QfxTransaction implements TransactionData {
     private final double amount;
     private final String fitId;
     private final String name;
+    /** Optional memo field from the QFX &lt;MEMO&gt; element. May contain account numbers for transfers. */
+    private final String memo;
+
     private QfxTransaction(Builder builder) {
         this.type = Objects.requireNonNull(builder.type, "Transaction type cannot be null");
         this.postedDate = Objects.requireNonNull(builder.postedDate, "Posted date cannot be null");
@@ -36,6 +40,7 @@ public class QfxTransaction implements TransactionData {
         this.amount = builder.amount;
         this.fitId = Objects.requireNonNull(builder.fitId, "FITID cannot be null");
         this.name = Objects.requireNonNull(builder.name, "Name cannot be null");
+        this.memo = builder.memo;
     }
     // TransactionData interface methods
     @Override
@@ -44,8 +49,6 @@ public class QfxTransaction implements TransactionData {
     }
     @Override
     public LocalDate getAuthorizationDate() {
-        // QFX doesn't distinguish between posted and auth date in most cases
-        // Use userDate if available, otherwise posted date
         return userDate != null ? userDate : postedDate;
     }
     @Override
@@ -58,7 +61,6 @@ public class QfxTransaction implements TransactionData {
     }
     @Override
     public boolean isCleared() {
-        // QFX transactions are always cleared (they come from the bank statement)
         return true;
     }
     @Override
@@ -81,6 +83,14 @@ public class QfxTransaction implements TransactionData {
     public String getName() {
         return name;
     }
+    /**
+     * Returns the memo/description from the QFX &lt;MEMO&gt; element, or null if not present.
+     * For transfer transactions, this often contains masked account numbers (e.g., XXXXXX7394)
+     * that can be used to identify the destination/source register.
+     */
+    public String getMemo() {
+        return memo;
+    }
     // Builder pattern
     public static Builder builder() {
         return new Builder();
@@ -92,6 +102,7 @@ public class QfxTransaction implements TransactionData {
         private double amount;
         private String fitId;
         private String name;
+        private String memo;
         public Builder type(TransactionType type) {
             this.type = type;
             return this;
@@ -114,6 +125,10 @@ public class QfxTransaction implements TransactionData {
         }
         public Builder name(String name) {
             this.name = name;
+            return this;
+        }
+        public Builder memo(String memo) {
+            this.memo = memo;
             return this;
         }
         public QfxTransaction build() {

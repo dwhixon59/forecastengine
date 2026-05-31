@@ -15,6 +15,7 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionUtilities;
+import com.hixon.financialApp.model.register.TransferMemoMapping;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
@@ -48,6 +49,14 @@ public class RegisterController {
     protected ViewInt view;
     protected NotificationServiceInt notificationService;
     protected SessionController sessionController;
+
+    /**
+     * Enhancement 3: Session-level transfer resolution cache.
+     * Keyed on (normalized payee + "|" + amount) so that repeated transfers with the same
+     * payee/amount within one import session are auto-resolved without prompting.
+     * This map is intentionally not persisted — it lives only for the lifetime of this controller instance.
+     */
+    private final Map<String, Register> sessionTransferCache = new HashMap<>();
 
 
     /*
@@ -385,6 +394,31 @@ public class RegisterController {
      * @throws QuitException     If the user quits the operation.
      */
     public Register resolveUnmatchedAccount(Calendar date, double amount, String payee, boolean recurring) throws Exception {
+        // Enhancement 3: Check the session-level transfer cache first.
+        // If the same (payee, amount) pair was already resolved this session, reuse that answer.
+        String cacheKey = makeTransferCacheKey(payee, amount);
+        if (sessionTransferCache.containsKey(cacheKey)) {
+            Register cached = sessionTransferCache.get(cacheKey);
+            logger.debug("[SessionCache] HIT key='{}' → '{}'", cacheKey, cached != null ? cached.getName() : "null");
+            if (cached != null) {
+                view.say("\u25b8 Auto-resolved transfer from session cache: " + cached.getName());
+            }
+            return cached;
+        }
+
+        Register result = resolveUnmatchedAccountInternal(date, amount, payee, recurring);
+
+        // Cache the result (including null so we don't re-prompt if it's truly unresolvable).
+        sessionTransferCache.put(cacheKey, result);
+        logger.debug("[SessionCache] STORE key='{}' → '{}'", cacheKey, result != null ? result.getName() : "null");
+        return result;
+    }
+
+    /**
+     * Internal implementation of {@link #resolveUnmatchedAccount}.
+     * Called by the cache-aware public method; do not call directly.
+     */
+    private Register resolveUnmatchedAccountInternal(Calendar date, double amount, String payee, boolean recurring) throws Exception {
 
         logger.debug("");
         logger.debug("=== resolveUnmatchedAccount Debug ===");
@@ -397,6 +431,18 @@ public class RegisterController {
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
 
+        // Enhancement 2: Check the persistent transfer_memo_mapping table before any filtering.
+        // If we have previously resolved the same payee pattern to a register, reuse that answer.
+        try {
+            Register mappedRegister = TransferMemoMapping.findRegisterForPayee(payee);
+            if (mappedRegister != null && !mappedRegister.equals(register)) {
+                logger.debug("  TransferMemoMapping HIT: '{}' -> '{}'", payee, mappedRegister.getName());
+                view.say("\u25b8 Auto-resolved transfer from memo history: " + mappedRegister.getName());
+                return mappedRegister;
+            }
+        } catch (Exception e) {
+            logger.debug("  TransferMemoMapping lookup failed: {}", e.getMessage());
+        }
 
         // if this is a recurring transfer:
         if (recurring) {
@@ -726,6 +772,13 @@ public class RegisterController {
                 registerNames, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
         Register result = possibleRegistersList.get(selection);
         logger.debug("  User selected register: {}", result.getName());
+        // Enhancement 2: Persist this mapping so future sessions auto-resolve the same payee.
+        try {
+            TransferMemoMapping.save(payee, result);
+            logger.debug("  TransferMemoMapping.save succeeded for payee '{}'", payee);
+        } catch (Exception e) {
+            logger.debug("  TransferMemoMapping.save failed: {}", e.getMessage());
+        }
         logger.debug("=== End resolveUnmatchedAccount Debug ===");
         logger.debug("");
         return result;
@@ -739,6 +792,16 @@ public class RegisterController {
      *         or throws ContinueFilteringException if multiple matches exist
      * @throws ContinueFilteringException when multiple registers exist and filtering should continue
      */
+    /**
+     * Enhancement 3: Build a session cache key from a payee string and transaction amount.
+     * The normalized payee strips noise (extra whitespace, case) while keeping the meaningful tokens.
+     * Amount is included because the same person can transfer different amounts to different registers.
+     */
+    private String makeTransferCacheKey(String payee, double amount) {
+        String normalized = (payee == null) ? "" : payee.trim().toUpperCase().replaceAll("\\s+", " ");
+        return normalized + "|" + amount;
+    }
+
     private Register evaluateRegisterSet(Set<Register> possibleRegisters) throws ContinueFilteringException {
         // Case 1: No registers found
         if (possibleRegisters.isEmpty()) {

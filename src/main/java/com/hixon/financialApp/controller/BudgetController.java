@@ -729,8 +729,8 @@ public class BudgetController {
                     line += Utility.calendarDateToStringDate(
                             applicableForecastTransaction.getPlannedDate());
                 } else {
-                    // For expired items with no forecast transaction, show "Not planned"
-                    line += ", Not planned";
+                    // For expired items with no forecast transaction, show "Expired"
+                    line += ", Expired";
                 }
             }
             if (budgetItem.getMemo() != null &&

@@ -9,13 +9,13 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.DatabaseConnectionManager;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlBudgetView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlForecastView;
 import com.hixon.financialApp.view.spreadsheetXml.SpreadsheetXmlRegisterView;
 
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 
@@ -73,10 +73,10 @@ public class TestController {
     public TestController(String username, String register, String budget, String forecast, ViewInt view,
                           NotificationServiceInt notificationService) throws Exception {
 
-        // Set up the user, the database connection, and the view:
-        java.sql.Connection dbConnection = DriverManager.getConnection(
+        // Set up the user, the database connection manager, and the view:
+        DatabaseConnectionManager mgr = new DatabaseConnectionManager(
                 "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***");
-        Utility.setDbConnection(dbConnection);
+        Utility.setConnectionManager(mgr);
         Utility.setUser(User.getByName(username));
         Utility.setView(view);
 
@@ -113,9 +113,9 @@ public class TestController {
     // Close the connection to the database:
     public void closeDbConnection() throws SQLException {
 
-        // Close the connection to the database:
+        // Close the connection to the database via the manager:
         System.out.println("\nClose the connection to the database.");
-        Utility.getDbConnection().close();
+        Utility.closeConnectionManager();
     }
 
 }  // End class TestController.

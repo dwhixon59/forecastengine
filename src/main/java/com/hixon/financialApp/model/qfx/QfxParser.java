@@ -240,6 +240,7 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
                     .amount(ofxTxn.getAmount())
                     .fitId(ofxTxn.getId())
                     .name(ofxTxn.getName())
+                    .memo(ofxTxn.getMemo())   // Enhancement 1: capture MEMO for transfer disambiguation
                     .build();
         } catch (Exception e) {
             System.err.println("Warning: Failed to convert transaction: " + e.getMessage());

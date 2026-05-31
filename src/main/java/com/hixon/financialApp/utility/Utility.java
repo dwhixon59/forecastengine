@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.ParseException;
@@ -31,8 +32,8 @@ public class Utility {
     // Common user for the App:
     private static User user;
 
-    // Common database connection for the App:
-    private static Connection dbConnection;
+    // Database connection manager – handles reconnection on timeout:
+    private static DatabaseConnectionManager connectionManager;
 
     // The configured view resolver:
     public static ViewInt resolver;
@@ -49,12 +50,50 @@ public class Utility {
         Utility.user = user;
     }
 
-    public static Connection getDbConnection() {
-        return dbConnection;
+    /**
+     * Returns a live database connection, reconnecting transparently if the underlying
+     * connection has timed out or been closed by the MySQL server.
+     *
+     * @return a valid, open {@link Connection}
+     * @throws SQLException if the connection manager is not initialised or reconnection fails
+     */
+    public static Connection getDbConnection() throws SQLException {
+        if (connectionManager == null) {
+            throw new SQLException("Database connection manager has not been initialised. " +
+                    "Call Utility.setConnectionManager() before using the database.");
+        }
+        return connectionManager.getConnection();
     }
 
-    public static void setDbConnection(Connection dbConnection) {
-        Utility.dbConnection = dbConnection;
+    /**
+     * Replaces the active connection manager.  Called once at startup from {@code Main} or
+     * from test setup code.
+     */
+    public static void setConnectionManager(DatabaseConnectionManager mgr) {
+        Utility.connectionManager = mgr;
+    }
+
+    /**
+     * Returns {@code true} if a connection manager has been set (regardless of whether
+     * the underlying connection is currently open).
+     */
+    public static boolean isConnectionManagerSet() {
+        return connectionManager != null;
+    }
+
+    /**
+     * Closes the underlying database connection via the manager.  Safe to call even if
+     * the manager has never been set or the connection is already closed.
+     */
+    public static void closeConnectionManager() {
+        if (connectionManager != null) {
+            try {
+                connectionManager.close();
+            } catch (SQLException e) {
+                // Log but do not re-throw – we are shutting down
+                e.printStackTrace();
+            }
+        }
     }
 
     public static ViewInt getView() {

@@ -239,7 +239,7 @@ public class BudgetItem extends Item {
                 if (forecastTransaction != null) {
                     line += Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate());
                 } else {
-                    line += "Not planned.";
+                    line += "Expired.";
                 }
             }
             if (getMemo() != null && !getMemo().isEmpty()) {

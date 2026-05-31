@@ -367,8 +367,19 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         // Convert LocalDate to Calendar
         Calendar postDate = Utility.localDateToCalendarDate(qfxTxn.getPostedDate());
 
-        // Get payee from QFX transaction
-        String payee = qfxTxn.getName();
+        // Get payee from QFX transaction.
+        // Enhancement 1: For transfer transactions, append the MEMO field to the payee string.
+        // Wells Fargo QFX files put the critical disambiguation data (including masked account numbers
+        // like XXXXXX7394) in the MEMO field, not the NAME field. WellsFargoBank.parseMerchantPayee()
+        // already handles combined NAME+MEMO strings, so we combine them here for transfer types.
+        String rawName = qfxTxn.getName();
+        String memo = qfxTxn.getMemo();
+        String payee;
+        if (isTransferPayee(rawName) && memo != null && !memo.isBlank()) {
+            payee = rawName + " " + memo.trim();
+        } else {
+            payee = rawName;
+        }
 
         // QFX transactions are always cleared
         boolean cleared = true;
@@ -411,6 +422,24 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
         // Create transaction using institution-specific logic
         return createFromCSVRecord(csvRecord, importRecordBaseName);
+    }
+
+    /**
+     * Returns true if the QFX transaction name indicates a transfer transaction.
+     * Transfer transactions benefit from having the MEMO appended to the payee string
+     * because the MEMO often contains masked account numbers used for register identification.
+     *
+     * @param name the QFX NAME field value
+     * @return true if this looks like a transfer transaction
+     */
+    private static boolean isTransferPayee(String name) {
+        if (name == null) return false;
+        String upper = name.toUpperCase();
+        return upper.startsWith("ONLINE TRANSFER")
+                || upper.startsWith("RECURRING TRANSFER")
+                || upper.startsWith("ATM TRANSFER")
+                || upper.startsWith("SAVE AS YOU")
+                || upper.startsWith("TRANSFER IN BRANCH");
     }
 
     // ========================================
