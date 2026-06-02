@@ -112,18 +112,29 @@ public class ImportLog {
 
         String importStatus;
         switch (status) {
-            case NEWLY_IMPORTED:  importStatus = "Imported a "; break;
-            case ALREADY_IMPORTED: importStatus = "Already imported: "; break;
-            case SKIPPED_BY_USER:  importStatus = "Skipped: "; break;
-            default: importStatus = "Processed: ";
+            case NEWLY_IMPORTED:  importStatus = "Imported"; break;
+            case ALREADY_IMPORTED: importStatus = "Already imported"; break;
+            case SKIPPED_BY_USER:  importStatus = "Skipped"; break;
+            default: importStatus = "Processed";
         }
 
-        getView().sayH3(importStatus + creditOrDebitString + transaction.getMerchant().getName() + " for " +
-                formatDollarAmount(Math.abs(transaction.getAmount())) + " on " +
-                ((transaction.getAuthorizationDate() != null) ?
-                        calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                        calendarDateToStringDate(transaction.getPostDate())) +
-                " (Import Record ID: " + transaction.getImportRecordId() + ")");
+        String importDate = (transaction.getAuthorizationDate() != null) ?
+                calendarDateToStringDate(transaction.getAuthorizationDate()) :
+                calendarDateToStringDate(transaction.getPostDate());
+        String registerName = null;
+        try {
+            registerName = transaction.getRegister() != null ? transaction.getRegister().getName() : null;
+        } catch (Exception ignored) {
+            registerName = null;
+        }
+        String destinationName = (registerName != null && !registerName.isBlank()) ? registerName : transaction.getMerchant().getName();
+
+        // Put a blank line above each new transaction so it stands out in the import log.
+        getView().say();
+
+        getView().sayH3(importStatus + " a " + (transaction.getAmount() > 0 ? "credit" : "debit") +
+                " to " + destinationName + " for " + formatDollarAmount(Math.abs(transaction.getAmount())) +
+                " on " + importDate + " (Import Record ID: " + transaction.getImportRecordId() + ")");
 
         // If a tip was detected during provisional/cleared reconciliation, display it now
         if (transaction.hasTipInfo()) {

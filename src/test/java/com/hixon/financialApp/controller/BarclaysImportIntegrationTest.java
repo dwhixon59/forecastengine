@@ -43,6 +43,7 @@ class BarclaysImportIntegrationTest {
         Register mockRegister = mock(Register.class);
         when(mockRegister.getTrxImportFileDirectory()).thenReturn(new File(qfxFilePath).getParent());
         when(mockRegister.getTrxImportFileName()).thenReturn(new File(qfxFilePath).getName());
+        when(mockRegister.getTrxImportFilePath()).thenReturn(qfxFilePath);
 
         Budget mockBudget = mock(Budget.class);
         Forecast mockForecast = mock(Forecast.class);

@@ -332,11 +332,40 @@ public class TransactionSplitsController {
                     continue;
                 }
 
-                // else if the response is a single use category:
+                // E10: Text input — use the entered string as a budget-item search seed.
+                // The user can find and pick a budget item without having to first type 'a'.
             } else if (amounts[0].matches("[a-zA-Z][a-zA-Z0-9 '()-\\+]+")) {
-                view.say("The allocate, but don't add, function has not been implemented yet.");
-                //String payee = amount.substring(0, amount.indexOf(':') - 1);
-                done = false;
+                try {
+                    view.say("Searching for budget item matching '" + amounts[0] + "'...");
+                    BudgetItem selectedBudgetItem = budgetController.getBudgetItemByNameFullText(amounts[0]);
+
+                    if (selectedBudgetItem != null) {
+                        // Ask whether to permanently associate this budget item with the merchant,
+                        // or use it just once for this transaction.
+                        String associate = view.getResponseString(
+                                "Permanently associate '" + selectedBudgetItem.getDisplayString() +
+                                        "' with merchant '" + merchant.getName() + "'? (y/n) [n]:",
+                                "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                                ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+                        if (associate.equalsIgnoreCase("y")) {
+                            // Add to merchant permanently and re-display updated budget items
+                            budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                            done = false;  // Re-loop to show updated list and ask for amounts
+                        } else {
+                            // One-time use: create a transient BudgetItemMerchant (unsaved) and add split
+                            BudgetItemMerchant tempBim = new BudgetItemMerchant(merchant, selectedBudgetItem);
+                            splits.add(new TransactionSplit(transaction.getAmount(), tempBim, transaction, null));
+                        }
+                    }
+                } catch (CancelException | SkipException e) {
+                    throw e;
+                } catch (QuitException e) {
+                    throw e;
+                } catch (Exception e) {
+                    view.say("Error searching for budget item: " + e.getMessage());
+                    done = false;
+                }
 
                 // else if the response is a number selection and a memo:
             } else if (amounts[0].matches("^[1-9][0-9]*[\\s]+[^,]*") && amounts.length == 1) {

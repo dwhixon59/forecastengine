@@ -12,7 +12,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static com.hixon.financialApp.view.base.ViewInt.*;
 
@@ -27,6 +29,14 @@ public class MerchantController {
     private SessionController sessionController;
     private ViewInt view;
     private NotificationServiceInt notificationService;
+
+    /**
+     * Session-scoped cache mapping payee strings to their confirmed merchants.
+     * Populated when the user confirms "Use merchant X for payee Y?" or when a new
+     * payee association is saved. Prevents repeated prompts for the same payee within
+     * a single import session (E8).
+     */
+    private final Map<String, Merchant> confirmedPayeeCache = new HashMap<>();
 
     /**
      * Constructor for MerchantController.
@@ -80,6 +90,13 @@ public class MerchantController {
                                     boolean requireConfirmation)
             throws Exception {
 
+        // E8: Check the session cache before hitting the database.
+        // If the user already confirmed this payee → merchant mapping in this session,
+        // return the cached merchant immediately without asking again.
+        if (confirmedPayeeCache.containsKey(merchantPayeeString)) {
+            return confirmedPayeeCache.get(merchantPayeeString);
+        }
+
         // First, try to find an existing merchant by the payee string
         Merchant merchant = Merchant.getByPayee(merchantPayeeString);
 
@@ -106,7 +123,10 @@ public class MerchantController {
                         "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                         ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 
-                if (!confirm.equalsIgnoreCase("y")) {
+                if (confirm.equalsIgnoreCase("y")) {
+                    // E8: Cache the confirmed payee→merchant mapping for the rest of this session.
+                    confirmedPayeeCache.put(merchantPayeeString, merchant);
+                } else {
                     merchant = null;  // User declined, need to select a different merchant
                 }
             }
@@ -155,6 +175,9 @@ public class MerchantController {
                 newPayee.save();
                 view.say("Associated payee '" + merchantPayeeString + "' with merchant '" + merchant.getName() + "'");
             }
+
+            // E8: Cache this payee→merchant mapping for the rest of this session.
+            confirmedPayeeCache.put(merchantPayeeString, merchant);
         }
 
         return merchant;

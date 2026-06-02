@@ -159,6 +159,12 @@ public class ImportController {
      */
     private final NotificationServiceInt notificationService;
 
+    /**
+     * Shared merchant controller — reused across all transactions in one import session so that the
+     * session-level payee→merchant cache (E8) is preserved between transactions.
+     */
+    private final MerchantController merchantController;
+
 
     // Constructors:
 
@@ -176,6 +182,7 @@ public class ImportController {
         this.forecast = sessionController.getForecast();
         this.view = sessionController.getView();
         this.notificationService = sessionController.getNotificationService();
+        this.merchantController = new MerchantController(sessionController);
     }
 
 
@@ -436,7 +443,8 @@ public class ImportController {
                     // If we haven't determined the merchant yet, then assign or create one:
                     if (merchant == null) {
                         try {
-                            MerchantController merchantController = new MerchantController(sessionController);
+                            // E8: Use the shared merchantController so its session cache persists
+                            // across all transactions in this import run.
                             merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
                                     currentTransaction.getPayee(), currentTransaction.getAmount());
                             currentTransaction.setIdMerchant(merchant.getId());
@@ -967,7 +975,8 @@ public class ImportController {
                     // If we haven't determined the merchant yet, then assign or create one:
                     if (merchant == null) {
                         try {
-                            MerchantController merchantController = new MerchantController(sessionController);
+                            // E8: Use the shared merchantController so its session cache persists
+                            // across all transactions in this import run.
                             merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
                                     currentTransaction.getPayee(), currentTransaction.getAmount());
                             currentTransaction.setIdMerchant(merchant.getId());
@@ -1690,7 +1699,8 @@ public class ImportController {
                             // If we still don't have a merchant, ask the user to identify it
                             if (merchant == null) {
                                 try {
-                                    MerchantController merchantController = new MerchantController(sessionController);
+                                    // E8: Use the shared merchantController field (not a local instance)
+                                    // so the session-level payee→merchant cache is preserved.
                                     Merchant assignedMerchant = merchantController.assignMerchant(
                                             provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
                                             provisionalTransactions.get(provTrxIndex).getPayee(),

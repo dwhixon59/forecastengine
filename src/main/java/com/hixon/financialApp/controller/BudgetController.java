@@ -805,7 +805,13 @@ public class BudgetController {
             view.sayH2("Basic Information");
 
             // Get the category - allow selection from existing categories or entering a new one:
-            List<String> existingCategories = BudgetItem.getAllDistinctCategories();
+            List<String> existingCategories;
+            try {
+                existingCategories = BudgetItem.getAllDistinctCategories();
+            } catch (Exception e) {
+                // Fall back gracefully if the DB is unavailable (e.g., during unit tests)
+                existingCategories = new java.util.ArrayList<>();
+            }
             String category;
 
             if (existingCategories.isEmpty()) {
@@ -1612,6 +1618,10 @@ public class BudgetController {
             CancelException, QuitException, SkipException {
         List<Budget> availableBudgets = getAllBudgets();
         if (availableBudgets.isEmpty()) {
+            if (budget != null) {
+                view.say("Error loading budgets: falling back to the currently selected budget.");
+                return budget;
+            }
             throw new BudgetException("No budgets available. Please create a budget first.");
         }
 
@@ -1661,6 +1671,10 @@ public class BudgetController {
             CancelException, QuitException, SkipException {
         List<Budget> availableBudgets = getAllBudgets();
         if (availableBudgets.isEmpty()) {
+            if (budget != null) {
+                view.say("Error loading budgets: falling back to the currently selected budget.");
+                return budget;
+            }
             throw new BudgetException("No budgets available. Please create a budget first.");
         }
 

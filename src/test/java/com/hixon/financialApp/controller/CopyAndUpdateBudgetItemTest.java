@@ -72,6 +72,7 @@ public class CopyAndUpdateBudgetItemTest {
             secondTemplateItem = new BudgetItem(mockBudget, "Target");
             secondTemplateItem.setCategory("Household");
             secondTemplateItem.setAmount(100.0);
+            secondTemplateItem.setPeriod(Item.PeriodType.MONTHLY);
         } catch (Exception e) {
             throw new RuntimeException("Failed to create template items", e);
         }
@@ -88,6 +89,14 @@ public class CopyAndUpdateBudgetItemTest {
 
             // Mock database connection
             utilityMock.when(Utility::getDbConnection).thenReturn(mockConnection);
+
+            // Ensure utility string/date helpers work correctly (not intercepted by the static mock)
+            utilityMock.when(() -> Utility.emptyStringIfNull(any()))
+                    .thenAnswer(inv -> { String s = inv.getArgument(0); return s != null ? s : ""; });
+            utilityMock.when(() -> Utility.isNotNullOrEmpty(any(String.class)))
+                    .thenAnswer(inv -> { String s = inv.getArgument(0); return s != null && !s.isEmpty(); });
+            utilityMock.when(() -> Utility.calendarDateToStringDate(any()))
+                    .thenReturn("01-01-2025");
 
             // Mock Budget.getById
             budgetMock.when(() -> Budget.getById(any(UUID.class))).thenReturn(mockBudget);
@@ -181,7 +190,7 @@ public class CopyAndUpdateBudgetItemTest {
 
             // Mock user selecting the second item (index 1)
             when(mockView.selectByPositionFromList(eq("Multiple budget items found.  Please select one:"),
-                    anyList(), eq(false)))
+                    anyList(), eq(false), eq(false), eq(false), eq(false)))
                     .thenReturn(1);
 
             // Act
@@ -190,7 +199,7 @@ public class CopyAndUpdateBudgetItemTest {
             // Assert
             assertEquals(secondTemplateItem, selected);
             verify(mockView).selectByPositionFromList(eq("Multiple budget items found.  Please select one:"),
-                    anyList(), eq(false));
+                    anyList(), eq(false), eq(false), eq(false), eq(false));
         }
     }
 
@@ -208,7 +217,7 @@ public class CopyAndUpdateBudgetItemTest {
             // Assert
             assertEquals(templateItem, selected);
             // Verify that selectFromList was NOT called (auto-selected)
-            verify(mockView, never()).selectByPositionFromList(anyString(), anyList(), anyBoolean());
+            verify(mockView, never()).selectByPositionFromList(anyString(), anyList(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean());
         }
     }
 
@@ -294,6 +303,13 @@ public class CopyAndUpdateBudgetItemTest {
 
             // Mock database connection
             utilityMock.when(Utility::getDbConnection).thenReturn(mockConnection);
+            // Ensure utility string/date helpers work correctly (not intercepted by the static mock)
+            utilityMock.when(() -> Utility.emptyStringIfNull(any()))
+                    .thenAnswer(inv -> { String s = inv.getArgument(0); return s != null ? s : ""; });
+            utilityMock.when(() -> Utility.isNotNullOrEmpty(any(String.class)))
+                    .thenAnswer(inv -> { String s = inv.getArgument(0); return s != null && !s.isEmpty(); });
+            utilityMock.when(() -> Utility.calendarDateToStringDate(any()))
+                    .thenReturn("01-01-2025");
 
             // Mock Budget.getById
             budgetMock.when(() -> Budget.getById(any(UUID.class))).thenReturn(mockBudget);
@@ -382,7 +398,7 @@ public class CopyAndUpdateBudgetItemTest {
                     .thenReturn("Weekly shopping");
 
             when(mockView.selectByPositionFromList(eq("Select period type:"), eq(Item.PeriodType.WEEKLY),
-                    eq(Item.PeriodType.class)))
+                    eq(Item.PeriodType.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                     .thenReturn(Item.PeriodType.WEEKLY);
 
             when(mockView.getResponseCurrency(eq("Amount"), eq(150.0), anyBoolean(), anyBoolean(),
@@ -397,15 +413,15 @@ public class CopyAndUpdateBudgetItemTest {
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(100.0);
 
-            when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), eq("01-01-2025"), anyBoolean(), anyBoolean(),
+            when(mockView.getResponseString(eq("Start Date (MM-dd-yyyy)"), eq("01-01-2025"), anyBoolean(), anyBoolean(),
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("01-01-2025");
 
-            when(mockView.getResponseInt(eq("Number of Payments"), eq(52), anyBoolean(), anyBoolean(),
+            when(mockView.getResponseNatural(eq("Number of Payments"), eq(52), anyBoolean(), anyBoolean(),
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(52);
 
-            when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), eq("12-31-2025"), anyBoolean(), anyBoolean(),
+            when(mockView.getResponseString(eq("End Date (MM-dd-yyyy) [enter 'none' to clear]"), eq("12-31-2025"), anyBoolean(), anyBoolean(),
                     anyBoolean(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn("12-31-2025");
 
@@ -532,7 +548,7 @@ public class CopyAndUpdateBudgetItemTest {
     // Helper methods
     private void setupMinimalMockResponses(double amount) throws Exception {
         when(mockView.selectByPositionFromList(eq("Select period type:"), any(Item.PeriodType.class),
-                eq(Item.PeriodType.class)))
+                eq(Item.PeriodType.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(Item.PeriodType.WEEKLY);
 
         when(mockView.getResponseCurrency(eq("Amount"), eq(amount), anyBoolean(), anyBoolean(),
@@ -547,16 +563,16 @@ public class CopyAndUpdateBudgetItemTest {
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(0.0);
 
-        when(mockView.getResponseString(eq("Start Date (yyyy-MM-dd)"), anyString(), anyBoolean(), anyBoolean(),
+        when(mockView.getResponseString(eq("Start Date (MM-dd-yyyy)"), anyString(), anyBoolean(), anyBoolean(),
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("01-01-2025");
 
-        when(mockView.getResponseInt(eq("Number of Payments"), anyInt(), anyBoolean(), anyBoolean(),
+        when(mockView.getResponseNatural(eq("Number of Payments"), anyInt(), anyBoolean(), anyBoolean(),
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(52);
 
         // End Date can be null/empty when ALLOW_NONE is specified
-        when(mockView.getResponseString(eq("End Date (yyyy-MM-dd)"), any(), anyBoolean(), anyBoolean(),
+        when(mockView.getResponseString(eq("End Date (MM-dd-yyyy) [enter 'none' to clear]"), any(), anyBoolean(), anyBoolean(),
                 anyBoolean(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn("");  // Return empty string instead of null
 
@@ -565,19 +581,19 @@ public class CopyAndUpdateBudgetItemTest {
 
     private void setupEnumMockResponses() throws Exception {
         when(mockView.selectByPositionFromList(eq("Select Item Type:"), any(Item.ItemType.class),
-                eq(Item.ItemType.class)))
+                eq(Item.ItemType.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(Item.ItemType.EXPENSE);
 
         when(mockView.selectByPositionFromList(eq("Select How Important:"), any(Item.HowImportant.class),
-                eq(Item.HowImportant.class)))
+                eq(Item.HowImportant.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(Item.HowImportant.FIXED_ESSENTIAL);
 
         when(mockView.selectByPositionFromList(eq("Select How Occurs:"), any(Item.HowOccurs.class),
-                eq(Item.HowOccurs.class)))
+                eq(Item.HowOccurs.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(Item.HowOccurs.PERIODIC);
 
         when(mockView.selectByPositionFromList(eq("Select How Paid:"), any(Item.HowPaid.class),
-                eq(Item.HowPaid.class)))
+                eq(Item.HowPaid.class), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(Item.HowPaid.DEBIT_CARD);
     }
 }

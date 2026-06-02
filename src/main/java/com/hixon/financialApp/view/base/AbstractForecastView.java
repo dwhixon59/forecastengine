@@ -21,7 +21,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static com.hixon.financialApp.model.forecast.Forecast.SignificantEvents.daysBelowMinimumBalance;
@@ -50,6 +53,53 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
     // spreadsheet rendering where they are displayed:
     protected Map<UUID, List<RowTransactionPair>> forecastItemToRowsMap = new HashMap<>();
 
+    private static final class MonthlyCashFlow {
+        private final String label;
+        private double income;
+        private double expense;
+        private double endingBalance;
+
+        private MonthlyCashFlow(String label) {
+            this.label = label;
+            this.income = 0.0;
+            this.expense = 0.0;
+            this.endingBalance = 0.0;
+        }
+
+        private double getNet() {
+            return roundCurrency(income - expense);
+        }
+    }
+
+    static double roundCurrency(double amount) {
+        return BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    static String monthKey(Calendar date) {
+        return new SimpleDateFormat("yyyy-MM", Locale.ENGLISH).format(date.getTime());
+    }
+
+    static String monthLabel(Calendar date) {
+        return new SimpleDateFormat("MMMM yyyy", Locale.ENGLISH).format(date.getTime());
+    }
+
+    static Calendar copyCalendar(Calendar date) {
+        return date == null ? null : (Calendar) date.clone();
+    }
+
+    static String normalizedLabel(String rawLabel, String fallback) {
+        if (rawLabel == null || rawLabel.trim().isEmpty()) {
+            return fallback;
+        }
+        return rawLabel.trim();
+    }
+
+    static double monthsOfRunway(double startingBalance, double monthlyNet) {
+        if (monthlyNet >= 0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return roundCurrency(startingBalance / -monthlyNet);
+    }
 
     /*
      * Getters and setters:
@@ -174,12 +224,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         List<Register> registers = forecast.getBudget().getRegisters();
         String reportType = registers.get(0).getReportType();
         double startingBalance = registers.get(0).getBalance();
-        double runningBalance = startingBalance;
+        double runningBalance = roundCurrency(startingBalance);
 
         // Variables to save significant events over the period of the forecast and the date on which they occurred:
-        double lowestBalance = startingBalance;
+        double lowestBalance = runningBalance;
         Calendar dateOfLowestBalance = null;
-        double highestBalance = startingBalance;
+        double highestBalance = runningBalance;
         Calendar dateOfHighestBalance = null;
         double firstNegativeBalance = 0.0;
         Calendar dateOfFirstNegativBalance = null;
@@ -187,6 +237,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double totalExpense = 0.0;
         double totalSavings = 0.0;
         double totalDebtExpense = 0.0;
+
+        // Track richer summary analytics for actionable reporting.
+        Map<String, MonthlyCashFlow> monthlyCashFlowMap = new TreeMap<>();
+        Map<String, Double> expenseByCategory = new HashMap<>();
+        Map<String, Double> incomeBySource = new HashMap<>();
 
         // Variables to hold the date of the first first-of-the-month and balance on that date.  This is used to
         // calculate whether the forecast is solvent over the period of the forecast, and also the required amount of
@@ -236,7 +291,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             }
 
             // Update the running balance:
-            runningBalance += forecastTransaction.getRemainingAmount();
+            double remainingAmount = roundCurrency(forecastTransaction.getRemainingAmount());
+            runningBalance = roundCurrency(runningBalance + remainingAmount);
             forecastTransaction.setRunningBalance(runningBalance);
 
             // Record the first negative balance and the date on which it occurred:
@@ -249,6 +305,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             // If we are within the forecast summary period (from the firstFirstOfMonth data to the end of the forecast),
             // then update the summary:
             if (dateOnlyCompare(forecastTransaction.getPlannedDate(), firstFirstOfMonth) >= 0) {
+                String periodKey = monthKey(forecastTransaction.getPlannedDate());
+                String periodLabel = monthLabel(forecastTransaction.getPlannedDate());
+                MonthlyCashFlow monthSummary = monthlyCashFlowMap.computeIfAbsent(periodKey,
+                        ignored -> new MonthlyCashFlow(periodLabel));
+                monthSummary.endingBalance = runningBalance;
+
                 if (runningBalance < lowestBalance) {
                     lowestBalance = runningBalance;
                     dateOfLowestBalance = forecastTransaction.getPlannedDate();
@@ -259,25 +321,34 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     dateOfHighestBalance = forecastTransaction.getPlannedDate();
                 }
 
-                // Record the total income and the date on which it occurred:
-                if (forecastTransaction.getRemainingAmount() > 0) {
-                    totalIncome += forecastTransaction.getRemainingAmount();
+                // Record income totals and source breakdown.
+                if (remainingAmount > 0) {
+                    totalIncome = roundCurrency(totalIncome + remainingAmount);
+                    monthSummary.income = roundCurrency(monthSummary.income + remainingAmount);
+                    String source = normalizedLabel(forecastTransaction.getForecastItem().getPayee(), "Unspecified income source");
+                    double updatedSource = roundCurrency(incomeBySource.getOrDefault(source, 0.0) + remainingAmount);
+                    incomeBySource.put(source, updatedSource);
                 }
 
-                // Record the total expense:
-                if (forecastTransaction.getRemainingAmount() < 0) {
-                    totalExpense += forecastTransaction.getRemainingAmount();
+                // Record expense totals and category breakdown (expense is shown as positive in breakdowns).
+                if (remainingAmount < 0) {
+                    totalExpense = roundCurrency(totalExpense + remainingAmount);
+                    double expenseAmount = roundCurrency(-remainingAmount);
+                    monthSummary.expense = roundCurrency(monthSummary.expense + expenseAmount);
+                    String category = normalizedLabel(forecastTransaction.getForecastItem().getCategory(), "Uncategorized expense");
+                    double updatedCategory = roundCurrency(expenseByCategory.getOrDefault(category, 0.0) + expenseAmount);
+                    expenseByCategory.put(category, updatedCategory);
                 }
 
                 // Record the total savings:
                 if (forecastTransaction.getForecastItem().getPayee().equalsIgnoreCase("Savings")) {
-                    totalSavings -= forecastTransaction.getRemainingAmount();
+                    totalSavings = roundCurrency(totalSavings - remainingAmount);
                 }
 
                 // Record the total debt expense:
-                if (forecastTransaction.getForecastItem().getCategory().length()  >= 4) {
+                if (forecastTransaction.getForecastItem().getCategory().length() >= 4) {
                     if (forecastTransaction.getForecastItem().getCategory().substring(0, 4).equalsIgnoreCase("Debt")) {
-                        totalDebtExpense += forecastTransaction.getRemainingAmount();
+                        totalDebtExpense = roundCurrency(totalDebtExpense + remainingAmount);
                     }
                 }
             }
@@ -362,19 +433,19 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 append(Utility.formatRoundedDollarAmount(runningBalance)).append(".").toString());
 
         // Display the net change in balance:
-        double netChangeInBalance = runningBalance - firstFirstOfMonthBalance;
+        double netChangeInBalance = roundCurrency(runningBalance - firstFirstOfMonthBalance);
         getView().say(new StringBuilder().append("The net change in balance is: ").
                 append(Utility.formatRoundedDollarAmount(netChangeInBalance)).append(".").toString());
 
         // Display the average monthly change in balance:
-        double rateOfChangeInBalance = netChangeInBalance / numberOfMonthsInForecast;
+        double rateOfChangeInBalance = roundCurrency(netChangeInBalance / numberOfMonthsInForecast);
         if (netChangeInBalance > 0) {
             getView().say(new StringBuilder().append("The average accumulation rate is: ").
                     append(Utility.formatRoundedDollarAmount(rateOfChangeInBalance)).
                     append(" per month.").toString());
         } else {
             getView().say(new StringBuilder().append("The average depletion rate is: ").
-                    append(Utility.formatRoundedDollarAmount(rateOfChangeInBalance)).append(".").toString());
+                    append(Utility.formatRoundedDollarAmount(rateOfChangeInBalance)).append(" per month.").toString());
         }
 
         // Display the highest balance and the date on which it occurred:
@@ -416,18 +487,67 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 append(Utility.formatRoundedDollarAmount(-totalDebtExpense / numberOfMonthsInForecast)).toString());
 
         // Display the debt to expense ratio:
-        double debtToExpenseRatio = totalDebtExpense / totalExpense;
-        double debtToIncomeRatio = -totalDebtExpense / totalIncome;
+        double debtToExpenseRatio = totalExpense == 0 ? 0 : totalDebtExpense / totalExpense;
+        double debtToIncomeRatio = totalIncome == 0 ? 0 : -totalDebtExpense / totalIncome;
         getView().say(new StringBuilder().append("Debt expense comprises ").append(Math.round(debtToIncomeRatio * 100)).
                 append("% of total income and ").append(Math.round(debtToExpenseRatio * 100)).
                 append("% of total expense.").toString());
+
+        // Improvement 1: monthly cash-flow breakdown.
+        getView().say("\nMonthly Cash Flow Breakdown:");
+        monthlyCashFlowMap.forEach((ignored, monthlyCashFlow) -> {
+            String trend;
+            if (monthlyCashFlow.getNet() > 0) {
+                trend = "positive";
+            } else if (monthlyCashFlow.getNet() < 0) {
+                trend = "deficit";
+            } else {
+                trend = "break-even";
+            }
+            getView().say(new StringBuilder().append("  ").append(monthlyCashFlow.label).append(": net ").
+                    append(Utility.formatRoundedDollarAmount(monthlyCashFlow.getNet())).append(" (").append(trend).
+                    append(") | income ").append(Utility.formatRoundedDollarAmount(monthlyCashFlow.income)).
+                    append(" | expense ").append(Utility.formatRoundedDollarAmount(-monthlyCashFlow.expense)).
+                    append(" | ending balance ").append(Utility.formatRoundedDollarAmount(monthlyCashFlow.endingBalance)).
+                    toString());
+        });
+
+        // Improvement 2: expense breakdown by category.
+        getView().say("\nExpense Breakdown by Category:");
+        final double finalTotalExpense = totalExpense;
+        expenseByCategory.entrySet().stream()
+                .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                .forEach(entry -> {
+                    double percentOfTotal = finalTotalExpense == 0 ? 0 :
+                            roundCurrency((entry.getValue() / -finalTotalExpense) * 100);
+                    double monthlyAverage = roundCurrency(entry.getValue() / numberOfMonthsInForecast);
+                    getView().say(new StringBuilder().append("  - ").append(entry.getKey()).append(": ").
+                            append(Utility.formatRoundedDollarAmount(-entry.getValue())).append(" total | ").
+                            append(Utility.formatRoundedDollarAmount(-monthlyAverage)).append("/month | ").
+                            append(Math.round(percentOfTotal)).append("% of expense").toString());
+                });
+
+        // Improvement 3: income breakdown by source.
+        getView().say("\nIncome Breakdown by Source:");
+        final double finalTotalIncome = totalIncome;
+        incomeBySource.entrySet().stream()
+                .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                .forEach(entry -> {
+                    double percentOfTotal = finalTotalIncome == 0 ? 0 :
+                            roundCurrency((entry.getValue() / finalTotalIncome) * 100);
+                    double monthlyAverage = roundCurrency(entry.getValue() / numberOfMonthsInForecast);
+                    getView().say(new StringBuilder().append("  - ").append(entry.getKey()).append(": ").
+                            append(Utility.formatRoundedDollarAmount(entry.getValue())).append(" total | ").
+                            append(Utility.formatRoundedDollarAmount(monthlyAverage)).append("/month | ").
+                            append(Math.round(percentOfTotal)).append("% of income").toString());
+                });
 
         // Print out the forecast analysis:
         getView().say("\nForecast Analysis:");
 
         // If the forecast is out of balance:
-        double outOfBalanceAmount = runningBalance - firstFirstOfMonthBalance;
-        double outOfBalanceMonthlyAmount = outOfBalanceAmount / numberOfMonthsInForecast;
+        double outOfBalanceAmount = roundCurrency(runningBalance - firstFirstOfMonthBalance);
+        double outOfBalanceMonthlyAmount = roundCurrency(outOfBalanceAmount / numberOfMonthsInForecast);
         if (outOfBalanceAmount < 0) {
 
             getView().say(new StringBuilder().append("The forecast is out of balance by ").
@@ -441,6 +561,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         } else {
             getView().say("The forecast is balanced.  No action is required.");
         }
+
+        // Save the pre-adjustment low-balance event for risk and timeline reporting.
+        double periodLowestBalance = lowestBalance;
+        Calendar dateOfPeriodLowestBalance = copyCalendar(dateOfLowestBalance);
+
+        double requiredFloat = 0.0;
+        double requiredDeposit = 0.0;
+        double excessFloat = 0.0;
 
         // If there are any negative balances, then the float is insufficient.  Calculate the required float and let
         // the user know how much they need to deposit to fix the float issue:
@@ -469,11 +597,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(") taking into account the " +
                             "effect of fixing the out-of-balance issue is ").
                     append(Utility.formatRoundedDollarAmount(-lowestBalance)).toString());
+            requiredFloat = roundCurrency(-lowestBalance);
 
             // Tell the user how much they need to deposit to fix the float issue:
             if (lowestBalance + firstFirstOfMonthBalance < 0) {
+                requiredDeposit = roundCurrency(-lowestBalance - firstFirstOfMonthBalance);
                 getView().say(new StringBuilder().append("To ensure you have no negative balances, you need to deposit ").
-                        append(Utility.formatRoundedDollarAmount(-lowestBalance - firstFirstOfMonthBalance)).
+                        append(Utility.formatRoundedDollarAmount(requiredDeposit)).
                         append(" to the ").append(forecast.getBudget().getRegisters().get(0).getName()).append(" account.").
                         toString());
             } else if ((lowestBalance + firstFirstOfMonthBalance) > -1 && (lowestBalance + firstFirstOfMonthBalance < 1)) {
@@ -481,12 +611,153 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                         append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
                         append(" account.").toString());
             } else {
+                excessFloat = roundCurrency(lowestBalance + firstFirstOfMonthBalance);
                 getView().say(new StringBuilder().append("You have excess float in the amount of ").
-                        append(Utility.formatRoundedDollarAmount(lowestBalance + firstFirstOfMonthBalance)).
+                        append(Utility.formatRoundedDollarAmount(excessFloat)).
                         append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
                         append(" account.").toString());
             }
         }
+
+        // Improvement 4: explicit risk warnings.
+        getView().say("\nRisk Warnings:");
+        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
+            getView().say(new StringBuilder().append("  - Critical: The account first goes negative on ").
+                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" at ").
+                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(".").toString());
+        } else {
+            getView().say("  - No negative balances are forecast in this period.");
+        }
+        if (dateOfPeriodLowestBalance != null) {
+            getView().say(new StringBuilder().append("  - Lowest projected balance is ").
+                    append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(" on ").
+                    append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(".").toString());
+        }
+        if (requiredFloat > 0) {
+            getView().say(new StringBuilder().append("  - Required float to remain solvent is at least ").
+                    append(Utility.formatRoundedDollarAmount(requiredFloat)).append(".").toString());
+        }
+        if (excessFloat > 0 && requiredFloat > excessFloat) {
+            getView().say(new StringBuilder().append("  - Current excess float is ").
+                    append(Utility.formatRoundedDollarAmount(excessFloat)).append(", which is insufficient for the worst-case month.").
+                    toString());
+        }
+
+        // Improvement 5: actionable recommendations.
+        getView().say("\nActionable Recommendations:");
+        double monthlyGap = outOfBalanceMonthlyAmount < 0 ? roundCurrency(-outOfBalanceMonthlyAmount) : 0.0;
+        if (monthlyGap > 0) {
+            getView().say(new StringBuilder().append("  Option A: Reduce monthly spending by at least ").
+                    append(Utility.formatRoundedDollarAmount(monthlyGap)).append(".").toString());
+            expenseByCategory.entrySet().stream()
+                    .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                    .limit(3)
+                    .forEach(entry -> {
+                        double monthlyAverage = roundCurrency(entry.getValue() / numberOfMonthsInForecast);
+                        double suggestedCut = roundCurrency(monthlyAverage * 0.25);
+                        getView().say(new StringBuilder().append("    * ").append(entry.getKey()).append(": current avg ").
+                                append(Utility.formatRoundedDollarAmount(-monthlyAverage)).append("/month, 25% cut saves about ").
+                                append(Utility.formatRoundedDollarAmount(-suggestedCut)).append("/month.").toString());
+                    });
+            getView().say(new StringBuilder().append("  Option B: Increase monthly income by at least ").
+                    append(Utility.formatRoundedDollarAmount(monthlyGap)).append(".").toString());
+            getView().say(new StringBuilder().append("  Option C: Combine smaller changes (about ").
+                    append(Utility.formatRoundedDollarAmount(monthlyGap / 2)).
+                    append(" spending reduction + ").append(Utility.formatRoundedDollarAmount(monthlyGap / 2)).
+                    append(" income increase per month).").toString());
+        } else {
+            getView().say("  - The forecast is already in balance; maintain current plan and monitor category drift.");
+        }
+        if (requiredDeposit > 0) {
+            getView().say(new StringBuilder().append("  - One-time float action: deposit ").
+                    append(Utility.formatRoundedDollarAmount(requiredDeposit)).append(" to prevent temporary overdrafts.").toString());
+        }
+
+        // Improvement 6: financial runway analysis.
+        getView().say("\nFinancial Runway Analysis:");
+        double monthlyIncomeAverage = totalIncome == 0 ? 0 : roundCurrency(totalIncome / numberOfMonthsInForecast);
+        double monthlyExpenseAverage = totalExpense == 0 ? 0 : roundCurrency(-totalExpense / numberOfMonthsInForecast);
+        double baselineMonthlyNet = roundCurrency(monthlyIncomeAverage - monthlyExpenseAverage);
+        double baselineRunway = monthsOfRunway(firstFirstOfMonthBalance, baselineMonthlyNet);
+        if (Double.isInfinite(baselineRunway)) {
+            getView().say("  - Current monthly net is non-negative, so runway is not constrained by burn rate.");
+        } else {
+            getView().say(new StringBuilder().append("  - At the current net burn of ").
+                    append(Utility.formatRoundedDollarAmount(baselineMonthlyNet)).append("/month, runway is about ").
+                    append(Math.round(baselineRunway)).append(" months.").toString());
+        }
+
+        List<Map.Entry<String, Double>> topIncomeSources = incomeBySource.entrySet().stream()
+                .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                .limit(2)
+                .toList();
+        for (Map.Entry<String, Double> source : topIncomeSources) {
+            double sourceMonthly = roundCurrency(source.getValue() / numberOfMonthsInForecast);
+            double netIfRemoved = roundCurrency(baselineMonthlyNet - sourceMonthly);
+            double runwayIfRemoved = monthsOfRunway(firstFirstOfMonthBalance, netIfRemoved);
+            if (Double.isInfinite(runwayIfRemoved)) {
+                getView().say(new StringBuilder().append("  - If '").append(source.getKey()).
+                        append("' stopped, the forecast still remains non-negative month-to-month.").toString());
+            } else {
+                getView().say(new StringBuilder().append("  - If '").append(source.getKey()).append("' stopped (").
+                        append(Utility.formatRoundedDollarAmount(sourceMonthly)).append("/month), runway drops to about ").
+                        append(Math.round(runwayIfRemoved)).append(" months.").toString());
+            }
+        }
+
+        // Improvement 7: timeline visualization as key milestones.
+        getView().say("\nForecast Timeline:");
+        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
+            Calendar preCrisisDate = copyCalendar(dateOfFirstNegativBalance);
+            preCrisisDate.add(Calendar.DAY_OF_MONTH, -1);
+            getView().say(new StringBuilder().append("  - Positive balance phase: ").
+                    append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" through ").
+                    append(Utility.calendarDateToStringDate(preCrisisDate)).append(".").toString());
+            getView().say(new StringBuilder().append("  - First deficit event: ").
+                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" (").
+                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(").").toString());
+        } else {
+            getView().say("  - All projected balances remain non-negative.");
+        }
+
+        Optional<MonthlyCashFlow> firstMonthEndNegative = monthlyCashFlowMap.values().stream()
+                .filter(month -> month.endingBalance < 0)
+                .findFirst();
+        if (firstMonthEndNegative.isPresent()) {
+            getView().say(new StringBuilder().append("  - Persistent deficit period begins by month-end in ").
+                    append(firstMonthEndNegative.get().label).append(".").toString());
+        }
+        if (dateOfPeriodLowestBalance != null) {
+            getView().say(new StringBuilder().append("  - Lowest point occurs on ").
+                    append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(" at ").
+                    append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(".").toString());
+        }
+
+        // Improvement 8: immediate actions checklist.
+        getView().say("\nImmediate Actions Required:");
+        Calendar actionDate1 = copyCalendar(firstFirstOfMonth);
+        actionDate1.add(Calendar.MONTH, 1);
+        Calendar actionDate2 = copyCalendar(firstFirstOfMonth);
+        actionDate2.add(Calendar.MONTH, 2);
+        Calendar actionDate3 = copyCalendar(dateOfFirstNegativBalance != null ? dateOfFirstNegativBalance : firstFirstOfMonth);
+        Calendar actionDate4 = copyCalendar(dateOfPeriodLowestBalance != null ? dateOfPeriodLowestBalance : lastForecastTransaction.getPlannedDate());
+        if (actionDate3 != null) {
+            actionDate3.add(Calendar.DAY_OF_MONTH, -14);
+        }
+        if (actionDate4 != null) {
+            actionDate4.add(Calendar.MONTH, -2);
+        }
+
+        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate1)).
+                append(": identify at least ").append(Utility.formatRoundedDollarAmount(monthlyGap)).
+                append("/month in spending cuts, new income, or a combination.").toString());
+        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate2)).
+                append(": implement and verify the plan against actual account activity.").toString());
+        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate3)).
+                append(": have contingency float ready before projected negative-balance risk.").toString());
+        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate4)).
+                append(": maintain minimum float target of ").append(Utility.formatRoundedDollarAmount(requiredFloat > 0 ? requiredFloat : 0)).
+                append(" to avoid trough-period shortfalls.").toString());
 
         // Update the forecast's lastRenderedDate to track when we rendered the file.
         // Use the file's actual lastModified timestamp rather than the current time, so that

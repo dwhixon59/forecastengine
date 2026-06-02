@@ -558,6 +558,9 @@ public abstract class Item extends IndependentEntity {
     }
 
     public static String generatePeriodType(PeriodType period) throws BudgetException {
+        if (period == null) {
+            return "";
+        }
         String dbPeriodType;
         switch (period) {
             case ON_DEMAND:
