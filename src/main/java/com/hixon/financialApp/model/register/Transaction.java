@@ -775,6 +775,7 @@ public class Transaction extends IndependentEntity {
         String s =
                 "Date = " + date +
                 ", Merchant = " + merchantName +
+                ", Payee = " + payee +
                 ", Amount = " + formatDollarAmount(amount);
         return s;
     }

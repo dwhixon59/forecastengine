@@ -510,8 +510,12 @@ public class BudgetController {
 
         try {
             // Inform the user why they need to select a budget item
-            view.say("\nNo budget items are currently assigned to merchant '" + merchant.getName() + "'.");
-            view.say("Please select a budget item to associate with this merchant.");
+            if (budgetItemsForMerchant == null || budgetItemsForMerchant.isEmpty()) {
+                view.say("\nNo budget items are currently assigned to merchant '" + merchant.getName() + "'.");
+                view.say("Please select a budget item to associate with this merchant.");
+            } else {
+                view.say("\nSelect a budget item to add to merchant '" + merchant.getName() + "'.");
+            }
 
             boolean firstTime = true;
             boolean done = false;
@@ -532,20 +536,12 @@ public class BudgetController {
                     BudgetItemMerchant existingAssociation = BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
 
                     if (existingAssociation == null) {
-                        // Association doesn't exist in database - safe to create
+                        // Association doesn't exist in database - safe to create.
+                        // The user just searched for and selected this budget item, so add it automatically.
+                        firstTime = false;
 
-                        // then if the user wants to add this budget item to the list of budget items for the merchant:
-                        if (
-                                !firstTime || // Later iterations don't make sense if we don't add them to the list:
-                                        view.getYesOrNo("Do you want to add this budget item \"" +
-                                                selectedBudgetItem.getPayee() + "\" to the list of budget items for the merchant \""
-                                                + merchant.getName() + "\"?")
-                        ) {
-                            firstTime = false;
-
-                            // Associate the budget item with the merchant in the database:
-                            budgetItemMerchant.save();
-                        }
+                        // Associate the budget item with the merchant in the database:
+                        budgetItemMerchant.save();
 
                         // Add the budget item to the list of budget items passed in:
                         budgetItemsForMerchant.add(budgetItemMerchant);
@@ -704,7 +700,6 @@ public class BudgetController {
      */
     public List<String> generateDisplayableBudgetItemList(List<BudgetItem> budgetItems) throws Exception {
 
-        view.say("The budget items are:");
         List<String> budgetItemNames = new ArrayList<>();
         for (BudgetItem budgetItem : budgetItems
         ) {
@@ -719,10 +714,12 @@ public class BudgetController {
             }
             line += Item.generatePeriodType(budgetItem.getPeriod());
             if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND && forecast != null) {
-                // Get the applicable forecast transaction (may be null for expired items)
+                // Use this session's forecast (which belongs to the budget being displayed) rather
+                // than the globally most-recent forecast, so an unrelated budget's forecast can't
+                // make an item show as "Expired" incorrectly.
                 ForecastTransaction applicableForecastTransaction =
                         ForecastTransaction.getApplicableForecastTransaction(
-                                budgetItem.getId(), Calendar.getInstance());
+                                forecast, budgetItem.getId(), Calendar.getInstance());
 
                 if (applicableForecastTransaction != null) {
                     line += ", ";
@@ -1827,7 +1824,6 @@ public class BudgetController {
             }
 
             // and ask the user to select one (allow cancel and skip):
-            view.say("Multiple expired budget items found.  Please select one:");
             budgetItem = getUserSelectedBudgetItem(expiredBudgetItems, true, false, true);
         }
 

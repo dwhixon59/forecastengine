@@ -1,6 +1,7 @@
 package com.hixon.financialApp.model.forecast;
 
 import com.hixon.financialApp.model.budget.BudgetException;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.ItemOfInterest;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
@@ -902,11 +903,22 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
 
+    /**
+     * Convenience overload that resolves the applicable forecast transaction using the most recent
+     * forecast <em>for the budget item's own budget</em>.
+     *
+     * <p>This deliberately avoids the global {@code Forecast.getMostRecent()} (which returns the
+     * globally most recent forecast across all budgets) so that a forecast generated for an
+     * unrelated budget can never make a budget item look like its forecast coverage has expired.</p>
+     */
     public static ForecastTransaction getApplicableForecastTransaction(UUID idBudgetItem, Calendar date)
             throws EntityException, Exception, BudgetException, RegisterException {
-        ForecastTransaction forecastTransaction = getApplicableForecastTransaction(Forecast.getMostRecent(), idBudgetItem,
-                date);
-        return forecastTransaction;
+        BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
+        Forecast forecast = Forecast.getMostRecent(budgetItem.getBudget());
+        if (forecast == null) {
+            return null;
+        }
+        return getApplicableForecastTransaction(forecast, idBudgetItem, date);
     }
 
     public static ForecastTransaction getApplicableForecastTransaction(Forecast forecast, UUID idBudgetItem, Calendar date)

@@ -238,10 +238,13 @@ public class TransactionSplit extends DependentEntity {
         try {
             String fromOrTo = (amount < 0) ? " to " : " from ";
             String memoString = (memo != null) ? ".  Memo:  " + memo : "";
+            String budgetItemMemo = getBudgetItem().getMemo();
+            String budgetItemMemoString = (budgetItemMemo != null && !budgetItemMemo.isBlank())
+                    ? " - " + budgetItemMemo.trim() : "";
             s = "Split: amount of " + formatDollarAmount(amount) + " on " +
                     calendarDateToStringDate(getTransaction().getDate()) + fromOrTo +
                     getTransaction().getMerchant().getName() + " applied to budget item " + getBudgetItem().getPayee() +
-                    memoString;
+                    budgetItemMemoString + memoString;
         } catch (Exception e) {
             e.printStackTrace();
         }

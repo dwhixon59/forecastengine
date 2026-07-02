@@ -121,19 +121,23 @@ public class ImportLog {
         String importDate = (transaction.getAuthorizationDate() != null) ?
                 calendarDateToStringDate(transaction.getAuthorizationDate()) :
                 calendarDateToStringDate(transaction.getPostDate());
-        String registerName = null;
-        try {
-            registerName = transaction.getRegister() != null ? transaction.getRegister().getName() : null;
-        } catch (Exception ignored) {
-            registerName = null;
+
+        // Always show the merchant name — it tells the user WHO the transaction was with.
+        // The register name is already known from context (you are importing into it).
+        // Fall back to merchantPayee or raw payee when no merchant has been assigned yet
+        // (e.g. auto-matched transactions where the payee→merchant lookup found nothing).
+        String destinationName;
+        if (transaction.getMerchant() != null) {
+            destinationName = transaction.getMerchant().getName();
+        } else if (transaction.getMerchantPayee() != null && !transaction.getMerchantPayee().isBlank()) {
+            destinationName = transaction.getMerchantPayee();
+        } else {
+            destinationName = transaction.getPayee();
         }
-        String destinationName = (registerName != null && !registerName.isBlank()) ? registerName : transaction.getMerchant().getName();
 
-        // Put a blank line above each new transaction so it stands out in the import log.
-        getView().say();
-
-        getView().sayH3(importStatus + " a " + (transaction.getAmount() > 0 ? "credit" : "debit") +
-                " to " + destinationName + " for " + formatDollarAmount(Math.abs(transaction.getAmount())) +
+        // sayH3() prints a blank line before the bullet; no need to add another one here.
+        getView().sayH3(importStatus + " a " + creditOrDebitString + destinationName + " for " +
+                formatDollarAmount(Math.abs(transaction.getAmount())) +
                 " on " + importDate + " (Import Record ID: " + transaction.getImportRecordId() + ")");
 
         // If a tip was detected during provisional/cleared reconciliation, display it now
@@ -143,5 +147,15 @@ public class ImportLog {
                     formatDollarAmount(transaction.getProvisionalAmount()),
                     formatDollarAmount(transaction.getAmount())));
         }
+    }
+
+    /**
+     * Records a transaction in the import summary without printing anything to the console.
+     * Use this when the console output has already been produced by other means
+     * (e.g., the auto-match block in Phase 2.5 of the import flow).
+     */
+    public void recordImportEvent(Transaction transaction, ImportRecord.Status status) {
+        importRecords.add(new ImportRecord(transaction, status));
+        importedTransactions.add(transaction);
     }
 }

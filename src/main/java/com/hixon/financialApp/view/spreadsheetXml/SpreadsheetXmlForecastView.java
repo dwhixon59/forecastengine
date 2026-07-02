@@ -246,7 +246,6 @@ public class SpreadsheetXmlForecastView extends AbstractForecastView {
     public SpreadsheetXmlForecastView(Forecast forecast, String shortTermForecastFilename, String longTermForecastFilename,
                                       String importForecastFilename, String encoding) throws EntityException, SQLException {
         super(forecast);
-        this.forecast = Forecast.getMostRecent();
         this.shortTermForecastFilename = shortTermForecastFilename;
         this.longTermForecastFilename = longTermForecastFilename;
         this.importForecastFilename = importForecastFilename;

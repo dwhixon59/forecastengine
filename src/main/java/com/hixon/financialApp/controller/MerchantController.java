@@ -115,9 +115,15 @@ public class MerchantController {
                     isTransferPayee = Register.getByName(merchant.getName()) != null;
                 } catch (Exception ignored) { /* don't let a DB error break merchant assignment */ }
             }
-            boolean shouldAsk = !isTransferPayee && (requireConfirmation || merchant.isAskAlways());
+            // Only ask for merchant identity confirmation when the caller explicitly requests it
+            // (requireConfirmation=true).  The askAlways flag controls *budget-item* assignment
+            // behaviour, not payee→merchant identity.  When Merchant.getByPayee() returns a hit,
+            // the payee is already explicitly mapped in the merchant_payee table — asking the user
+            // to re-confirm an exact match every time is redundant.
+            boolean shouldAsk = !isTransferPayee && requireConfirmation;
 
             if (shouldAsk) {
+                view.say();  // blank line to separate from the previous transaction's output
                 String confirm = view.getResponseString(
                         "Use merchant '" + merchant.getName() + "' for payee '" + merchantPayeeString + "'? (y/n):",
                         "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
@@ -139,8 +145,11 @@ public class MerchantController {
             view.say("Transaction payee: " + transactionPayee);
             view.say("Amount: $" + String.format("%.2f", amount));
 
-            // Ask user to search for or create a merchant
-            merchant = selectMerchant(ALLOW_CREATE);
+            // Ask user to search for or create a merchant.  Seed the search with the merchant
+            // payee string so the fuzzy name match runs automatically and surfaces a likely
+            // candidate (e.g. payee "FIORELLI WIN" finds "Fiorelli Winery And Vineyard") instead
+            // of forcing the user to guess and type a search term.
+            merchant = selectMerchant(ALLOW_CREATE, merchantPayeeString);
 
             if (merchant == null) {
                 // User cancelled
@@ -305,9 +314,25 @@ public class MerchantController {
      * @throws Exception if any error occurs
      */
     private Merchant selectMerchant(boolean allowCreate) throws Exception {
+        return selectMerchant(allowCreate, null);
+    }
+
+    /**
+     * Search for and select a merchant using the SelectionController, optionally pre-seeding the
+     * search with a starting term (typically the transaction's merchant-payee string).  When a
+     * non-blank seed is supplied, the fuzzy name search runs immediately so a likely candidate is
+     * surfaced for confirmation without the user having to type a search term.
+     *
+     * @param allowCreate Whether to allow creating a new merchant if not found
+     * @param seedName    The initial search term, or {@code null}/blank to prompt the user
+     * @return The selected Merchant, or null if cancelled
+     * @throws Exception if any error occurs
+     */
+    private Merchant selectMerchant(boolean allowCreate, String seedName) throws Exception {
         SelectionController selectionController = new SelectionController(view);
+        String seed = (seedName != null && !seedName.isBlank()) ? seedName : null;
         return selectionController.getByNameFullText(
-                null,  // No seed name
+                seed,  // Pre-seed the search (e.g. with the merchant payee) when available
                 null,  // No scope for merchants (they're global)
                 DO_NOT_ALLOW_NONE,
                 allowCreate,

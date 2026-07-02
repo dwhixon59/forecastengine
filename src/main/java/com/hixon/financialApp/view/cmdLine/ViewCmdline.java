@@ -1746,6 +1746,10 @@ final     /**
             String response = getResponseString(optionPrompt, defaultItemIndexStr, allowNone,
                     showCancelQuitSkipPrompt, isCancelAllowed, isQuitAllowed, isSkipAllowed, helpSupplier);
 
+            // Trim surrounding whitespace so that input like "1 " (a number with a trailing space)
+            // is still recognized as a menu selection rather than being treated as a search string.
+            response = response.trim();
+
             // Handle navigation commands
             if (response.equalsIgnoreCase("F")) {
                 if (currentPage < totalPages - 1) {

@@ -4,6 +4,8 @@ import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -112,11 +114,14 @@ public class ImportSummaryController {
 
             // NEWLY_IMPORTED — recategorize via the same path as Manage Data
             recategorize(record);
-            printSummary(records);
 
-            // E9: After a successful recategorization, check if adjacent records share the same
+            // E9: Before reprinting the summary, check if adjacent records share the same
             // merchant.  If so, offer to apply the same categorization to all of them at once.
+            // This is done here (before printSummary) so the offer appears as part of the
+            // recategorization flow rather than surfacing unexpectedly after the table redraws.
             offerGroupRecategorize(records, selection - 1);
+
+            printSummary(records);
         }
 
         return forecastWasChanged;
@@ -257,14 +262,48 @@ public class ImportSummaryController {
         return buildSplitLine(splits.get(0));
     }
 
-    /** Formats a single TransactionSplit as "BudgetItemName ($amount) · memo". */
+    /**
+     * Formats a single TransactionSplit as "BudgetItemName [due MM-DD-YYYY] ($amount) · memo".
+     *
+     * <p>The "[due ...]" segment shows the planned date of the budget item occurrence that this
+     * transaction was matched to, allowing the user to confirm it was matched to the correct
+     * occurrence.</p>
+     */
     private String buildSplitLine(TransactionSplit split) throws Exception {
         BudgetItem budgetItem = split.getBudgetItem();
         String name = budgetItem != null ? budgetItem.getName() : "Unknown";
+        String occurrence = buildOccurrenceDate(split, budgetItem);
         String amount = formatDollarAmount(Math.abs(split.getAmount()));
         String memo = split.getMemo() != null && !split.getMemo().isBlank()
                 ? " · " + split.getMemo() : "";
-        return name + " (" + amount + ")" + memo;
+        return name + occurrence + " (" + amount + ")" + memo;
+    }
+
+    /**
+     * Returns the matched budget item occurrence date as " [due MM-DD-YYYY]", or an empty string
+     * when no forecast occurrence is associated with this split.
+     *
+     * <p>The date is read directly from the {@link ForecastTransaction} that this split was actually
+     * matched to (via its {@link ForecastTransactionSplit} link in the most recent forecast), so it
+     * reflects the true occurrence the transaction was assigned to rather than a re-derived guess.</p>
+     */
+    private String buildOccurrenceDate(TransactionSplit split, BudgetItem budgetItem) {
+        if (budgetItem == null) {
+            return "";
+        }
+        try {
+            ForecastTransactionSplit fts = ForecastTransactionSplit.getForecastTransactionSplit(
+                    sessionController.getForecast(), split);
+            if (fts != null) {
+                ForecastTransaction forecastTransaction = fts.getForecastTransaction();
+                if (forecastTransaction != null && forecastTransaction.getPlannedDate() != null) {
+                    return " [due " + calendarDateToStringDate(forecastTransaction.getPlannedDate()) + "]";
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not resolve budget item occurrence date for summary: {}", e.getMessage());
+        }
+        return "";
     }
 
     /** Returns "MM-DD" from the transaction's auth date or post date. */

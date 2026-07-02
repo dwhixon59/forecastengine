@@ -239,14 +239,17 @@ public class SelectionController {
                     // Let the user know that no similar entities were found:
                     view.say("No " + typeName + " found with a name similar to " + seedName + ".");
 
-                    // If the user is allowed to create a new entity, then ask them if they want to create one:
-                    if (
-                            allowCreateInList &&
-                                    view.getYesOrNo("Do you want to create a new " + typeName + " called " +
-                                                    toTitleCase(seedName) + "?", ViewInt.DO_NOT_ALLOW_CANCEL, ViewInt.DO_NOT_ALLOW_QUIT,
-                                            ViewInt.DO_NOT_ALLOW_SKIP)
-                    ) {
-                        return stringEntityCreator.apply(scope, toTitleCase(seedName));
+                    // If the user is allowed to create a new entity, ask — but default to "y" so that pressing
+                    // Enter is sufficient when the user typed the full name they intended.  Typing "n" lets the
+                    // user enter a new search string instead (e.g., when they typed a short browse term).
+                    if (allowCreateInList) {
+                        String confirm = view.getResponseString(
+                                "Create a new " + typeName + " called '" + toTitleCase(seedName) + "'? (y/n):",
+                                "y", ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                                ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+                        if (confirm.equalsIgnoreCase("y")) {
+                            return stringEntityCreator.apply(scope, toTitleCase(seedName));
+                        }
                     }
 
                     // Since the entity was not found and the user is not allowed to or does not want to create a new entity,

@@ -29,6 +29,7 @@ import java.io.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static com.hixon.financialApp.controller.TerminationCondition.*;
@@ -210,15 +211,40 @@ public class ImportController {
      * @return The full import record ID with instance number appended
      */
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
-        String importRecordId;
-        if (map.containsKey(importRecordBaseName)) {
-            int instance = Integer.parseInt(map.get(importRecordBaseName)) + 1;
-            map.put(importRecordBaseName, Integer.toString(instance));
-            importRecordId = importRecordBaseName + "\t" + instance;
-        } else {
-            map.put(importRecordBaseName, "1");
-            importRecordId = importRecordBaseName + "\t1";
+        return constructImportRecordId(map, importRecordBaseName, importRecordBaseName);
+    }
+
+    /**
+     * Builds an import record ID using a compact display prefix while using a separate full-detail
+     * string as the deduplication key.  This allows the displayed ID to be short and readable
+     * (e.g. "P202606171") while still correctly detecting duplicate transactions within the run.
+     *
+     * <p>The sequence counter is maintained <em>per {@code idBase}</em>.  Each distinct
+     * {@code dedupKey} under the same {@code idBase} receives the next counter value
+     * (P...1, P...2, P...3, …).  If the identical {@code dedupKey} is seen again later
+     * (a true duplicate), the previously-assigned ID is reused so the caller can detect
+     * the collision rather than creating a new record.</p>
+     *
+     * @param map          tracks dedupKey→assignedId AND idBase→nextCounter in this run
+     * @param idBase       the short prefix for the displayed ID (e.g. "P20260617")
+     * @param dedupKey     the full-detail key used for duplicate detection in {@code map}
+     * @return             a unique import record ID of the form {@code idBase + counter}
+     */
+    public String constructImportRecordId(HashMap<String, String> map, String idBase, String dedupKey) {
+        // If this exact dedupKey was already seen, return the same ID (true duplicate).
+        if (map.containsKey(dedupKey)) {
+            return map.get(dedupKey);
         }
+
+        // New dedupKey: advance the per-idBase counter and build a new ID.
+        // The counter entry uses a NUL-prefixed internal key that can never clash with a real
+        // dedupKey (which is always a date+amount+payee string).
+        String counterKey = "\u0000" + idBase;
+        int counter = map.containsKey(counterKey) ? Integer.parseInt(map.get(counterKey)) + 1 : 1;
+        map.put(counterKey, Integer.toString(counter));
+
+        String importRecordId = idBase + counter;
+        map.put(dedupKey, importRecordId);  // remember this dedupKey → its assigned ID
         return importRecordId;
     }
 
@@ -406,14 +432,32 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
-                            // Determine the merchant for this transaction
+                            // Determine the merchant for this transaction.
+                            // First try: exact payee→merchant mapping (fastest, most specific).
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
                                 merchant = possibleMerchants.getFirst();
-                            } else if (merchant == null) {
-                                // If we can't determine a unique merchant, we need to ask the user
-                                // Don't auto-save in this case - let the normal merchant assignment flow handle it
-                                // But we can still keep the splits for later use
-                                merchant = null;  // Explicitly set to null to skip auto-save
+                            }
+
+                            // Second try: if the payee lookup didn't resolve a unique merchant,
+                            // use the merchant linked to the matched forecast's budget item.
+                            // This handles transfer payees (e.g. "Transfer to XXXXXX8249 from
+                            // Bill Pay Danni") whose payee string has no direct merchant mapping
+                            // but whose budget item does have an associated merchant.
+                            if (merchant == null) {
+                                try {
+                                    BudgetItem forecastBudgetItem = BudgetItem.getById(idBudgetItem);
+                                    if (forecastBudgetItem != null) {
+                                        List<BudgetItemMerchant> assignedMerchants =
+                                                BudgetItemMerchant.getAssignedMerchantsForBudgetItem(forecastBudgetItem);
+                                        if (assignedMerchants.size() == 1) {
+                                            merchant = Merchant.getById(assignedMerchants.get(0).getIdMerchant());
+                                        }
+                                        // If there are multiple merchants for the budget item, we cannot
+                                        // determine a unique one automatically — fall through to prompt.
+                                    }
+                                } catch (Exception e) {
+                                    // Don't let a lookup failure block the import; fall through to prompt.
+                                }
                             }
 
                             // Only save and reconcile if we successfully identified a merchant
@@ -435,6 +479,11 @@ public class ImportController {
 
                                 // Mark that we've auto-matched and already reconciled
                                 autoMatched = true;
+
+                                // Record for the Import Summary without printing a second bullet —
+                                // the auto-match output above already serves as the console log entry.
+                                importLog.recordImportEvent(currentTransaction,
+                                        ImportLog.ImportRecord.Status.NEWLY_IMPORTED);
                             }
                             // If merchant is still null, splits will be saved later after merchant assignment
                         }
@@ -498,8 +547,11 @@ public class ImportController {
                     // At this point the transaction is complete, so save it off:
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
 
-                    // Tell the user what we just did:
-                    importLog.logImportEvent(currentTransaction, isNewTransaction);
+                    // Tell the user what we just did — but skip if auto-matched, since the
+                    // auto-match block already recorded the event and printed its own output.
+                    if (!autoMatched) {
+                        importLog.logImportEvent(currentTransaction, isNewTransaction);
+                    }
 
                     /*
                      * Phase 3:  Get the assigned budget items for this merchant:
@@ -574,7 +626,10 @@ public class ImportController {
                             split.save(INSERT_ON_DUPLICATE_UPDATE);
                         }
                     } else {
-                        view.say("Already assigned splits.");
+                        // Only print if we didn't auto-match — the auto-match block already logged this
+                        if (!autoMatched) {
+                            view.say("Already assigned splits.");
+                        }
 
                         // If splits were modified during provisional reconciliation (e.g., tip adjustment),
                         // they need to be saved to persist the changes
@@ -615,7 +670,6 @@ public class ImportController {
                     }
                 }
 
-                j++; // Increment transaction counter
             } // End while hasNext()
 
             /*
@@ -938,14 +992,28 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
-                            // Determine the merchant for this transaction
+                            // Determine the merchant for this transaction.
+                            // First try: exact payee→merchant mapping.
                             if (possibleMerchants != null && possibleMerchants.size() == 1) {
                                 merchant = possibleMerchants.getFirst();
-                            } else if (merchant == null) {
-                                // If we can't determine a unique merchant, we need to ask the user
-                                // Don't auto-save in this case - let the normal merchant assignment flow handle it
-                                // But we can still keep the splits for later use
-                                merchant = null;  // Explicitly set to null to skip auto-save
+                            }
+
+                            // Second try: merchant linked to the matched forecast's budget item.
+                            // Handles transfer payees whose payee string has no direct merchant
+                            // mapping but whose budget item does have an associated merchant.
+                            if (merchant == null) {
+                                try {
+                                    BudgetItem forecastBudgetItem = BudgetItem.getById(idBudgetItem);
+                                    if (forecastBudgetItem != null) {
+                                        List<BudgetItemMerchant> assignedMerchants =
+                                                BudgetItemMerchant.getAssignedMerchantsForBudgetItem(forecastBudgetItem);
+                                        if (assignedMerchants.size() == 1) {
+                                            merchant = Merchant.getById(assignedMerchants.get(0).getIdMerchant());
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Don't let a lookup failure block the import; fall through to prompt.
+                                }
                             }
 
                             // Only save and reconcile if we successfully identified a merchant
@@ -967,6 +1035,11 @@ public class ImportController {
 
                                 // Mark that we've auto-matched and already reconciled
                                 autoMatched = true;
+
+                                // Record for the Import Summary without printing a second bullet —
+                                // the auto-match output above already serves as the console log entry.
+                                importLog.recordImportEvent(currentTransaction,
+                                        ImportLog.ImportRecord.Status.NEWLY_IMPORTED);
                             }
                             // If merchant is still null, splits will be saved later after merchant assignment
                         }
@@ -1030,8 +1103,11 @@ public class ImportController {
                     // At this point the transaction is complete, so save it off:
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
 
-                    // Tell the user what we just did:
-                    importLog.logImportEvent(currentTransaction, isNewTransaction);
+                    // Tell the user what we just did — but skip if auto-matched, since the
+                    // auto-match block already recorded the event and printed its own output.
+                    if (!autoMatched) {
+                        importLog.logImportEvent(currentTransaction, isNewTransaction);
+                    }
 
                     /*
                      * Phase 3:  Get the assigned budget items for this merchant:
@@ -1106,7 +1182,10 @@ public class ImportController {
                             split.save(INSERT_ON_DUPLICATE_UPDATE);
                         }
                     } else {
-                        view.say("Already assigned splits.");
+                        // Only print if we didn't auto-match — the auto-match block already logged this
+                        if (!autoMatched) {
+                            view.say("Already assigned splits.");
+                        }
 
                         // If splits were modified during provisional reconciliation (e.g., tip adjustment),
                         // they need to be saved to persist the changes
@@ -1392,11 +1471,17 @@ public class ImportController {
                         continue;
                     }
 
-                    // Construct an ID for this import record and store it in the transaction:
-                    String importRecordBaseName = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
+                    // Construct an ID for this import record and store it in the transaction.
+                    // The full-detail string (date+amount+cleared+checknum+payee) is used as the
+                    // dedup key so that identical provisional transactions in the same file get
+                    // distinct sequence numbers.  The displayed ID uses a compact "PyyyyMMdd"
+                    // prefix so it looks readable in the import log (e.g. "P202606111").
+                    String importRecordDedupKey = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
                             formatDollarAmount(transaction.getAmount()).substring(1) + "\t" +
                             transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
-                    transaction.setImportRecordId(constructImportRecordId(map, importRecordBaseName));
+                    SimpleDateFormat provIdFmt = new SimpleDateFormat("yyyyMMdd");
+                    String importRecordIdBase = "P" + provIdFmt.format(transaction.getPostDate().getTime());
+                    transaction.setImportRecordId(constructImportRecordId(map, importRecordIdBase, importRecordDedupKey));
 
                     // Add the transaction to the array of provisional transactions:
                     provisionalTransactions.add(transaction);
@@ -1546,29 +1631,63 @@ public class ImportController {
                                     provisionalTransactions.get(provTrxIndex).setMerchant(possibleMerchants.getFirst());
                                 }
 
-                                // Update the balance in the register and save it:
-                                register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
-                                register.update();
-
-                                // Log the import event
-                                importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
-
-                                // Save the provisional transaction with merchant info
-                                provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
-
-                                // Save the splits
-                                for (TransactionSplit split : splits) {
-                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                // The DB requires a non-null merchant on every transaction.
+                                // If the payee lookup above found nothing, ask the user to identify
+                                // the merchant now.  If the user cancels or skips, fall through to
+                                // the manual path (clear splits so the normal flow handles it).
+                                if (provisionalTransactions.get(provTrxIndex).getMerchant() == null) {
+                                    try {
+                                        Merchant assignedMerchant = merchantController.assignMerchant(
+                                                provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
+                                                provisionalTransactions.get(provTrxIndex).getPayee(),
+                                                provisionalTransactions.get(provTrxIndex).getAmount());
+                                        if (assignedMerchant != null) {
+                                            provisionalTransactions.get(provTrxIndex).setMerchant(assignedMerchant);
+                                        } else {
+                                            // User did not assign a merchant — drop auto-match, let manual path handle it
+                                            splits = null;
+                                        }
+                                    } catch (CancelException | SkipException e) {
+                                        // User cancelled/skipped — drop auto-match, let manual path handle it
+                                        splits = null;
+                                    }
                                 }
 
-                                // Reconcile immediately with the forecast (no need to do it again later)
-                                ForecastController forecastController = new ForecastController(
-                                        sessionController);
-                                forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
+                                // If merchant assignment was cancelled/skipped above, splits was
+                                // set to null to signal that the manual path should handle this
+                                // transaction instead.  Only proceed with auto-match save when we
+                                // have both a merchant and splits.
+                                if (splits != null) {
+                                    // Update the balance in the register and save it:
+                                    register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
+                                    register.update();
 
-                                // Move to the next provisional transaction since we're done with this one
-                                provTrxIndex++;
-                                continue;
+                                    // Log the import event
+                                    importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
+
+                                    // Save the provisional transaction with merchant info
+                                    provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
+
+                                    // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
+                                    // branch kept the original primary-key UUID.  Sync the in-memory object (and any
+                                    // splits that reference it) so the FK in transaction_split is correct.
+                                    syncTransactionIdAfterUpsert(provisionalTransactions.get(provTrxIndex), splits);
+
+                                    // Save the splits
+                                    for (TransactionSplit split : splits) {
+                                        split.save(INSERT_ON_DUPLICATE_UPDATE);
+                                    }
+
+                                    // Reconcile immediately with the forecast (no need to do it again later)
+                                    ForecastController forecastController = new ForecastController(
+                                            sessionController);
+                                    forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
+
+                                    // Move to the next provisional transaction since we're done with this one
+                                    provTrxIndex++;
+                                    continue;
+                                }
+                                // splits == null: fall through to manual path below
                             }
                         }
 
@@ -1592,7 +1711,10 @@ public class ImportController {
                         // Check for unexpired budget items that have no applicable forecast transaction
                         // (their forecast coverage has expired even though the budget item itself hasn't).
                         // Separate them out and treat them like expired items:
+                        // Use the provisional transaction's date as the reference, not today, so the
+                        // check is consistent with what assignAmountsToBudgetItems uses.
                         if (splits == null && !budgetItemMerchants.isEmpty() && merchant != null) {
+                            Calendar txnDate = provisionalTransactions.get(provTrxIndex).getDate();
                             List<BudgetItemMerchant> forecastExpiredItems = new ArrayList<>();
                             Iterator<BudgetItemMerchant> iter = budgetItemMerchants.iterator();
                             while (iter.hasNext()) {
@@ -1600,7 +1722,7 @@ public class ImportController {
                                 BudgetItem bi = bim.getBudgetItem();
                                 if (bi.getPeriod() != null && bi.getPeriod() != Item.PeriodType.ON_DEMAND) {
                                     ForecastTransaction ft = ForecastTransaction.getApplicableForecastTransaction(
-                                            bi.getId(), Calendar.getInstance());
+                                            bi.getId(), txnDate);
                                     if (ft == null) {
                                         forecastExpiredItems.add(bim);
                                         iter.remove();
@@ -1608,8 +1730,10 @@ public class ImportController {
                                 }
                             }
 
-                            // If any budget items had no forecast transaction, offer to renew them:
-                            if (!forecastExpiredItems.isEmpty()) {
+                            // If any budget items had no forecast transaction AND no other valid items remain,
+                            // offer to renew them. If valid On-Demand (or other) items remain, skip the prompt
+                            // since the import can proceed using those items.
+                            if (!forecastExpiredItems.isEmpty() && budgetItemMerchants.isEmpty()) {
                                 try {
                                     if (forecastExpiredItems.size() == 1) {
                                         BudgetItem budgetItem = BudgetItem.getById(forecastExpiredItems.getFirst().getIdBudgetItem());
@@ -1790,12 +1914,17 @@ public class ImportController {
                         // Save the provisional transaction:
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
 
+                        // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
+                        // branch kept the original primary-key UUID.  Sync the in-memory object (and any
+                        // splits that reference it) so the FK in transaction_split is correct.
+                        syncTransactionIdAfterUpsert(provisionalTransactions.get(provTrxIndex), splits);
+
                         // If the user entered some transaction splits:
                         if (splits != null) {
 
                             // then save the splits:
                             for (TransactionSplit split : splits) {
-                                split.save();
+                                split.save(INSERT_ON_DUPLICATE_UPDATE);
                             }
 
                             // and then reconcile the splits with the forecast:
@@ -1811,7 +1940,7 @@ public class ImportController {
 
                         // Log the import event
                         provisionalTransactions.get(provTrxIndex).setMerchant(registerTransactions.get(regTrxIndex).getMerchant());
-                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
+                        importLog.logImportEvent(provisionalTransactions.get(provTrxIndex), ImportLog.ImportRecord.Status.ALREADY_IMPORTED);
 
                         // Tell the user what we did:
                         view.say("Transaction wws previously imported.");
@@ -1985,6 +2114,52 @@ public class ImportController {
 
         // Return whether the forecast is in sync:
         System.out.println("Successfully imported " + i + " budget items into the database.");
+    }
+
+    /**
+     * After an {@code INSERT_ON_DUPLICATE_UPDATE} save, MySQL never changes the primary-key UUID
+     * of the existing row.  If the in-memory {@code Transaction} object was freshly constructed
+     * (new UUID) but the importRecordId already existed in the database, the on-duplicate branch
+     * will have updated every other column while keeping the original UUID.  The in-memory object
+     * and any associated splits will then reference a UUID that does not exist in the
+     * {@code transaction} table, causing a foreign-key violation when the splits are saved.
+     *
+     * <p>This method detects that mismatch and patches the in-memory objects so that subsequent
+     * INSERT statements for {@code transaction_split} use the correct FK value.
+     *
+     * @param transaction the provisional transaction that was just upserted
+     * @param splits      the splits about to be saved (may be {@code null})
+     */
+    private void syncTransactionIdAfterUpsert(Transaction transaction, List<TransactionSplit> splits)
+            throws EntityException, SQLException {
+        String importRecordId = transaction.getImportRecordId();
+        if (importRecordId == null) return;
+
+        Transaction dbTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
+        if (dbTransaction != null && !dbTransaction.getId().equals(transaction.getId())) {
+            // The upsert hit an existing row; the DB kept the original UUID.
+            // Sync the in-memory transaction and every split so FK references are correct.
+            UUID correctId = dbTransaction.getId();
+            transaction.setIdTransaction(correctId);
+            if (splits != null) {
+                for (TransactionSplit split : splits) {
+                    split.setIdTransaction(correctId);
+                }
+            }
+
+            // The old DB row may have stale splits from a previous corrupted import run.
+            // Delete them now so only the freshly-assigned splits survive.
+            // This prevents "ghost" splits (e.g., from a previous run where all transactions
+            // on the same date collided on the same importRecordId) from appearing in the
+            // import summary and in future queries.
+            try {
+                TransactionSplit.deleteSplitsForTransaction(correctId);
+            } catch (Exception e) {
+                // Non-fatal: log and continue.  The worst outcome is stale splits stay in the DB.
+                view.say("Warning: could not delete stale splits for transaction " + importRecordId +
+                        ": " + e.getMessage());
+            }
+        }
     }
 
 } // End class Importer.

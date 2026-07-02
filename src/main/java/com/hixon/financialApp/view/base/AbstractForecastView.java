@@ -461,9 +461,18 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // If there are one or more negative balances, display the first negative balance and the date on which it
         // occurred:
         if (firstNegativeBalance < 0) {
-            getView().say(new StringBuilder().append("The first negative balance is: ").
-                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(" on ").
-                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(".").toString());
+            Calendar today = Calendar.getInstance();
+            if (dateOnlyCompare(dateOfFirstNegativBalance, today) < 0) {
+                // The first negative balance date is in the past — it already occurred
+                getView().say(new StringBuilder().append("The first negative balance was: ")
+                        .append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(" on ")
+                        .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                        .append(" (already occurred).").toString());
+            } else {
+                getView().say(new StringBuilder().append("The first negative balance is: ").
+                        append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(" on ").
+                        append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(".").toString());
+            }
         }
 
         // Display the total amount of income:
@@ -621,10 +630,18 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Improvement 4: explicit risk warnings.
         getView().say("\nRisk Warnings:");
+        Calendar today = Calendar.getInstance();
         if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
-            getView().say(new StringBuilder().append("  - Critical: The account first goes negative on ").
-                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" at ").
-                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(".").toString());
+            if (dateOnlyCompare(dateOfFirstNegativBalance, today) < 0) {
+                getView().say(new StringBuilder().append("  - Note: The account went negative on ")
+                        .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                        .append(" at ").append(Utility.formatRoundedDollarAmount(firstNegativeBalance))
+                        .append(" — this is in the past.").toString());
+            } else {
+                getView().say(new StringBuilder().append("  - Critical: The account first goes negative on ").
+                        append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" at ").
+                        append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(".").toString());
+            }
         } else {
             getView().say("  - No negative balances are forecast in this period.");
         }
@@ -707,7 +724,9 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Improvement 7: timeline visualization as key milestones.
         getView().say("\nForecast Timeline:");
-        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
+        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
+                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) >= 0) {
+            // Crisis date is within (or after) the summary period — show the positive phase up to it
             Calendar preCrisisDate = copyCalendar(dateOfFirstNegativBalance);
             preCrisisDate.add(Calendar.DAY_OF_MONTH, -1);
             getView().say(new StringBuilder().append("  - Positive balance phase: ").
@@ -716,6 +735,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             getView().say(new StringBuilder().append("  - First deficit event: ").
                     append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" (").
                     append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(").").toString());
+        } else if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
+                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) < 0) {
+            // Crisis date is before the summary period — the historical overdraft already happened
+            getView().say(new StringBuilder().append("  - Historical deficit occurred on ")
+                    .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                    .append(" (before the forecast summary period).").toString());
+            getView().say("  - All balances within the forecast summary period are non-negative.");
         } else {
             getView().say("  - All projected balances remain non-negative.");
         }
@@ -739,14 +765,27 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         actionDate1.add(Calendar.MONTH, 1);
         Calendar actionDate2 = copyCalendar(firstFirstOfMonth);
         actionDate2.add(Calendar.MONTH, 2);
-        Calendar actionDate3 = copyCalendar(dateOfFirstNegativBalance != null ? dateOfFirstNegativBalance : firstFirstOfMonth);
-        Calendar actionDate4 = copyCalendar(dateOfPeriodLowestBalance != null ? dateOfPeriodLowestBalance : lastForecastTransaction.getPlannedDate());
+        // For dates derived from the (potentially historical) first-negative-balance date, clamp to
+        // at least the first month of the summary period so we never show past action deadlines.
+        Calendar crisisAnchor = (dateOfFirstNegativBalance != null
+                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) >= 0)
+                ? dateOfFirstNegativBalance : firstFirstOfMonth;
+        Calendar troughAnchor = (dateOfPeriodLowestBalance != null
+                && dateOnlyCompare(dateOfPeriodLowestBalance, firstFirstOfMonth) >= 0)
+                ? dateOfPeriodLowestBalance
+                : (lastForecastTransaction != null ? lastForecastTransaction.getPlannedDate() : firstFirstOfMonth);
+        Calendar actionDate3 = copyCalendar(crisisAnchor);
+        Calendar actionDate4 = copyCalendar(troughAnchor);
         if (actionDate3 != null) {
             actionDate3.add(Calendar.DAY_OF_MONTH, -14);
         }
         if (actionDate4 != null) {
             actionDate4.add(Calendar.MONTH, -2);
         }
+        // Final clamp: never show a date in the past
+        Calendar clampFloor = copyCalendar(firstFirstOfMonth);
+        if (actionDate3 != null && dateOnlyCompare(actionDate3, clampFloor) < 0) actionDate3 = clampFloor;
+        if (actionDate4 != null && dateOnlyCompare(actionDate4, clampFloor) < 0) actionDate4 = clampFloor;
 
         getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate1)).
                 append(": identify at least ").append(Utility.formatRoundedDollarAmount(monthlyGap)).

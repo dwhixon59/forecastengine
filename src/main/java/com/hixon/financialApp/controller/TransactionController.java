@@ -316,10 +316,11 @@ public class TransactionController {
                 view.say("You can search by:");
                 view.say("  • Payee or merchant name");
                 view.say("  • Date range:");
-                view.say("      - Full dates: '2024-01-01 to 2024-12-31'");
-                view.say("      - Month-day: '01-15 to 03-20' (defaults to current year, wraps to next year if needed)");
-                view.say("      - Day only: '15 to 20' (defaults to current month, wraps to next month if needed)");
-                view.say("  • Amount (e.g., '25.00' for exact match)");
+                view.say("      - Full dates: '06-17-2026 to 06-19-2026' (MM-DD-YYYY)");
+                view.say("      - Month-day: '06-15 to 06-19' (defaults to current year)");
+                view.say("      - Day only: '15 to 19' (defaults to current month)");
+                view.say("      - Single date: '06-17-2026' (MM-DD-YYYY)");
+                view.say("  • Amount (e.g., '25.00' or '-25.00' for exact match)");
                 view.say("  • Amount range (e.g., '10.00 to 50.00')");
                 view.say("  • Filters: cleared:yes, cleared:no, new:yes, disputed:yes");
                 view.say("  • Or press Enter to see all transactions");
@@ -415,7 +416,7 @@ public class TransactionController {
 
         // Parse filters from search string
         if (searchString != null && !searchString.isEmpty()) {
-            // Check for date range pattern (supports YYYY-MM-DD, MM-DD, or DD formats)
+            // Check for date range pattern (supports YYYY-MM-DD, MM-DD-YYYY, MM-DD, or DD formats)
             // Pattern matches: "something to something" where something contains digits and optionally dashes
             String dateRangePattern = "([\\d-]+)\\s+to\\s+([\\d-]+)";
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(dateRangePattern);
@@ -431,18 +432,27 @@ public class TransactionController {
                     criteria.endDate = dates[1];
 
                     // Remove the date range from search text
-                    searchString = searchString.replaceAll(java.util.regex.Pattern.quote(dateRangeStr), "").trim();
+                    searchString = searchString.replaceFirst(java.util.regex.Pattern.quote(dateRangeStr), "").trim();
                     criteria.searchText = searchString;
                 } else {
                     view.say("Warning: Could not parse date range. Supported formats:");
-                    view.say("  - Full: 'YYYY-MM-DD to YYYY-MM-DD'");
+                    view.say("  - Full: 'MM-DD-YYYY to MM-DD-YYYY' or 'YYYY-MM-DD to YYYY-MM-DD'");
                     view.say("  - Month-day: 'MM-DD to MM-DD'");
                     view.say("  - Day only: 'DD to DD'");
                 }
+            } else {
+                // No "to" found — try the whole token as a single date (sets start == end)
+                Calendar singleDate = Utility.parseFlexibleSingleDate(searchString);
+                if (singleDate != null) {
+                    criteria.startDate = singleDate;
+                    criteria.endDate = singleDate;
+                    searchString = "";          // entire input consumed as a date
+                    criteria.searchText = "";
+                }
             }
 
-            // Check for amount range pattern (12.34 to 56.78)
-            String amountRangePattern = "(\\d+\\.\\d{2})\\s+to\\s+(\\d+\\.\\d{2})";
+            // Check for amount range pattern (e.g. '10.00 to 50.00' or '-50.00 to -10.00')
+            String amountRangePattern = "(-?\\d+\\.\\d{2})\\s+to\\s+(-?\\d+\\.\\d{2})";
             java.util.regex.Pattern amountPattern = java.util.regex.Pattern.compile(amountRangePattern);
             java.util.regex.Matcher amountMatcher = amountPattern.matcher(searchString);
 
@@ -452,32 +462,35 @@ public class TransactionController {
                     String minAmountStr = amountMatcher.group(1);
                     String maxAmountStr = amountMatcher.group(2);
 
-                    criteria.minAmount = Double.parseDouble(minAmountStr);
-                    criteria.maxAmount = Double.parseDouble(maxAmountStr);
+                    // Use absolute values so '-50.00 to -10.00' behaves the same as '10.00 to 50.00'
+                    double val1 = Math.abs(Double.parseDouble(minAmountStr));
+                    double val2 = Math.abs(Double.parseDouble(maxAmountStr));
+                    criteria.minAmount = Math.min(val1, val2);
+                    criteria.maxAmount = Math.max(val1, val2);
 
                     // Remove the amount range from search text
-                    searchString = searchString.replaceAll(amountRangePattern, "").trim();
+                    searchString = searchString.replaceFirst(java.util.regex.Pattern.quote(amountMatcher.group(0)), "").trim();
                 } catch (Exception e) {
                     view.say("Warning: Could not parse amount range. Format should be '10.00 to 50.00'");
                 }
             } else {
-                // Check for single amount pattern (12.34)
-                String singleAmountPattern = "\\b(\\d+\\.\\d{2})\\b";
+                // Check for single amount pattern (optional leading minus, e.g. '26.30' or '-26.30')
+                String singleAmountPattern = "-?\\d+\\.\\d{2}";
                 java.util.regex.Pattern singlePattern = java.util.regex.Pattern.compile(singleAmountPattern);
                 java.util.regex.Matcher singleMatcher = singlePattern.matcher(searchString);
 
                 if (singleMatcher.find()) {
-                    // Found a single amount - search for exact match
+                    // Found a single amount - search for exact match (sign-agnostic via ABS in SQL)
                     try {
-                        String amountStr = singleMatcher.group(1);
-                        Double amount = Double.parseDouble(amountStr);
+                        String amountStr = singleMatcher.group(0);
+                        Double amount = Math.abs(Double.parseDouble(amountStr));
                         criteria.minAmount = amount;
                         criteria.maxAmount = amount;
 
-                        // Remove the amount from search text
-                        searchString = searchString.replaceAll(singleAmountPattern, "").trim();
+                        // Remove the entire matched token (including any leading '-') from search text
+                        searchString = searchString.replaceFirst(java.util.regex.Pattern.quote(amountStr), "").trim();
                     } catch (Exception e) {
-                        view.say("Warning: Could not parse amount. Format should be '25.00'");
+                        view.say("Warning: Could not parse amount. Format should be '25.00' or '-25.00'");
                     }
                 }
             }
@@ -722,49 +735,19 @@ public class TransactionController {
             view.say("No merchant currently assigned.");
         }
 
-        // Use MerchantController to assign a merchant
+        // The user explicitly chose to change the merchant, so we go straight to the
+        // merchant-selection UI.  We do NOT call parseMerchantPayee (which would
+        // auto-resolve transfers via memo history) or assignMerchant (which skips
+        // the prompt for transfer payees).  The user must be able to pick any merchant.
         MerchantController merchantController = new MerchantController(sessionController);
-
-        // Parse the merchant payee string for creating the MerchantPayee mapping
-        // Note: merchantPayee is not stored in the transaction table, but is used to create
-        // a MerchantPayee record that maps the cleaned payee string to the merchant
-        String merchantPayeeString;
-        try {
-            // Get the register and financial institution to parse the merchant payee
-            Register transactionRegister = transaction.getRegister();
-
-            // For now, hardcode WellsFargoBank since that's what's currently used
-            // TODO: Make this configurable based on register's financial institution
-            SessionController tempSession = new SessionController(transactionRegister, budget, forecast, view, notificationService);
-            com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt financialInstitution =
-                    new com.hixon.financialApp.model.financialinstitution.WellsFargoBank(tempSession);
-
-            // Parse the merchant payee from the raw payee to get a cleaned, shortened version
-            // Example: "PURCHASE AUTHORIZED ON 11/18 TARGET T-0799..." -> "TARGET T-0799 Sarasota FL"
-            merchantPayeeString = financialInstitution.parseMerchantPayee(
-                    transaction.getDate(),
-                    transaction.getAmount(),
-                    transaction.getPayee());
-
-        } catch (Exception e) {
-            // If parsing fails, fall back to using the raw payee
-            // This may cause database errors if the raw payee is too long
-            view.say("Warning: Could not parse merchant payee from raw payee. Using raw payee instead.");
-            view.say("Error: " + e.getMessage());
-            merchantPayeeString = transaction.getPayee();
-        }
-
-        Merchant merchant = merchantController.assignMerchant(
-                merchantPayeeString,
-                transaction.getPayee(),
-                transaction.getAmount(),
-                true);  // Always require confirmation for manual merchant assignment
+        Merchant merchant = merchantController.selectMerchantPublic(ALLOW_CREATE);
 
         if (merchant != null) {
             // Update the transaction with the new merchant
             transaction.setMerchant(merchant);
             transaction.setIdMerchant(merchant.getId());
             transaction.update();
+            view.say("Merchant successfully changed to: " + merchant.getName());
         }
     }
 

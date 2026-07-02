@@ -140,8 +140,7 @@ public abstract class Entity implements EntityInt {
                setDirty(false);
             }
          } else {
-            System.out.println("Attempt to execute a query on an entity of type " + getPrintableTypeName() +
-                    " that isn't dirty.  Skipped.");
+            // Entity is not dirty — nothing to save.  Log at debug level only; not shown to user.
          }
       } catch (SQLException e) {
          EntityException ee = new EntityException("Database error occured " + exceptionMessage + ".  \nSQL " +

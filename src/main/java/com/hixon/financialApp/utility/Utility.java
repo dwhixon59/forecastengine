@@ -277,22 +277,32 @@ public class Utility {
             return input;
         }
 
-        StringBuilder titleCase = new StringBuilder();
-        boolean nextTitleCase = true;
-
-        for (char c : input.toCharArray()) {
-            if (Character.isSpaceChar(c)) {
-                nextTitleCase = true;
-            } else if (nextTitleCase) {
-                c = Character.toTitleCase(c);
-                nextTitleCase = false;
+        // Split on spaces, preserving the delimiter so we can rebuild with the same spacing.
+        String[] tokens = input.split("(?<=\\s)|(?=\\s)");
+        StringBuilder result = new StringBuilder();
+        for (String token : tokens) {
+            if (token.isBlank()) {
+                // Whitespace token — keep as-is
+                result.append(token);
             } else {
-                c = Character.toLowerCase(c);
+                // Check whether every letter in the token is uppercase (ignoring non-letters).
+                // If so, it is an acronym/abbreviation (e.g. "CVS", "ATM") and should be
+                // preserved exactly.  Otherwise apply normal title-casing.
+                boolean allUpperCase = token.chars()
+                        .filter(Character::isLetter)
+                        .allMatch(Character::isUpperCase);
+
+                if (allUpperCase && token.chars().anyMatch(Character::isLetter)) {
+                    result.append(token);
+                } else {
+                    // Title-case: uppercase first letter, lowercase the rest
+                    result.append(Character.toTitleCase(token.charAt(0)));
+                    result.append(token.substring(1).toLowerCase());
+                }
             }
-            titleCase.append(c);
         }
 
-        return titleCase.toString();
+        return result.toString();
     }
 
     /**
@@ -1057,9 +1067,9 @@ public class Utility {
             int endDashes = endStr.length() - endStr.replace("-", "").length();
 
             if (startDashes == 2 && endDashes == 2) {
-                // Full format: YYYY-MM-DD to YYYY-MM-DD
-                startDate = sqlDateStringToCalendarDate(startStr);
-                endDate = sqlDateStringToCalendarDate(endStr);
+                // Full date format: YYYY-MM-DD or MM-DD-YYYY (both have 2 dashes)
+                startDate = parseFullDate(startStr);
+                endDate = parseFullDate(endStr);
             } else if (startDashes == 1 && endDashes == 1) {
                 // MM-DD to MM-DD format
                 startDate = parseMonthDay(startStr, now.get(YEAR));
@@ -1094,6 +1104,54 @@ public class Utility {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Parses a full date string in either YYYY-MM-DD or MM-DD-YYYY format.
+     *
+     * @param dateStr the date string
+     * @return the parsed Calendar, never null
+     * @throws ParseException if the string cannot be parsed
+     */
+    private static Calendar parseFullDate(String dateStr) throws ParseException {
+        String[] p = dateStr.split("-");
+        if (p.length == 3) {
+            if (p[0].length() == 4) {
+                // YYYY-MM-DD
+                return sqlDateStringToCalendarDate(dateStr);
+            } else if (p[2].length() == 4) {
+                // MM-DD-YYYY → reorder to YYYY-MM-DD
+                return sqlDateStringToCalendarDate(p[2] + "-" + p[0] + "-" + p[1]);
+            }
+        }
+        throw new ParseException("Unrecognized full-date format: " + dateStr, 0);
+    }
+
+    /**
+     * Parses a flexible single date string (YYYY-MM-DD, MM-DD-YYYY, or MM-DD).
+     * Returns null if the string cannot be interpreted as a date.
+     *
+     * @param dateStr the candidate date string
+     * @return the parsed Calendar, or null if parsing fails
+     */
+    public static Calendar parseFlexibleSingleDate(String dateStr) {
+        if (dateStr == null || dateStr.trim().isEmpty()) return null;
+        dateStr = dateStr.trim();
+        int dashes = dateStr.length() - dateStr.replace("-", "").length();
+        try {
+            Calendar now = Calendar.getInstance();
+            if (dashes == 2) {
+                return parseFullDate(dateStr);            // YYYY-MM-DD or MM-DD-YYYY
+            } else if (dashes == 1) {
+                return parseMonthDay(dateStr, now.get(YEAR)); // MM-DD
+            } else if (dateStr.matches("\\d{1,2}")) {
+                // Day-only
+                Calendar cal = (Calendar) now.clone();
+                cal.set(DATE, Integer.parseInt(dateStr));
+                return cal;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /**

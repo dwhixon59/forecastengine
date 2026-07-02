@@ -100,6 +100,58 @@ public class TransactionSplitsController {
             boolean allFixed = budgetItemsForMerchant.stream().allMatch(
                     item -> item.getAmount() > 0 || item.getPercentage() > 0);
 
+            // ── Single-item shortcut ───────────────────────────────────────────────
+            // When there is exactly one budget item and the merchant still prompts
+            // each time (askAlways=true), replace the full split-entry prompt with a
+            // focused memo-only prompt.  The item is auto-selected; the user just
+            // provides a memo (or presses Enter to accept the budget item's own memo
+            // as the default).  Typing 'a' adds a budget item and re-enters the
+            // normal multi-item loop on the next iteration; 's' skips the transaction.
+            // This shortcut is skipped when amounts are pre-fixed — pressing Enter is
+            // already optimal in that path.
+            if (budgetItemsForMerchant.size() == 1 && merchant.isAskAlways() && !allFixed) {
+                BudgetItemMerchant sole = budgetItemsForMerchant.get(0);
+                String defaultMemo = getBudgetItemMemo(sole);
+                String itemLabel;
+                try {
+                    itemLabel = sole.getBudgetItem().getPayee();
+                } catch (Exception e) {
+                    itemLabel = "item 1";
+                }
+                view.say("▸ Auto-selected: " + itemLabel);
+                String memoInput = view.getResponseString(
+                        "Memo (or 'a' to add a budget item, 's' to skip):",
+                        defaultMemo, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+                if (memoInput != null && memoInput.equalsIgnoreCase("a")) {
+                    try {
+                        budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                        done = false;  // re-loop to show updated list with the new item
+                    } catch (SkipException se) {
+                        view.say("Skipping this transaction.");
+                        terminationCondition = SKIP;
+                        // done stays true — loop will exit
+                    }
+                    continue;
+                } else if (memoInput != null && memoInput.equalsIgnoreCase("s")) {
+                    if (skipAllowed) {
+                        view.say("Skipping this transaction.");
+                        terminationCondition = SKIP;
+                    } else {
+                        view.say("Skip not allowed at this time.");
+                        done = false;
+                    }
+                    continue;
+                }
+
+                String memo = (memoInput == null || memoInput.isBlank()) ? null : memoInput;
+                splits.add(new TransactionSplit(transaction.getAmount(), sole, transaction, memo));
+                // done stays true — fall through to the "Always auto-assign?" question
+                continue;
+            }
+            // ── End single-item shortcut ───────────────────────────────────────────
+
             String[] amounts;
             String prompt = "Enter the split amounts (or a - add, d - delete, i - inquire, s - skip)";
 
@@ -432,7 +484,7 @@ public class TransactionSplitsController {
         if (!splits.isEmpty() && merchant.isAskAlways() && budgetItemsForMerchant.size() == 1) {
             try {
                 String setDefault = view.getResponseString(
-                        "Always auto-assign '" + merchant.getName() + "' to this budget item? (y/n) [n]:",
+                        "Always auto-assign '" + merchant.getName() + "' to this budget item? (y/n):",
                         "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                         ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
                 if (setDefault.equalsIgnoreCase("y")) {

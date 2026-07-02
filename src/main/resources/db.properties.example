@@ -1,0 +1,13 @@
+# Copy this file to db.properties and fill in your credentials.
+# db.properties is listed in .gitignore and must NEVER be committed to version control.
+
+# Local MySQL connection
+db.url=jdbc:mysql://localhost:3306/ForecastDatabase
+db.username=root
+db.password=YOUR_PASSWORD_HERE
+
+# AWS RDS connection (uncomment to use instead of local)
+#db.url=jdbc:mysql://YOUR_HOST.rds.amazonaws.com:3306/forecastdatabase
+#db.username=YOUR_USERNAME
+#db.password=YOUR_PASSWORD_HERE
+
