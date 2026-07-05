@@ -1,93 +1,146 @@
-C-- SQL Script to Clean Up Duplicate Forecast Transactions
+-- SQL Script to Clean Up Duplicate Forecast Transactions
 -- This script removes duplicate forecast transactions that have the same:
 --   - ForecastItem_idForecastItem
 --   - plannedDate
+--   - remainingAmount
+--   - the exact same set of linked transaction splits (the "split signature")
 -- It keeps only the most recently updated version of each duplicate.
 --
--- NOTE: Forecast transactions linked to different splits are NOT duplicates - they represent
--- different actual transactions that matched the same forecast item on the same date.
--- These are EXCLUDED from the cleanup.
+-- NOTE: Forecast transactions linked to DIFFERENT splits, or that differ in remaining amount, are
+-- NOT duplicates - they represent different actual entries that share the same forecast item and
+-- date.  A split's identity is the composite of (Transaction_Split_idTransaction,
+-- Transaction_Split_idBudgetItem), so the split signature below incorporates both.  Two forecast
+-- transactions are only duplicates when their forecast item, planned date, remaining amount, and
+-- split signature all match (which includes the case where neither is linked to any split, i.e. a
+-- NULL signature).
 
 -- BACKUP YOUR DATABASE BEFORE RUNNING THIS SCRIPT!
 
 -- Step 1: Identify duplicates (for review only - does not modify data)
--- Excludes cases where multiple transactions have different splits (which are valid)
+-- A forecast transaction's split signature is a deterministic, ordered concatenation of the
+-- composite ids of every split linked to it (NULL when it is linked to no split).
 SELECT
-    BIN_TO_UUID(ft.ForecastItem_idForecastItem) as forecast_item_id,
-    ft.plannedDate,
+    forecast_item_id,
+    plannedDate,
+    remainingAmount,
+    split_signature,
     COUNT(*) as duplicate_count,
-    COUNT(DISTINCT fts.Transaction_Split_idTransaction) as distinct_transaction_count,
-    GROUP_CONCAT(BIN_TO_UUID(ft.idForecastTransaction) SEPARATOR ', ') as transaction_ids,
-    GROUP_CONCAT(ft.updatedTimeStamp SEPARATOR ', ') as timestamps
-FROM
-    forecast_transaction ft
-    LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction
-GROUP BY
-    ft.ForecastItem_idForecastItem,
-    ft.plannedDate
-HAVING
-    COUNT(*) > 1
-    AND (COUNT(DISTINCT fts.Transaction_Split_idTransaction) <= 1 OR COUNT(DISTINCT fts.Transaction_Split_idTransaction) IS NULL)
-ORDER BY
-    ft.plannedDate DESC;
+    GROUP_CONCAT(transaction_id ORDER BY updatedTimeStamp DESC SEPARATOR ', ') as transaction_ids,
+    GROUP_CONCAT(updatedTimeStamp ORDER BY updatedTimeStamp DESC SEPARATOR ', ') as timestamps
+FROM (
+    SELECT
+        BIN_TO_UUID(ft.ForecastItem_idForecastItem) as forecast_item_id,
+        ft.plannedDate as plannedDate,
+        ft.remainingAmount as remainingAmount,
+        ft.updatedTimeStamp as updatedTimeStamp,
+        BIN_TO_UUID(ft.idForecastTransaction) as transaction_id,
+        GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+            BIN_TO_UUID(fts.Transaction_Split_idTransaction),
+            BIN_TO_UUID(fts.Transaction_Split_idBudgetItem))
+            ORDER BY BIN_TO_UUID(fts.Transaction_Split_idTransaction),
+                     BIN_TO_UUID(fts.Transaction_Split_idBudgetItem) SEPARATOR '|') as split_signature
+    FROM forecast_transaction ft
+    LEFT JOIN forecast_transaction_split fts
+        ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction
+    GROUP BY ft.idForecastTransaction
+) per_ft
+GROUP BY forecast_item_id, plannedDate, remainingAmount, split_signature
+HAVING COUNT(*) > 1
+ORDER BY plannedDate DESC;
 
 -- Step 2: Delete duplicates, keeping only the most recent (by updatedTimeStamp)
--- Only delete if they don't have different splits
+-- Only delete when the two forecast transactions share the same amount and split signature.
 DELETE ft1
 FROM forecast_transaction ft1
 INNER JOIN forecast_transaction ft2
     ON ft1.ForecastItem_idForecastItem = ft2.ForecastItem_idForecastItem
     AND ft1.plannedDate = ft2.plannedDate
+    AND ft1.remainingAmount = ft2.remainingAmount
     AND ft1.updatedTimeStamp < ft2.updatedTimeStamp
-LEFT JOIN forecast_transaction_split fts1 ON ft1.idForecastTransaction = fts1.ForecastTransaction_idForecastTransaction
-LEFT JOIN forecast_transaction_split fts2 ON ft2.idForecastTransaction = fts2.ForecastTransaction_idForecastTransaction
+LEFT JOIN (
+    SELECT ForecastTransaction_idForecastTransaction as ftId,
+           GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+               BIN_TO_UUID(Transaction_Split_idTransaction),
+               BIN_TO_UUID(Transaction_Split_idBudgetItem))
+               ORDER BY BIN_TO_UUID(Transaction_Split_idTransaction),
+                        BIN_TO_UUID(Transaction_Split_idBudgetItem) SEPARATOR '|') as sig
+    FROM forecast_transaction_split
+    GROUP BY ForecastTransaction_idForecastTransaction
+) s1 ON s1.ftId = ft1.idForecastTransaction
+LEFT JOIN (
+    SELECT ForecastTransaction_idForecastTransaction as ftId,
+           GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+               BIN_TO_UUID(Transaction_Split_idTransaction),
+               BIN_TO_UUID(Transaction_Split_idBudgetItem))
+               ORDER BY BIN_TO_UUID(Transaction_Split_idTransaction),
+                        BIN_TO_UUID(Transaction_Split_idBudgetItem) SEPARATOR '|') as sig
+    FROM forecast_transaction_split
+    GROUP BY ForecastTransaction_idForecastTransaction
+) s2 ON s2.ftId = ft2.idForecastTransaction
 WHERE ft1.overridden = FALSE
   AND ft2.overridden = FALSE
-  AND (fts1.Transaction_Split_idTransaction IS NULL
-       OR fts2.Transaction_Split_idTransaction IS NULL
-       OR fts1.Transaction_Split_idTransaction = fts2.Transaction_Split_idTransaction);
+  AND ((s1.sig IS NULL AND s2.sig IS NULL) OR s1.sig = s2.sig);
 
 -- Step 3: For any remaining duplicates with the same timestamp, keep the one with the lower ID
--- Only delete if they don't have different splits
+-- Only delete when the two forecast transactions share the same amount and split signature.
 DELETE ft1
 FROM forecast_transaction ft1
 INNER JOIN forecast_transaction ft2
     ON ft1.ForecastItem_idForecastItem = ft2.ForecastItem_idForecastItem
     AND ft1.plannedDate = ft2.plannedDate
+    AND ft1.remainingAmount = ft2.remainingAmount
     AND ft1.updatedTimeStamp = ft2.updatedTimeStamp
     AND ft1.idForecastTransaction > ft2.idForecastTransaction
-LEFT JOIN forecast_transaction_split fts1 ON ft1.idForecastTransaction = fts1.ForecastTransaction_idForecastTransaction
-LEFT JOIN forecast_transaction_split fts2 ON ft2.idForecastTransaction = fts2.ForecastTransaction_idForecastTransaction
+LEFT JOIN (
+    SELECT ForecastTransaction_idForecastTransaction as ftId,
+           GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+               BIN_TO_UUID(Transaction_Split_idTransaction),
+               BIN_TO_UUID(Transaction_Split_idBudgetItem))
+               ORDER BY BIN_TO_UUID(Transaction_Split_idTransaction),
+                        BIN_TO_UUID(Transaction_Split_idBudgetItem) SEPARATOR '|') as sig
+    FROM forecast_transaction_split
+    GROUP BY ForecastTransaction_idForecastTransaction
+) s1 ON s1.ftId = ft1.idForecastTransaction
+LEFT JOIN (
+    SELECT ForecastTransaction_idForecastTransaction as ftId,
+           GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+               BIN_TO_UUID(Transaction_Split_idTransaction),
+               BIN_TO_UUID(Transaction_Split_idBudgetItem))
+               ORDER BY BIN_TO_UUID(Transaction_Split_idTransaction),
+                        BIN_TO_UUID(Transaction_Split_idBudgetItem) SEPARATOR '|') as sig
+    FROM forecast_transaction_split
+    GROUP BY ForecastTransaction_idForecastTransaction
+) s2 ON s2.ftId = ft2.idForecastTransaction
 WHERE ft1.overridden = FALSE
   AND ft2.overridden = FALSE
-  AND (fts1.Transaction_Split_idTransaction IS NULL
-       OR fts2.Transaction_Split_idTransaction IS NULL
-       OR fts1.Transaction_Split_idTransaction = fts2.Transaction_Split_idTransaction);
+  AND ((s1.sig IS NULL AND s2.sig IS NULL) OR s1.sig = s2.sig);
 
 -- Step 4: Verify no duplicates remain (should return 0 rows)
--- Excludes valid cases where transactions have different splits
 SELECT
-    BIN_TO_UUID(ft.ForecastItem_idForecastItem) as forecast_item_id,
-    ft.plannedDate,
-    COUNT(*) as duplicate_count,
-    COUNT(DISTINCT fts.Transaction_Split_idTransaction) as distinct_transaction_count
-FROM
-    forecast_transaction ft
-    LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction
-GROUP BY
-    ft.ForecastItem_idForecastItem,
-    ft.plannedDate
-HAVING
-    COUNT(*) > 1
-    AND (COUNT(DISTINCT fts.Transaction_Split_idTransaction) <= 1 OR COUNT(DISTINCT fts.Transaction_Split_idTransaction) IS NULL);
+    forecast_item_id,
+    plannedDate,
+    remainingAmount,
+    split_signature,
+    COUNT(*) as duplicate_count
+FROM (
+    SELECT
+        BIN_TO_UUID(ft.ForecastItem_idForecastItem) as forecast_item_id,
+        ft.plannedDate as plannedDate,
+        ft.remainingAmount as remainingAmount,
+        GROUP_CONCAT(DISTINCT CONCAT_WS(':',
+            BIN_TO_UUID(fts.Transaction_Split_idTransaction),
+            BIN_TO_UUID(fts.Transaction_Split_idBudgetItem))
+            ORDER BY BIN_TO_UUID(fts.Transaction_Split_idTransaction),
+                     BIN_TO_UUID(fts.Transaction_Split_idBudgetItem) SEPARATOR '|') as split_signature
+    FROM forecast_transaction ft
+    LEFT JOIN forecast_transaction_split fts
+        ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction
+    GROUP BY ft.idForecastTransaction
+) per_ft
+GROUP BY forecast_item_id, plannedDate, remainingAmount, split_signature
+HAVING COUNT(*) > 1;
 
--- Step 5: Add UNIQUE constraint to prevent future duplicates
--- Note: This constraint will prevent multiple forecast transactions with the same item+date,
--- but the application must handle the valid case of multiple actual transactions matching
--- the same forecast item on the same date by using splits properly.
-ALTER TABLE forecast_transaction
-ADD UNIQUE KEY uk_forecast_item_date (ForecastItem_idForecastItem, plannedDate);
-
--- Verify the constraint was added
-SHOW KEYS FROM forecast_transaction WHERE Key_name = 'uk_forecast_item_date';
+-- NOTE: A UNIQUE constraint on (ForecastItem_idForecastItem, plannedDate) is intentionally NOT added,
+-- because it is valid to have multiple forecast transactions for the same forecast item on the same
+-- date when they are linked to different transaction splits or have different amounts.
 

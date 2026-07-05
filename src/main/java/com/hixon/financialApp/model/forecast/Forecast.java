@@ -670,66 +670,326 @@ public class Forecast extends IndependentEntity {
      * which indicates logical duplicates that should not exist.
      *
      * NOTE: Transactions linked to different splits are NOT considered duplicates - they represent
-     * different actual transactions that matched the same forecast item on the same date.
+     * different actual transactions that matched the same forecast item on the same date.  To
+     * distinguish these legitimate multiple instances from true duplicates, the uniqueness key
+     * includes each forecast transaction's full linked-split identity (the composite of the split's
+     * transaction id and budget item id) as well as its remaining amount.  Two forecast transactions
+     * are only treated as duplicates when they share the same forecast item, planned date, remaining
+     * amount, and the exact same set of linked splits (which includes the case where both are linked
+     * to no split at all).  Rows that differ in amount represent distinct entries and are not flagged.
      */
     public void checkForDuplicateTransactions() throws SQLException {
+        // Gather one row per forecast transaction, including a deterministic "split signature" that
+        // captures the exact set of splits linked to it (NULL when it is linked to no split).  The
+        // grouping/duplicate decision is intentionally performed in Java (see findDuplicateGroups)
+        // so that the logic is unit-testable without a live database.
         String query =
             "SELECT " +
             "    BIN_TO_UUID(fi.idForecastItem) as forecastItemId, " +
-            "    fi.category, " +
-            "    fi.payee, " +
-            "    ft.plannedDate, " +
-            "    COUNT(*) as duplicateCount, " +
-            "    GROUP_CONCAT(BIN_TO_UUID(ft.idForecastTransaction) ORDER BY ft.updatedTimeStamp DESC SEPARATOR ', ') as transactionIds, " +
-            "    COUNT(DISTINCT fts.Transaction_Split_idTransaction) as distinctTransactionCount " +
+            "    fi.category as category, " +
+            "    fi.payee as payee, " +
+            "    ft.plannedDate as plannedDate, " +
+            "    ft.remainingAmount as remainingAmount, " +
+            "    ft.updatedTimeStamp as updatedTimeStamp, " +
+            "    BIN_TO_UUID(ft.idForecastTransaction) as transactionId, " +
+            "    GROUP_CONCAT(DISTINCT CONCAT_WS(':', " +
+            "        BIN_TO_UUID(fts.Transaction_Split_idTransaction), " +
+            "        BIN_TO_UUID(fts.Transaction_Split_idBudgetItem)) " +
+            "        ORDER BY BIN_TO_UUID(fts.Transaction_Split_idTransaction), " +
+            "                 BIN_TO_UUID(fts.Transaction_Split_idBudgetItem) SEPARATOR '|') as splitSignature " +
             "FROM forecast_transaction ft " +
             "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
             "LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction " +
             "WHERE fi.Forecast_idForecast = UUID_TO_BIN('" + this.getId() + "') " +
             "  AND ft.plannedDate >= " + Utility.calendarDateToSqlDateString(this.startDate) + " " +
-            "GROUP BY fi.idForecastItem, ft.plannedDate " +
-            "HAVING COUNT(*) > 1 " +
-            "  AND (COUNT(DISTINCT fts.Transaction_Split_idTransaction) <= 1 OR COUNT(DISTINCT fts.Transaction_Split_idTransaction) IS NULL) " +
+            "GROUP BY ft.idForecastTransaction " +
             "ORDER BY ft.plannedDate DESC, fi.category, fi.payee";
 
+        List<DuplicateCandidate> candidates = new ArrayList<>();
         try (Statement statement = Utility.getDbConnection().createStatement();
              ResultSet rs = statement.executeQuery(query)) {
 
-            boolean foundDuplicates = false;
             while (rs.next()) {
-                if (!foundDuplicates) {
-                    Utility.getView().say("");
-                    Utility.getView().say("WARNING: Duplicate forecast transactions detected!");
-                    Utility.getView().say("=========================================");
-                    foundDuplicates = true;
-                }
-
-                String category = rs.getString("category");
-                String payee = rs.getString("payee");
-                LocalDate plannedDate = rs.getObject("plannedDate", LocalDate.class);
-                int count = rs.getInt("duplicateCount");
-                String transactionIds = rs.getString("transactionIds");
-
-                Utility.getView().say(String.format(
-                    "  [%s] %s - %s: %d duplicates",
-                    plannedDate.toString(),
-                    category,
-                    payee,
-                    count
-                ));
-                Utility.getView().say("    Transaction IDs: " + transactionIds);
-            }
-
-            if (foundDuplicates) {
-                Utility.getView().say("=========================================");
-                Utility.getView().say("Run cleanup_duplicate_forecast_transactions.sql to remove duplicates.");
-                Utility.getView().say("");
+                candidates.add(new DuplicateCandidate(
+                        rs.getString("forecastItemId"),
+                        rs.getString("category"),
+                        rs.getString("payee"),
+                        rs.getObject("plannedDate", LocalDate.class),
+                        rs.getDouble("remainingAmount"),
+                        rs.getString("splitSignature"),
+                        rs.getString("transactionId"),
+                        rs.getTimestamp("updatedTimeStamp")));
             }
         } catch (SQLException e) {
             System.err.println("Error checking for duplicate forecast transactions: " + e.getMessage());
             throw e;
         }
+
+        List<DuplicateGroup> duplicateGroups = findDuplicateGroups(candidates);
+
+        if (!duplicateGroups.isEmpty()) {
+            Utility.getView().say("");
+            Utility.getView().say("WARNING: Duplicate forecast transactions detected!");
+            Utility.getView().say("=========================================");
+            for (DuplicateGroup group : duplicateGroups) {
+                Utility.getView().say(String.format(
+                    "  [%s] %s - %s: %d duplicates",
+                    group.plannedDate.toString(),
+                    group.category,
+                    group.payee,
+                    group.transactionIds.size()
+                ));
+                Utility.getView().say("    Transaction IDs: " + String.join(", ", group.transactionIds));
+            }
+            Utility.getView().say("=========================================");
+            Utility.getView().say("Run cleanup_duplicate_forecast_transactions.sql to remove duplicates.");
+            Utility.getView().say("");
+        }
     } // End checkForDuplicateTransactions().
+
+    /**
+     * A single forecast-transaction row considered as a candidate for duplicate detection.
+     * The {@code splitSignature} is a deterministic representation of the exact set of transaction
+     * splits linked to the forecast transaction, or {@code null} when it is linked to no split.
+     */
+    static final class DuplicateCandidate {
+        final String forecastItemId;
+        final String category;
+        final String payee;
+        final LocalDate plannedDate;
+        final double remainingAmount;
+        final String splitSignature;
+        final String transactionId;
+        final Timestamp updatedTimeStamp;
+
+        DuplicateCandidate(String forecastItemId, String category, String payee, LocalDate plannedDate,
+                           double remainingAmount, String splitSignature, String transactionId,
+                           Timestamp updatedTimeStamp) {
+            this.forecastItemId = forecastItemId;
+            this.category = category;
+            this.payee = payee;
+            this.plannedDate = plannedDate;
+            this.remainingAmount = remainingAmount;
+            this.splitSignature = splitSignature;
+            this.transactionId = transactionId;
+            this.updatedTimeStamp = updatedTimeStamp;
+        }
+    }
+
+    /**
+     * A group of forecast transactions that are genuine duplicates of one another (same forecast
+     * item, same planned date, and the same linked-split signature).
+     */
+    static final class DuplicateGroup {
+        final String category;
+        final String payee;
+        final LocalDate plannedDate;
+        /** Transaction ids in the group, ordered by most-recently-updated first. */
+        final List<String> transactionIds;
+
+        DuplicateGroup(String category, String payee, LocalDate plannedDate, List<String> transactionIds) {
+            this.category = category;
+            this.payee = payee;
+            this.plannedDate = plannedDate;
+            this.transactionIds = transactionIds;
+        }
+    }
+
+    /**
+     * Groups the supplied candidates by (forecastItemId, plannedDate, splitSignature) and returns
+     * only those groups that contain more than one forecast transaction - i.e. genuine duplicates.
+     *
+     * <p>Two forecast transactions are duplicates only when they share the same forecast item, the
+     * same planned date, the same remaining amount, AND the exact same linked-split signature.  A
+     * {@code null} split signature (a forecast transaction not linked to any split) is treated as its
+     * own distinct key value, so multiple unlinked rows for the same item/date/amount are still
+     * detected as duplicates.  Conversely, forecast transactions that differ in amount, or that are
+     * linked to different splits (for example, two separate purchases from the same merchant on the
+     * same day), have different keys and are therefore NOT flagged.</p>
+     *
+     * <p>This method is package-visible and free of any database or view dependency so that the
+     * duplicate-detection logic can be unit tested directly.</p>
+     *
+     * @param candidates one row per forecast transaction
+     * @return the list of duplicate groups, ordered by planned date descending then category, payee
+     */
+    static List<DuplicateGroup> findDuplicateGroups(List<DuplicateCandidate> candidates) {
+        // Use a String key for the signature part so that null (no linked split) groups together and
+        // is kept distinct from any real signature value.
+        final String NULL_SIGNATURE = "\u0000<none>";
+
+        // Preserve insertion order for deterministic reporting.
+        Map<String, List<DuplicateCandidate>> groups = new LinkedHashMap<>();
+        for (DuplicateCandidate candidate : candidates) {
+            String signaturePart = candidate.splitSignature == null ? NULL_SIGNATURE : candidate.splitSignature;
+            // Round the amount to whole cents so that floating-point representation does not split
+            // otherwise-identical rows into different groups.
+            long amountInCents = Math.round(candidate.remainingAmount * 100.0);
+            String key = candidate.forecastItemId + "\u0000" + candidate.plannedDate + "\u0000"
+                    + amountInCents + "\u0000" + signaturePart;
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(candidate);
+        }
+
+        List<DuplicateGroup> duplicates = new ArrayList<>();
+        for (List<DuplicateCandidate> group : groups.values()) {
+            if (group.size() <= 1) {
+                continue;
+            }
+            // Order the transaction ids within the group by most-recently-updated first.
+            List<DuplicateCandidate> ordered = new ArrayList<>(group);
+            ordered.sort(Comparator.comparing(
+                    (DuplicateCandidate c) -> c.updatedTimeStamp,
+                    Comparator.nullsLast(Comparator.reverseOrder())));
+            List<String> transactionIds = new ArrayList<>();
+            for (DuplicateCandidate c : ordered) {
+                transactionIds.add(c.transactionId);
+            }
+            DuplicateCandidate first = group.get(0);
+            duplicates.add(new DuplicateGroup(first.category, first.payee, first.plannedDate, transactionIds));
+        }
+        return duplicates;
+    } // End findDuplicateGroups().
+
+    // The database value stored for a ForecastItem whose period is ON_DEMAND (see Item.generatePeriodType).
+    static final String ON_DEMAND_PERIOD = "On-Demand";
+    // The database value stored for a ForecastItem whose howOccurs is UNPLANNED (see Item.generateHowOccurs).
+    static final String UNPLANNED_HOW_OCCURS = "U";
+
+    /**
+     * Detects and reports "orphan" forecast transactions that make no sense in the forecast.
+     *
+     * <p>These are forecast transactions whose forecast item is unplanned (howOccurs = UNPLANNED)
+     * or has an ON_DEMAND period, that have a zero remaining amount AND are not linked to any
+     * forecast transaction split.  Unplanned / on-demand items only belong in the forecast when they
+     * are required to reconcile an actual transaction split; a zero-amount occurrence with no linked
+     * split therefore serves no purpose and is almost certainly left-over data.</p>
+     *
+     * <p>This method only reports the offending transactions; it does not delete anything.</p>
+     */
+    public void checkForOrphanUnplannedTransactions() throws SQLException {
+        // Gather one row per forecast transaction, along with the forecast item's period and
+        // howOccurs, its remaining amount, and whether it has any linked split.  The decision about
+        // which rows are orphans is performed in Java (see findUnplannedOrphanTransactions) so the
+        // logic is unit-testable without a live database.
+        String query =
+            "SELECT " +
+            "    fi.category as category, " +
+            "    fi.payee as payee, " +
+            "    ft.plannedDate as plannedDate, " +
+            "    fi.period as period, " +
+            "    fi.howOccurs as howOccurs, " +
+            "    ft.remainingAmount as remainingAmount, " +
+            "    BIN_TO_UUID(ft.idForecastTransaction) as transactionId, " +
+            "    COUNT(fts.ForecastTransaction_idForecastTransaction) as splitCount " +
+            "FROM forecast_transaction ft " +
+            "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+            "LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction " +
+            "WHERE fi.Forecast_idForecast = UUID_TO_BIN('" + this.getId() + "') " +
+            "  AND ft.plannedDate >= " + Utility.calendarDateToSqlDateString(this.startDate) + " " +
+            "GROUP BY ft.idForecastTransaction " +
+            "ORDER BY ft.plannedDate DESC, fi.category, fi.payee";
+
+        List<UnplannedOrphanCandidate> candidates = new ArrayList<>();
+        try (Statement statement = Utility.getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
+
+            while (rs.next()) {
+                candidates.add(new UnplannedOrphanCandidate(
+                        rs.getString("category"),
+                        rs.getString("payee"),
+                        rs.getObject("plannedDate", LocalDate.class),
+                        rs.getString("period"),
+                        rs.getString("howOccurs"),
+                        rs.getDouble("remainingAmount"),
+                        rs.getInt("splitCount") > 0,
+                        rs.getString("transactionId")));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking for orphan unplanned forecast transactions: " + e.getMessage());
+            throw e;
+        }
+
+        List<UnplannedOrphanCandidate> orphans = findUnplannedOrphanTransactions(candidates);
+
+        if (!orphans.isEmpty()) {
+            Utility.getView().say("");
+            Utility.getView().say("WARNING: Orphan unplanned/on-demand forecast transactions detected!");
+            Utility.getView().say("(zero remaining amount, no linked split - these serve no purpose)");
+            Utility.getView().say("=========================================");
+            for (UnplannedOrphanCandidate orphan : orphans) {
+                Utility.getView().say(String.format(
+                    "  [%s] %s - %s (period=%s, howOccurs=%s)  Transaction ID: %s",
+                    orphan.plannedDate.toString(),
+                    orphan.category,
+                    orphan.payee,
+                    orphan.period,
+                    orphan.howOccurs,
+                    orphan.transactionId
+                ));
+            }
+            Utility.getView().say("=========================================");
+            Utility.getView().say("");
+        }
+    } // End checkForOrphanUnplannedTransactions().
+
+    /**
+     * A single forecast-transaction row considered as a candidate for the orphan unplanned/on-demand
+     * check.  Captures the forecast item's period and howOccurs, the transaction's remaining amount,
+     * and whether it is linked to any forecast transaction split.
+     */
+    static final class UnplannedOrphanCandidate {
+        final String category;
+        final String payee;
+        final LocalDate plannedDate;
+        final String period;
+        final String howOccurs;
+        final double remainingAmount;
+        final boolean hasSplit;
+        final String transactionId;
+
+        UnplannedOrphanCandidate(String category, String payee, LocalDate plannedDate, String period,
+                                 String howOccurs, double remainingAmount, boolean hasSplit,
+                                 String transactionId) {
+            this.category = category;
+            this.payee = payee;
+            this.plannedDate = plannedDate;
+            this.period = period;
+            this.howOccurs = howOccurs;
+            this.remainingAmount = remainingAmount;
+            this.hasSplit = hasSplit;
+            this.transactionId = transactionId;
+        }
+    }
+
+    /**
+     * Filters the supplied candidates down to the "orphan" forecast transactions - those that:
+     * <ul>
+     *   <li>belong to a forecast item that is unplanned ({@code howOccurs == "U"}) OR has an
+     *       on-demand period ({@code period == "On-Demand"}), AND</li>
+     *   <li>have a zero remaining amount (to the cent), AND</li>
+     *   <li>are not linked to any forecast transaction split.</li>
+     * </ul>
+     *
+     * <p>This method is package-visible and free of any database or view dependency so that the
+     * detection logic can be unit tested directly.  The returned list preserves the input order.</p>
+     *
+     * @param candidates one row per forecast transaction
+     * @return the orphan transactions, in input order
+     */
+    static List<UnplannedOrphanCandidate> findUnplannedOrphanTransactions(List<UnplannedOrphanCandidate> candidates) {
+        List<UnplannedOrphanCandidate> orphans = new ArrayList<>();
+        for (UnplannedOrphanCandidate candidate : candidates) {
+            boolean isUnplannedOrOnDemand =
+                    UNPLANNED_HOW_OCCURS.equals(candidate.howOccurs)
+                    || ON_DEMAND_PERIOD.equals(candidate.period);
+            boolean isZeroRemaining = Math.round(candidate.remainingAmount * 100.0) == 0L;
+            if (isUnplannedOrOnDemand && isZeroRemaining && !candidate.hasSplit) {
+                orphans.add(candidate);
+            }
+        }
+        return orphans;
+    } // End findUnplannedOrphanTransactions().
+
 
     // Save the entire forecast to the database, including all the forecast items and forecast transactions:
     public void saveAll() throws SQLException, BudgetException, EntityException, ForecastException {

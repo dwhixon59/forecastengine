@@ -882,6 +882,14 @@ public class ForecastTransaction extends IndependentEntity {
 
             // Get the first non-zero occurence of a forecast transaction for this item of interest:
             ForecastItem forecastItem = ForecastItem.getByBudgetItemId(itemOfInterest.getIdBudgetItem());
+
+            // The item of interest's budget item may not have a corresponding forecast item in the current
+            // forecast (for example, if the item expired or was never rendered into this forecast).  In that
+            // case there is nothing to report on, so skip it rather than dereferencing a null forecast item.
+            if (forecastItem == null) {
+                continue;
+            }
+
             ForecastTransaction forecastTransaction = getFirstNonZeroOccurrence(forecastItem);
 
             // and if there is an applicable transaction:
@@ -1256,6 +1264,11 @@ public class ForecastTransaction extends IndependentEntity {
      */
     private static ForecastTransaction getFirstNonZeroOccurrence(ForecastItem forecastItem)
             throws EntityException, SQLException, ForecastException, BudgetException {
+
+        // A null forecast item has no occurrences, so there is nothing to return.
+        if (forecastItem == null) {
+            return null;
+        }
 
         String firstOccurrenceQuery =
                 ForecastTransaction.getSelectQuery() + " " +

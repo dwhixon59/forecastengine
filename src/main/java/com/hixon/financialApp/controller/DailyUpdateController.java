@@ -360,6 +360,19 @@ public class DailyUpdateController {
                     throw e;
                 }
             }
+
+            // Check for orphan unplanned/on-demand forecast transactions (zero remaining amount and no
+            // linked split - these serve no purpose and are almost certainly left-over data):
+            try {
+               view.sayH2("CHECKING FOR ORPHAN UNPLANNED FORECAST TRANSACTIONS");
+               forecast.checkForOrphanUnplannedTransactions();
+               view.sayH4("Orphan unplanned forecast transaction check complete.");
+            } catch (Exception e) {
+                if (!view.askContinue("The error '" + e + "' occurred while checking for orphan unplanned " +
+                        "forecast transactions.")) {
+                    throw e;
+                }
+            }
         }
 
         // If an exception during the update process:
