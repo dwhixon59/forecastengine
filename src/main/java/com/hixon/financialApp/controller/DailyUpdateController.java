@@ -9,6 +9,7 @@ import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.view.base.ViewInt;
 
 import java.util.Calendar;
+import java.util.List;
 
 
 public class DailyUpdateController {
@@ -365,11 +366,42 @@ public class DailyUpdateController {
             // linked split - these serve no purpose and are almost certainly left-over data):
             try {
                view.sayH2("CHECKING FOR ORPHAN UNPLANNED FORECAST TRANSACTIONS");
-               forecast.checkForOrphanUnplannedTransactions();
+               List<String> orphanIds = forecast.checkForOrphanUnplannedTransactions();
+               if (!orphanIds.isEmpty()) {
+                   if (view.getYesOrNo("Delete these " + orphanIds.size() + " orphan forecast transaction(s)? " +
+                           "They have a zero remaining amount and no linked split, so they serve no purpose.")) {
+                       int deleted = forecast.deleteForecastTransactionsByIds(orphanIds);
+                       view.sayH4("Deleted " + deleted + " orphan forecast transaction(s).");
+                   } else {
+                       view.say("Left the orphan forecast transactions in place.");
+                   }
+               }
                view.sayH4("Orphan unplanned forecast transaction check complete.");
             } catch (Exception e) {
                 if (!view.askContinue("The error '" + e + "' occurred while checking for orphan unplanned " +
                         "forecast transactions.")) {
+                    throw e;
+                }
+            }
+
+            // Check for forecast transactions planned after their budget item's end date (stale projections
+            // left behind when an item is given an end date - these keep expired items showing a future date):
+            try {
+               view.sayH2("CHECKING FOR FORECAST TRANSACTIONS AFTER THE BUDGET ITEM END DATE");
+               List<String> afterEndDateIds = forecast.checkForForecastTransactionsAfterEndDate();
+               if (!afterEndDateIds.isEmpty()) {
+                   if (view.getYesOrNo("Delete these " + afterEndDateIds.size() + " forecast transaction(s) planned " +
+                           "after their budget item's end date? They are stale projections with no linked split.")) {
+                       int deleted = forecast.deleteForecastTransactionsByIds(afterEndDateIds);
+                       view.sayH4("Deleted " + deleted + " forecast transaction(s) planned after the end date.");
+                   } else {
+                       view.say("Left the after-end-date forecast transactions in place.");
+                   }
+               }
+               view.sayH4("After-end-date forecast transaction check complete.");
+            } catch (Exception e) {
+                if (!view.askContinue("The error '" + e + "' occurred while checking for forecast transactions " +
+                        "after the budget item end date.")) {
                     throw e;
                 }
             }

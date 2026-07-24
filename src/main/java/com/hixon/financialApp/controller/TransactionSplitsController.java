@@ -132,6 +132,10 @@ public class TransactionSplitsController {
                         view.say("Skipping this transaction.");
                         terminationCondition = SKIP;
                         // done stays true — loop will exit
+                    } catch (CancelException ce) {
+                        // User cancelled adding a budget item — return to the prompt without aborting the import.
+                        view.say("Cancelled adding a budget item.");
+                        done = false;
                     }
                     continue;
                 } else if (memoInput != null && memoInput.equalsIgnoreCase("s")) {
@@ -201,6 +205,10 @@ public class TransactionSplitsController {
                 } catch (SkipException se) {
                     view.say("Skipping this transaction.");
                     terminationCondition = SKIP;
+                } catch (CancelException ce) {
+                    // User cancelled adding a budget item — return to the prompt without aborting the import.
+                    view.say("Cancelled adding a budget item.");
+                    done = false;
                 }
             }
             // Delete one of the displayed budget items from the merchant for this transaction:
@@ -443,9 +451,18 @@ public class TransactionSplitsController {
                 view.say("  • d - delete a budget item");
                 view.say("  • i - inquire (send for review)");
                 view.say("  • s - skip this transaction");
-                view.say("  • A number (1-" + budgetItemsForMerchant.size() + ") to select a budget item");
-                view.say("  • Number:amount (e.g., '1:-50.00') to assign specific amounts");
-                view.say("  • Comma-separated amounts to split across all budget items");
+                view.say("  • A number (1-" + budgetItemsForMerchant.size() + ") to select a budget item for the whole amount");
+                view.say("  • '<number> <memo>' to select a budget item and add a memo (e.g. '3 birthday gift')");
+                view.say("  • Text to search for a budget item by name (e.g. 'groceries')");
+                view.say("  • Comma-separated amounts to split across ALL listed budget items in order");
+                view.say("      (e.g. '-30.00, -20.00' for the first two items)");
+                view.say("  • '<number>:<amount>' pairs (comma-separated) to assign amounts to specific items");
+                view.say("      (e.g. '1:-50.00, 3:-25.00 dog treats' — text after the amount becomes the memo)");
+                view.say("  • Amount suffixes for '<number>:<amount>' pairs:");
+                view.say("      e = give this item everything else (the remainder), split evenly if used on more than one item");
+                view.say("          (e.g. '1:-17.50, 3:e' assigns the leftover to item 3)");
+                view.say("      a = give this item an apportioned (proportional) share of the remainder");
+                view.say("      t = add sales tax to this item's amount");
                 view.say("Please try again.");
                 done = false;
             } else {

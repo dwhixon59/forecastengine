@@ -229,6 +229,10 @@ public class BudgetItem extends Item {
             }
             if (getPeriod() != null && getPeriod() != Item.PeriodType.ON_DEMAND) {
                 line += ", ";
+                // An item whose end date has already passed is expired regardless of whether a stale/lingering
+                // forecast transaction still happens to "apply" to today's date, so check the end date first.
+                // If the item is still active but there is no applicable forecast transaction, that means it is not
+                // represented in the current forecast window (common for annual items), not that it is expired.
                 ForecastTransaction forecastTransaction = null;
                 try {
                     forecastTransaction = ForecastTransaction.getApplicableForecastTransaction(
@@ -236,11 +240,8 @@ public class BudgetItem extends Item {
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-                if (forecastTransaction != null) {
-                    line += Utility.calendarDateToStringDate(forecastTransaction.getPlannedDate());
-                } else {
-                    line += "Expired.";
-                }
+                line += formatScheduleStatus(isExpired(),
+                        forecastTransaction != null ? forecastTransaction.getPlannedDate() : null);
             }
             if (getMemo() != null && !getMemo().isEmpty()) {
                 line += ", " + getMemo();
@@ -248,6 +249,39 @@ public class BudgetItem extends Item {
             line += ")";
         }
         return line;
+    }
+
+
+    /**
+     * Determines whether this budget item has expired, i.e., its end date has already passed.  An item with no end
+     * date never expires.  The comparison ignores the time-of-day portion so that an item ending "today" is still
+     * considered active.  This mirrors the {@code endDate is null or endDate >= currentDate} SQL used by
+     * {@link #getUnexpiredByPayee(Budget, String)}.
+     *
+     * @return {@code true} if the item has an end date that is before today's date, {@code false} otherwise.
+     */
+    public boolean isExpired() {
+        if (endDate == null) {
+            return false;
+        }
+        return Utility.dateOnlyCompare(endDate, Calendar.getInstance()) < 0;
+    }
+
+    /**
+     * Formats the concise schedule/expiration portion shown in budget-item lists.
+     *
+     * @param expiredByEndDate whether the budget item's end date has passed
+     * @param plannedDate the applicable forecast planned date, if any, for the current forecast window
+     * @return {@code Expired.}, a formatted planned date, or {@code Not in current forecast.}
+     */
+    static String formatScheduleStatus(boolean expiredByEndDate, Calendar plannedDate) {
+        if (expiredByEndDate) {
+            return "Expired.";
+        }
+        if (plannedDate != null) {
+            return Utility.calendarDateToStringDate(plannedDate);
+        }
+        return "Not in current forecast.";
     }
 
 

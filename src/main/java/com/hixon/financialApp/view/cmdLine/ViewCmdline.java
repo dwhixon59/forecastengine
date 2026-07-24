@@ -513,7 +513,10 @@ public class ViewCmdline implements ViewInt {
 
         // Input loop
         while (true) {
-            String response = getLine();
+            // Trim leading/trailing whitespace so stray spaces (e.g. "b ") don't defeat the
+            // menu-option, C/Q/S command, and empty-input checks below.  Outer whitespace is never
+            // meaningful for these prompts.
+            String response = getLine().trim();
 
             // Check for help request
             if (helpCallback != null && response.equals("?")) {

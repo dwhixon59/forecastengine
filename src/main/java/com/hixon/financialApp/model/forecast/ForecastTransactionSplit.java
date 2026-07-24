@@ -186,4 +186,20 @@ public class ForecastTransactionSplit extends DependentEntity {
       return forecastTransactionSplit;
    }
 
+   /**
+    * Counts the number of transaction-split links that reference the given forecast transaction.
+    * Used to determine whether a forecast transaction has been left orphaned (no linked split).
+    *
+    * @param idForecastTransaction the forecast transaction id
+    * @return the number of linked splits (0 if the forecast transaction is orphaned)
+    */
+   public static int countSplitsForForecastTransaction(UUID idForecastTransaction)
+           throws EntityException, SQLException {
+      ResultSet rs = EntityInt.getRS("select count(*) from forecast_transaction_split where " +
+              "ForecastTransaction_idForecastTransaction = uuid_to_bin('" + idForecastTransaction + "')",
+              "counting the splits linked to a forecast transaction");
+      rs.next();
+      return rs.getInt(1);
+   }
+
 }

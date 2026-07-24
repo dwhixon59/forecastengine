@@ -352,7 +352,10 @@ public class MerchantController {
                 (scope, newName) -> {
                     Merchant newMerchant = new Merchant(newName);
                     return newMerchant;
-                });
+                },
+                // A merchant name is unique, so when the user types an exact name just use it (with a
+                // one-line notice) instead of an extra yes/no confirmation.
+                SelectionController.AUTO_ACCEPT_EXACT_MATCH);
     }
 
     /**

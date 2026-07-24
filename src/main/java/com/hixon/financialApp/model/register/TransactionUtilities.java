@@ -519,20 +519,23 @@ public class TransactionUtilities {
      * Checks if there are any transactions skipped with respect to a forecast during the import process.
      *
      * @param forecast The forecast to check against.
+     * @param register The register whose transactions should be checked. This must be the register
+     *                 actually being processed — a single budget can own multiple registers, so using
+     *                 the budget's first register would miss skipped transactions in the others.
      * @return True if there are skipped transactions, false otherwise.
      * @throws EntityException If a database or entity error occurs.
      * @throws SQLException If a SQL error occurs.
      * @throws BudgetException If a budget error occurs.
      * @throws RegisterException If a register error occurs.
      */
-    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, SQLException, BudgetException, RegisterException {
+    public static boolean isSkippedTransactionsWrtForecast(Forecast forecast, Register register) throws EntityException, SQLException, BudgetException, RegisterException {
         Calendar startDate = forecast.getStartDate();
         Calendar fourMonthsAgo = Calendar.getInstance();
         fourMonthsAgo.add(Calendar.MONTH, -4);
         if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
         String query = Transaction.getCountQuery() + " " +
                 "where tr.postDate >= " + com.hixon.financialApp.utility.Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
-                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
+                "tr.Register_idRegister = uuid_to_bin('" + register.getId() + "') and " +
                 "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +
@@ -552,20 +555,23 @@ public class TransactionUtilities {
      * Retrieves a ResultSet of transactions that were skipped with respect to a forecast during the import process.
      *
      * @param forecast The forecast to check against.
+     * @param register The register whose transactions should be retrieved. This must be the register
+     *                 actually being processed — a single budget can own multiple registers, so using
+     *                 the budget's first register would miss skipped transactions in the others.
      * @return ResultSet of skipped transactions.
      * @throws EntityException If a database or entity error occurs.
      * @throws BudgetException If a budget error occurs.
      * @throws SQLException If a SQL error occurs.
      * @throws RegisterException If a register error occurs.
      */
-    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast) throws EntityException, BudgetException, SQLException, RegisterException {
+    public static ResultSet getSkippedTransactionsWrtForecast(Forecast forecast, Register register) throws EntityException, BudgetException, SQLException, RegisterException {
         Calendar startDate = forecast.getStartDate();
         Calendar fourMonthsAgo = Calendar.getInstance();
         fourMonthsAgo.add(Calendar.MONTH, -4);
         if (fourMonthsAgo.after(startDate)) startDate = fourMonthsAgo;
         String query = Transaction.getSelectQuery() + " " +
                 "where tr.postDate >= " + com.hixon.financialApp.utility.Utility.calendarDateToSqlDateString(fourMonthsAgo) + " and " +
-                "tr.Register_idRegister = uuid_to_bin('" + forecast.getBudget().getRegisters().get(0).getId() + "') and " +
+                "tr.Register_idRegister = uuid_to_bin('" + register.getId() + "') and " +
                 "tr.idTransaction not in " +
                 "(select idTransaction from transaction " +
                 "inner join transaction_split on idTransaction = Transaction_idTransaction " +

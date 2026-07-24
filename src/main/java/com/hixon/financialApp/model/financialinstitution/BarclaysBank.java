@@ -103,8 +103,19 @@ public class BarclaysBank extends FinancialInstitution {
 
 
     /**
+     * Payment-processor prefixes that Barclays prepends to merchant names in the QFX NAME field.
+     * These are stripped so the merchant-payee string used for matching/searching contains only
+     * the actual merchant name (e.g. "PY *PRODIGY PEST SOLU" becomes "PRODIGY PEST SOLU").
+     */
+    private static final java.util.Set<String> PAYMENT_PROCESSOR_PREFIXES = java.util.Set.of(
+            "PY", "SQ", "TST", "SP", "WP", "UEP", "ACH", "POS", "DEBIT", "CREDIT", "CHECKCARD",
+            "GOOGLE", "AMAZON", "MKTPL", "MKTPLACE", "PRIME", "PAYPAL", "VENMO", "ZELLE");
+
+    /**
      * Parses merchant/payee information from Barclays transaction data.
-     * Barclays credit card payees are typically clean merchant names, so we return as-is.
+     * Barclays credit card payees are typically clean merchant names, but some are prefixed with
+     * payment-processor tokens (e.g. "PY *PRODIGY PEST SOLU").  This method strips those prefixes
+     * so the resulting merchant payee matches the actual merchant name.
      *
      * @param date the transaction date
      * @param amount the transaction amount
@@ -113,10 +124,32 @@ public class BarclaysBank extends FinancialInstitution {
      */
     @Override
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
-        // Barclays credit card payees are typically clean merchant names
-        // For now, just return the payee as-is
-        // TODO: Add Barclays-specific payee parsing if needed in the future
-        return payee;
+        if (payee == null || payee.isBlank()) {
+            return payee;
+        }
+
+        String trimmed = payee.trim();
+        // Split on whitespace and asterisk so "PY *PRODIGY" becomes ["PY", "", "PRODIGY"]
+        String[] tokens = trimmed.split("[\\s\\*]+");
+        int start = 0;
+        while (start < tokens.length
+                && (tokens[start].isEmpty()
+                    || PAYMENT_PROCESSOR_PREFIXES.contains(tokens[start].toUpperCase()))) {
+            start++;
+        }
+
+        if (start >= tokens.length) {
+            // Everything was noise; fall back to the original string.
+            return trimmed;
+        }
+
+        StringBuilder cleaned = new StringBuilder(tokens[start]);
+        for (int i = start + 1; i < tokens.length; i++) {
+            if (!tokens[i].isEmpty()) {
+                cleaned.append(" ").append(tokens[i]);
+            }
+        }
+        return cleaned.toString();
     }
 
     @Override
@@ -137,4 +170,3 @@ public class BarclaysBank extends FinancialInstitution {
         return "CREDIT_CARD";
     }
 }
-

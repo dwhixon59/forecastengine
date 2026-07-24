@@ -1243,10 +1243,71 @@ public class BudgetController {
             budgetItem.setIdBudget(newBudget.getId());
             budgetItem.update();
 
+            // The item had no transaction splits or forecast-transaction splits, but it may still have
+            // projected (unreconciled) forecast transactions - and their forecast items - sitting in the
+            // OLD budget's forecast.  Nothing else cleans these up (expireOldForecastItems only handles
+            // deleted items, and the moved item was never expired), so they would linger forever,
+            // referencing an item that now lives in a different budget.  Remove them now.
+            int removed = deleteSplitlessForecastArtifactsForBudgetItem(budgetItem, currentBudget);
+
             view.say("✓ Budget item moved to budget '" + newBudget.getName() + "'");
+            if (removed > 0) {
+                view.say("✓ Removed " + removed + " stale forecast transaction(s) (no splits) from budget '" +
+                        currentBudget.getName() + "'");
+            }
 
             return budgetItem;
         }
+    }
+
+    /**
+     * Removes the "leftover" forecast artifacts for a budget item that was just moved out of a budget.
+     * Specifically, deletes every forecast transaction for the budget item that is <em>not</em> linked to
+     * a forecast transaction split (i.e. was never reconciled), within forecasts belonging to the supplied
+     * (old) budget, then deletes any forecast items for the budget item that are left with no forecast
+     * transactions.  Finally the old budget's forecasts are flagged out of sync so they will be re-rendered.
+     *
+     * <p>Only splitless forecast transactions are removed, so reconciled activity is never touched.  When
+     * this is called from the "no dependencies" move path there are no splits at all, so this cleanly
+     * removes all of the moved item's forecast footprint from the old budget.</p>
+     *
+     * @param budgetItem the budget item that was moved (already pointing at its new budget)
+     * @param oldBudget  the budget the item was moved out of
+     * @return the number of forecast transactions deleted
+     * @throws Exception if a database error occurs
+     */
+    private int deleteSplitlessForecastArtifactsForBudgetItem(BudgetItem budgetItem, Budget oldBudget)
+            throws Exception {
+        String itemId = budgetItem.getId().toString();
+        String oldBudgetId = oldBudget.getId().toString();
+
+        int deletedTransactions;
+        try (java.sql.Statement stmt = Utility.getDbConnection().createStatement()) {
+            // Step 1: delete unreconciled (no split) forecast transactions for this item in the old budget's forecasts.
+            deletedTransactions = stmt.executeUpdate(
+                    "DELETE ft FROM forecast_transaction ft " +
+                    "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                    "INNER JOIN forecast f ON fi.Forecast_idForecast = f.idForecast " +
+                    "LEFT JOIN forecast_transaction_split fts " +
+                    "  ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction " +
+                    "WHERE fi.BudgetItem_idBudgetItem = uuid_to_bin('" + itemId + "') " +
+                    "  AND f.Budget_idBudget = uuid_to_bin('" + oldBudgetId + "') " +
+                    "  AND fts.ForecastTransaction_idForecastTransaction IS NULL");
+
+            // Step 2: delete forecast items for this item (in the old budget) that now have no forecast transactions.
+            stmt.executeUpdate(
+                    "DELETE fi FROM forecast_item fi " +
+                    "INNER JOIN forecast f ON fi.Forecast_idForecast = f.idForecast " +
+                    "WHERE fi.BudgetItem_idBudgetItem = uuid_to_bin('" + itemId + "') " +
+                    "  AND f.Budget_idBudget = uuid_to_bin('" + oldBudgetId + "') " +
+                    "  AND NOT EXISTS (SELECT 1 FROM forecast_transaction ft " +
+                    "                  WHERE ft.ForecastItem_idForecastItem = fi.idForecastItem)");
+
+            // Step 3: mark the old budget's forecasts out of sync so they are re-rendered.
+            stmt.executeUpdate(
+                    "UPDATE forecast SET inSync = 0 WHERE Budget_idBudget = uuid_to_bin('" + oldBudgetId + "')");
+        }
+        return deletedTransactions;
     }
 
     /**

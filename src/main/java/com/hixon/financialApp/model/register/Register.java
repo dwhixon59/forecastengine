@@ -189,23 +189,28 @@ public class Register extends IndependentEntity {
                 .replace(".", "\\.")  // Escape dots
                 .replace("YYYYMMDD", "\\d{8}");  // Replace date pattern with 8 digits
 
+            // Match case-insensitively so an uppercase extension (e.g. ".QFX") is still found.
+            java.util.regex.Pattern compiledPattern =
+                java.util.regex.Pattern.compile(regexPattern, java.util.regex.Pattern.CASE_INSENSITIVE);
+
             System.out.println("DEBUG: Pattern: " + pattern);
-            System.out.println("DEBUG: Regex pattern: " + regexPattern);
+            System.out.println("DEBUG: Regex pattern: " + regexPattern + " (case-insensitive)");
 
             // List all files in directory for debugging
             java.io.File[] allFiles = dir.listFiles();
             if (allFiles != null) {
                 System.out.println("DEBUG: Total files in directory: " + allFiles.length);
                 for (java.io.File f : allFiles) {
-                    if (f.getName().toLowerCase().endsWith(".qfx")) {
-                        System.out.println("DEBUG: Found QFX file: " + f.getName() + " (matches: " + f.getName().matches(regexPattern) + ")");
+                    if (f.getName().toLowerCase().endsWith(".qfx") && !isAlreadyProcessedFile(f.getName())) {
+                        System.out.println("DEBUG: Found QFX file: " + f.getName() +
+                            " (matches: " + compiledPattern.matcher(f.getName()).matches() + ")");
                     }
                 }
             }
 
-            // Find all matching files
+            // Find all matching files, excluding files that have already been processed (e.g. "*_old.qfx").
             java.io.File[] matchingFiles = dir.listFiles((file, name) ->
-                name.matches(regexPattern));
+                !isAlreadyProcessedFile(name) && compiledPattern.matcher(name).matches());
 
             if (matchingFiles == null || matchingFiles.length == 0) {
                 System.err.println("DEBUG: No files matched pattern " + regexPattern);
@@ -237,6 +242,18 @@ public class Register extends IndependentEntity {
             e.printStackTrace();
             return null;
         }
+    }
+
+    /**
+     * Determines whether a file has already been processed and should therefore be excluded from
+     * import-file matching.  Files that have been imported are renamed with an "_old" suffix
+     * (e.g. "qdl20260121_old.qfx"), so any name containing "_old" is treated as already processed.
+     *
+     * @param fileName the file name to test
+     * @return true if the file has already been processed and should be ignored
+     */
+    private static boolean isAlreadyProcessedFile(String fileName) {
+        return fileName != null && fileName.toLowerCase().contains("_old");
     }
 
     public String getProvisionalTrxFilePath() {
@@ -584,7 +601,7 @@ public class Register extends IndependentEntity {
      */
     public boolean isSkippedTransactions(Forecast forecast) throws SQLException, EntityException, BudgetException,
             RegisterException {
-        return TransactionUtilities.isSkippedTransactionsWrtForecast(forecast);
+        return TransactionUtilities.isSkippedTransactionsWrtForecast(forecast, this);
     }
 
     /**

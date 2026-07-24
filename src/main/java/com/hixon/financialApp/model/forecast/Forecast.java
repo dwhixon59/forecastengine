@@ -864,9 +864,12 @@ public class Forecast extends IndependentEntity {
      * are required to reconcile an actual transaction split; a zero-amount occurrence with no linked
      * split therefore serves no purpose and is almost certainly left-over data.</p>
      *
-     * <p>This method only reports the offending transactions; it does not delete anything.</p>
+     * <p>This method reports the offending transactions and returns their forecast transaction ids
+     * so the caller can offer to delete them; the method itself does not delete anything.</p>
+     *
+     * @return the ids (as UUID strings) of the orphan forecast transactions, empty if none were found
      */
-    public void checkForOrphanUnplannedTransactions() throws SQLException {
+    public List<String> checkForOrphanUnplannedTransactions() throws SQLException {
         // Gather one row per forecast transaction, along with the forecast item's period and
         // howOccurs, its remaining amount, and whether it has any linked split.  The decision about
         // which rows are orphans is performed in Java (see findUnplannedOrphanTransactions) so the
@@ -911,12 +914,14 @@ public class Forecast extends IndependentEntity {
 
         List<UnplannedOrphanCandidate> orphans = findUnplannedOrphanTransactions(candidates);
 
+        List<String> orphanIds = new ArrayList<>();
         if (!orphans.isEmpty()) {
             Utility.getView().say("");
             Utility.getView().say("WARNING: Orphan unplanned/on-demand forecast transactions detected!");
             Utility.getView().say("(zero remaining amount, no linked split - these serve no purpose)");
             Utility.getView().say("=========================================");
             for (UnplannedOrphanCandidate orphan : orphans) {
+                orphanIds.add(orphan.transactionId);
                 Utility.getView().say(String.format(
                     "  [%s] %s - %s (period=%s, howOccurs=%s)  Transaction ID: %s",
                     orphan.plannedDate.toString(),
@@ -930,7 +935,37 @@ public class Forecast extends IndependentEntity {
             Utility.getView().say("=========================================");
             Utility.getView().say("");
         }
+        return orphanIds;
     } // End checkForOrphanUnplannedTransactions().
+
+    /**
+     * Deletes the forecast transactions with the supplied ids (UUID strings).  Any lingering
+     * forecast_transaction_split links are removed first so the delete cannot fail on a foreign key,
+     * although true orphans have no such links.  Intended for removing orphan unplanned/on-demand
+     * forecast transactions identified by {@link #checkForOrphanUnplannedTransactions()}.
+     *
+     * @param transactionIds the forecast transaction ids to delete
+     * @return the number of forecast transactions actually deleted
+     * @throws SQLException if a database error occurs
+     */
+    public int deleteForecastTransactionsByIds(List<String> transactionIds) throws SQLException {
+        if (transactionIds == null || transactionIds.isEmpty()) {
+            return 0;
+        }
+        int deleted = 0;
+        try (Statement statement = Utility.getDbConnection().createStatement()) {
+            for (String id : transactionIds) {
+                // Defensively remove any lingering split links (orphans have none) then the transaction:
+                statement.executeUpdate(
+                        "DELETE FROM forecast_transaction_split " +
+                        "WHERE ForecastTransaction_idForecastTransaction = UUID_TO_BIN('" + id + "')");
+                deleted += statement.executeUpdate(
+                        "DELETE FROM forecast_transaction " +
+                        "WHERE idForecastTransaction = UUID_TO_BIN('" + id + "')");
+            }
+        }
+        return deleted;
+    } // End deleteForecastTransactionsByIds().
 
     /**
      * A single forecast-transaction row considered as a candidate for the orphan unplanned/on-demand
@@ -989,6 +1024,136 @@ public class Forecast extends IndependentEntity {
         }
         return orphans;
     } // End findUnplannedOrphanTransactions().
+
+
+    /**
+     * Detects and reports forecast transactions whose planned date falls after the end date of their
+     * budget item.  A budget item with an end date should not have any forecast activity beyond that
+     * date, so such transactions are stale, left-over projections (for example, an item that was given
+     * an end date after its forecast was generated).  They cause expired items to keep showing a future
+     * planned date instead of "Expired." in item lists.
+     *
+     * <p>To be safe this only considers transactions that are <em>not</em> linked to any actual
+     * transaction split, so a real (reconciled) transaction that happened to post after the end date is
+     * never flagged for deletion.  The method reports the offending transactions and returns their ids
+     * so the caller can offer to delete them; it does not delete anything itself.</p>
+     *
+     * @return the ids (as UUID strings) of the after-end-date forecast transactions, empty if none
+     * @throws SQLException if a database error occurs
+     */
+    public List<String> checkForForecastTransactionsAfterEndDate() throws SQLException {
+        // Gather one row per forecast transaction that belongs to a budget item with an end date, along
+        // with the planned date, the item's end date, and whether it has any linked split.  The decision
+        // about which rows are "after the end date" is performed in Java (see
+        // findTransactionsAfterEndDate) so the logic is unit-testable without a live database.
+        String query =
+            "SELECT " +
+            "    fi.category as category, " +
+            "    fi.payee as payee, " +
+            "    ft.plannedDate as plannedDate, " +
+            "    bi.endDate as endDate, " +
+            "    BIN_TO_UUID(ft.idForecastTransaction) as transactionId, " +
+            "    COUNT(fts.ForecastTransaction_idForecastTransaction) as splitCount " +
+            "FROM forecast_transaction ft " +
+            "INNER JOIN forecast_item fi ON ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+            "INNER JOIN budget_item bi ON fi.BudgetItem_idBudgetItem = bi.idBudgetItem " +
+            "LEFT JOIN forecast_transaction_split fts ON ft.idForecastTransaction = fts.ForecastTransaction_idForecastTransaction " +
+            "WHERE fi.Forecast_idForecast = UUID_TO_BIN('" + this.getId() + "') " +
+            "  AND bi.endDate IS NOT NULL " +
+            "GROUP BY ft.idForecastTransaction " +
+            "ORDER BY ft.plannedDate DESC, fi.category, fi.payee";
+
+        List<AfterEndDateCandidate> candidates = new ArrayList<>();
+        try (Statement statement = Utility.getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
+
+            while (rs.next()) {
+                candidates.add(new AfterEndDateCandidate(
+                        rs.getString("category"),
+                        rs.getString("payee"),
+                        rs.getObject("plannedDate", LocalDate.class),
+                        rs.getObject("endDate", LocalDate.class),
+                        rs.getInt("splitCount") > 0,
+                        rs.getString("transactionId")));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking for forecast transactions after the budget item end date: " +
+                    e.getMessage());
+            throw e;
+        }
+
+        List<AfterEndDateCandidate> afterEndDate = findTransactionsAfterEndDate(candidates);
+
+        List<String> transactionIds = new ArrayList<>();
+        if (!afterEndDate.isEmpty()) {
+            Utility.getView().say("");
+            Utility.getView().say("WARNING: Forecast transactions after the budget item end date detected!");
+            Utility.getView().say("(planned after the item's end date, no linked split - these are stale projections)");
+            Utility.getView().say("=========================================");
+            for (AfterEndDateCandidate candidate : afterEndDate) {
+                transactionIds.add(candidate.transactionId);
+                Utility.getView().say(String.format(
+                    "  [planned %s > ends %s] %s - %s  Transaction ID: %s",
+                    candidate.plannedDate.toString(),
+                    candidate.endDate.toString(),
+                    candidate.category,
+                    candidate.payee,
+                    candidate.transactionId
+                ));
+            }
+            Utility.getView().say("=========================================");
+            Utility.getView().say("");
+        }
+        return transactionIds;
+    } // End checkForForecastTransactionsAfterEndDate().
+
+
+    /**
+     * A single forecast-transaction row considered as a candidate for the after-end-date check.
+     * Captures the transaction's planned date, its budget item's end date, and whether it is linked
+     * to any forecast transaction split.
+     */
+    static final class AfterEndDateCandidate {
+        final String category;
+        final String payee;
+        final LocalDate plannedDate;
+        final LocalDate endDate;
+        final boolean hasSplit;
+        final String transactionId;
+
+        AfterEndDateCandidate(String category, String payee, LocalDate plannedDate, LocalDate endDate,
+                              boolean hasSplit, String transactionId) {
+            this.category = category;
+            this.payee = payee;
+            this.plannedDate = plannedDate;
+            this.endDate = endDate;
+            this.hasSplit = hasSplit;
+            this.transactionId = transactionId;
+        }
+    }
+
+    /**
+     * Filters the supplied candidates down to the forecast transactions whose planned date is strictly
+     * after their budget item's end date and that are not linked to any forecast transaction split.
+     *
+     * <p>This method is package-visible and free of any database or view dependency so that the
+     * detection logic can be unit tested directly.  The returned list preserves the input order.</p>
+     *
+     * @param candidates one row per forecast transaction (belonging to an item with an end date)
+     * @return the transactions planned after their item's end date, in input order
+     */
+    static List<AfterEndDateCandidate> findTransactionsAfterEndDate(List<AfterEndDateCandidate> candidates) {
+        List<AfterEndDateCandidate> afterEndDate = new ArrayList<>();
+        for (AfterEndDateCandidate candidate : candidates) {
+            if (candidate.endDate != null
+                    && candidate.plannedDate != null
+                    && candidate.plannedDate.isAfter(candidate.endDate)
+                    && !candidate.hasSplit) {
+                afterEndDate.add(candidate);
+            }
+        }
+        return afterEndDate;
+    } // End findTransactionsAfterEndDate().
 
 
     // Save the entire forecast to the database, including all the forecast items and forecast transactions:

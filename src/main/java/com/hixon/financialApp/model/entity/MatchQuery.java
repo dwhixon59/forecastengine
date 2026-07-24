@@ -181,6 +181,19 @@ public class MatchQuery {
             if (searchString.isEmpty() || searchString.replace("*", "").replace("%", "").trim().isEmpty()) {
                 return getAllResultsSortedByName(modifiedQuery);
             }
+
+            // When the seed is multiple words (e.g. a merchant payee like "ADT SECURITY"), match on
+            // the individual words with OR semantics and rank by how many words match, so a partial
+            // match such as "ADT Safe Haven" is surfaced for the seed "ADT SECURITY".  This only
+            // applies when the caller did not supply its own ORDER BY (selectQueryAfterMatch), so
+            // existing ordered searches (e.g. budget-item relevance) are left unchanged.
+            if (selectQueryAfterMatch.isEmpty()) {
+                String tokenizedQuery = buildTokenizedLikeQuery(modifiedQuery, searchString);
+                if (tokenizedQuery != null) {
+                    return tokenizedQuery;
+                }
+            }
+
             // Escape single quotes by doubling them to prevent SQL syntax errors
             String escapedSearchString = Utility.escapeSqlString(searchString);
             // Build simple LIKE query with wildcards (same as s: prefix)
@@ -197,6 +210,109 @@ public class MatchQuery {
             likeQuery.append(addAfterMatchClause());
             return likeQuery.toString();
         }
+    }
+
+    /**
+     * Common noise words that should not, on their own, broaden a multi-word "any word matches"
+     * search.  Kept intentionally small — only words that appear in a large fraction of names.
+     */
+    private static final java.util.Set<String> SEARCH_STOPWORDS = java.util.Set.of(
+            "THE", "AND", "OF", "FOR", "COM", "LLC", "INC", "CO");
+
+    /**
+     * Payment-processor prefixes and other short tokens that should not contribute to the
+     * tokenized search score.  These prefixes appear in bank descriptors (e.g. "PY *PRODIGY",
+     * "GOOGLE *YouTube TV", "AMAZON MKTPL*...") and would otherwise match many unrelated
+     * merchant names as substrings.
+     */
+    private static final java.util.Set<String> PAYMENT_PROCESSOR_NOISE = java.util.Set.of(
+            "PY", "SQ", "TST", "SP", "WP", "UEP", "ACH", "POS", "DEBIT", "CREDIT", "CHECKCARD",
+            "GOOGLE", "AMAZON", "MKTPL", "MKTPLACE", "PRIME", "PAYPAL", "VENMO", "ZELLE");
+
+    /**
+     * Builds a tokenized LIKE query for a multi-word search seed.  Every meaningful word is matched
+     * with OR semantics against every match column, and the results are ordered by the number of
+     * words that match (most matches first).  This surfaces partial matches — e.g. the seed
+     * "ADT SECURITY" finds the merchant "ADT Safe Haven" (which matches on "ADT") — that a single
+     * whole-phrase {@code LIKE '%ADT SECURITY%'} would miss.
+     *
+     * @param modifiedQuery the SELECT ... WHERE query (ending with "WHERE " or "... AND ")
+     * @param searchString  the raw multi-word search seed
+     * @return the tokenized query, or {@code null} if the seed has fewer than two meaningful words
+     *         (in which case the caller should fall back to the single-phrase LIKE behavior)
+     */
+    private String buildTokenizedLikeQuery(String modifiedQuery, String searchString) {
+        String[] rawWords = searchString.trim().split("\\s+");
+        java.util.List<String> words = new java.util.ArrayList<>();
+        for (String rawWord : rawWords) {
+            String cleaned = rawWord.replace("%", "").replace("*", "").trim();
+            if (cleaned.length() >= 3 && !SEARCH_STOPWORDS.contains(cleaned.toUpperCase())
+                    && !PAYMENT_PROCESSOR_NOISE.contains(cleaned.toUpperCase())) {
+                words.add(cleaned);
+            }
+        }
+        // Only worthwhile when there are at least two meaningful words; otherwise the single-phrase
+        // LIKE is equivalent and simpler.
+        if (words.size() < 2) {
+            return null;
+        }
+
+        String[] columns = matchColumnList.split(",");
+        StringBuilder query = new StringBuilder(modifiedQuery);
+
+        // WHERE ( any word matches any column )
+        query.append("(");
+        boolean first = true;
+        for (String word : words) {
+            String escaped = Utility.escapeSqlString(word);
+            for (String column : columns) {
+                if (!first) {
+                    query.append(" OR ");
+                }
+                query.append(column.trim()).append(" LIKE '%").append(escaped).append("%'");
+                first = false;
+            }
+        }
+        query.append(")");
+
+        // ORDER BY: prioritize matches on the first (main) word, then sum all matches.
+        // Tiebreaker: when first-word scores are equal, prefer exact match on first word only,
+        // then shorter names (fewer extra words).  This ensures "COSTCO" ranks above "Costco Gas
+        // Station" when both match the first word equally.
+        String firstWordEscaped = Utility.escapeSqlString(words.get(0));
+        query.append(" ORDER BY (");
+        first = true;
+        // Boost first-word matches (they get higher priority in the sum)
+        for (String column : columns) {
+            if (!first) {
+                query.append(" + ");
+            }
+            query.append("(").append(column.trim()).append(" LIKE '%").append(firstWordEscaped).append("%') * 10");
+            first = false;
+        }
+        // Then add matching on other words (lower priority)
+        for (int i = 1; i < words.size(); i++) {
+            String escaped = Utility.escapeSqlString(words.get(i));
+            for (String column : columns) {
+                query.append(" + ");
+                query.append("(").append(column.trim()).append(" LIKE '%").append(escaped).append("%')");
+            }
+        }
+        query.append(") DESC, ");
+        // Tiebreaker 1: exact match on first word (case-insensitive) gets highest priority
+        first = true;
+        for (String column : columns) {
+            if (!first) {
+                query.append(" OR ");
+            }
+            query.append("(").append(column.trim()).append(" = \"").append(firstWordEscaped).append("\")");
+            first = false;
+        }
+        query.append(" DESC, ");
+        // Tiebreaker 2: shorter names (fewer extra words) rank higher when primary score and exact match tie
+        query.append("LENGTH(").append(columns[0].trim()).append(") ASC");
+
+        return query.toString();
     }
 
     /**

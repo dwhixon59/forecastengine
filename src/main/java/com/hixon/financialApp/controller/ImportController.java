@@ -1962,12 +1962,46 @@ public class ImportController {
                             // Confirm that with the user and remove if they agree:
                             if (registerController.askDeleteRegisterTransaction(registerTransactions.get(regTrxIndex))) {
 
+                                Transaction fallenOff = registerTransactions.get(regTrxIndex);
+
+                                // Before deleting, capture any UNPLANNED forecast transactions that were created
+                                // solely to reconcile this provisional transaction's splits.  Once the transaction
+                                // (and its cascade-linked splits) are gone, these would be left as orphans
+                                // (zero remaining amount, no linked split), so we remove them below.
+                                List<ForecastTransaction> candidateForecastTransactions = new ArrayList<>();
+                                List<TransactionSplit> fallenOffSplits =
+                                        TransactionSplit.getSplitsForTransaction(fallenOff);
+                                if (fallenOffSplits != null) {
+                                    for (TransactionSplit split : fallenOffSplits) {
+                                        ForecastTransactionSplit fts =
+                                                ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
+                                        if (fts != null) {
+                                            ForecastTransaction ft = fts.getForecastTransaction();
+                                            if (ft != null &&
+                                                    ft.getForecastItem().getHowOccurs() == Item.HowOccurs.UNPLANNED) {
+                                                candidateForecastTransactions.add(ft);
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Add back the amount previously deducted from the register and save it:
-                                register.setBalance(register.getBalance() - registerTransactions.get(regTrxIndex).getAmount());
+                                register.setBalance(register.getBalance() - fallenOff.getAmount());
                                 register.update();
 
-                                // And delete the transaction that has fallen off:
-                                registerTransactions.get(regTrxIndex).delete();
+                                // And delete the transaction that has fallen off (this also removes its splits and
+                                // forecast_transaction_split links):
+                                fallenOff.delete();
+
+                                // Remove any unplanned forecast transaction that is now left with no linked split:
+                                for (ForecastTransaction ft : candidateForecastTransactions) {
+                                    if (ForecastTransactionSplit.countSplitsForForecastTransaction(ft.getId()) == 0) {
+                                        ft.delete();
+                                        view.say("Removed the orphaned unplanned forecast transaction that had been " +
+                                                "created for the invalidated provisional transaction: " +
+                                                ft.toStringVeryConcise());
+                                    }
+                                }
                             }
                         }
                         // Move to the next register transaction:

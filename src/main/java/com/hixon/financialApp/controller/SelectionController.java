@@ -101,6 +101,41 @@ public class SelectionController {
             Function<ResultSet, T> rsEntityCreator,
             BiFunction<IndependentEntity, String, T> stringEntityCreator)
             throws EntityException, CancelException, QuitException, SkipException {
+        // Default behavior: confirm an exact name match with a yes/no prompt.
+        return getByNameFullText(seedName, scope, allowNone, allowCreate, isCancelAllowed, isQuitAllowed,
+                isSkipAllowed, typeName, getDisplayString, matchQuery, rsEntityCreator, stringEntityCreator,
+                DO_NOT_AUTO_ACCEPT_EXACT_MATCH);
+    }
+
+    /** Pass to {@code getByNameFullText} to auto-accept a unique exact name match without confirming. */
+    public static final boolean AUTO_ACCEPT_EXACT_MATCH = true;
+    /** Pass to {@code getByNameFullText} to confirm an exact name match with a yes/no prompt. */
+    public static final boolean DO_NOT_AUTO_ACCEPT_EXACT_MATCH = false;
+
+    /**
+     * Overload of {@link #getByNameFullText} that can auto-accept a unique exact name match.
+     *
+     * @param autoAcceptExactMatch when {@code true}, an exact (case-insensitive) name match is used
+     *        immediately (printing a one-line notice of what was selected) instead of prompting the
+     *        user to confirm.  Best used where the user typed the exact name and names are unique
+     *        (e.g. merchant selection); leave {@code false} where a typed term may also be a prefix
+     *        of other desired results (e.g. budget items).
+     */
+    public <T extends IndependentEntity> T getByNameFullText(
+            String seedName,
+            IndependentEntity scope,
+            boolean allowNone,
+            boolean allowCreate,
+            boolean isCancelAllowed,
+            boolean isQuitAllowed,
+            boolean isSkipAllowed,
+            String typeName,
+            Function<T, String> getDisplayString,
+            MatchQuery matchQuery,
+            Function<ResultSet, T> rsEntityCreator,
+            BiFunction<IndependentEntity, String, T> stringEntityCreator,
+            boolean autoAcceptExactMatch)
+            throws EntityException, CancelException, QuitException, SkipException {
         try {
             boolean firstTime = true;
 
@@ -130,6 +165,12 @@ public class SelectionController {
                 if (!firstTime && entity != null) {
                     boolean loaded = entity.loadByName(scope, seedName);
                     if (loaded) {
+                        // When the caller opts in, an exact name match is unambiguous, so use it
+                        // directly and just print what was selected instead of prompting.
+                        if (autoAcceptExactMatch) {
+                            view.say("Using " + typeName + " " + getDisplayString.apply(entity) + ".");
+                            return entity;
+                        }
                         if (view.getYesOrNo(typeName + " with the name " + entity.getName() + " found.  " +
                                 "Is " + getDisplayString.apply(entity) + " the correct " + typeName)) {
                             return entity;
@@ -153,6 +194,7 @@ public class SelectionController {
 
                     // Create an entity for this row:
                     entity = rsEntityCreator.apply(rs);
+                    double firstRelevance = tryGetRelevance(rs);
 
                     // If there are more rows in the result set:
                     if (rs.next()) {
@@ -164,6 +206,25 @@ public class SelectionController {
                         boolean alreadyInLIst = false;
                         if (entity.getName().equalsIgnoreCase(seedName)) {
                             alreadyInLIst = true;
+                        }
+
+                        // Peek at the second entity's relevance to decide if first is dominant
+                        double secondRelevance = tryGetRelevance(rs);
+                        // Auto-select only if BOTH conditions are met:
+                        // 1. First result is significantly higher than second (>= 1.5x), AND
+                        // 2. First result's score is high enough in absolute terms (>= 15.0) to indicate
+                        //    it's a genuinely good match, not just the least-bad option among poor matches.
+                        boolean firstIsDominant = firstRelevance >= 15.0 && secondRelevance > 0
+                                && firstRelevance >= secondRelevance * 1.5;
+
+                        // If autoAcceptExactMatch is enabled and first result has significantly higher relevance
+                        // AND meets a minimum absolute threshold, auto-select it without prompting the user.  This
+                        // handles fuzzy matches where the top result is clearly dominant (e.g. "STATE FARM INSURANCE
+                        // BLOOMI" -> "State Farm" with high confidence), while avoiding auto-selecting when both
+                        // candidates are poor matches (e.g. score 10 vs 1 when 10 is still weak overall).
+                        if (autoAcceptExactMatch && firstIsDominant) {
+                            view.say("Using " + typeName + " " + getDisplayString.apply(entity) + ".");
+                            return entity;
                         }
 
                         // Loop through the result set and create an entity for each row and add the entity to the list of
@@ -209,6 +270,15 @@ public class SelectionController {
                             seedName = entityOrStringResult.getSearchString();
                         }
                     } else {
+                        // If the single candidate is an exact (case-insensitive) name match and the caller opted in
+                        // to auto-accepting exact matches, then use it directly instead of prompting.  This handles
+                        // the common case where a normalized payee (e.g. "NETFLIX") matches an existing merchant
+                        // exactly on the very first search iteration.
+                        if (autoAcceptExactMatch && entity.getName().equalsIgnoreCase(seedName)) {
+                            view.say("Using " + typeName + " " + getDisplayString.apply(entity) + ".");
+                            return entity;
+                        }
+
                         // If there is only one similar entity found, then ask the user if it is the correct entity:
                         if (view.getYesOrNo("Only one similar " + typeName + " found.  Is " +
                                 getDisplayString.apply(entity) + " the correct " + typeName)) {
@@ -263,6 +333,23 @@ public class SelectionController {
         } catch (SQLException e) {
             EntityException ee = new EntityException("Database error occurred.", e);
             throw ee;
+        }
+    }
+
+    /**
+     * Safely attempts to extract the relevance score from a ResultSet row.  The relevance column is
+     * added by MatchQuery when doing full-text search to indicate how well the row matches the search.
+     * If the column doesn't exist (e.g., for non-full-text-search queries), returns 0.0.
+     *
+     * @param rs The result set positioned at a row
+     * @return the relevance score (typically 0 to high number), or 0.0 if unavailable
+     */
+    private double tryGetRelevance(ResultSet rs) {
+        try {
+            return rs.getDouble("relevance");
+        } catch (SQLException e) {
+            // Column doesn't exist or query doesn't use full-text search
+            return 0.0;
         }
     }
 

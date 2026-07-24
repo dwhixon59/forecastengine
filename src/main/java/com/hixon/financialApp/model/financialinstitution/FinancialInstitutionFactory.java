@@ -44,6 +44,7 @@ public class FinancialInstitutionFactory {
      * <ul>
      *   <li>"Wells Fargo Bank" (or "WellsFargo", "Wells Fargo") - Creates WellsFargoBank for CSV import</li>
      *   <li>"Barclays Bank" (or "Barclays") - Creates BarclaysBank for QFX import</li>
+     *   <li>"Citi" (or "Citibank", "Citi Bank") - Creates CitiBank for QFX import</li>
      *   <li>"Bank" (or "Generic Bank", "Generic") - Creates GenericBank for manual entry</li>
      * </ul>
      *
@@ -90,13 +91,16 @@ public class FinancialInstitutionFactory {
             case "barclays bank", "barclays" ->
                 new BarclaysBank(sessionController);
 
+            case "citi", "citibank", "citi bank" ->
+                new CitiBank(sessionController);
+
             case "bank", "generic bank", "generic" ->
                 new GenericBank(sessionController);
 
             default ->
                 throw new IllegalArgumentException(
                     "Unknown financial institution: '" + institutionName + "'. " +
-                    "Supported institutions: 'Wells Fargo Bank', 'Barclays Bank', 'Bank' (generic). " +
+                    "Supported institutions: 'Wells Fargo Bank', 'Barclays Bank', 'Citi', 'Bank' (generic). " +
                     "Please update the register's financialInstitution field."
                 );
         };

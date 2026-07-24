@@ -907,7 +907,7 @@ public class RegisterController {
         BudgetController budgetController = new BudgetController(sessionController);
         try {
             // Retrieve any transactions that were skipped.
-            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast);
+            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast, register);
 
             // For each transaction in the result set:
             Transaction transaction;
@@ -1055,7 +1055,7 @@ public class RegisterController {
         int i = 0;
         try {
             // Retrieve any transactions that were skipped.
-            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast);
+            ResultSet rs = TransactionUtilities.getSkippedTransactionsWrtForecast(forecast, register);
 
             // For each transaction in the result set:
             Transaction transaction;
