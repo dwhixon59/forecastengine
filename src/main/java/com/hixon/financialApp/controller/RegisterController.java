@@ -15,7 +15,6 @@ import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionUtilities;
-import com.hixon.financialApp.model.register.TransferMemoMapping;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
@@ -431,19 +430,6 @@ public class RegisterController {
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
 
-        // Enhancement 2: Check the persistent transfer_memo_mapping table before any filtering.
-        // If we have previously resolved the same payee pattern to a register, reuse that answer.
-        try {
-            Register mappedRegister = TransferMemoMapping.findRegisterForPayee(payee);
-            if (mappedRegister != null && !mappedRegister.equals(register)) {
-                logger.debug("  TransferMemoMapping HIT: '{}' -> '{}'", payee, mappedRegister.getName());
-                view.say("\u25b8 Auto-resolved transfer from memo history: " + mappedRegister.getName());
-                return mappedRegister;
-            }
-        } catch (Exception e) {
-            logger.debug("  TransferMemoMapping lookup failed: {}", e.getMessage());
-        }
-
         // if this is a recurring transfer:
         if (recurring) {
 
@@ -528,7 +514,11 @@ public class RegisterController {
         // See if we are down to one register:
         try {
             Register result = evaluateRegisterSet(possibleRegisters);
-            logger.debug("Resolved to single register after user/type filter: {}", result.getName());
+            if (result != null) {
+                logger.debug("Resolved to single register after user/type filter: {}", result.getName());
+            } else {
+                logger.debug("User rejected the single register after user/type filter");
+            }
             logger.debug("=== End resolveUnmatchedAccount Debug ===");
             logger.debug("");
             return result;
@@ -613,10 +603,13 @@ public class RegisterController {
                                 // If there is only one possible register left, return it:
                                 try {
                                     Register result = evaluateRegisterSet(possibleRegisters);
-                                    logger.debug("  Down to one register after rejection: {}", result.getName());
-                                    logger.debug("=== End resolveUnmatchedAccount Debug ===");
-                                    logger.debug("");
-                                    return result;
+                                    if (result != null) {
+                                        logger.debug("  Down to one register after rejection: {}", result.getName());
+                                        logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                                        logger.debug("");
+                                        return result;
+                                    }
+                                    logger.debug("  User rejected the remaining single register, continuing filtering...");
                                 } catch (ContinueFilteringException e) {
                                     logger.debug("  Multiple registers still possible, continuing filtering...");
                                     // Continue to the next filter.
@@ -672,31 +665,13 @@ public class RegisterController {
                 logger.debug("  After filtering to possible registers: {} transactions remain", relevantTransactions.size());
                 if (!relevantTransactions.isEmpty()) {
 
-                    // If there is only one transaction, then ask the user if this is the correct register:
-                    if (relevantTransactions.size() == 1) {
-                        logger.debug("  Only one transaction found, asking user for confirmation");
-                        Transaction relevantTransaction = relevantTransactions.get(0);
-                        Register register = Register.getByName(relevantTransaction.getMerchant().getName());
-                        if (register != null) {
-                            logger.debug("  Associated register: {}", register.getName());
-                            view.say("Found a register that matches the token in the memo: " + register.toStringConcise());
-                            Set<Register> setWithMatchingToken = new HashSet<>();
-                            setWithMatchingToken.add(register);
-                            try {
-                                Register result = evaluateRegisterSet(setWithMatchingToken);
-                                logger.debug("  User confirmed register from full-text match: {}", result.getName());
-                                logger.debug("=== End resolveUnmatchedAccount Debug ===");
-                                logger.debug("");
-                                return result;
-                            } catch (ContinueFilteringException e) {
-                                logger.debug("  User rejected register, removing from possible list");
-                                possibleRegisters.remove(register);
-                            }
-                        }
-                    }
-
-                    // There are multiple transactions, so create a list of "transaction with the register name" strings:
-                    logger.debug("  Multiple transactions found ({}), building selection list", relevantTransactions.size());
+                    // Build the set of distinct registers referenced by these historical transactions.
+                    // NOTE: a single historical match is only a *suggestion*. Transfer payees are often
+                    // ambiguous (e.g. "HIXON D" maps to more than one account), so we never silently
+                    // auto-select. A single suggestion is confirmed via evaluateRegisterSet (which asks
+                    // the user), and multiple suggestions are presented as a list. In either case, if the
+                    // user declines, we fall through to the final fallback that lists ALL possible registers.
+                    logger.debug("  Building selection list from {} transaction(s)", relevantTransactions.size());
                     List<String> fullTextTrxsWithRegisterNames = new ArrayList<>();
                     Set<Register> associatedRegisters = new HashSet<>();
                     for (Transaction relevantTransaction : relevantTransactions) {
@@ -716,10 +691,15 @@ public class RegisterController {
                         logger.debug("  Only one unique register, asking user for confirmation");
                         try {
                             Register result = evaluateRegisterSet(associatedRegisters);
-                            logger.debug("  User confirmed register: {}", result.getName());
-                            logger.debug("=== End resolveUnmatchedAccount Debug ===");
-                            logger.debug("");
-                            return result;
+                            if (result != null) {
+                                logger.debug("  User confirmed register: {}", result.getName());
+                                logger.debug("=== End resolveUnmatchedAccount Debug ===");
+                                logger.debug("");
+                                return result;
+                            }
+                            // User rejected the suggested register. Fall through to the final fallback,
+                            // which lets the user pick from the full list of possible registers.
+                            logger.debug("  User rejected suggested register, continuing to manual selection");
                         } catch (ContinueFilteringException e) {
                             logger.debug("  User rejected, continuing to next filter");
                             // Continue to next filter.
@@ -772,13 +752,6 @@ public class RegisterController {
                 registerNames, ViewInt.DO_NOT_ALLOW_NONE, ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.ALLOW_SKIP);
         Register result = possibleRegistersList.get(selection);
         logger.debug("  User selected register: {}", result.getName());
-        // Enhancement 2: Persist this mapping so future sessions auto-resolve the same payee.
-        try {
-            TransferMemoMapping.save(payee, result);
-            logger.debug("  TransferMemoMapping.save succeeded for payee '{}'", payee);
-        } catch (Exception e) {
-            logger.debug("  TransferMemoMapping.save failed: {}", e.getMessage());
-        }
         logger.debug("=== End resolveUnmatchedAccount Debug ===");
         logger.debug("");
         return result;
@@ -809,16 +782,20 @@ public class RegisterController {
             return null;
         }
 
-        // Case 2: Exactly one register found - confirm with user
+        // Case 2: Exactly one register found - confirm with user before selecting it.
+        // This register is only a *suggestion* (derived from history, nicknames, or a single
+        // full-text match). Because transfer payees are frequently ambiguous (e.g. "HIXON D"
+        // can refer to more than one account), we must never silently auto-select it. If the
+        // user rejects the suggestion, return null so the caller falls through to presenting
+        // the full list of possible registers.
         if (possibleRegisters.size() == 1) {
             Register singleRegister = possibleRegisters.iterator().next();
             view.say("Found potential match: " + singleRegister.toStringConcise());
-//            if (view.getYesOrNo("Is this the correct register?")) {
-//                return singleRegister;
-//            } else {
-//                return null;
-//            }
-            return singleRegister;
+            if (view.getYesOrNo("Is this the correct register?")) {
+                return singleRegister;
+            } else {
+                return null;
+            }
         }
 
         // Case 3: Multiple registers - continue filtering
