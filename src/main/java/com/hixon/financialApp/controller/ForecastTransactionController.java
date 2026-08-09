@@ -11,6 +11,7 @@ import com.hixon.financialApp.model.forecast.*;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.ForecastTransactionMatcher;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.NumberOrStringResponse;
 import com.hixon.financialApp.view.base.UserResponse;
@@ -1096,6 +1097,34 @@ public class ForecastTransactionController {
         if (bestMatch != null && bestScore > 0) {
             // Use the best match from scoring and apply the existing validation logic
             ForecastTransaction.Timing timing = bestMatch.fallsWithinWindow(split.getTransaction().getDate());
+
+            // AMOUNT SAFEGUARD (shared across all financial institutions):
+            // Never silently auto-assign a split whose amount differs materially from the
+            // matched forecast transaction's remaining amount. A strong merchant/date match is
+            // NOT sufficient on its own - a $1,200 charge must not be auto-assigned to a $50
+            // planned expense. When the amounts are outside the shared tolerance, ask the user.
+            if (!ForecastTransactionMatcher.isAmountWithinAutoMatchTolerance(
+                    split.getAmount(), bestMatch.getRemainingAmount())) {
+
+                ForecastController forecastController = new ForecastController(sessionController);
+                UserResponse resp = forecastController.confirmForecastTransactionAmountMatch(split, bestMatch);
+                split.setDisposition(resp.getDisposition());
+                switch (split.getDisposition()) {
+
+                    case ASSIGN: // User confirmed: assign despite the amount difference.
+                        return bestMatch;
+
+                    case DISPUTE: // Flag the transaction as improper but still assign it.
+                        split.getTransaction().setIsImproper(true);
+                        split.getTransaction().save(INSERT_ON_DUPLICATE_UPDATE);
+                        split.getTransaction().getRegister().addSignificantEvent(split.getTransaction());
+                        return bestMatch;
+
+                    case IGNORE: // User declined the match: do not assign to this forecast transaction.
+                    default:
+                        return null;
+                }
+            }
 
             // For most cases with good scores, we can skip the interactive prompts
             // unless the variance is extreme

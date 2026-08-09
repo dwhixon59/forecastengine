@@ -285,6 +285,56 @@ public class ForecastController {
     }
 
     /**
+     * Ask the user what to do when a candidate forecast transaction matches on merchant and/or
+     * date, but its amount differs materially from the split amount (see
+     * {@link com.hixon.financialApp.utility.ForecastTransactionMatcher#AUTO_MATCH_AMOUNT_TOLERANCE}).
+     *
+     * <p>This prevents silently auto-assigning an imported transaction to a planned forecast
+     * transaction whose amount is very different (e.g. a $1,200 charge auto-matched to a $50
+     * planned expense simply because the merchant matched).
+     *
+     * @param split               the transaction split being reconciled
+     * @param forecastTransaction the candidate forecast transaction whose amount differs
+     * @return the user's chosen disposition (ASSIGN, IGNORE, or DISPUTE)
+     * @throws EntityException
+     * @throws SQLException
+     */
+    public UserResponse confirmForecastTransactionAmountMatch(TransactionSplit split,
+            ForecastTransaction forecastTransaction) throws EntityException, SQLException {
+        UserResponse response = new UserResponse();
+
+        view.say("The transaction amount (" + Utility.formatDollarAmount(Math.abs(split.getAmount())) +
+                ") differs significantly from the planned amount (" +
+                Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount())) + ") for " +
+                forecastTransaction.toStringConcise() + ".");
+        view.ask("What would you like to do (s-assign anyway, i-do not assign, d-dispute)? ");
+
+        boolean done = false;
+        while (!done) {
+            done = true;
+            String line = view.getResponseString();
+            switch (line) {
+                case "s":
+                    response.setDisposition(ASSIGN);
+                    break;
+
+                case "d":
+                    response.setDisposition(DISPUTE);
+                    break;
+
+                case "i":
+                    response.setDisposition(IGNORE);
+                    break;
+
+                default:
+                    view.say("Please enter s, i, or d.");
+                    done = false;
+            }
+        }
+        return response;
+    }
+
+    /**
      * {@inheritDoc}
      */
     public UserResponse getForecastStartDate() throws QuitException, CancelException {

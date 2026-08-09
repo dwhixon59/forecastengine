@@ -19,6 +19,46 @@ import java.util.UUID;
 public class ForecastTransactionMatcher {
 
     /**
+     * Maximum fractional difference between a cleared transaction amount and a forecast
+     * transaction's remaining amount that is still considered close enough to auto-assign
+     * WITHOUT asking the user. If a candidate forecast transaction matches on merchant/date
+     * but its amount differs from the transaction by more than this fraction, the match must
+     * be confirmed by the user rather than silently auto-assigned.
+     *
+     * <p>This is the single, shared definition of "amounts are too different to auto-assign"
+     * used by every matching code path (and therefore by every financial institution), so we
+     * do not have to re-add this safeguard each time a new institution is introduced.
+     */
+    public static final double AUTO_MATCH_AMOUNT_TOLERANCE = 0.05; // 5%
+
+    /**
+     * Determines whether a cleared transaction amount is close enough to a forecast
+     * transaction's remaining amount to be auto-assigned without user confirmation.
+     *
+     * <p>Amounts are compared by absolute value (sign compatibility is validated separately
+     * during scoring) as a fraction of the larger magnitude. Two amounts are considered a
+     * confident amount match when they differ by no more than {@link #AUTO_MATCH_AMOUNT_TOLERANCE}.
+     *
+     * @param transactionAmount the cleared transaction amount (sign ignored)
+     * @param forecastAmount    the forecast transaction's remaining amount (sign ignored)
+     * @return true if the amounts are within tolerance (safe to auto-assign), false if they
+     *         differ enough that the user should be asked before assigning
+     */
+    public static boolean isAmountWithinAutoMatchTolerance(double transactionAmount, double forecastAmount) {
+        double txn = Math.abs(transactionAmount);
+        double forecast = Math.abs(forecastAmount);
+        double larger = Math.max(txn, forecast);
+
+        // If both amounts are effectively zero there is nothing to distinguish - treat as a match.
+        if (larger == 0.0) {
+            return true;
+        }
+
+        double percentDiff = Math.abs(txn - forecast) / larger;
+        return percentDiff <= AUTO_MATCH_AMOUNT_TOLERANCE;
+    }
+
+    /**
      * Attempts to find a matching forecast transaction for a cleared transaction based on date and amount proximity.
      * This method provides automatic matching for planned transactions without requiring merchant identification
      * or budget item selection from the user.
@@ -310,13 +350,24 @@ public class ForecastTransactionMatcher {
             List<BudgetItemMerchant> budgetItemMerchants =
                     BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
 
+            // Award the merchant bonus at most once, even if several of the budget item's
+            // merchants happen to match. Otherwise a transaction with a wildly different amount
+            // (0 amount points) could still cross the 70-point auto-match threshold on the
+            // strength of a repeated merchant bonus.
+            boolean merchantMatched = false;
             for (BudgetItemMerchant bim : budgetItemMerchants) {
                 for (Merchant possibleMerchant : possibleMerchants) {
                     if (bim.getIdMerchant().equals(possibleMerchant.getId())) {
-                        score += 20;
+                        merchantMatched = true;
                         break;
                     }
                 }
+                if (merchantMatched) {
+                    break;
+                }
+            }
+            if (merchantMatched) {
+                score += 20;
             }
         }
 

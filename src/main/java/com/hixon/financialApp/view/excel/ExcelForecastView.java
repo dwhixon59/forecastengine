@@ -23,6 +23,11 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -431,7 +436,13 @@ public class ExcelForecastView extends AbstractForecastView {
         // Set to a lower ratio (0.001) to allow our files while still protecting against actual attacks
         ZipSecureFile.setMinInflateRatio(0.001);
 
-        try (FileInputStream fis = new FileInputStream(sourceName);
+        Path sourcePath = Paths.get(sourceName);
+        if (!Files.exists(sourcePath)) {
+            throw new ControllerException("Excel file not found: " + sourceName);
+        }
+
+        try (RandomAccessFile raf = Utility.openFileWithRetry(sourcePath);
+             FileInputStream fis = new FileInputStream(raf.getFD());
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Utility.getView().say("\nUpdate the forecast from the forecast transactions in the Excel file " + sourceName);
@@ -628,7 +639,7 @@ public class ExcelForecastView extends AbstractForecastView {
             }
 
         } catch (FileNotFoundException e) {
-            throw new ControllerException("Excel file not found: " + sourceName);
+            throw new ControllerException("Excel file could not be opened (it may be locked by another program such as Excel): " + sourceName);
         } catch (IOException e) {
             ControllerException ce = new ControllerException("I/O error reading Excel file " + sourceName + " at row " + i);
             ce.initCause(e);

@@ -7,6 +7,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.Date;
@@ -1170,6 +1171,31 @@ public class Utility {
         return cal;
     }
 
+    /**
+     * Opens a file for reading with a retry loop.  If the file cannot be opened (e.g. because it is
+     * locked by another program such as Excel), the user is asked whether to try again.
+     *
+     * @param path the path of the file to open
+     * @return an open {@link RandomAccessFile} positioned at the beginning of the file
+     * @throws IOException if the file does not exist or the user declines to retry
+     */
+    public static RandomAccessFile openFileWithRetry(Path path) throws IOException {
+        boolean done = false;
+        RandomAccessFile file = null;
+        while (!done) {
+            try {
+                file = new RandomAccessFile(path.toFile(), "r");
+                done = true;
+            } catch (IOException e) {
+                getView().say("\nUnable to open the file " + path);
+                getView().say("Error message: " + e.getMessage());
+                done = !getView().getYesOrNo("Would you like to try again?");
+                if (done) {
+                    throw e;
+                }
+            }
+        }
+        return file;
+    }
+
 }
-
-
