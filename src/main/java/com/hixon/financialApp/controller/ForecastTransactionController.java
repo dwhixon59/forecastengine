@@ -3,6 +3,7 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
@@ -1136,7 +1137,14 @@ public class ForecastTransactionController {
             // matched forecast transaction's remaining amount. A strong merchant/date match is
             // NOT sufficient on its own - a $1,200 charge must not be auto-assigned to a $50
             // planned expense. When the amounts are outside the shared tolerance, ask the user.
-            if (!ForecastTransactionMatcher.isAmountWithinAutoMatchTolerance(
+            //
+            // Skip this for COLLECTION items (e.g. Groceries): a single trip is expected to be
+            // less than the remaining budgeted/planned amount for the period - that's the whole
+            // point of a collection item accumulating multiple transactions - so comparing one
+            // split's amount to the remaining amount produces a false "differs significantly"
+            // warning on every normal partial purchase.
+            if (split.getBudgetItem().getHowOccurs() != Item.HowOccurs.COLLECTION
+                    && !ForecastTransactionMatcher.isAmountWithinAutoMatchTolerance(
                     split.getAmount(), bestMatch.getRemainingAmount())) {
 
                 ForecastController forecastController = new ForecastController(sessionController);
