@@ -326,6 +326,9 @@ public class ImportController {
                 // Set up for processing this transaction:
                 merchant = null;
                 boolean autoMatched = false;  // Track if we auto-matched and already reconciled in Phase 2.5
+                // Set (Phase 2.5) when a forecast match was found but the merchant couldn't be
+                // resolved yet, so the eventual merchant can be linked to this budget item once known.
+                UUID matchedBudgetItemPendingMerchant = null;
 
                 /*
                  * Phase 1:  The transaction has already been created by the financial institution
@@ -414,10 +417,16 @@ public class ImportController {
                                 MerchantUtilities.getPossibleMerchantsByPayee(
                                         currentTransaction.getMerchantPayee());
 
-                        // Try to find a matching forecast transaction within ±5 days
+                        // Try to find a matching forecast transaction. The window here is just a
+                        // performance/candidate-gathering guard, not the actual match filter - the
+                        // score's own date-proximity decay (0 points past 5 business days) already
+                        // rejects distant dates, so this can be generous without risking false
+                        // auto-matches. Keeping it tight caused near-misses (e.g. an exact-amount
+                        // candidate one calendar day outside a ±5 window) to be silently excluded
+                        // before they were even scored.
                         ForecastTransaction matchedForecast =
                                 ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                        currentTransaction, forecast, possibleMerchants, 5, 5);
+                                        currentTransaction, forecast, possibleMerchants, 14, 14);
 
                         // If we found a confident match
                         if (matchedForecast != null) {
@@ -433,17 +442,33 @@ public class ImportController {
                             view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
 
                             // Determine the merchant for this transaction.
-                            // First try: exact payee→merchant mapping (fastest, most specific).
-                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
+                            // First try (transfers): if the raw payee still carries a masked
+                            // counterparty account number (e.g. "...XXXXXX8249..."), resolve the
+                            // register with those last four digits and use that register's name as
+                            // the merchant. Transfer merchants are keyed by register name throughout
+                            // the app, so this is deterministic and institution-agnostic. Returns
+                            // null (falls through) for non-transfer payees.
+                            merchant = MerchantUtilities.getTransferMerchantByLastFour(
+                                    currentTransaction.getPayee(), register);
+
+                            // Second try: exact payee→merchant mapping (fast, most specific).
+                            if (merchant == null && possibleMerchants != null && possibleMerchants.size() == 1) {
                                 merchant = possibleMerchants.getFirst();
                             }
 
-                            // Second try: if the payee lookup didn't resolve a unique merchant,
+                            // Third try: if neither of the above resolved a unique merchant,
                             // use the merchant linked to the matched forecast's budget item.
                             // This handles transfer payees (e.g. "Transfer to XXXXXX8249 from
                             // Bill Pay Danni") whose payee string has no direct merchant mapping
                             // but whose budget item does have an associated merchant.
-                            if (merchant == null) {
+                            //
+                            // Only do this when possibleMerchants is null, i.e. merchant
+                            // identification was never attempted (the transfer case this was
+                            // written for). When possibleMerchants is non-null (even if empty),
+                            // ForecastTransactionMatcher already asked the user to confirm this is
+                            // a different/new merchant for the budget item - silently reusing the
+                            // budget item's existing merchant here would overwrite that answer.
+                            if (merchant == null && possibleMerchants == null) {
                                 try {
                                     BudgetItem forecastBudgetItem = BudgetItem.getById(idBudgetItem);
                                     if (forecastBudgetItem != null) {
@@ -458,6 +483,13 @@ public class ImportController {
                                 } catch (Exception e) {
                                     // Don't let a lookup failure block the import; fall through to prompt.
                                 }
+                            }
+
+                            // If we still don't have a merchant, remember which budget item this
+                            // transaction was matched to so the merchant can be linked to it once
+                            // resolved below (Phase 3's assignMerchant search/create flow).
+                            if (merchant == null) {
+                                matchedBudgetItemPendingMerchant = idBudgetItem;
                             }
 
                             // Only save and reconcile if we successfully identified a merchant
@@ -541,6 +573,27 @@ public class ImportController {
                                     throw new ControllerException("Invalid termination condition " +
                                             resolver.getTerminationCondition() + " during transaction import");
                             }
+                        }
+                    }
+
+                    // If Phase 2.5 matched a budget item but couldn't resolve the merchant at the
+                    // time (the user confirmed a merchant mismatch, or there was no merchant info
+                    // to go on at all), link the merchant identified above to that budget item so
+                    // future transactions from this merchant are recognized without asking again.
+                    if (matchedBudgetItemPendingMerchant != null) {
+                        try {
+                            BudgetItem matchedBudgetItem = BudgetItem.getById(matchedBudgetItemPendingMerchant);
+                            if (matchedBudgetItem != null &&
+                                    BudgetItemMerchant.getByItemAndMerchant(matchedBudgetItem, merchant) == null) {
+                                BudgetItemMerchant newAssociation = new BudgetItemMerchant(merchant, matchedBudgetItem);
+                                newAssociation.save();
+                                view.say("Associated merchant '" + merchant.getName() + "' with budget item '" +
+                                        matchedBudgetItem.getDisplayString() + "'.");
+                            }
+                        } catch (Exception e) {
+                            // Don't let a lookup/save failure block the import.
+                            view.say("Warning: could not link merchant '" + merchant.getName() +
+                                    "' to the matched budget item: " + e.getMessage());
                         }
                     }
 
@@ -669,6 +722,12 @@ public class ImportController {
                         forecastController.reconcile(currentTransaction, splitsToReconcile);
                     }
                 }
+
+                // This transaction was fully processed (it did not hit an early `continue`),
+                // so count it. This drives the post-loop lastImportDate update and success
+                // summary (see the `if (j > 0)` block after the loop). Transactions skipped
+                // via CANCEL/SKIP/INQUIRE `continue` are intentionally not counted.
+                j++;
 
             } // End while hasNext()
 
@@ -740,539 +799,6 @@ public class ImportController {
         return threshold;
     }
 
-    /**
-     * Imports cleared (posted) transactions from a CSV file into the register.
-     *
-     * <p>This is the main method for importing transactions that have cleared (posted) at the
-     * financial institution. The method performs a comprehensive multi-phase import process:</p>
-     *
-     * <h4>Phase 1: Transaction Creation/Retrieval</h4>
-     * <ul>
-     *   <li>Parses each CSV record using the financial institution's format</li>
-     *   <li>Creates unique import record IDs to prevent duplicate imports</li>
-     *   <li>Retrieves existing transactions if already imported</li>
-     *   <li>Checks for outdated transactions (warns if first transaction is over a week old)</li>
-     * </ul>
-     *
-     * <h4>Phase 2: Provisional Transaction Reconciliation</h4>
-     * <ul>
-     *   <li>Searches for matching provisional (pending) transactions</li>
-     *   <li>Handles tip additions (e.g., restaurant charges where tip is added later)</li>
-     *   <li>Transfers splits from provisional to cleared transaction</li>
-     *   <li>Updates register balance only for new transactions</li>
-     * </ul>
-     *
-     * <h4>Phase 2.5: Automatic Forecast Matching</h4>
-     * <ul>
-     *   <li>Attempts to identify possible merchants from transaction payee</li>
-     *   <li>Searches for forecast transactions within ±5 days</li>
-     *   <li>Scores potential matches based on date proximity and amount similarity</li>
-     *   <li>Auto-assigns budget items if a confident match is found</li>
-     * </ul>
-     *
-     * <h4>Phase 3: Merchant Identification</h4>
-     * <ul>
-     *   <li>Looks up merchant from transaction payee</li>
-     *   <li>Prompts user to identify or create merchant if not found</li>
-     *   <li>Handles user cancellation, skip, or quit requests</li>
-     * </ul>
-     *
-     * <h4>Phase 4: Split Assignment</h4>
-     * <ul>
-     *   <li>Retrieves budget items assigned to the merchant</li>
-     *   <li>Assigns transaction amounts to budget items (may be split across multiple items)</li>
-     *   <li>Prompts user for split amounts if needed</li>
-     *   <li>Saves splits to database</li>
-     * </ul>
-     *
-     * <h4>Phase 5: Forecast Reconciliation</h4>
-     * <ul>
-     *   <li>Reconciles each split with corresponding forecast transactions</li>
-     *   <li>Updates forecast transaction remaining amounts</li>
-     *   <li>Marks forecast transactions as found</li>
-     * </ul>
-     *
-     * <h4>Phase 6: Event Processing (Future)</h4>
-     * <ul>
-     *   <li>Reserved for processing significant events from reconciliation</li>
-     * </ul>
-     *
-     * <h4>Phase 7: Cleanup</h4>
-     * <ul>
-     *   <li>Versions the import file (creates backup copy)</li>
-     *   <li>Reports number of transactions imported</li>
-     * </ul>
-     *
-     * <p><b>Error Handling:</b> The method is fault-tolerant. If an error occurs with one
-     * transaction, the user can choose to continue importing remaining transactions. The
-     * import record ID system prevents duplicate imports if the import is restarted.</p>
-     *
-     * <p><b>User Interaction:</b> At various points, the user may be prompted to:
-     * <ul>
-     *   <li>Identify or create merchants</li>
-     *   <li>Assign budget items to merchants</li>
-     *   <li>Specify split amounts across budget items</li>
-     *   <li>Choose to cancel, skip, or quit the process</li>
-     * </ul>
-     * </p>
-     *
-     * @param clearedTransactionsFilename The full path to the CSV file containing cleared transactions
-     * @return true if the forecast is in sync after the import, false otherwise
-     * @throws ControllerException If a controller logic error occurs during import
-     * @throws QuitException       If the user chooses to quit the import process
-     * @see Transaction
-     * @see Register
-     * @see Merchant
-     * @see TransactionSplit
-     * @see ForecastTransaction
-     */
-    public boolean importCsvRegisterTransactionFile(String clearedTransactionsFilename)
-            throws ControllerException, QuitException {
-
-        resolver.say("Beginning register balance:  " + formatDollarAmount(register.getBalance()));
-
-        /*
-         * Import transactions from the CSV file:
-         */
-        int i, j = 0;
-        try {
-            Transaction currentTransaction;
-
-            // Open the import file:
-            BufferedReader br = openBufferedFileReader(Transaction.CLEARED_TRANSACTIONS_FILE,
-                    clearedTransactionsFilename);
-
-            // Describe the format of the CSV file for the CSVFormat.Builder:
-            CSVFormat format = CSVFormat.RFC4180.builder()
-                    .setHeader(financialInstitution.getCsvHeadersClass())
-                    .setTrim(true)
-                    .get();
-
-            List<CSVRecord> recordList = new ArrayList<>();
-
-            // Read all records from the CSV file into a list:
-            try (CSVParser parser = format.parse(br)) {
-                for (CSVRecord record : parser) {
-                    recordList.add(record);
-                }
-            }
-            br.close();
-
-            // For each transaction in the import file:
-            HashMap<String, String> map = new HashMap<>();
-            String importRecordId;
-            Merchant merchant;
-            boolean firstTransaction = true;
-            for (i = recordList.size() - 1, j = 0; i > -1; i--, j++) {
-                CSVRecord record = recordList.get(i);
-
-                // Set up for processing this transaction:
-                merchant = null;
-                boolean autoMatched = false;  // Track if we auto-matched and already reconciled in Phase 2.5
-
-                /*
-                 * Phase 1:  create or retrieve the transaction and the merchant associated with it.  The reason we can
-                 * retrieve an existing transaction is that the transaction may have been previously imported:
-                 */
-                // Construct an ID for this import record from the import record base name:
-                importRecordId = constructImportRecordId(map, financialInstitution.getRegisterImportRecordBaseName(record));
-
-                // Get the transaction for this import record ID:
-                currentTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
-
-                // Track whether this is a new transaction (not previously imported)
-                boolean isNewTransaction = (currentTransaction == null);
-
-                // Get the merchant and splits for this transaction if we found one:
-                List<TransactionSplit> splits = null;
-                if (currentTransaction != null) {
-                    // This transaction has already been imported, so get the merchant and splits for it:
-                    merchant = currentTransaction.getMerchant();
-                    splits = TransactionSplit.getSplitsForTransaction(currentTransaction);
-                } else {
-                    try {
-                        currentTransaction = financialInstitution.createFromCSVRecord(record, importRecordId);
-                    } catch (SkipException se) {
-                        merchant = Merchant.getByName(Merchant.UNKNOWN);
-                        MerchantPayee merchantPayee = new MerchantPayee(currentTransaction.getPayee(), merchant.getId());
-                        merchantPayee.save(INSERT_ON_DUPLICATE_SKIP);
-                        currentTransaction.setMerchant(merchant);
-                        currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                        register.update();
-                        continue;
-                    }
-                }
-
-                // It is expected that transactions will be downloaded almost daily, so if the first transaction is more
-                // than a week old, ask the user to verify that they indeed want to import these old transactions:
-                if (firstTransaction) {
-                    Calendar oneWeekAgo = Calendar.getInstance();
-                    oneWeekAgo.add(Calendar.DATE, -7);
-                    if (currentTransaction.getDate().before(oneWeekAgo)) {
-                        view.say("\nThe earliest transaction in the import file seems old.");
-                        view.say(currentTransaction.toStringConcise());
-                        if (!view.getYesOrNo("Are you sure you want to import it?")) {
-                            throw new FileNotFoundException("Specified import file contains old transactions.");
-                        }
-                    }
-                    firstTransaction = false;
-                }
-
-                // Let the resolver know we are beginning a new item:
-                resolver.beginImportItem(currentTransaction);
-
-                // If we haven't already assigned the splits to this transaction in a previous run:
-                if (splits == null) {
-                    /*
-                     * Phase 2:  Reconcile the transaction with any existing provisional transactions
-                     */
-                    // Get matching provisional transaction and reconcile it with the cleared transaction.
-                    Transaction provisionalTransaction =
-                            financialInstitution.getMatchingProvisionalTransaction(currentTransaction);
-
-                    // If we found a provisional transaction:
-                    boolean reconciledWithProvisional = false;
-                    if (provisionalTransaction != null) {
-
-                        // The merchant from a provisional transaction should never be null, but just in case:
-                        if (provisionalTransaction.getMerchant() == null) {
-                            throw new ControllerException("Provisional transaction has no merchant assigned.");
-                        }
-
-                        // If the merchant is the unknown merchant:
-                        if (provisionalTransaction.getMerchant().getName().equals(Merchant.UNKNOWN)) {
-
-                            // then get the merchant with the help of the user:
-                            merchant = Merchant.getByPayee(currentTransaction.getMerchantPayee());
-                            currentTransaction.setMerchant(merchant);
-                        } else {
-                            merchant = provisionalTransaction.getMerchant();
-                        }
-
-                        // Get the splits from the provisional transaction:
-                        splits = TransactionSplit.getSplitsForTransaction(provisionalTransaction);
-
-                        // Let the financial institution reconcile the provisional with cleared transaction
-                        reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
-                                currentTransaction, provisionalTransaction, register, splits);
-                    }
-
-                    // If no provisional transaction was found and this is a new transaction,
-                    // update the register balance
-                    if (!reconciledWithProvisional && isNewTransaction) {
-                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                        register.update();
-                    }
-
-                    /*
-                     * Phase 2.5: Auto-match with forecast transactions (if enabled)
-                     */
-                    if (splits == null) {
-                        // Get possible merchants from the transaction payee (0, 1, or more matches)
-                        List<Merchant> possibleMerchants =
-                                MerchantUtilities.getPossibleMerchantsByPayee(
-                                        currentTransaction.getMerchantPayee());
-
-                        // Try to find a matching forecast transaction within ±5 days
-                        ForecastTransaction matchedForecast =
-                                ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                        currentTransaction, forecast, possibleMerchants, 5, 5);
-
-                        // If we found a confident match
-                        if (matchedForecast != null) {
-                            // Get the budget item from the forecast transaction
-                            UUID idBudgetItem = matchedForecast.getForecastItem().getIdBudgetItem();
-
-                            // Create the split automatically
-                            splits = new ArrayList<>();
-                            splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
-                                    currentTransaction.getId(), null));
-
-                            // Inform the user about the auto-match as a heading
-                            view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
-
-                            // Determine the merchant for this transaction.
-                            // First try: exact payee→merchant mapping.
-                            if (possibleMerchants != null && possibleMerchants.size() == 1) {
-                                merchant = possibleMerchants.getFirst();
-                            }
-
-                            // Second try: merchant linked to the matched forecast's budget item.
-                            // Handles transfer payees whose payee string has no direct merchant
-                            // mapping but whose budget item does have an associated merchant.
-                            if (merchant == null) {
-                                try {
-                                    BudgetItem forecastBudgetItem = BudgetItem.getById(idBudgetItem);
-                                    if (forecastBudgetItem != null) {
-                                        List<BudgetItemMerchant> assignedMerchants =
-                                                BudgetItemMerchant.getAssignedMerchantsForBudgetItem(forecastBudgetItem);
-                                        if (assignedMerchants.size() == 1) {
-                                            merchant = Merchant.getById(assignedMerchants.get(0).getIdMerchant());
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Don't let a lookup failure block the import; fall through to prompt.
-                                }
-                            }
-
-                            // Only save and reconcile if we successfully identified a merchant
-                            if (merchant != null) {
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-
-                                // Save the transaction with merchant info
-                                currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-
-                                // Save the splits
-                                for (TransactionSplit split : splits) {
-                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
-                                }
-
-                                // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                                ForecastController forecastController = new ForecastController(sessionController);
-                                forecastController.reconcile(currentTransaction, splits);
-
-                                // Mark that we've auto-matched and already reconciled
-                                autoMatched = true;
-
-                                // Record for the Import Summary without printing a second bullet —
-                                // the auto-match output above already serves as the console log entry.
-                                importLog.recordImportEvent(currentTransaction,
-                                        ImportLog.ImportRecord.Status.NEWLY_IMPORTED);
-                            }
-                            // If merchant is still null, splits will be saved later after merchant assignment
-                        }
-                    }
-
-                    // If we haven't determined the merchant yet, then assign or create one:
-                    if (merchant == null) {
-                        try {
-                            // E8: Use the shared merchantController so its session cache persists
-                            // across all transactions in this import run.
-                            merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
-                                    currentTransaction.getPayee(), currentTransaction.getAmount());
-                            currentTransaction.setIdMerchant(merchant.getId());
-                            currentTransaction.setMerchant(merchant);
-                        } catch (CancelException ce) {
-                            terminationCondition = CANCEL;
-                        } catch (SkipException se) {
-                            terminationCondition = SKIP;
-                        } catch (QuitException qe) {
-                            terminationCondition = QUIT;
-                        }
-
-                        // If the user aborted the merchant assignment process, then figure out what to do:
-                        if (merchant == null) {
-                            switch (terminationCondition) {
-
-                                case INQUIRE:
-                                    List<User> users = User.getAllUsers();
-                                    User user = view.getUser("Select the user to send the notification to",
-                                            users, true);
-                                    if (user != null) {
-                                        notificationService.requestIdentifyMerchant(user, currentTransaction);
-                                    }
-                                    continue;
-
-                                case CANCEL:
-                                    // Can't restart with iterator pattern - just skip this transaction
-                                    continue;
-
-                                case SKIP:
-                                    merchant = Merchant.getByName(Merchant.UNKNOWN);
-                                    if (merchant != null) {
-                                        currentTransaction.setMerchant(merchant);
-                                        currentTransaction.setIdMerchant(merchant.getId());
-                                    }
-                                    currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                                    register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                                    register.update();
-                                    continue;
-
-                                case QUIT:
-                                    throw new QuitException("User quit during merchant assignment");
-
-                                default:
-                                    throw new ControllerException("Invalid termination condition " +
-                                            resolver.getTerminationCondition() + " during transaction import");
-                            }
-                        }
-                    }
-
-                    // At this point the transaction is complete, so save it off:
-                    currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-
-                    // Tell the user what we just did — but skip if auto-matched, since the
-                    // auto-match block already recorded the event and printed its own output.
-                    if (!autoMatched) {
-                        importLog.logImportEvent(currentTransaction, isNewTransaction);
-                    }
-
-                    /*
-                     * Phase 3:  Get the assigned budget items for this merchant:
-                     */
-                    // If there was a provisional transaction with assigned splits, then the splits are already assigned.
-                    // If that is not the case then we need to assign the splits now.
-                    if (splits == null) {
-                        // Declare BudgetController here since it's only needed in this block
-                        BudgetController budgetController = new BudgetController(sessionController);
-
-                        // Get the assigned budget items for the merchant:
-                        List<BudgetItemMerchant> budgetItemsForMerchant =
-                                BudgetItemMerchant.getAssignedUnexpiredBudgetItems(budget, merchant);
-
-                        // If we couldn't find any matching items, get some help from the user:
-                        if (budgetItemsForMerchant.isEmpty()) {
-                            try {
-                                budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
-                            } catch (CancelException ce) {
-                                // Can't restart with iterator pattern - just skip this transaction
-                                continue;
-                            } catch (SkipException se) {
-                                continue;
-                            }
-                            if (budgetItemsForMerchant.isEmpty()) {
-                                List<User> users = User.getAllUsers();
-                                User user = view.getUser("Select the user to send the notification to",
-                                        users, true);
-                                if (user != null) {
-                                    notificationService.requestAssignBudgetItems(user, merchant);
-                                }
-                            }
-                        }
-
-                        /*
-                         * Phase 4:  Assign the splits to the transaction:
-                         */
-                        // Get the splits for the transaction.  Create them if they don't already exist:
-                        splits = budgetController.assignAmountsToBudgetItems(currentTransaction, merchant, budget,
-                                budgetItemsForMerchant);
-
-                        // If the user aborted the split assignment process, then figure out what to do:
-                        if (splits == null) {
-                            switch (budgetController.getTerminationCondition()) {
-                                case CANCEL:
-                                    // Can't restart with iterator pattern - just skip this transaction
-                                    continue;
-
-                                case SKIP:
-                                    continue;
-
-                                case INQUIRE:
-                                    List<User> users = User.getAllUsers();
-                                    User user = view.getUser("Select the user to send the notification to",
-                                            users, true);
-                                    if (user != null) {
-                                        notificationService.requestAssignSplits(user, currentTransaction, budget);
-                                    }
-                                    continue;
-
-                                case QUIT:
-                                    throw new QuitException("User quit during split assignment");
-
-                                default:
-                                    throw new ControllerException("Invalid termination condition " +
-                                            resolver.getTerminationCondition() + " during split assignment.");
-                            }
-                        }
-
-                        // Save the splits using INSERT_ON_DUPLICATE_UPDATE to handle both new and existing splits
-                        for (TransactionSplit split : splits) {
-                            split.save(INSERT_ON_DUPLICATE_UPDATE);
-                        }
-                    } else {
-                        // Only print if we didn't auto-match — the auto-match block already logged this
-                        if (!autoMatched) {
-                            view.say("Already assigned splits.");
-                        }
-
-                        // If splits were modified during provisional reconciliation (e.g., tip adjustment),
-                        // they need to be saved to persist the changes
-                        for (TransactionSplit split : splits) {
-                            if (split.isDirty()) {
-                                split.save(INSERT_ON_DUPLICATE_UPDATE);
-                            }
-                        }
-                    }
-                } else {
-                    // Tell the user what we just did:
-                    importLog.logImportEvent(currentTransaction, false);
-                }
-
-                /*
-                 * Phase 5:  Reconcile the transaction with the forecast:
-                 */
-                // Only reconcile if we didn't already reconcile in Phase 2.5
-                if (!autoMatched) {
-                    // Filter out splits that are already reconciled before calling reconcile()
-                    // This prevents prompting the user for information (like register for transfers)
-                    // when the split has already been reconciled
-                    List<TransactionSplit> splitsToReconcile = new ArrayList<>();
-                    for (TransactionSplit split : splits) {
-                        ForecastTransactionSplit existingReconciliation =
-                                ForecastTransactionSplit.getForecastTransactionSplit(forecast, split);
-                        if (existingReconciliation == null) {
-                            // Not yet reconciled - add to list
-                            splitsToReconcile.add(split);
-                        }
-                    }
-
-                    // Only call reconcile if there are splits that need reconciling
-                    if (!splitsToReconcile.isEmpty()) {
-                        // Reconcile this transaction with the forecast:
-                        ForecastController forecastController = new ForecastController(sessionController);
-                        forecastController.reconcile(currentTransaction, splitsToReconcile);
-                    }
-                }
-
-            } // End for each record in the transaction file.
-
-            /*
-             * Phase 6:  Perform any tasks that are necessitated by the results of the update:
-             */
-            // TODO: Process any significant events that occurred during reconciliation:
-
-            /*
-             * Phase 7:  Clean up and terminate:
-             */
-            // Create a save version of the import file:
-            versionFile(clearedTransactionsFilename);
-
-            // TODO: Save the import event:
-
-        } catch (FileNotFoundException e) {
-            if (!view.getYesOrNo("Do you want to continue?")) {
-                QuitException qe = new QuitException(Transaction.CLEARED_TRANSACTIONS_FILE + " " +
-                        clearedTransactionsFilename + " is invalid or not found.");
-                qe.initCause(e);
-                throw (qe);
-            }
-        } catch (IOException e) {
-            ControllerException ce = new ControllerException("I/O error reading from the transactions file " +
-                    clearedTransactionsFilename + "on line " + j + ".");
-            ce.initCause(e);
-            throw (ce);
-        } catch (FinancialAppException e) {
-            ControllerException ve = new ControllerException("Error occured while creating a previous version of the " +
-                    "forecast transaction import file.");
-            ve.initCause(e);
-            throw ve;
-        } catch (Exception e) {
-            ControllerException ce = new ControllerException("Exception while processing the transactions file " +
-                    clearedTransactionsFilename + " on line " + j + ".");
-            ce.initCause(e);
-            throw ce;
-        }
-
-        // Return the number of transactions imported:
-        if (j > 0) {
-            view.say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
-                    register.getName() + " from file " + clearedTransactionsFilename + ".");
-        }
-        return forecast.getInSync();
-
-    } // End importCsvTransactionFile(Connection dbConnection).
 
 
     /**
@@ -1434,7 +960,6 @@ public class ImportController {
      * @throws EntityException       If a database error occurs
      * @throws BudgetException       If an error occurs while processing budget items
      * @throws FinancialAppException If any other error occurs during the import process
-     * @see #importCsvRegisterTransactionFile(String)
      * @see Transaction
      * @see TransactionSplit
      * @see ForecastTransaction
@@ -1605,10 +1130,12 @@ public class ImportController {
                                     MerchantUtilities.getPossibleMerchantsByPayee(
                                             provisionalTransactions.get(provTrxIndex).getMerchantPayee());
 
-                            // Try to find a matching forecast transaction within ±5 days
+                            // Try to find a matching forecast transaction (see comment on the other
+                            // Phase 2.5 call site above for why this window is wider than the
+                            // effective auto-match date range).
                             ForecastTransaction matchedForecast =
                                     ForecastTransactionMatcher.findMatchingForecastTransaction(
-                                            provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 5, 5);
+                                            provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 14, 14);
 
                             // If we found a confident match
                             if (matchedForecast != null) {
@@ -1658,6 +1185,30 @@ public class ImportController {
                                 // transaction instead.  Only proceed with auto-match save when we
                                 // have both a merchant and splits.
                                 if (splits != null) {
+                                    // Link the resolved merchant to the matched budget item if it
+                                    // isn't already associated (e.g. the user just confirmed this
+                                    // is a new/different merchant for the budget item via
+                                    // ForecastTransactionMatcher's mismatch prompt), so future
+                                    // transactions from this merchant are recognized without asking.
+                                    Merchant resolvedMerchant = provisionalTransactions.get(provTrxIndex).getMerchant();
+                                    if (resolvedMerchant != null) {
+                                        try {
+                                            BudgetItem matchedBudgetItem = BudgetItem.getById(idBudgetItem);
+                                            if (matchedBudgetItem != null && BudgetItemMerchant.getByItemAndMerchant(
+                                                    matchedBudgetItem, resolvedMerchant) == null) {
+                                                BudgetItemMerchant newAssociation =
+                                                        new BudgetItemMerchant(resolvedMerchant, matchedBudgetItem);
+                                                newAssociation.save();
+                                                view.say("Associated merchant '" + resolvedMerchant.getName() +
+                                                        "' with budget item '" + matchedBudgetItem.getDisplayString() + "'.");
+                                            }
+                                        } catch (Exception e) {
+                                            // Don't let a lookup/save failure block the import.
+                                            view.say("Warning: could not link merchant '" + resolvedMerchant.getName() +
+                                                    "' to the matched budget item: " + e.getMessage());
+                                        }
+                                    }
+
                                     // Update the balance in the register and save it:
                                     register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
                                     register.update();

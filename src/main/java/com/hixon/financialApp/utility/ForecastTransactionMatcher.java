@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.view.base.ViewInt;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -86,6 +87,15 @@ public class ForecastTransactionMatcher {
             List<Merchant> possibleMerchants,
             int daysBefore,
             int daysAfter) throws Exception {
+
+        // ---- TEMP INSTRUMENTATION (Phase 2.5) — remove when done tuning ----
+        // Show the raw input payee (the line from the import file) and the parsed payee so the
+        // matcher output can be judged against the actual source text.
+        ViewInt payeeDebugView = Utility.getView();
+        payeeDebugView.say("");
+        payeeDebugView.say("[Phase2.5] raw payee    : " + transaction.getPayee());
+        payeeDebugView.say("[Phase2.5] parsed payee : " + transaction.getMerchantPayee());
+        // ---- END TEMP INSTRUMENTATION ----
 
         return findMatchingForecastTransaction(
                 transaction.getDate(),
@@ -205,6 +215,29 @@ public class ForecastTransactionMatcher {
             return null;
         }
 
+        // ============================ TEMP INSTRUMENTATION (Phase 2.5) ============================
+        // Prints the possible merchants and every scored forecast candidate so the matching
+        // algorithm can be judged during tuning. REMOVE this block (and the two smaller TEMP
+        // blocks below, plus the ViewInt import) when done.
+        ViewInt debugView = Utility.getView();
+        debugView.say("[Phase2.5] Matching cleared txn  date=" + Utility.calendarDateToStringDate(date)
+                + "  amount=" + Utility.formatDollarAmount(amount));
+        if (possibleMerchants == null) {
+            debugView.say("[Phase2.5]   possibleMerchants: null (no merchant filtering)");
+        } else if (possibleMerchants.isEmpty()) {
+            debugView.say("[Phase2.5]   possibleMerchants: (none)");
+        } else {
+            StringBuilder merchantNames = new StringBuilder();
+            for (Merchant m : possibleMerchants) {
+                if (merchantNames.length() > 0) merchantNames.append(", ");
+                merchantNames.append(m.getName());
+            }
+            debugView.say("[Phase2.5]   possibleMerchants (" + possibleMerchants.size() + "): " + merchantNames);
+        }
+        debugView.say("[Phase2.5]   considering " + candidateForecastTransactions.size()
+                + " forecast transaction(s) [score / threshold 70]:");
+        // ========================== END TEMP INSTRUMENTATION ==========================
+
         // Score each remaining forecast transaction
         ForecastTransaction bestMatch = null;
         double bestScore = 0.0;
@@ -212,18 +245,78 @@ public class ForecastTransactionMatcher {
         for (ForecastTransaction ft : candidateForecastTransactions) {
             double score = calculateMatchScore(date, amount, ft, possibleMerchants);
 
+            // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
+            debugView.say(String.format("[Phase2.5]     %6.2f  %s", score, ft.toStringConcise()));
+            // ---- END TEMP INSTRUMENTATION ----
+
             if (score > bestScore) {
                 bestScore = score;
                 bestMatch = ft;
             }
         }
 
+        // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
+        if (bestMatch == null) {
+            debugView.say("[Phase2.5]   result: no candidate scored above 0");
+        } else if (bestScore >= 70.0) {
+            debugView.say(String.format("[Phase2.5]   result: AUTO-MATCH (best=%.2f) -> %s",
+                    bestScore, bestMatch.toStringConcise()));
+        } else {
+            debugView.say(String.format("[Phase2.5]   result: NO MATCH (best=%.2f below threshold) -> %s",
+                    bestScore, bestMatch.toStringConcise()));
+        }
+        debugView.say("");
+        // ---- END TEMP INSTRUMENTATION ----
+
         // Only return a match if confidence is at least 70%
-        if (bestScore >= 70.0) {
-            return bestMatch;
+        if (bestScore < 70.0) {
+            return null;
         }
 
-        return null;
+        // Merchant validation gate: a high date/amount score alone isn't proof this is the same
+        // recurring item - it can also mean an unrelated (possibly brand-new) charge coincidentally
+        // landed on a similar date/amount, e.g. a new $20 Anthropic subscription lining up with an
+        // existing $19.99 LinkedIn budget item. If the winning candidate's budget item has merchants
+        // assigned and none of them match this transaction's identified merchant(s), don't silently
+        // auto-assign - ask the user whether this is really another merchant for that budget item.
+        if (possibleMerchants != null) {
+            UUID idBudgetItem = bestMatch.getForecastItem().getIdBudgetItem();
+            BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
+            List<BudgetItemMerchant> assignedMerchants =
+                    BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
+
+            if (!assignedMerchants.isEmpty()) {
+                boolean merchantMatches = false;
+                for (BudgetItemMerchant bim : assignedMerchants) {
+                    for (Merchant possibleMerchant : possibleMerchants) {
+                        if (bim.getIdMerchant().equals(possibleMerchant.getId())) {
+                            merchantMatches = true;
+                            break;
+                        }
+                    }
+                    if (merchantMatches) break;
+                }
+
+                if (!merchantMatches) {
+                    String txnMerchantDescription = possibleMerchants.isEmpty()
+                            ? "This transaction's merchant"
+                            : "This transaction's merchant ('" + possibleMerchants.get(0).getName() + "')";
+
+                    boolean confirmed = debugView.getYesOrNo(txnMerchantDescription
+                            + " does not match any merchant assigned to budget item '" + budgetItem.getPayee()
+                            + "', though it otherwise matches on date/amount. Is this transaction another "
+                            + "merchant for '" + budgetItem.getPayee() + "'?");
+
+                    if (!confirmed) {
+                        debugView.say("[Phase2.5]   merchant mismatch declined by user -> no match");
+                        return null;
+                    }
+                    debugView.say("[Phase2.5]   merchant mismatch confirmed by user -> proceeding with match");
+                }
+            }
+        }
+
+        return bestMatch;
     }
 
     /**

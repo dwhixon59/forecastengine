@@ -538,8 +538,9 @@ public class TransactionSplitsController {
     /**
      * Calculate relevancy scores for budget items based on how well they match the transaction.
      * Scores are based on:
-     * 1. Amount similarity (0-50 points): How close the transaction amount is to the budget item amount
-     * 2. Period match (0-30 points): Whether the transaction date aligns with the budget item's period
+     * 1. Amount similarity (0-60 points): How close the transaction amount is to the budget item amount
+     * 2. Date proximity (0-20 points): Absolute distance from the transaction date to the budget
+     *    item's closest expected occurrence, per {@link ItemUtilities#getClosestOccurrence}
      * 3. Category priority (0-20 points): Based on item importance and type
      *
      * @param budgetItemsForMerchant List of budget items to score
@@ -570,28 +571,17 @@ public class TransactionSplitsController {
                 score += 30;
             }
 
-            // 2. Period/Date Proximity Score (0-20 points) - based on distance from next expected occurrence
+            // 2. Period/Date Proximity Score (0-20 points) - based on distance from next expected
+            // occurrence. Delegates to ItemUtilities.getClosestOccurrence, the same calendar-aware
+            // logic the forecast engine uses to place forecast transactions, instead of
+            // approximating period length as a fixed day-count (which drifts from the real
+            // calendar for MONTHLY/SEMIMONTHLY/ANNUALLY periods).
             if (budgetItem.getPeriod() != null && budgetItem.getStartDate() != null) {
                 try {
-                    // Determine the period length in days
-                    int periodDays = getPeriodDays(budgetItem.getPeriod());
+                    Calendar closestOccurrence = ItemUtilities.getClosestOccurrence(budgetItem, transactionDate);
 
-                    if (periodDays > 0) {
-                        // Calculate days between transaction date and budget start date
-                        long transactionTime = transactionDate.getTimeInMillis();
-                        long startTime = budgetItem.getStartDate().getTimeInMillis();
-                        long daysSinceStart = (transactionTime - startTime) / (1000 * 60 * 60 * 24);
-
-                        // Find the next expected occurrence (could be in past, present, or future)
-                        long periodsPassed = daysSinceStart / periodDays;
-                        long daysIntoCurrentPeriod = daysSinceStart % periodDays;
-
-                        // Calculate distance to nearest expected occurrence (either current or next period)
-                        long daysToNextOccurrence = (daysIntoCurrentPeriod <= periodDays / 2)
-                            ? -daysIntoCurrentPeriod  // Closer to current period's occurrence (negative = past)
-                            : periodDays - daysIntoCurrentPeriod;  // Closer to next period's occurrence (positive = future)
-
-                        long absDaysFromExpected = Math.abs(daysToNextOccurrence);
+                    if (closestOccurrence != null) {
+                        long absDaysFromExpected = Math.abs(Utility.daysBetween(closestOccurrence, transactionDate));
 
                         // Scoring based on absolute distance from expected date
                         // 0-3 days = 20 points, 4-7 days = 15 points, 8-14 days = 10 points,
@@ -615,7 +605,7 @@ public class TransactionSplitsController {
 
                         score += Math.max(0, proximityScore);
                     } else {
-                        // On-demand items get baseline score
+                        // Item has ended prior to the transaction date - baseline score
                         score += 10;
                     }
                 } catch (Exception e) {
@@ -623,7 +613,7 @@ public class TransactionSplitsController {
                     score += 10;
                 }
             } else {
-                // Items without period info get baseline score
+                // Items without period info (e.g. ON_DEMAND) get baseline score
                 score += 10;
             }
 
@@ -696,47 +686,4 @@ public class TransactionSplitsController {
         scores.addAll(sortedScores);
     }
 
-    /**
-     * Get the number of days in a period type.
-     *
-     * @param period The period type
-     * @return Number of days, or 0 for on-demand
-     */
-    private int getPeriodDays(Item.PeriodType period) {
-        if (period == null) return 0;
-
-        switch (period) {
-            case DAILY:
-                return 1;
-            case WEEKLY:
-                return 7;
-            case BIWEEKLY:
-                return 14;
-            case THREE_WEEKS:
-                return 21;
-            case FOUR_WEEKS:
-                return 28;
-            case SEMIMONTHLY:
-                return 15;
-            case SCHOOL_YEAR_SEMIMONTHLY:
-                return 15;
-            case MONTHLY:
-                return 30;
-            case SIX_WEEKS:
-                return 42;
-            case BIMONTHLY:
-                return 60;
-            case QUARTERLY:
-                return 90;
-            case FOUR_MONTHS:
-                return 120;
-            case SEMIANNUALLY:
-                return 182;
-            case ANNUALLY:
-                return 365;
-            case ON_DEMAND:
-            default:
-                return 0;
-        }
-    }
 }

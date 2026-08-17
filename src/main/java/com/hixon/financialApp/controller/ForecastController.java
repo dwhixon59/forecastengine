@@ -335,6 +335,52 @@ public class ForecastController {
     }
 
     /**
+     * Ask the user what to do when every scored candidate forecast transaction for a budget item
+     * was disqualified because the transaction's merchant doesn't match any of the budget item's
+     * assigned merchants. Falling through to the merchant-blind sequential fallback matcher here
+     * would defeat the purpose of merchant validation (see
+     * {@link ForecastTransactionController#getApplicableForecastTransaction}), so the user must
+     * explicitly opt in before merchant-blind date/amount matching is allowed to proceed.
+     *
+     * @param split the transaction split whose merchant didn't match any candidate
+     * @return the user's chosen disposition (ASSIGN to proceed without merchant validation, or IGNORE)
+     * @throws EntityException
+     * @throws SQLException
+     * @throws RegisterException
+     * @throws BudgetException
+     */
+    public UserResponse confirmMerchantMismatchFallback(TransactionSplit split)
+            throws EntityException, SQLException, RegisterException, BudgetException {
+        UserResponse response = new UserResponse();
+
+        view.say("The merchant for this transaction (" +
+                split.getTransaction().getMerchant().getName() +
+                ") does not match any merchant assigned to budget item " +
+                split.getBudgetItem().getPayee() + ".");
+        view.ask("What would you like to do (p-proceed without merchant match, i-ignore)? ");
+
+        boolean done = false;
+        while (!done) {
+            done = true;
+            String line = view.getResponseString();
+            switch (line) {
+                case "p":
+                    response.setDisposition(ASSIGN);
+                    break;
+
+                case "i":
+                    response.setDisposition(IGNORE);
+                    break;
+
+                default:
+                    view.say("Please enter p or i.");
+                    done = false;
+            }
+        }
+        return response;
+    }
+
+    /**
      * {@inheritDoc}
      */
     public UserResponse getForecastStartDate() throws QuitException, CancelException {

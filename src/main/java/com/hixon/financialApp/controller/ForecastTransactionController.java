@@ -985,6 +985,11 @@ public class ForecastTransactionController {
      * @param split The transaction split to match
      * @return The match score (higher is better, negative means disqualified)
      */
+    // Sentinel score returned when a candidate's merchant doesn't match any of the budget item's
+    // assigned merchants. Callers must not fall back to merchant-blind matching without asking
+    // the user first — see the anyMerchantDisqualified handling in getApplicableForecastTransaction.
+    private static final int MERCHANT_MISMATCH_SCORE = -1000;
+
     private int calculateMatchScore(ForecastTransaction forecastTransaction, TransactionSplit split)
             throws Exception {
         int score = 0;
@@ -1009,7 +1014,7 @@ public class ForecastTransactionController {
                     score += 100;  // Strong merchant match
                 } else if (!budgetMerchants.isEmpty()) {
                     // Merchant doesn't match and budget item HAS merchants - disqualify
-                    return -1000;
+                    return MERCHANT_MISMATCH_SCORE;
                 }
                 // If budget item has no merchants, don't penalize (score += 0)
             }
@@ -1082,15 +1087,43 @@ public class ForecastTransactionController {
 
         ForecastTransaction bestMatch = null;
         int bestScore = -1;
+        boolean anyMerchantDisqualified = false;
+        Calendar transactionDate = split.getTransaction().getDate();
 
         ForecastTransaction candidate = scoringIterator.getNext();
         while (candidate != null) {
             int score = calculateMatchScore(candidate, split);
+            if (score == MERCHANT_MISMATCH_SCORE) {
+                anyMerchantDisqualified = true;
+            }
             if (score > bestScore) {
                 bestScore = score;
                 bestMatch = candidate;
+            } else if (score == bestScore && bestMatch != null) {
+                // Tie-break: prefer whichever candidate's planned date is nearer to the
+                // transaction date, rather than leaving ties to iterator/row order.
+                int currentDistance = Math.abs(Utility.daysBetween(bestMatch.getPlannedDate(), transactionDate));
+                int candidateDistance = Math.abs(Utility.daysBetween(candidate.getPlannedDate(), transactionDate));
+                if (candidateDistance < currentDistance) {
+                    bestMatch = candidate;
+                }
             }
             candidate = scoringIterator.getNext();
+        }
+
+        // Every scored candidate was disqualified because its merchant doesn't match the
+        // transaction's merchant. Falling through to the merchant-blind sequential fallback below
+        // would defeat the purpose of merchant validation, so the user must explicitly opt in
+        // before merchant-blind date/amount matching is allowed to proceed.
+        if (bestMatch == null && anyMerchantDisqualified) {
+            ForecastController forecastController = new ForecastController(sessionController);
+            UserResponse resp = forecastController.confirmMerchantMismatchFallback(split);
+            split.setDisposition(resp.getDisposition());
+            if (resp.getDisposition() != ASSIGN) {
+                return null;
+            }
+            // User confirmed proceeding without merchant validation; continue to the scoring
+            // result check below (bestMatch is still null, so this will reach the fallback).
         }
 
         // If we found a good match (score > 0), validate it with the existing logic
