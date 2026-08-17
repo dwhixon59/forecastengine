@@ -811,7 +811,9 @@ public class WellsFargoBank extends FinancialInstitution {
      *
      * <p>Removed elements include:
      * <ul>
-     *   <li>City and state combinations (e.g., "TAMPA FL" is removed if validated as a real city/state)</li>
+     *   <li>City and state combinations (e.g., "TAMPA FL" is removed if validated as a real
+     *       city/state). The city may be multi-word (e.g., "WESLEY CHAPEL FL"), so up to the
+     *       three tokens immediately before the state are tried, longest first.</li>
      *   <li>The word "RECURRING" which appears in many transaction descriptions</li>
      * </ul>
      *
@@ -821,11 +823,24 @@ public class WellsFargoBank extends FinancialInstitution {
      */
     private void cleanPayeeTokenList(int start) throws SQLException, EntityException {
         for (int i = start; i < payeeTokens.length; i++) {
-            // Remove city followed by state from the merchant payee:
+            // Remove a (possibly multi-word) city followed by a state from the merchant payee.
+            // Try the longest plausible city name first (up to 3 words, since some cities are
+            // multi-word, e.g. "Wesley Chapel", "West Palm Beach") so a multi-word match isn't
+            // missed in favor of only checking the single token immediately before the state.
             if (i > 0 && payeeTokens[i].length() == 2 && STATES.indexOf(payeeTokens[i]) > 0) {
-                if (CityStateChecker.exists(payeeTokens[i - 1], payeeTokens[i])) {
-                    payeeTokens[i] = "###";
-                    payeeTokens[i - 1] = "###";
+                int maxCityWords = Math.min(3, i - start);
+                for (int cityWords = maxCityWords; cityWords >= 1; cityWords--) {
+                    int cityStart = i - cityWords;
+                    StringBuilder city = new StringBuilder(payeeTokens[cityStart]);
+                    for (int w = cityStart + 1; w < i; w++) {
+                        city.append(' ').append(payeeTokens[w]);
+                    }
+                    if (CityStateChecker.exists(city.toString(), payeeTokens[i])) {
+                        for (int w = cityStart; w <= i; w++) {
+                            payeeTokens[w] = "###";
+                        }
+                        break;
+                    }
                 }
             }
 
