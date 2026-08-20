@@ -1299,6 +1299,12 @@ public class ForecastTransactionController {
                                 if (forecastTransaction != null) {
                                     forecastTransaction.setRemainingAmount(forecastTransaction.getRemainingAmount() +
                                             remainingAmount);
+
+                                    // and save the carried amount straight away.  The last transaction the loop lands
+                                    // on is saved later by the caller, but the intermediate ones are not, so without
+                                    // this the rolled forward money is zeroed out of one period and never lands in
+                                    // the next:
+                                    forecastTransaction.save(UPDATE);
                                 } else break;
                             }
                             split.setDisposition(ASSIGN);

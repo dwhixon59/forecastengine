@@ -535,6 +535,43 @@ public class ForecastController {
 
 
     /**
+     * Calculate how far a transaction split overshoots what is left to spend (or collect) in the current period of a
+     * collection type budget item.
+     *
+     * <p>Expense amounts are negative and income amounts are positive, so "exceeds the remaining amount" has to be
+     * evaluated in the direction of the item.  An expense split overshoots when it is more negative than the
+     * remaining amount (-1300.00 against -1242.00 overshoots by 58.00); an income split, e.g. rent collected in
+     * instalments, overshoots when it is more positive (1245.00 against 1242.00 overshoots by 3.00).  Comparing
+     * income the same way as expense makes every partial payment look like an overage, and zeroing out the rest of
+     * the period then drops the item from the rendered forecast entirely.</p>
+     *
+     * @param isIncome         true if the budget item is an income item, false if it is an expense item.
+     * @param remainingAmount  The amount left in the current period of the forecast transaction.
+     * @param splitAmount      The amount of the split being reconciled against it.
+     * @return The amount by which the split exceeds the remaining amount.  Positive means the user overspent (or
+     * over-collected); zero or negative means the split fits within the period.
+     */
+    public static double calculateOverage(boolean isIncome, double remainingAmount, double splitAmount) {
+        return isIncome ? splitAmount - remainingAmount : remainingAmount - splitAmount;
+    }
+
+    /**
+     * Determine whether a transaction split exceeds what is left in the current period of a collection type budget
+     * item.  Currency is compared with the {@code CURRENCY_COMPARISON_THRESHOLD} so a split that matches the
+     * remaining amount to the cent is not treated as an overage.
+     *
+     * @param isIncome         true if the budget item is an income item, false if it is an expense item.
+     * @param remainingAmount  The amount left in the current period of the forecast transaction.
+     * @param splitAmount      The amount of the split being reconciled against it.
+     * @return true if the split overshoots the remaining amount for the period.
+     * @see #calculateOverage(boolean, double, double)
+     */
+    public static boolean exceedsRemainingAmount(boolean isIncome, double remainingAmount, double splitAmount) {
+        return calculateOverage(isIncome, remainingAmount, splitAmount) > CURRENCY_COMPARISON_THRESHOLD;
+    }
+
+
+    /**
      * Deduct the split amount from collection type items because they ore a collection of smaller transactions that are
      * add up to the budgeted (and spent) amount.  In addition, any remaining amounts at the end of the period are
      * carried over to the next period so we must keep track of the remaining amount.
@@ -568,14 +605,20 @@ public class ForecastController {
 
             case COLLECTION:
 
-                // If the user has overspent on this item, e.g. the amount of the split is greater than the remaining
-                // amount in the current period of the budgeted amount per period for this budget item:
-                if (split.getAmount() < forecastTransaction.getRemainingAmount()) {
+                // The comparison below runs in the direction of the item because expense amounts are negative and
+                // income amounts are positive:
+                boolean isIncome = forecastTransaction.getForecastItem().isIncome();
+                double remainingInPeriod = forecastTransaction.getRemainingAmount();
+
+                // If the user has overspent (or over-collected) on this item, e.g. the amount of the split is greater
+                // than the remaining amount in the current period of the budgeted amount per period for this budget
+                // item:
+                if (exceedsRemainingAmount(isIncome, remainingInPeriod, split.getAmount())) {
 
                     // Then ask the user what they would like to do:
                     view.say("You exceeded the remaining amount for this budget item by " +
-                            Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount() -
-                                    split.getAmount())) + ".  ");
+                            Utility.formatDollarAmount(
+                                    calculateOverage(isIncome, remainingInPeriod, split.getAmount())) + ".  ");
                     ForecastTransactionIterator it = ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(
                             split.getIdBudgetItem(), forecast.getId());
                     ForecastTransaction nextNonZeroForecastTransaction = it.getNext();
