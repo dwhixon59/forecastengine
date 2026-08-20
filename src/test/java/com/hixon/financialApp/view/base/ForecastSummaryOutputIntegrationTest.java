@@ -93,7 +93,7 @@ class ForecastSummaryOutputIntegrationTest {
 
         assertTrue(output.contains("Forecast Summary:"));
         assertTrue(output.contains("Monthly Cash Flow Breakdown:"));
-        assertTrue(output.contains("Expense Breakdown by Category:"));
+        assertTrue(output.contains("Expense Breakdown by Category and Payee:"));
         assertTrue(output.contains("Income Breakdown by Source:"));
         assertTrue(output.contains("Risk Warnings:"));
         assertTrue(output.contains("Actionable Recommendations:"));
@@ -107,6 +107,51 @@ class ForecastSummaryOutputIntegrationTest {
         assertTrue(output.contains("Salary"));
         assertTrue(output.contains("Household"));
         assertTrue(output.contains("[ ] By "));
+    }
+
+    /**
+     * Each expense category breaks down into the payees that drove it, so a large category can be traced to a payee
+     * without opening the workbook.
+     */
+    @Test
+    @DisplayName("Expense breakdown lists the payees within each category")
+    void expenseBreakdownListsThePayeesWithinEachCategory() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Two payees in Household (900 and 300 of a 1,200 category) and one in Pets, against 2,000 of income so the
+        // percentages are easy to read off.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, 2000.0, "Income", "Salary"),
+                mockTransaction(firstOfMonth, -900.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, 3), -300.0, "Household", "Happy Bins"),
+                mockTransaction(addDays(firstOfMonth, 6), -100.0, "Pets", "Concierge Vet Service")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("Expense Breakdown by Category and Payee:"),
+                "the section header should name both dimensions");
+
+        // The category line keeps its share of total expense; the payee lines are indented under it and are shares of
+        // the category.
+        assertTrue(output.contains("  - Household: $-1,200 total"), "the category total should still be reported");
+        assertTrue(output.contains("      - Mortgage payment (PITI): $-900 total"),
+                "the largest payee in the category should be listed under it");
+        assertTrue(output.contains("      - Happy Bins: $-300 total"),
+                "every payee with an expense in the period should be listed");
+        assertTrue(output.contains("      - Concierge Vet Service: $-100 total"),
+                "payees in other categories should be listed under their own category");
+
+        assertTrue(output.contains("75% of category"), "900 of a 1,200 category is 75%");
+        assertTrue(output.contains("25% of category"), "300 of a 1,200 category is 25%");
+
+        // The payees are listed largest first within the category.
+        assertTrue(output.indexOf("Mortgage payment (PITI): $-900") < output.indexOf("Happy Bins: $-300"),
+                "payees should be ordered largest first within the category");
+
+        // Income is broken down by source only, so it should not have gained payee sub-lines.
+        assertFalse(output.contains("      - Salary"), "the income breakdown should be unchanged");
     }
 
     /**

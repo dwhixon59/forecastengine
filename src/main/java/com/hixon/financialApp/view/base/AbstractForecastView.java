@@ -249,6 +249,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // Track richer summary analytics for actionable reporting.
         Map<String, MonthlyCashFlow> monthlyCashFlowMap = new TreeMap<>();
         Map<String, Double> expenseByCategory = new HashMap<>();
+
+        // The payees making up each category, keyed by category then by payee.  Only payees with an expense in the
+        // summary period appear, so a category breaks down into exactly the payees that drove it:
+        Map<String, Map<String, Double>> expenseByCategoryAndPayee = new HashMap<>();
+
         Map<String, Double> incomeBySource = new HashMap<>();
 
         // Variables to hold the date of the first first-of-the-month and balance on that date.  This is used to
@@ -361,6 +366,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     String category = normalizedLabel(forecastTransaction.getForecastItem().getCategory(), "Uncategorized expense");
                     double updatedCategory = roundCurrency(expenseByCategory.getOrDefault(category, 0.0) + expenseAmount);
                     expenseByCategory.put(category, updatedCategory);
+
+                    // Record the payee within the category as well, so a category can be traced to what drove it:
+                    String expensePayee = normalizedLabel(forecastTransaction.getForecastItem().getPayee(),
+                            "Unspecified payee");
+                    Map<String, Double> payeeExpenses =
+                            expenseByCategoryAndPayee.computeIfAbsent(category, ignored -> new HashMap<>());
+                    payeeExpenses.put(expensePayee,
+                            roundCurrency(payeeExpenses.getOrDefault(expensePayee, 0.0) + expenseAmount));
                 }
 
                 // Record the total savings:
@@ -544,19 +557,39 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     toString());
         });
 
-        // Improvement 2: expense breakdown by category.
-        getView().say("\nExpense Breakdown by Category:");
+        // Improvement 2: expense breakdown by category, and within each category by payee.
+        getView().say("\nExpense Breakdown by Category and Payee:");
         final double finalTotalExpense = totalExpense;
         expenseByCategory.entrySet().stream()
                 .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
                 .forEach(entry -> {
+                    double categoryTotal = entry.getValue();
                     double percentOfTotal = finalTotalExpense == 0 ? 0 :
-                            roundCurrency((entry.getValue() / -finalTotalExpense) * 100);
-                    double monthlyAverage = roundCurrency(entry.getValue() / numberOfMonthsInForecast);
+                            roundCurrency((categoryTotal / -finalTotalExpense) * 100);
+                    double monthlyAverage = roundCurrency(categoryTotal / numberOfMonthsInForecast);
                     getView().say(new StringBuilder().append("  - ").append(entry.getKey()).append(": ").
-                            append(Utility.formatRoundedDollarAmount(-entry.getValue())).append(" total | ").
+                            append(Utility.formatRoundedDollarAmount(-categoryTotal)).append(" total | ").
                             append(Utility.formatRoundedDollarAmount(-monthlyAverage)).append("/month | ").
                             append(Math.round(percentOfTotal)).append("% of expense").toString());
+
+                    // and the payees that make up the category, largest first.  The share is expressed against the
+                    // category rather than against total expense, because the question a payee line answers is which
+                    // payee is driving the category above it:
+                    expenseByCategoryAndPayee.getOrDefault(entry.getKey(), Map.of()).entrySet().stream()
+                            .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                            .forEach(payeeEntry -> {
+                                double percentOfCategory = categoryTotal == 0 ? 0 :
+                                        roundCurrency((payeeEntry.getValue() / categoryTotal) * 100);
+                                double payeeMonthlyAverage =
+                                        roundCurrency(payeeEntry.getValue() / numberOfMonthsInForecast);
+                                getView().say(new StringBuilder().append("      - ").append(payeeEntry.getKey()).
+                                        append(": ").
+                                        append(Utility.formatRoundedDollarAmount(-payeeEntry.getValue())).
+                                        append(" total | ").
+                                        append(Utility.formatRoundedDollarAmount(-payeeMonthlyAverage)).
+                                        append("/month | ").
+                                        append(Math.round(percentOfCategory)).append("% of category").toString());
+                            });
                 });
 
         // Improvement 3: income breakdown by source.
