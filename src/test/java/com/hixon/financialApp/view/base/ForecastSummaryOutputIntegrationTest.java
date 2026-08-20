@@ -26,6 +26,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -106,6 +107,160 @@ class ForecastSummaryOutputIntegrationTest {
         assertTrue(output.contains("Salary"));
         assertTrue(output.contains("Household"));
         assertTrue(output.contains("[ ] By "));
+    }
+
+    /**
+     * A deficit that began before the summary period and has not cleared by the time the period opens must not be
+     * reported as "all balances within the forecast summary period are non-negative".  The timeline used to decide
+     * that from the date of the first deficit alone, and the period low point is seeded with the balance carried into
+     * the period, so an account that opened the period in the red was described as sound while the very next line
+     * named that same negative balance as the low point.
+     */
+    @Test
+    @DisplayName("Period that opens in deficit is not reported as non-negative")
+    void periodOpeningInDeficitIsNotReportedAsNonNegative() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500.  The account goes 1,500 into the red before the period opens and is still there on
+        // the first day, then a large deposit on that first day lifts it back into the black for the rest of the
+        // period.  Every balance after a transaction within the period is positive; only the carried-in balance is
+        // negative, which is exactly the case the low point reports.
+        List<ForecastTransaction> beforeAndDuring = List.of(
+                mockTransaction(addDays(firstOfMonth, -10), -2000.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(firstOfMonth, 3000.0, "Income", "Salary"),
+                mockTransaction(addDays(firstOfMonth, 5), -100.0, "Groceries", "Publix")
+        );
+        List<ForecastTransaction> duringOnly = List.of(
+                mockTransaction(firstOfMonth, 3000.0, "Income", "Salary"),
+                mockTransaction(addDays(firstOfMonth, 5), -100.0, "Groceries", "Publix")
+        );
+
+        String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
+
+        assertTrue(output.contains("Historical deficit occurred on"),
+                "the deficit that predates the summary period should still be reported as history");
+        assertTrue(output.contains("The balance is still in deficit when the summary period opens on"),
+                "a period that opens in the red should say so");
+        assertFalse(output.contains("All balances within the forecast summary period are non-negative"),
+                "the balance carried into the period is negative, so the period is not all non-negative");
+        assertFalse(output.contains("Positive balance phase:"),
+                "there is no positive phase when the period opens in deficit");
+    }
+
+    /**
+     * A deficit that began and cleared before the summary period opens is history only: the period really is sound.
+     */
+    @Test
+    @DisplayName("Deficit cleared before the summary period is reported as history only")
+    void deficitClearedBeforeSummaryPeriodIsReportedAsHistoryOnly() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500.  The account dips into the red before the period, recovers before the period opens,
+        // and stays positive throughout.
+        List<ForecastTransaction> beforeAndDuring = List.of(
+                mockTransaction(addDays(firstOfMonth, -10), -2000.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, -5), 3000.0, "Income", "Salary"),
+                mockTransaction(firstOfMonth, 100.0, "Income", "Side Hustle"),
+                mockTransaction(addDays(firstOfMonth, 5), -100.0, "Groceries", "Publix")
+        );
+        List<ForecastTransaction> duringOnly = List.of(
+                mockTransaction(firstOfMonth, 100.0, "Income", "Side Hustle"),
+                mockTransaction(addDays(firstOfMonth, 5), -100.0, "Groceries", "Publix")
+        );
+
+        String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
+
+        assertTrue(output.contains("Historical deficit occurred on"),
+                "the deficit that predates the summary period should be reported as history");
+        assertTrue(output.contains("All balances within the forecast summary period are non-negative"),
+                "the period really is non-negative, so it should be reported as such");
+        assertFalse(output.contains("The balance is still in deficit when the summary period opens on"),
+                "the deficit cleared before the period opened");
+        assertFalse(output.contains("First deficit within the forecast summary period:"),
+                "there is no deficit inside the period to report");
+    }
+
+    /**
+     * A period that opens in the black and goes into deficit during it reports the positive phase and the deficit,
+     * even when an older deficit was already reported as history.
+     */
+    @Test
+    @DisplayName("Deficit arising during the summary period is reported with its positive phase")
+    void deficitArisingDuringSummaryPeriodIsReportedWithPositivePhase() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500.  Red before the period, recovered before it opens, then back into the red partway
+        // through the period.
+        List<ForecastTransaction> beforeAndDuring = List.of(
+                mockTransaction(addDays(firstOfMonth, -10), -2000.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, -5), 3000.0, "Income", "Salary"),
+                mockTransaction(firstOfMonth, -100.0, "Groceries", "Publix"),
+                mockTransaction(addDays(firstOfMonth, 5), -2000.0, "Household", "AAdvantage Card - David")
+        );
+        List<ForecastTransaction> duringOnly = List.of(
+                mockTransaction(firstOfMonth, -100.0, "Groceries", "Publix"),
+                mockTransaction(addDays(firstOfMonth, 5), -2000.0, "Household", "AAdvantage Card - David")
+        );
+
+        String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
+
+        assertTrue(output.contains("Historical deficit occurred on"),
+                "the older deficit should still be reported as history");
+        assertTrue(output.contains("Positive balance phase:"),
+                "the period opened in the black, so its positive phase should be reported");
+        assertTrue(output.contains("First deficit within the forecast summary period:"),
+                "the deficit that arises during the period should be reported");
+        assertFalse(output.contains("All balances within the forecast summary period are non-negative"),
+                "balances inside the period go negative, so they must not be reported as non-negative");
+    }
+
+    /**
+     * Render a forecast over the supplied transactions and return everything the view was asked to say.
+     *
+     * @param transactions  The transactions for the main rendering pass.
+     * @param floatPassTransactions The transactions for the required-float pass, which starts at the first of the
+     *                              month rather than at the start of the rendering.
+     * @param renderStartDate The date the rendering starts on.
+     */
+    private static String renderAndCaptureOutput(List<ForecastTransaction> transactions,
+                                                 List<ForecastTransaction> floatPassTransactions,
+                                                 Calendar renderStartDate) throws Exception {
+        ViewInt originalView = Utility.getView();
+        ViewInt mockView = mock(ViewInt.class);
+        Utility.setView(mockView);
+
+        Forecast forecast = mock(Forecast.class);
+        Budget budget = mock(Budget.class);
+        Register register = mock(Register.class);
+
+        when(forecast.getBudget()).thenReturn(budget);
+        when(budget.getRegisters()).thenReturn(List.of(register));
+        when(register.getReportType()).thenReturn("csv");
+        when(register.getBalance()).thenReturn(500.0);
+        when(register.getName()).thenReturn("Bill Pay Dave");
+
+        TestForecastView forecastView = new TestForecastView(forecast);
+
+        try (MockedStatic<Forecast> forecastStatic = mockStatic(Forecast.class);
+             MockedStatic<ForecastTransaction> transactionStatic = mockStatic(ForecastTransaction.class)) {
+
+            forecastStatic.when(() -> Forecast.getFirstNonZeroTransactionDate(forecast)).thenReturn(renderStartDate);
+            transactionStatic.when(() -> ForecastTransaction.zeroRunningBalances(forecast)).thenAnswer(invocation -> null);
+            transactionStatic.when(() -> ForecastTransaction.getForecastTransactionsStartingOn(eq(forecast), any(Calendar.class)))
+                    .thenReturn(new ListForecastTransactionIterator(transactions),
+                            new ListForecastTransactionIterator(floatPassTransactions));
+
+            forecastView.renderLongTermForecast(forecast);
+        } finally {
+            Utility.setView(originalView);
+        }
+
+        ArgumentCaptor<String> outputCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockView, atLeastOnce()).say(outputCaptor.capture());
+        return String.join("\n", outputCaptor.getAllValues());
     }
 
     private static ForecastTransaction mockTransaction(Calendar plannedDate, double remainingAmount, String category,

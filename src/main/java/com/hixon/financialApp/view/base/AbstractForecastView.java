@@ -233,6 +233,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         Calendar dateOfHighestBalance = null;
         double firstNegativeBalance = 0.0;
         Calendar dateOfFirstNegativBalance = null;
+
+        // The first negative balance tracked above is the first one anywhere in the rendering, which may fall before
+        // the summary period begins.  The timeline needs the first deficit INSIDE the summary period as well, because
+        // a balance that went negative earlier and has not recovered is still negative once the period opens:
+        double firstPeriodNegativeBalance = 0.0;
+        Calendar dateOfFirstPeriodNegativeBalance = null;
+        boolean periodOpensInDeficit = false;
+
         double totalIncome = 0.0;
         double totalExpense = 0.0;
         double totalSavings = 0.0;
@@ -287,6 +295,15 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                     firstFirstOfMonthBalance = runningBalance;
                     lowestBalance = runningBalance;
                     dateOfLowestBalance = firstFirstOfMonth;
+
+                    // The balance carried into the summary period seeds the period low point on the line above, so it
+                    // has to count as a balance within the period here as well.  Otherwise a period that opens in the
+                    // red gets reported as non-negative while the low point names that very balance:
+                    if (runningBalance < 0) {
+                        periodOpensInDeficit = true;
+                        firstPeriodNegativeBalance = runningBalance;
+                        dateOfFirstPeriodNegativeBalance = copyCalendar(firstFirstOfMonth);
+                    }
                 }
             }
 
@@ -310,6 +327,12 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 MonthlyCashFlow monthSummary = monthlyCashFlowMap.computeIfAbsent(periodKey,
                         ignored -> new MonthlyCashFlow(periodLabel));
                 monthSummary.endingBalance = runningBalance;
+
+                // Record the first negative balance within the summary period and the date it occurred on:
+                if (runningBalance < 0 && dateOfFirstPeriodNegativeBalance == null) {
+                    firstPeriodNegativeBalance = runningBalance;
+                    dateOfFirstPeriodNegativeBalance = forecastTransaction.getPlannedDate();
+                }
 
                 if (runningBalance < lowestBalance) {
                     lowestBalance = runningBalance;
@@ -724,23 +747,39 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
 
         // Improvement 7: timeline visualization as key milestones.
         getView().say("\nForecast Timeline:");
-        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
-                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) >= 0) {
-            // Crisis date is within (or after) the summary period — show the positive phase up to it
-            Calendar preCrisisDate = copyCalendar(dateOfFirstNegativBalance);
+        // A deficit before the summary period began is reported as history.  It says nothing about whether the
+        // balance has recovered by the time the period opens, so it must not be used to claim that the balances
+        // within the period are sound — that claim is only true when no deficit occurs inside the period:
+        boolean historicalDeficit = firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
+                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) < 0;
+        if (historicalDeficit) {
+            getView().say(new StringBuilder().append("  - Historical deficit occurred on ")
+                    .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                    .append(" (before the forecast summary period).").toString());
+        }
+
+        if (periodOpensInDeficit) {
+
+            // The account was already in the red when the summary period opened, so there is no positive phase and no
+            // new deficit event to report — the deficit simply has not been cleared:
+            getView().say(new StringBuilder().append("  - The balance is still in deficit when the summary period " +
+                            "opens on ").
+                    append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" (").
+                    append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
+        } else if (dateOfFirstPeriodNegativeBalance != null) {
+
+            // The period opened in the black and went into deficit during it, so there is a genuine positive phase
+            // leading up to the deficit whether or not an older deficit was reported as history above:
+            Calendar preCrisisDate = copyCalendar(dateOfFirstPeriodNegativeBalance);
             preCrisisDate.add(Calendar.DAY_OF_MONTH, -1);
             getView().say(new StringBuilder().append("  - Positive balance phase: ").
                     append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" through ").
                     append(Utility.calendarDateToStringDate(preCrisisDate)).append(".").toString());
-            getView().say(new StringBuilder().append("  - First deficit event: ").
-                    append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" (").
-                    append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(").").toString());
-        } else if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
-                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) < 0) {
-            // Crisis date is before the summary period — the historical overdraft already happened
-            getView().say(new StringBuilder().append("  - Historical deficit occurred on ")
-                    .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
-                    .append(" (before the forecast summary period).").toString());
+
+            getView().say(new StringBuilder().append("  - First deficit within the forecast summary period: ").
+                    append(Utility.calendarDateToStringDate(dateOfFirstPeriodNegativeBalance)).append(" (").
+                    append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
+        } else if (historicalDeficit) {
             getView().say("  - All balances within the forecast summary period are non-negative.");
         } else {
             getView().say("  - All projected balances remain non-negative.");
