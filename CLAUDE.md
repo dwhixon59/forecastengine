@@ -82,6 +82,12 @@ Strategy classes in `controller`: `QfxImportStrategy`, `OfxImportStrategy`, `Qif
 - Source control: do not commit unless asked — the user tests first, then requests a commit with
   a concise message. After each major change, remind the user to commit.
 
+## Testing
+- Unit tests are under `src/test/java`. Use `mvn test` to run all tests, or `mvn test -Dtest=ClassName`
+  to run a specific class. Some legacy tests have `main()` methods and hit a real database; prefer
+  JUnit tests for new code.
+- Always create unit tests for new features or bug fixes. Use mocks/stubs for external dependencies when possible.
+
 ## Related docs
 
 The repo root has numerous design docs worth checking before large changes in their area:
