@@ -30,6 +30,10 @@ public class Utility {
     // 1/2 of a cent:
     public static final double CURRENCY_COMPARISON_THRESHOLD = 0.005;
 
+    // Appended to the name of the previous version of a file while it is held aside during versioning.  A file with
+    // this extension left behind means a versioning was interrupted between the two renames.
+    public static final String SUPERSEDED_FILENAME_EXTENSION = ".superseded";
+
     // Common user for the App:
     private static User user;
 
@@ -973,12 +977,16 @@ public class Utility {
 
     /**
      * Create a previous version of a file by appending the filename extension passed in to the current filename just
-     * before the file extension. If a file with that name already exists, delete it.  The filename extension is appended
-     * as is, so if you want a dot before the extension, then pass it in, e.g. ".old" not "old".
+     * before the file extension.  The filename extension is appended as is, so if you want a dot before the extension,
+     * then pass it in, e.g. ".old" not "old".
+     *
+     * <p>If a file with the versioned name already exists it is replaced, but only once the current file has actually
+     * been renamed.  A versioning that fails — most often because the current file is open in another program —
+     * therefore leaves the existing previous version untouched rather than destroying it.</p>
      *
      * @param currentFilename      The name of the file to be versioned.
      * @param oldFilenameExtension The extension to be appended to the current filename to effectively version it.
-     * @return True if the file versions succeeded.  False if file does not exist, or unable to delete the file, etc.
+     * @return True if the file versions succeeded.  False if file does not exist, or unable to rename the file, etc.
      */
     public static Boolean versionFile(String currentFilename, String oldFilenameExtension) {
 
@@ -998,22 +1006,32 @@ public class Utility {
             done = false;
             while (!done) {
                 try {
-                    // If the save file already exists, delete it:
+                    // If a previous version already exists, move it aside rather than deleting it up front.  The
+                    // rename below fails whenever the current file is held open by another program, and deleting
+                    // first would destroy the previous version for a versioning that never happened:
+                    Path supersededPath = null;
                     if (Files.exists(saveFile.toPath())) {
-                        Files.delete(saveFile.toPath());
-
-                        // Wait for the file to be deleted:
-                        while (Files.exists(saveFile.toPath())) {
-                            getView().say("Waiting for " + saveFileName + " to be deleted...");
-                            try {
-                                Thread.sleep(1000);
-                            } catch (InterruptedException ignored) {
-                            }
-                        }
+                        supersededPath = Path.of(saveFileName + SUPERSEDED_FILENAME_EXTENSION);
+                        Files.move(saveFile.toPath(), supersededPath, StandardCopyOption.REPLACE_EXISTING);
                     }
+
                     // Rename the current file to the save file name:
-                    Files.move(currentFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE);
+                    try {
+                        Files.move(currentFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                                StandardCopyOption.ATOMIC_MOVE);
+                    } catch (IOException e) {
+
+                        // The rename failed, so put the previous version back before reporting the failure:
+                        if (supersededPath != null) {
+                            Files.move(supersededPath, saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        throw e;
+                    }
+
+                    // The rename succeeded, so the previous version is safe to delete now:
+                    if (supersededPath != null) {
+                        Files.delete(supersededPath);
+                    }
                     done = true;
                     result = true;
                 } catch (IOException e) {
