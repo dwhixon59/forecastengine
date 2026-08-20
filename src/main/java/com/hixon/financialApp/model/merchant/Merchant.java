@@ -10,6 +10,7 @@ import com.hixon.financialApp.model.entity.IndependentEntityInt;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
+import com.hixon.financialApp.utility.StoreNumberStripper;
 import com.hixon.financialApp.utility.Utility;
 
 import java.sql.ResultSet;
@@ -277,6 +278,36 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
         }
     }
 
+    /**
+     * Returns the names of every merchant whose name contains a digit.
+     *
+     * <p>Used by {@link com.hixon.financialApp.utility.StoreNumberStripper} to tell a store number
+     * apart from a number that is genuinely part of a merchant's name ("Pier 1 Imports",
+     * "Seasons 52", "7-Eleven").  Only names containing a digit can ever make that difference, so
+     * the rest of the merchant table is not loaded.
+     *
+     * @return the names of all merchants whose name contains a digit
+     * @throws RegisterException if a database error occurs
+     */
+    public static List<String> getNamesContainingDigits() throws RegisterException {
+
+        String query = "select m.name as 'm.name' from merchant m where m.name regexp '[0-9]'";
+        List<String> names = new ArrayList<>();
+        try (Statement statement = getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
+            while (rs.next()) {
+                String name = rs.getString("m.name");
+                if (name != null) {
+                    names.add(name);
+                }
+            }
+            return names;
+        } catch (SQLException e) {
+            throw new RegisterException("Database error occurred trying to get the merchant names containing " +
+                    "digits.\nSQL statement was:  " + query, e);
+        }
+    }
+
     public static Merchant getByName(String name) throws RegisterException {
 
         // Find the ID of the merchant that uses the passed in name:
@@ -339,6 +370,10 @@ public class Merchant extends IndependentEntity implements IndependentEntityInt 
             for (MerchantPayee merchantPayee : merchantPayees) {
                 merchantPayee.save();
             }
+
+            // A new or renamed merchant may protect a number that is part of its name (e.g. creating
+            // "Seasons 52"), so the store-number stripper must reload its merchant names.
+            StoreNumberStripper.invalidateMerchantNameCache();
         } catch (SQLException e) {
             throw new RegisterException("Error saving merchant", e);
         }

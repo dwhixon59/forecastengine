@@ -11,6 +11,7 @@ import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.CityStateChecker;
+import com.hixon.financialApp.utility.StoreNumberStripper;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -779,7 +780,12 @@ public class WellsFargoBank extends FinancialInstitution {
              i++) {
             merchantPayee.append(" ").append(addCleanToken(payeeTokens[i]));
         }
-        return merchantPayee.toString();
+
+        // Drop the store number so every location of a brand normalizes to the same payee
+        // ("STARBUCKS STORE 08" and "STARBUCKS 15" both become "STARBUCKS"). The short-number
+        // exception in the loop above (for names like "PIER 1") lets store numbers through, and
+        // the stripper is what tells the two cases apart.
+        return StoreNumberStripper.strip(merchantPayee.toString());
     }
 
     /**

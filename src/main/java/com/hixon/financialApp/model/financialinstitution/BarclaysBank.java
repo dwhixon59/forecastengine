@@ -10,6 +10,7 @@ import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.StoreNumberStripper;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
 
@@ -149,7 +150,9 @@ public class BarclaysBank extends FinancialInstitution {
                 cleaned.append(" ").append(tokens[i]);
             }
         }
-        return cleaned.toString();
+
+        // Drop any store/reference number so every location of a brand yields the same merchant payee.
+        return StoreNumberStripper.strip(cleaned.toString());
     }
 
     @Override

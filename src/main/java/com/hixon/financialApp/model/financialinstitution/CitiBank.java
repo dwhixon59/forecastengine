@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.utility.CityStateChecker;
+import com.hixon.financialApp.utility.StoreNumberStripper;
 import org.apache.commons.csv.CSVRecord;
 
 import java.sql.SQLException;
@@ -160,7 +161,10 @@ public class CitiBank extends FinancialInstitution {
      */
     @Override
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
-        return normalizeCitiPayee(payee);
+        // The store-number stripper runs after Citi's own normalization to catch the short store
+        // numbers this class deliberately leaves alone (a two-digit run such as the "03" in
+        // "TACO BELL 03" is too ambiguous to remove without the merchant-name check the stripper does).
+        return StoreNumberStripper.strip(normalizeCitiPayee(payee));
     }
 
     /**
