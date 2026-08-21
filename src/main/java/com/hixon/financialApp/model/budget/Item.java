@@ -18,6 +18,8 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.hixon.financialApp.model.budget.Item.HowOccurs.*;
 import static com.hixon.financialApp.model.budget.Item.HowPaid.*;
@@ -53,6 +55,11 @@ public abstract class Item extends IndependentEntity {
     protected String payee = null;
     protected String memo = null;
     protected PeriodType period;
+
+    // The number of days between occurrences when the period is FIXED_DAYS.  Zero for every other period type, which
+    // derive their spacing from the calendar instead:
+    protected int periodDays = 0;
+
     // Expected amount for this budget item:
     protected double amount = 0;
     // The running balance if this item is an envelope:
@@ -85,8 +92,24 @@ public abstract class Item extends IndependentEntity {
     // How frequently this forecast item is expected to occur:
     public enum PeriodType {
         ON_DEMAND, DAILY, WEEKLY, BIWEEKLY, THREE_WEEKS, FOUR_WEEKS, SEMIMONTHLY, SCHOOL_YEAR_SEMIMONTHLY, MONTHLY,
-        SIX_WEEKS, BIMONTHLY, QUARTERLY, FOUR_MONTHS, SEMIANNUALLY, ANNUALLY;
+        SIX_WEEKS, BIMONTHLY, QUARTERLY, FOUR_MONTHS, SEMIANNUALLY, ANNUALLY,
+
+        // Recurs every {@link #getPeriodDays()} days, for items whose cycle is not any of the calendar periods above.
+        // For example a medication that comes in a bottle of 25 pills is taken every 25 days:
+        FIXED_DAYS;
     }
+
+    // The smallest and largest number of days a FIXED_DAYS item may recur on.  A single day is DAILY and anything past
+    // a year is better expressed as ANNUALLY, so the fixed-day period is bounded to what it is actually useful for:
+    public static final int MINIMUM_PERIOD_DAYS = 2;
+    public static final int MAXIMUM_PERIOD_DAYS = 365;
+
+    // A FIXED_DAYS period is stored as "Every-<n>-Days", e.g. "Every-25-Days".  Keeping the day count inside the
+    // period string means it travels with the period everywhere the period already goes — including the raw SQL that
+    // copies bi.period into fi.period — rather than needing a column of its own on both item tables:
+    private static final String FIXED_DAYS_PREFIX = "Every-";
+    private static final String FIXED_DAYS_SUFFIX = "-Days";
+    private static final Pattern FIXED_DAYS_PATTERN = Pattern.compile("^Every-(\\d{1,3})-Days$");
 
     public boolean isExpired(Calendar nextDate) {
         return (getEndDate() == null) ? false : getEndDate().compareTo(nextDate) < 0;
@@ -206,6 +229,20 @@ public abstract class Item extends IndependentEntity {
                 "Invalid combination: HowOccurs = %s requires a scheduled Period (not ON_DEMAND) " +
                 "(Item: %s, Category: %s)",
                 howOccurs, payee, category));
+        }
+
+        // Rule 4: A fixed-day period is defined by its day count, and only a fixed-day period has one
+        if (period == FIXED_DAYS && (periodDays < MINIMUM_PERIOD_DAYS || periodDays > MAXIMUM_PERIOD_DAYS)) {
+            throw new BudgetException(String.format(
+                "Invalid combination: Period = FIXED_DAYS requires a day count between %d and %d, but found %d " +
+                "(Item: %s, Category: %s)",
+                MINIMUM_PERIOD_DAYS, MAXIMUM_PERIOD_DAYS, periodDays, payee, category));
+        }
+        if (period != FIXED_DAYS && periodDays != 0) {
+            throw new BudgetException(String.format(
+                "Invalid combination: Period = %s takes its spacing from the calendar, so it cannot also recur " +
+                "every %d days (Item: %s, Category: %s)",
+                period, periodDays, payee, category));
         }
 
         // Rule 3: ENVELOPE with ON_DEMAND is allowed but worth noting
@@ -328,6 +365,26 @@ public abstract class Item extends IndependentEntity {
         return period;
     }
 
+    /**
+     * The number of days between occurrences of a {@link PeriodType#FIXED_DAYS} item.
+     *
+     * @return The number of days between occurrences, or zero when the period is not FIXED_DAYS.
+     */
+    public int getPeriodDays() {
+        return periodDays;
+    }
+
+    /**
+     * Set the number of days between occurrences of a {@link PeriodType#FIXED_DAYS} item.
+     *
+     * @param periodDays The number of days between occurrences, between {@link #MINIMUM_PERIOD_DAYS} and
+     *                   {@link #MAXIMUM_PERIOD_DAYS}, or zero when the period is not FIXED_DAYS.
+     */
+    public void setPeriodDays(int periodDays) {
+        this.periodDays = periodDays;
+        setDirty(true);
+    }
+
     public void setPeriod(PeriodType period) {
         this.period = period;
         setDirty(true);
@@ -336,7 +393,7 @@ public abstract class Item extends IndependentEntity {
     // Get the period type as a short string for display purposes:
     public String getPeriodAsShortString() throws BudgetException {
 
-        return generatePeriodType(period);
+        return generatePeriodType(period, periodDays);
     }
 
     public double getAmount() {
@@ -474,6 +531,9 @@ public abstract class Item extends IndependentEntity {
             case SIX_WEEKS:
                 monthlyAmount = amount / 42.0 * 365.0;
                 break;
+            case FIXED_DAYS:
+                monthlyAmount = (periodDays == 0) ? 0.0 : amount / (double) periodDays * 365.0;
+                break;
             case BIMONTHLY:
                 monthlyAmount = amount * 6.0;
                 break;
@@ -552,14 +612,72 @@ public abstract class Item extends IndependentEntity {
                 period = ANNUALLY;
                 break;
             default:
+
+                // A fixed-day period carries its day count in the string itself, e.g. "Every-25-Days", so it cannot be
+                // matched by a case label:
+                if (FIXED_DAYS_PATTERN.matcher(dbPeriod).matches()) {
+                    period = FIXED_DAYS;
+                    break;
+                }
                 throw new BudgetException("Invalid budget item period type:  " + dbPeriod + ".");
         }
         return period;
     }
 
+    /**
+     * Extract the number of days between occurrences from a stored period, e.g. 25 from "Every-25-Days".
+     *
+     * @param dbPeriod The period as stored in the database.
+     * @return The number of days between occurrences, or zero if the period is not a fixed-day period.
+     * @throws BudgetException If the day count is outside the range a fixed-day period allows.
+     */
+    public static int parsePeriodDays(String dbPeriod) throws BudgetException {
+        if (dbPeriod == null) {
+            return 0;
+        }
+        Matcher matcher = FIXED_DAYS_PATTERN.matcher(dbPeriod);
+        if (!matcher.matches()) {
+            return 0;
+        }
+        int days = Integer.parseInt(matcher.group(1));
+        if (days < MINIMUM_PERIOD_DAYS || days > MAXIMUM_PERIOD_DAYS) {
+            throw new BudgetException("Invalid number of days in budget item period:  " + dbPeriod + ".  It must be " +
+                    "between " + MINIMUM_PERIOD_DAYS + " and " + MAXIMUM_PERIOD_DAYS + ".");
+        }
+        return days;
+    }
+
+    /**
+     * Render a period for storage.  A fixed-day period needs its day count, which this overload does not have, so use
+     * {@link #generatePeriodType(PeriodType, int)} for any item that may be FIXED_DAYS.
+     *
+     * @param period The period to render.
+     * @return The period as it is stored in the database.
+     * @throws BudgetException If the period is FIXED_DAYS, whose day count cannot be recovered here.
+     */
     public static String generatePeriodType(PeriodType period) throws BudgetException {
+        return generatePeriodType(period, 0);
+    }
+
+    /**
+     * Render a period for storage, including the day count when the period is {@link PeriodType#FIXED_DAYS}.
+     *
+     * @param period     The period to render.
+     * @param periodDays The number of days between occurrences; used only when the period is FIXED_DAYS.
+     * @return The period as it is stored in the database, e.g. "Monthly" or "Every-25-Days".
+     * @throws BudgetException If the period is not a valid period type, or a fixed-day period has a day count outside
+     *                         the range that a fixed-day period allows.
+     */
+    public static String generatePeriodType(PeriodType period, int periodDays) throws BudgetException {
         if (period == null) {
             return "";
+        }
+        if (period == FIXED_DAYS) {
+            if (periodDays < MINIMUM_PERIOD_DAYS || periodDays > MAXIMUM_PERIOD_DAYS) {
+                throw new BudgetException("A fixed-day period must recur on between " + MINIMUM_PERIOD_DAYS + " and " +
+                        MAXIMUM_PERIOD_DAYS + " days, not " + periodDays + ".");
+            }
+            return FIXED_DAYS_PREFIX + periodDays + FIXED_DAYS_SUFFIX;
         }
         String dbPeriodType;
         switch (period) {
@@ -936,13 +1054,32 @@ public abstract class Item extends IndependentEntity {
      * @return True if the variance is OK for this type of item.
      */
     public boolean isWithinNormalDateVariance(int variance) throws BudgetException {
-        return isWithinNormalDateVariance(variance, getPeriod(), getHowOccurs());
+        return isWithinNormalDateVariance(variance, getPeriod(), getHowOccurs(), getPeriodDays());
     }
 
     // Determine if a given number of days of variance between the planned and actual dates of occurrence of an item of
     // this type is OK:
     public static boolean isWithinNormalDateVariance(int variance, PeriodType period, HowOccurs howOccurs)
             throws BudgetException {
+        return isWithinNormalDateVariance(variance, period, howOccurs, 0);
+    }
+
+    /**
+     * As {@link #isWithinNormalDateVariance(int, PeriodType, HowOccurs)}, but with the day count needed to judge a
+     * {@link PeriodType#FIXED_DAYS} item.  How far an occurrence can drift before it looks wrong depends on how long
+     * the period is, so a fixed-day item is banded by its own length: a short cycle is held to the tolerance of the
+     * calendar periods of similar length, and a long one to the tolerance of the longer periods.
+     *
+     * @param variance   The difference in days between the planned and actual dates.
+     * @param period     The period of the item.
+     * @param howOccurs  How the occurrences of the item happen relative to its budget period.
+     * @param periodDays The number of days between occurrences of a fixed-day item; ignored for other periods, and
+     *                   treated as a mid-length cycle when it is not known.
+     * @return true if the variance is within what is normal for the item.
+     * @throws BudgetException If the period is not a valid period type.
+     */
+    public static boolean isWithinNormalDateVariance(int variance, PeriodType period, HowOccurs howOccurs,
+                                                     int periodDays) throws BudgetException {
 
         boolean isOk = true;
 
@@ -975,6 +1112,18 @@ public abstract class Item extends IndependentEntity {
                     break;
                 case ON_DEMAND:
                     isOk = variance > -8 && variance < 8;
+                    break;
+                case FIXED_DAYS:
+
+                    // Band the tolerance by the length of the cycle, matching the calendar periods of similar length.
+                    // An unknown day count falls in the middle band, which is where most fixed-day items sit:
+                    if (periodDays > 0 && periodDays <= 14) {
+                        isOk = variance > -3 && variance < 3;
+                    } else if (periodDays > 45) {
+                        isOk = variance > -8 && variance < 8;
+                    } else {
+                        isOk = variance > -4 && variance < 4;
+                    }
                     break;
                 default:
                     throw new BudgetException("Unknow HowOccurs type " + howOccurs + " in switch statement.");
@@ -1045,6 +1194,23 @@ public abstract class Item extends IndependentEntity {
         return isOk;
     }
 
+
+    /**
+     * The number of days between occurrences of this fixed-day item, checked before it is used in date arithmetic.
+     * A zero or negative day count would make the recurrence calculations either divide by zero or never advance, so
+     * it is rejected here rather than silently producing a forecast that loops.
+     *
+     * @return The number of days between occurrences of this item.
+     * @throws ForecastException If this item's day count is not usable.
+     */
+    private int requirePeriodDays() throws ForecastException {
+        if (periodDays < MINIMUM_PERIOD_DAYS || periodDays > MAXIMUM_PERIOD_DAYS) {
+            throw new ForecastException("The item '" + payee + "' recurs every " + periodDays + " days, which is " +
+                    "outside the " + MINIMUM_PERIOD_DAYS + " to " + MAXIMUM_PERIOD_DAYS + " days a fixed-day period " +
+                    "allows.");
+        }
+        return periodDays;
+    }
 
     // Compute the first occurrence of this item after an arbitrary date:
     public Calendar getFirstDateOnOrAfter(Calendar onOrAfterDateParm) throws ForecastException {
@@ -1153,6 +1319,19 @@ public abstract class Item extends IndependentEntity {
                 daysTillNextOccurrence = 28 - (Utility.daysBetween(startDate, onOrAfterDate) % 28);
                 Utility.copyDate(onOrAfterDate, nextDate);
                 if (daysTillNextOccurrence != 28) {
+                    nextDate.add(Calendar.DATE, daysTillNextOccurrence);
+                }
+                break;
+
+            case FIXED_DAYS:
+                // The same algorithm as the fixed-length periods above, using this item's own number of days: work out
+                // how far into the current period the on-or-after-date falls, and add the remainder of that period to
+                // reach the next occurrence.  A remainder of a whole period means the on-or-after-date is itself an
+                // occurrence, so nothing is added.
+                int fixedDays = requirePeriodDays();
+                daysTillNextOccurrence = fixedDays - (Utility.daysBetween(startDate, onOrAfterDate) % fixedDays);
+                Utility.copyDate(onOrAfterDate, nextDate);
+                if (daysTillNextOccurrence != fixedDays) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);
                 }
                 break;
@@ -1378,6 +1557,11 @@ public abstract class Item extends IndependentEntity {
                     nextDate.add(Calendar.DATE, 42);
                     break;
 
+                case FIXED_DAYS:
+                    // Increment the date by this item's own number of days:
+                    nextDate.add(Calendar.DATE, requirePeriodDays());
+                    break;
+
                 case BIMONTHLY:
                     // Increment the date by three months:
                     nextDate.add(Calendar.MONTH, 2);
@@ -1507,6 +1691,11 @@ public abstract class Item extends IndependentEntity {
                 case SIX_WEEKS:
                     // Decrement the date by the length of six weeks, e.g. 42 days:
                     previousDateOfItemOccurrence.add(Calendar.DATE, -42);
+                    break;
+
+                case FIXED_DAYS:
+                    // Decrement the date by this item's own number of days:
+                    previousDateOfItemOccurrence.add(Calendar.DATE, -requirePeriodDays());
                     break;
 
                 case BIMONTHLY:

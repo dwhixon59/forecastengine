@@ -712,7 +712,7 @@ public class BudgetController {
                 line += Utility.formatRoundedDollarAmount(budgetItem.getAmount());
                 line += " ";
             }
-            line += Item.generatePeriodType(budgetItem.getPeriod());
+            line += Item.generatePeriodType(budgetItem.getPeriod(), budgetItem.getPeriodDays());
             if (budgetItem.getPeriod() != Item.PeriodType.ON_DEMAND && forecast != null) {
                 // Use this session's forecast (which belongs to the budget being displayed) rather
                 // than the globally most-recent forecast, so an unrelated budget's forecast can't
@@ -753,6 +753,38 @@ public class BudgetController {
      * @throws QuitException   if the user quits
      * @throws SkipException   if the user skips
      */
+    /**
+     * Ask the user how many days apart the occurrences of a fixed-day item are.
+     *
+     * <p>Only {@link Item.PeriodType#FIXED_DAYS} carries a length of its own; every other period takes its spacing
+     * from the calendar.  For any other period this returns zero without prompting, which also clears the day count
+     * when an item is changed away from a fixed-day period.</p>
+     *
+     * @param period      The period the user selected.
+     * @param defaultDays The day count to offer as the default, or zero if there is not a sensible one.
+     * @return The number of days between occurrences, or zero if the period is not a fixed-day period.
+     */
+    protected int askPeriodDays(Item.PeriodType period, int defaultDays)
+            throws CancelException, QuitException, SkipException {
+
+        if (period != Item.PeriodType.FIXED_DAYS) {
+            return 0;
+        }
+
+        view.say("A fixed-day item recurs a set number of days after the previous occurrence, for a cycle that is " +
+                "not one of the calendar periods.  For example a medication supplied 25 pills at a time recurs " +
+                "every 25 days.");
+
+        // ViewInt does not expose the variant of getResponseIntBetween that takes a default, so the current value is
+        // shown for reference rather than offered as an enter-to-accept default:
+        String current = (defaultDays >= Item.MINIMUM_PERIOD_DAYS && defaultDays <= Item.MAXIMUM_PERIOD_DAYS)
+                ? ", currently " + defaultDays : "";
+
+        return view.getResponseIntBetween("Number of days between occurrences (" + Item.MINIMUM_PERIOD_DAYS + "-" +
+                        Item.MAXIMUM_PERIOD_DAYS + current + ")",
+                Item.MINIMUM_PERIOD_DAYS, Item.MAXIMUM_PERIOD_DAYS, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+    }
+
     public BudgetItem getBudgetItemFromUser() throws BudgetException, SQLException, EntityException, ParseException,
             CancelException, QuitException, SkipException {
         return getBudgetItemFromUser(null);
@@ -869,6 +901,10 @@ public class BudgetController {
                     defaultPeriodTypeEnum, Item.PeriodType.class, DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT,
                     DO_NOT_ALLOW_SKIP);
 
+            // A fixed-day period carries its own length, so ask for it:
+            int selectedPeriodDays = askPeriodDays(selectedPeriodType,
+                    template != null ? template.getPeriodDays() : 0);
+
             // Get the Amount
             Double defaultAmount = template != null ? template.getAmount() : null;
             double amount = view.getResponseCurrency("Amount", defaultAmount, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
@@ -943,6 +979,7 @@ public class BudgetController {
             budgetItem.setCategory(category);
             budgetItem.setMemo(memo);
             budgetItem.setPeriod(selectedPeriodType);
+            budgetItem.setPeriodDays(selectedPeriodDays);
             budgetItem.setAmount(amount);
             budgetItem.setRunningBalance(runningBalance);
             budgetItem.setMinimumBalance(minimumBalance);
@@ -1070,6 +1107,10 @@ public class BudgetController {
                             budgetItem.getPeriod(), Item.PeriodType.class,
                             DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
                     budgetItem.setPeriod(newPeriod);
+
+                    // A fixed-day period carries its own length, so ask for it.  Changing away from a fixed-day
+                    // period clears the day count so a stale one cannot be left behind:
+                    budgetItem.setPeriodDays(askPeriodDays(newPeriod, budgetItem.getPeriodDays()));
                     break;
 
                 case "a":  // amount
@@ -1357,6 +1398,7 @@ public class BudgetController {
         newItem.setPayee(originalItem.getPayee());
         newItem.setMemo(originalItem.getMemo());
         newItem.setPeriod(originalItem.getPeriod());
+        newItem.setPeriodDays(originalItem.getPeriodDays());
         newItem.setAmount(originalItem.getAmount());
         newItem.setRunningBalance(originalItem.getRunningBalance());
         newItem.setMinimumBalance(originalItem.getMinimumBalance());

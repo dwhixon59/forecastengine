@@ -107,7 +107,7 @@ public class BudgetItem extends Item {
     public String getInsertQuery() throws BudgetException, ForecastException, EntityException, SQLException, NotImplementedException {
 
         return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
-                generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", "  + minimumBalance + ", " +
+                generatePeriodType(period, periodDays) + "', " + amount + ", " + runningBalance + ", "  + minimumBalance + ", " +
                 Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
                 Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
                 generateHowImportant(howImportant) + "', '" + generateHowOccurs(howOccurs) + "', '" +
@@ -122,13 +122,13 @@ public class BudgetItem extends Item {
     public String getInsertOnDuplicateUpdateQuery() throws BudgetException {
 
         return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
-                generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", " +
+                generatePeriodType(period, periodDays) + "', " + amount + ", " + runningBalance + ", " +
                 Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
                 Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
                 generateHowImportant(howImportant) + "', '" + generateHowOccurs(howOccurs) + "', '" +
                 generateHowPaid(howPaid) + "', uuid_to_bin('" + idBudget + "')) on duplicate key update " +
                 "category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo + "\", period = '" +
-                generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
+                generatePeriodType(period, periodDays) + "', amount = " + amount + ", runningBalance = " + runningBalance +
                 ", minimumBalance = " + minimumBalance + ", startDate = " + Utility.calendarDateToSqlDateString(startDate) +
                 ", numberOfPayments = " + numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) +
                 ", itemType = '" + generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) +
@@ -139,7 +139,7 @@ public class BudgetItem extends Item {
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
         return updateQuery + "category = '" + category + "', payee = \"" + payee + "\", memo = \"" + memo + "\", period = '" +
-                generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " + runningBalance +
+                generatePeriodType(period, periodDays) + "', amount = " + amount + ", runningBalance = " + runningBalance +
                 ", minimumBalance = " + minimumBalance + ", startDate = " + Utility.calendarDateToSqlDateString(startDate) +
                 ", numberOfPayments = " + numberOfPayments + ", endDate = " + Utility.calendarDateToSqlDateString(endDate) +
                 ", itemType = '" + generateItemType(itemType) + "', howImportant = '" + generateHowImportant(howImportant) +
@@ -222,7 +222,7 @@ public class BudgetItem extends Item {
             }
             try {
                 if (getPeriod() != null) {
-                    line += Item.generatePeriodType(getPeriod());
+                    line += Item.generatePeriodType(getPeriod(), getPeriodDays());
                 }
             } catch (BudgetException e) {
                 throw new RuntimeException(e);
@@ -338,6 +338,7 @@ public class BudgetItem extends Item {
                 this.payee = budgetItem.getPayee();
                 this.memo = budgetItem.getMemo();
                 this.period = budgetItem.getPeriod();
+                this.periodDays = budgetItem.getPeriodDays();
                 this.amount = budgetItem.getAmount();
                 this.runningBalance = budgetItem.getRunningBalance();
                 this.minimumBalance = budgetItem.getMinimumBalance();
@@ -371,6 +372,7 @@ public class BudgetItem extends Item {
             payee = rs.getString("bi.payee");
             memo = Utility.emptyStringIfNull(rs.getString("bi.memo"));
             period = parsePeriodType(rs.getString("bi.period"));
+            periodDays = parsePeriodDays(rs.getString("bi.period"));
             amount = rs.getDouble("bi.amount");
             runningBalance = rs.getDouble("bi.runningBalance");
             minimumBalance = rs.getDouble("bi.minimumBalance");
@@ -633,7 +635,7 @@ public class BudgetItem extends Item {
         validatePeriodHowOccursConsistency();
 
         String query = updateQuery + "category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo +
-                "\", period = '" + generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " +
+                "\", period = '" + generatePeriodType(period, periodDays) + "', amount = " + amount + ", runningBalance = " +
                 runningBalance + ", minimumBalance = " + minimumBalance + ", startDate = " +
                 Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments +
                 ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemType = '" + generateItemType(itemType) +

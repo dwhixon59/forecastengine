@@ -112,6 +112,7 @@ public class ForecastItem extends Item {
         this.payee = item.payee;
         this.memo = item.memo;
         this.period = item.period;
+        this.periodDays = item.periodDays;
         this.amount = item.amount;
         this.runningBalance = item.runningBalance;
         this.minimumBalance = item.minimumBalance;
@@ -169,6 +170,7 @@ public class ForecastItem extends Item {
         payee = budgetItem.getPayee();
         memo = budgetItem.getMemo();
         period = budgetItem.getPeriod();
+        periodDays = budgetItem.getPeriodDays();
         amount = budgetItem.getAmount();
         runningBalance = budgetItem.getRunningBalance();
         minimumBalance = budgetItem.getMinimumBalance();
@@ -265,7 +267,7 @@ public class ForecastItem extends Item {
         }
         query += ") values (";
         query += "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
-                Item.generatePeriodType(period) + "', " + amount + ", " + runningBalance + ", " + minimumBalance + ", " +
+                Item.generatePeriodType(period, periodDays) + "', " + amount + ", " + runningBalance + ", " + minimumBalance + ", " +
                 Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
                 Utility.calendarDateToSqlDateString(endDate) + ", '" + Item.generateItemType(itemType) + "', '" +
                 Item.generateHowImportant(howImportant) + "', '" + Item.generateHowOccurs(howOccurs) + "', '" +
@@ -292,7 +294,7 @@ public class ForecastItem extends Item {
     @Override
     public String getUpdateByIdQuery() throws BudgetException {
         return updateQuery + " category = \"" + category + "\", payee = \"" + payee + "\", memo = \"" + memo + "\", " +
-                "period = '" + Item.generatePeriodType(period) + "', amount = " + amount + ", runningBalance = " +
+                "period = '" + Item.generatePeriodType(period, periodDays) + "', amount = " + amount + ", runningBalance = " +
                 runningBalance + ", minimumBalance = " + minimumBalance + ", startDate = " +
                 Utility.calendarDateToSqlDateString(startDate) + ", numberOfPayments = " + numberOfPayments +
                 ", endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", itemtype = '" +
@@ -330,6 +332,7 @@ public class ForecastItem extends Item {
             payee = rs.getString("fi.payee");
             memo = Utility.emptyStringIfNull(rs.getString("fi.memo"));
             period = Item.parsePeriodType(rs.getString("fi.period"));
+            periodDays = Item.parsePeriodDays(rs.getString("fi.period"));
             amount = rs.getDouble("fi.amount");
             runningBalance = rs.getDouble("fi.runningBalance");
             minimumBalance = rs.getDouble("fi.minimumBalance");
@@ -365,6 +368,7 @@ public class ForecastItem extends Item {
             payee = rs.getString("bi.payee");
             memo = rs.getString("bi.memo");
             period = parsePeriodType(rs.getString("bi.period"));
+            periodDays = parsePeriodDays(rs.getString("bi.period"));
             amount = rs.getDouble("bi.amount");
             runningBalance = rs.getDouble("bi.runningBalance");
             minimumBalance = rs.getDouble("bi.minimumBalance");

@@ -607,7 +607,7 @@ public class Forecast extends IndependentEntity {
                 preparedStmt.setString(1, forecastItem.getId().toString());
                 preparedStmt.setString(2, forecastItem.getCategory());
                 preparedStmt.setString(3, forecastItem.getPayee());
-                preparedStmt.setString(4, Item.generatePeriodType(forecastItem.getPeriod()));
+                preparedStmt.setString(4, Item.generatePeriodType(forecastItem.getPeriod(), forecastItem.getPeriodDays()));
                 preparedStmt.setDouble(5, forecastItem.getAmount());
                 preparedStmt.setDate(6, Utility.calendarDateToSqlDate(forecastItem.getStartDate()));
                 preparedStmt.setInt(7, forecastItem.getNumberOfPayments());
