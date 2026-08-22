@@ -188,7 +188,7 @@ want it.
 The schema change is the small half. The behavioural half is that **a session on a register with no
 forecast becomes a normal state**, and today it is an error.
 
-#### The unresolved contract: a session with no forecast
+#### The contract: a session with no forecast
 
 `SessionController.getRegisterBudgetForecast()` resolves the forecast with
 `Forecast.selectForecast(budget)`. When the budget has no forecast that method offers to create one,
@@ -199,17 +199,70 @@ throw new ForecastException("No forecast available for budget '" + budget.getNam
 ```
 
 Today no register reaches it, because all seven feedless registers borrow the forecast of the budget
-they share. After step 1 all seven reach it on every session. The convention in this design — "the
-presence of a forecast is the switch" — only holds if opening a session on a forecast-less register
-is unremarkable, so `getRegisterBudgetForecast()` must leave `forecast` null rather than prompt or
-throw, and every goal in `MainController` must be audited for what it does with a null forecast.
+they share. After step 1 all seven reach it on every session. The convention this design rests on —
+"the presence of a forecast is the switch" — only holds if opening a session on a forecast-less
+register is unremarkable.
 
-**This is undecided and must be settled before the migration runs.** It is the real content of step
-1; the column is trivial next to it.
+**Decided: `getRegisterBudgetForecast()` leaves `forecast` null when the register has no forecast.
+No prompt, no throw.**
 
-There is a live example to measure against before changing any code: `Joint Savings Account` sits on
-budget `Justin's College Fund`, which already has no forecast. Whatever selecting that register does
-today is the behaviour the other seven are about to inherit.
+This is not a new state being invented. `MainController` already handles it, in
+`updateFromExternalSource` (:323):
+
+```java
+if (sessionController.getForecast() != null) {
+    forecastController.updateFromExternalSource();
+} else {
+    view.say("There is no forecast to update.");
+}
+```
+
+Step 1 generalises a pattern that is already there and already user-visible.
+
+##### Which goals care
+
+All twenty-two goals call `getRegisterBudgetForecast()`; only some use what it loads.
+
+**Need a forecast** — these dereference `getForecast()` directly and would throw on null. Each needs
+the treatment already at :323, naming the register:
+
+`saveForecast` (:339), `renderShortTermForecast` (:367), `renderLongTermForecast` (:380),
+`renderEnvelopeReport` (:393), `renderItemsOfInterestReport` (:406),
+`renderOverdueAndUpcomingItemsReport` (:419).
+
+**Do not** — imports, `manageData`, `renderRegister`, `renderBudgetSummaryReport`, the spending
+reports, `verifyRegisterBalance`, `processUncategorizedTransactions`,
+`processUnreconciledTransactions`. These need register and budget only, and get quietly more correct:
+today they may load an unrelated register's forecast and never notice.
+
+##### The create-offer must leave the session path
+
+`selectForecast` offering to create a forecast is fine when reached deliberately. It is wrong on the
+session path, and this is the sharp edge:
+
+> Whether a register has a feed is a decision made once, by hand, when the forecast is or is not
+> created. Nothing infers it.
+
+A prompt during an ordinary import lets a stray Enter create a forecast for a feedless register —
+which silently turns on transfer counterparts for it, from a question that never mentions transfers.
+The convention would then be flippable by accident. **A forecast-required goal refuses with a plain
+message instead; creating a forecast stays deliberate, through `createForecast`.**
+
+##### Two things to check while implementing
+
+`Joint Savings Account` sits on budget `Justin's College Fund`, which already has no forecast, so it
+reaches this path today. Measure it before changing anything — it is the behaviour the other seven
+are about to inherit.
+
+And `dailyUpdate` (:442) carries a workaround for the very defect step 1 removes:
+
+```java
+// Clear session to ensure user selects the correct register
+// Without this, the forecast from a previous register would be used
+```
+
+Once a forecast belongs to a register, that `clearSession()` may no longer be needed. Worth
+revisiting, but not in the same change.
 
 #### Verified state of the data
 
@@ -527,14 +580,18 @@ less certain in the minority of cases where both sides carry a reference.
   the distinction from the `TransferMemoMapping` that was removed in `e6253c8`.
 - **The bank reference number confirms a match but never gates one.** It is present on only 43% of
   transfers, so nothing may be conditional on having one. See section 5.
+- **A session on a register with no forecast is a normal state.**
+  `getRegisterBudgetForecast()` leaves `forecast` null rather than prompting or throwing, and the six
+  goals that need a forecast say so and decline cleanly. `updateFromExternalSource` already works
+  this way.
+- **Creating a forecast never happens as a side effect of a session.** Offering it during an import
+  would let the feed convention be switched on by accident; it stays deliberate, through
+  `createForecast`.
 
 ## Open questions
 
-**One, and it blocks step 1: what does a session on a register with no forecast do?** The
-forecast-to-register mapping is decided and the migration is verified, but seven registers end up
-with no forecast, and `SessionController.getRegisterBudgetForecast()` currently treats that as an
-error rather than a normal state. The convention this design rests on does not work until that is
-settled. See "Building the prerequisite" above.
+None outstanding. The session-with-no-forecast contract that blocked step 1 is settled — see
+"Building the prerequisite" above — and step 1 can now be built.
 
 One thing to watch once it is running, noted inline: the ad-hoc gate reads the *source* split's
 budget item, so a transfer that is budgeted on one side only will keep asking on the far side. If
