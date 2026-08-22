@@ -153,7 +153,7 @@ register:
 | Bill Pay Account - Danni Forecast | Bill Pay Danni |
 | Bill Pay Account - Dave Forecast | Bill Pay Dave |
 | Bill Pay Envelopes Forecast | Bill Pay Envelopes |
-| Aviator Mastercard Forecast | Citi AAdvantage Mastercard |
+| Citi AAdvantage Mastercard Forecast | Citi AAdvantage Mastercard |
 
 In every case the forecast belongs to the register that carries the money, so the seven registers
 that share a budget with one of these — `Danni's Spending Account`, `Dave's Spending Account`, both
@@ -171,7 +171,7 @@ UPDATE forecast f
         WHEN 'Bill Pay Account - Danni Forecast' THEN 'Bill Pay Danni'
         WHEN 'Bill Pay Account - Dave Forecast'  THEN 'Bill Pay Dave'
         WHEN 'Bill Pay Envelopes Forecast'       THEN 'Bill Pay Envelopes'
-        WHEN 'Aviator Mastercard Forecast'       THEN 'Citi AAdvantage Mastercard'
+        WHEN 'Citi AAdvantage Mastercard Forecast'       THEN 'Citi AAdvantage Mastercard'
       END
   SET f.Register_idRegister = r.idRegister;
 ```
@@ -318,6 +318,95 @@ doubles as the "already created" check in Phase 5.5 and as the audit trail.
 
 The regeneration point is easy to miss and would silently undo the feature.
 
+### 5. The bank reference number as a confirmation signal
+
+Wells Fargo issues its own reference for a transfer and writes **the same string into both sides**:
+
+```
+Bill Pay Dave    -30.00  ONLINE TRANSFER TO   HIXON D ... REF #IB0ZBFJRYR ON 08/11/26
+Bill Pay Danni   +30.00  ONLINE TRANSFER FROM HIXON D ... REF #IB0ZBFJRYR ON 08/11/26
+```
+
+Opposite signs, same date, different registers, one reference. Where both sides carry it, this is an
+*exact* identity for "these two rows are the same movement of money" — no scoring involved.
+
+It is tempting to build the whole feature on that. The measurements say otherwise.
+
+#### What the data actually shows
+
+For 2026:
+
+| | Count |
+|---|---|
+| Transfer transactions | 334  (Bill Pay Danni 236, Bill Pay Dave 98) |
+| …carrying a `REF #` at all | **143  (43%)** |
+| …forming a true cross-register pair | **15** |
+
+All time, the same shape: 2,639 transactions carry a reference, but of 2,492 distinct references
+**2,408 occur exactly once**. Only 83 occur twice, and only 47 of those are genuine cross-register,
+opposite-sign pairs.
+
+The reason is structural rather than a parsing defect. References live almost entirely in one
+register:
+
+```
+Bill Pay Dave        2,443
+Bill Pay Danni         130
+Bill Pay Envelopes      66
+```
+
+Most transfers point at a feedless register, so the other side is never imported and there is nothing
+for the reference to match. This is the same fact the forecast-per-register convention already
+encodes, seen from a different angle.
+
+Two further limits. The reference is not universally present even within one payee format — 186 of
+the 2026 `ONLINE TRANSFER TO/FROM` transactions carry none. And it exists only inside the `payee`
+varchar; there is no column, so any use of it means parsing.
+
+#### Why it cannot replace the counterpart
+
+Deeper than coverage: **a reference tells you two transactions are the same money. It does not tell
+you which budget item the far side should get.** That is the question this design exists to answer,
+and the counterpart forecast transaction is what carries the answer across — it exists *before* the
+far transaction arrives, which a reference on that transaction cannot. `transfer_budget_item_pair`
+and section 1 stand unchanged.
+
+#### The rule
+
+> **The reference confirms a match. It never gates one.**
+>
+> When both sides carry the same reference, a Phase 2.5 match is upgraded from "score ≥ 70" to
+> certain. When either side lacks one, nothing changes and the existing score decides.
+
+No code path may require a reference to be present, and no counterpart may be suppressed for want of
+one. Coverage is 43% and outside our control; anything conditional on presence would silently do
+nothing for the majority.
+
+| Situation | Behaviour |
+|---|---|
+| Both sides carry the same reference | Match is certain. Skip the score threshold and take it. |
+| Both carry references, but different ones | Not the same movement. Suppress the match regardless of score. |
+| Either side carries none | Unchanged — `ForecastTransactionMatcher` scores as it does today. |
+
+The second row is the one that earns its keep. The residual risk noted in section 1 is the matcher
+having two plausible candidates for the same money and stranding the planned one; a differing
+reference rules a candidate out outright, which scoring alone cannot do.
+
+Where it is worth reading the reference:
+
+- **Phase 5.5 idempotency.** `sourceTransaction` is the primary "already created" check. A reference
+  is bank-issued and stable across re-imports, so it still identifies the pair when a source row has
+  been deleted and recreated and the UUID has changed.
+- **Phase 2.5 confirmation**, per the table above.
+- **The audit trail**, alongside `sourceTransaction`, since it is the identifier the bank itself
+  would use if you ever had to reconcile by hand.
+
+> **Noticed in passing, and out of scope for this design.** The 36 same-register duplicate pairs above
+> are duplicate imports — same reference, amount, date and payee, imported twice. They survived
+> because `importRecordId` is the raw import line, and the two copies came from files that format it
+> differently (`-1625.00` vs `-1,625.00`, `*` vs `false`, truncated payee). Duplicate detection keyed
+> on a reference rather than on the raw line would not have been fooled. Worth its own piece of work.
+
 ## Phasing
 
 1. Forecast belongs to a register (prerequisite, own change).
@@ -326,8 +415,11 @@ The regeneration point is easy to miss and would silently undo the feature.
    `sourceTransaction`.
 4. Reporting in Phase 2.5.
 5. Lifecycle handling for edit and delete.
+6. Reference-number confirmation in Phase 2.5 (section 5).
 
 After step 3 the second import already auto-matches silently; step 4 is only about telling you why.
+Step 6 is independent of the rest and can land whenever — the feature is correct without it, only
+less certain in the minority of cases where both sides carry a reference.
 
 ## Testing
 
@@ -341,6 +433,10 @@ After step 3 the second import already auto-matches silently; step 4 is only abo
   chosen; the second is silent; and a pairing never applies to the wrong target budget.
 - An unpaired counterpart must **not** auto-match and must **not** assign a placeholder budget item —
   Phases 3 and 4 have to run.
+- Reference numbers: matching two sides sharing a reference is certain; two sides carrying
+  *different* references do not match however well they score; and a transfer where either side has
+  no reference behaves exactly as it does today. The last of these is the one that must not regress —
+  it is 57% of transfers.
 
 ## Decided
 
@@ -356,6 +452,8 @@ After step 3 the second import already auto-matches silently; step 4 is only abo
   item, and the pairing is learned from that choice. See section 2a.
 - **The pairing is keyed on source budget item plus target budget**, not on a payee string. That is
   the distinction from the `TransferMemoMapping` that was removed in `e6253c8`.
+- **The bank reference number confirms a match but never gates one.** It is present on only 43% of
+  transfers, so nothing may be conditional on having one. See section 5.
 
 ## Open questions
 
