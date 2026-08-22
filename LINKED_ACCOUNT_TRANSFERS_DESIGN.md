@@ -183,6 +183,79 @@ Your instinct that multiple forecasts per register might be useful for modelling
 is worth keeping in mind but not designing for now — one nullable column supports it whenever you
 want it.
 
+### Building the prerequisite: what step 1 actually touches
+
+The schema change is the small half. The behavioural half is that **a session on a register with no
+forecast becomes a normal state**, and today it is an error.
+
+#### The unresolved contract: a session with no forecast
+
+`SessionController.getRegisterBudgetForecast()` resolves the forecast with
+`Forecast.selectForecast(budget)`. When the budget has no forecast that method offers to create one,
+and if declined throws:
+
+```java
+throw new ForecastException("No forecast available for budget '" + budget.getName() + "'. Cannot proceed.");
+```
+
+Today no register reaches it, because all seven feedless registers borrow the forecast of the budget
+they share. After step 1 all seven reach it on every session. The convention in this design — "the
+presence of a forecast is the switch" — only holds if opening a session on a forecast-less register
+is unremarkable, so `getRegisterBudgetForecast()` must leave `forecast` null rather than prompt or
+throw, and every goal in `MainController` must be audited for what it does with a null forecast.
+
+**This is undecided and must be settled before the migration runs.** It is the real content of step
+1; the column is trivial next to it.
+
+There is a live example to measure against before changing any code: `Joint Savings Account` sits on
+budget `Justin's College Fund`, which already has no forecast. Whatever selecting that register does
+today is the behaviour the other seven are about to inherit.
+
+#### Verified state of the data
+
+Confirmed against the database rather than assumed:
+
+| Budget | Registers | Forecasts |
+|---|---|---|
+| Bill Pay Danni | Bill Pay Danni, Danni's Spending Account | 1 |
+| Bill Pay Dave | Bill Pay Dave + 5 others | 1 |
+| Bill Pay Envelopes | Bill Pay Envelopes | 1 |
+| Citi AAdvantage Mastercard | Citi AAdvantage Mastercard | 1 |
+| Justin's College Fund | Joint Savings Account | **0** |
+
+Eleven registers, four with a forecast after the change, seven without. The migration's `CASE` on
+`f.description` resolves all four forecasts to a real register by name.
+
+#### Call sites
+
+- **`Forecast.selectForecast(...)`** — seven: `SessionController:128`, `TransactionController:901`
+  and `:905`, `ForecastTransactionController:283`, `DataManagerController:199`,
+  `BudgetController:1435` and `:1448`.
+- **Column lists in `Forecast`** — six places spell out the columns and all need `Register_idRegister`
+  threading through: `selectQuery` (:71), `getInsertQuery` (:243), `getUpdateByIdQuery` (:268), the
+  `ResultSet` constructor (:341), and the two prepared-statement inserts (:557, :602).
+- **`registers.get(0)`** — six: `Forecast:1311`, `AbstractForecastView:224-226`, `:672`, `:676`,
+  `:682`, `ForecastController:76`. All become `forecast.getRegister()`.
+- **Deprecated no-arg `Forecast.getMostRecent()`** — still live in `CsvForecastView:51`,
+  `ExcelForecastView:141`, `SpreadsheetXmlForecastView:226`. "Most recent globally" stops meaning
+  anything once forecasts are register-scoped; these need a register passed in.
+
+Add `getListOf(Register)` and `getMostRecent(Register)` alongside the budget-keyed versions rather
+than replacing them, then migrate callers. The budget association stays either way, since forecast
+items still reference budget items.
+
+> **`registers.get(0)` is a latent bug, not an active one.** `Budget.getRegisters()` has no
+> `ORDER BY`, so the row order is arbitrary. It happens to return the money-carrying register today
+> — `Bill Pay Dave` and `Bill Pay Danni` are physically first in their groups — which is why nothing
+> has gone visibly wrong. Nothing guarantees it stays that way. Owning the register makes it correct
+> by construction rather than by luck.
+
+#### Reversibility
+
+Write the down migration (`ALTER TABLE forecast DROP COLUMN Register_idRegister`) at the same time as
+the up. There is no remote for this repository, so the database is the one thing that cannot be
+recovered with `git checkout`.
+
 ## What gets built
 
 ### 1. Create the counterpart expectation
@@ -457,8 +530,11 @@ less certain in the minority of cases where both sides carry a reference.
 
 ## Open questions
 
-None outstanding. The design is settled and the forecast-to-register mapping is decided, so step 1
-can be built as written.
+**One, and it blocks step 1: what does a session on a register with no forecast do?** The
+forecast-to-register mapping is decided and the migration is verified, but seven registers end up
+with no forecast, and `SessionController.getRegisterBudgetForecast()` currently treats that as an
+error rather than a normal state. The convention this design rests on does not work until that is
+settled. See "Building the prerequisite" above.
 
 One thing to watch once it is running, noted inline: the ad-hoc gate reads the *source* split's
 budget item, so a transfer that is budgeted on one side only will keep asking on the far side. If
