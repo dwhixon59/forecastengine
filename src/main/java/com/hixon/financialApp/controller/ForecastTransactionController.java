@@ -278,9 +278,16 @@ public class ForecastTransactionController {
 
                 // Check if user wants to change forecast
                 if (searchString != null && searchString.trim().equalsIgnoreCase("F")) {
-                    // Allow user to select a different forecast
+                    // Allow user to select a different forecast.  Forecasts belong to a register, so
+                    // the choice is scoped to this session's register.
                     try {
-                        forecast = Forecast.selectForecast(budget);
+                        Forecast selected = Forecast.selectForecast(register);
+                        if (selected == null) {
+                            view.say("There is no forecast for " + register.getName() + ".");
+                            searchString = null;
+                            continue;
+                        }
+                        forecast = selected;
                         sessionController.setForecast(forecast);
                         view.say("Forecast changed to: " + forecast.getDescription());
                         searchString = null; // Reset to show menu again

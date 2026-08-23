@@ -124,14 +124,44 @@ public class SessionController {
             budget = Budget.getById(register.getBudgetID());
             budgetView = new SpreadsheetXmlBudgetView(budget);
 
-            // and get the forecast associated with the selected register that the user wants to work with:
-            forecast = Forecast.selectForecast(budget);
-            //forecastView = new SpreadsheetXmlForecastView(forecast);
-            forecastView = new ExcelForecastView(forecast);
+            // and get the forecast belonging to the selected register.  A forecast belongs to one and
+            // only one register, so a register with no forecast is a normal state -- it is how the
+            // application records that the register has no import feed -- and leaves the session's
+            // forecast null.  We deliberately do not offer to create one here:  a create prompt on
+            // the session path would let a stray Enter switch on a decision that is meant to be made
+            // by hand, through the createForecast goal.  Goals that need a forecast say so and
+            // decline cleanly.
+            forecast = Forecast.selectForecast(register);
+            if (forecast != null) {
+                //forecastView = new SpreadsheetXmlForecastView(forecast);
+                forecastView = new ExcelForecastView(forecast);
+            } else {
+                forecastView = null;
+            }
 
             // and set the financial institution associated with the selected register (after forecast is retrieved)
             financialInstitution = FinancialInstitutionFactory.create(this);
         }
+    }
+
+    /**
+     * Reports whether this session has a forecast, and if it does not, says why the goal cannot run.
+     *
+     * <p>A register with no forecast is a normal state (see {@link #getRegisterBudgetForecast()}),
+     * so a goal that needs one declines with a plain message naming the register rather than
+     * throwing or offering to create a forecast.
+     *
+     * @param whatWasBeingDone a short description of the goal, e.g. "render the long term forecast"
+     * @return true if a forecast is available, false if the goal should be skipped
+     */
+    public boolean requireForecast(String whatWasBeingDone) {
+        if (forecast != null) {
+            return true;
+        }
+        String registerName = (register != null) ? register.getName() : "the selected register";
+        view.say("There is no forecast for " + registerName + ", so there is nothing to " +
+                whatWasBeingDone + ". Use the createForecast goal if this register should have one.");
+        return false;
     }
 
     /**

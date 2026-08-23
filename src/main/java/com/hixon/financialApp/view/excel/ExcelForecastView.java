@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.user.User;
@@ -137,8 +138,8 @@ public class ExcelForecastView extends AbstractForecastView {
     /*
      * Constructors:
      */
-    public ExcelForecastView() throws EntityException, SQLException {
-        super(Forecast.getMostRecent());
+    public ExcelForecastView(Register register) throws EntityException, SQLException {
+        super(Forecast.getMostRecent(register));
         shortTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +
                 "ShortTermForecast-" + forecast.getDescription().replaceAll("\\s", "") + ".xlsx";
         longTermForecastFilename = "C:\\Users\\dwhix\\OneDrive\\Shared Data\\Hixon Family Personal Business\\Finances\\Expenses\\" +

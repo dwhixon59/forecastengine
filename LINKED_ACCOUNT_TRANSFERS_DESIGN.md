@@ -1,6 +1,38 @@
 # Linked Account Transfers — Design
 
-**Status:** draft for review. Nothing implemented yet.
+**Status:** implemented 2026-08-22. All six phases are built, the test suite is green (295 tests),
+and the three migrations have been applied to `ForecastDatabase`.
+
+Each migration has a rollback, written at the same time as the up and exercised against a scratch
+copy of the schema before either was run for real. There is no remote for this repository, so the
+database is the one thing `git checkout` cannot recover.
+
+| Up (applied) | Down |
+|---|---|
+| `add_forecast_register_column.sql` | `rollback_forecast_register_column.sql` |
+| `add_transfer_budget_item_pair.sql` | `rollback_transfer_budget_item_pair.sql` |
+| `add_forecast_transaction_transfer_columns.sql` | `rollback_forecast_transaction_transfer_columns.sql` |
+
+After the migration the data is exactly as predicted below: four forecasts, each owning the register
+that carries the money, and seven registers with no forecast — which is what makes the convention
+decide not to create counterpart expectations for them.
+
+Four things went slightly beyond what is written below, each noted at the point it arises:
+
+- **Phase 5.5 also checks whether the counterparty register already holds the other side**, and
+  records nothing if it does. Without this the expectation bounces: importing the second register
+  processes transfers too, and each one would write an expectation back into the register it came
+  from, for a transfer that had already happened there. The check also makes re-imports of either
+  side, in either order, come out the same.
+- `forecast_transaction.SourceBudgetItem_idBudgetItem`, so that a multi-split transfer learns its
+  pairing exactly rather than guessing which split a counterpart came from.
+- `Forecast.selectForecast(Budget)` no longer offers to create a forecast either. The design removed
+  the create-offer from the session path; leaving it on the budget path would have created forecasts
+  belonging to no register, which the register-scoped lookups can never find again.
+- A transfer counterpart is exempt from Phase 2.5's merchant filter and merchant-mismatch gate. Its
+  identity comes from the source transaction, and a transfer payee rarely maps to the merchants on
+  the far side's budget item — so leaving the gate in place would have asked about every transfer,
+  which is the question this feature exists to remove.
 
 ## Goal
 

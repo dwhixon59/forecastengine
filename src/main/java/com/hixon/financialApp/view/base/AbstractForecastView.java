@@ -220,10 +220,14 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // Get the first day of the forecast rendering:
         Calendar startDate = Forecast.getFirstNonZeroTransactionDate(forecast);
 
-        // Get the starting balance.  Take if from the first register associated with the budget for now:
-        List<Register> registers = forecast.getBudget().getRegisters();
-        String reportType = registers.get(0).getReportType();
-        double startingBalance = registers.get(0).getBalance();
+        // Get the starting balance from the register this forecast belongs to:
+        Register forecastRegister = forecast.getRegister();
+        if (forecastRegister == null) {
+            throw new ForecastException("Forecast '" + forecast.getDescription() + "' does not belong to a " +
+                    "register, so there is no balance to start the long term forecast from.");
+        }
+        String reportType = forecastRegister.getReportType();
+        double startingBalance = forecastRegister.getBalance();
         double runningBalance = roundCurrency(startingBalance);
 
         // Variables to save significant events over the period of the forecast and the date on which they occurred:
@@ -669,17 +673,17 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 requiredDeposit = roundCurrency(-lowestBalance - firstFirstOfMonthBalance);
                 getView().say(new StringBuilder().append("To ensure you have no negative balances, you need to deposit ").
                         append(Utility.formatRoundedDollarAmount(requiredDeposit)).
-                        append(" to the ").append(forecast.getBudget().getRegisters().get(0).getName()).append(" account.").
+                        append(" to the ").append(forecastRegister.getName()).append(" account.").
                         toString());
             } else if ((lowestBalance + firstFirstOfMonthBalance) > -1 && (lowestBalance + firstFirstOfMonthBalance < 1)) {
                 getView().say(new StringBuilder().append("You have sufficient float to ensure no negative balances.").
-                        append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
+                        append(" in the ").append(forecastRegister.getName()).
                         append(" account.").toString());
             } else {
                 excessFloat = roundCurrency(lowestBalance + firstFirstOfMonthBalance);
                 getView().say(new StringBuilder().append("You have excess float in the amount of ").
                         append(Utility.formatRoundedDollarAmount(excessFloat)).
-                        append(" in the ").append(forecast.getBudget().getRegisters().get(0).getName()).
+                        append(" in the ").append(forecastRegister.getName()).
                         append(" account.").toString());
             }
         }

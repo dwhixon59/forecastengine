@@ -62,6 +62,46 @@ public class ForecastTransaction extends IndependentEntity {
     protected double runningBalance = 0;
 
     // A reference to the forecast item that this transaction is an occurrence of;
+    /**
+     * When this forecast transaction is the expected other side of a transfer that was already
+     * processed in another register, this is the transaction it was created from.  Null for every
+     * ordinary forecast transaction.
+     *
+     * <p>It is the "already created" check that keeps Phase 5.5 idempotent, the link that lets the
+     * far import learn which budget item the far side belongs to, and the audit trail behind the
+     * "Taken from the corresponding transfer in ..." message.
+     */
+    protected UUID idSourceTransaction = null;
+
+    /**
+     * The bank's own reference for the transfer (Wells Fargo writes the same {@code REF #} into both
+     * sides), copied from the source transaction.
+     *
+     * <p>It CONFIRMS a match and never gates one:  only about 43% of transfers carry a reference, so
+     * no code path may require one to be present.
+     */
+    /**
+     * The budget item of the split this counterpart was created from, on the source side.
+     *
+     * <p>A transfer with several ad-hoc splits produces one counterpart each, and the pairing that
+     * gets learned is keyed on the source budget item -- so this is what tells the far import which
+     * split a given counterpart came from.  With a single split it is redundant; with several it is
+     * what makes learning exact rather than a guess based on the amount.
+     */
+    protected UUID idSourceBudgetItem = null;
+
+    protected String sourceReference = null;
+
+    /**
+     * Set when this counterpart had to be created before the budget item pairing was known, so its
+     * budget item is a placeholder rather than an answer.
+     *
+     * <p>Phase 2.5 must not assign that budget item as a split.  It reports that this is the other
+     * side of a transfer and falls through to the questions it would otherwise have asked, and the
+     * pairing is learned from whatever the user chooses.
+     */
+    protected boolean transferPairingUnknown = false;
+
     protected ForecastItem forecastItem = null;
 
     // A pointer to the next transaction on the same date:
@@ -182,6 +222,50 @@ public class ForecastTransaction extends IndependentEntity {
         this.forecastItem = forecastItem;
     }
 
+    public UUID getIdSourceTransaction() {
+        return idSourceTransaction;
+    }
+
+    public void setIdSourceTransaction(UUID idSourceTransaction) {
+        this.idSourceTransaction = idSourceTransaction;
+        setDirty(true);
+    }
+
+    public UUID getIdSourceBudgetItem() {
+        return idSourceBudgetItem;
+    }
+
+    public void setIdSourceBudgetItem(UUID idSourceBudgetItem) {
+        this.idSourceBudgetItem = idSourceBudgetItem;
+        setDirty(true);
+    }
+
+    public String getSourceReference() {
+        return sourceReference;
+    }
+
+    public void setSourceReference(String sourceReference) {
+        this.sourceReference = sourceReference;
+        setDirty(true);
+    }
+
+    public boolean isTransferPairingUnknown() {
+        return transferPairingUnknown;
+    }
+
+    public void setTransferPairingUnknown(boolean transferPairingUnknown) {
+        this.transferPairingUnknown = transferPairingUnknown;
+        setDirty(true);
+    }
+
+    /**
+     * Whether this forecast transaction is the expected other side of a transfer processed in
+     * another register.
+     */
+    public boolean isTransferCounterpart() {
+        return idSourceTransaction != null;
+    }
+
     public ForecastTransaction getNextTransaction() {
         return nextTransaction;
     }
@@ -255,6 +339,12 @@ public class ForecastTransaction extends IndependentEntity {
         this.runningBalance = rs.getDouble("ft.runningBalance");
         this.version = SqlTimestampToCalendarDate(rs.getTimestamp("ft.version"));
         this.idForecastItem = UUID.fromString(rs.getString("ft.idForecastItem"));
+        String sourceTransactionId = rs.getString("ft.idSourceTransaction");
+        this.idSourceTransaction = (sourceTransactionId != null) ? UUID.fromString(sourceTransactionId) : null;
+        String sourceBudgetItemId = rs.getString("ft.idSourceBudgetItem");
+        this.idSourceBudgetItem = (sourceBudgetItemId != null) ? UUID.fromString(sourceBudgetItemId) : null;
+        this.sourceReference = rs.getString("ft.sourceReference");
+        this.transferPairingUnknown = rs.getBoolean("ft.transferPairingUnknown");
     }
 
     public ForecastTransaction(ForecastTransaction forecastTransaction) throws Exception, EntityException, BudgetException {
@@ -268,6 +358,10 @@ public class ForecastTransaction extends IndependentEntity {
         this.remainingAmount = forecastTransaction.getRemainingAmount();
         this.runningBalance = forecastTransaction.getRunningBalance();
         this.idForecastItem = forecastTransaction.getIdForecastItem();
+        this.idSourceTransaction = forecastTransaction.getIdSourceTransaction();
+        this.idSourceBudgetItem = forecastTransaction.getIdSourceBudgetItem();
+        this.sourceReference = forecastTransaction.getSourceReference();
+        this.transferPairingUnknown = forecastTransaction.isTransferPairingUnknown();
         this.version = Calendar.getInstance();
         copyDate(forecastTransaction.getVersion(), this.version);
         this.forecastItem = forecastTransaction.getForecastItem();
@@ -294,6 +388,10 @@ public class ForecastTransaction extends IndependentEntity {
             "ft.updatedTimeStamp as 'ft.version', ft.remainingAmount as 'ft.remainingAmount', ft.plannedDate as " +
             "'ft.plannedDate', ft.memo as 'ft.memo', ft.runningBalance as 'ft.runningBalance', ft.overridden as 'ft.overridden', " +
             "ft.firstOccurrence as 'ft.firstOccurrence', ft.found as 'ft.found', " +
+            "bin_to_uuid(ft.SourceTransaction_idTransaction) as 'ft.idSourceTransaction', " +
+            "bin_to_uuid(ft.SourceBudgetItem_idBudgetItem) as 'ft.idSourceBudgetItem', " +
+            "ft.sourceReference as 'ft.sourceReference', " +
+            "ft.transferPairingUnknown as 'ft.transferPairingUnknown', " +
             "bin_to_uuid(ft.ForecastItem_idForecastItem) as 'ft.idForecastItem' ";
 
     public static String getSelectColumns() {
@@ -309,13 +407,31 @@ public class ForecastTransaction extends IndependentEntity {
     // The insert query:
     public static final String insertQuery = "insert into forecast_transaction (idForecastTransaction, " +
             "remainingAmount, plannedDate, memo, runningBalance, overridden, firstOccurrence, found, " +
+            "SourceTransaction_idTransaction, SourceBudgetItem_idBudgetItem, sourceReference, " +
+            "transferPairingUnknown, " +
             "ForecastItem_idForecastItem) values (";
 
     @Override
     public String getInsertQuery() throws EntityException, SQLException, ForecastException, BudgetException {
         return insertQuery + "uuid_to_bin('" + getId() + "'), " + remainingAmount + ", " +
                 calendarDateToSqlDateString(plannedDate) + ", \"" + memo + "\", " + runningBalance + ", " +
-                overridden + ", " + firstOccurrence + ", " + found + ", uuid_to_bin('" + getIdForecastItem() + "'))";
+                overridden + ", " + firstOccurrence + ", " + found + ", " +
+                sourceTransactionSqlValue() + ", " + sourceBudgetItemSqlValue() + ", " +
+                sourceReferenceSqlValue() + ", " + transferPairingUnknown +
+                ", uuid_to_bin('" + getIdForecastItem() + "'))";
+    }
+
+    // The transfer columns are nullable, so they need a literal NULL rather than the string "null":
+    private String sourceTransactionSqlValue() {
+        return (idSourceTransaction != null) ? "uuid_to_bin('" + idSourceTransaction + "')" : "NULL";
+    }
+
+    private String sourceBudgetItemSqlValue() {
+        return (idSourceBudgetItem != null) ? "uuid_to_bin('" + idSourceBudgetItem + "')" : "NULL";
+    }
+
+    private String sourceReferenceSqlValue() {
+        return (sourceReference != null) ? "'" + Utility.escapeSqlString(sourceReference) + "'" : "NULL";
     }
 
     // The insert on duplicate update query:
@@ -336,6 +452,10 @@ public class ForecastTransaction extends IndependentEntity {
         return "remainingAmount = " + remainingAmount + ", plannedDate = " + calendarDateToSqlDateString(plannedDate) +
                 ", memo = \"" + memo + "\", runningBalance = " + runningBalance + ", overridden = " +
                 overridden + ", firstOccurrence = " + firstOccurrence + ", found = " + found +
+                ", SourceTransaction_idTransaction = " + sourceTransactionSqlValue() +
+                ", SourceBudgetItem_idBudgetItem = " + sourceBudgetItemSqlValue() +
+                ", sourceReference = " + sourceReferenceSqlValue() +
+                ", transferPairingUnknown = " + transferPairingUnknown +
                 ", updatedTimeStamp = current_timestamp() where idForecastTransaction = uuid_to_bin('" + id + "')";
     }
 
@@ -908,6 +1028,87 @@ public class ForecastTransaction extends IndependentEntity {
         };
         items.sort(comparator);
         return items;
+    }
+
+
+    /*
+     * Transfer counterpart lookups:
+     */
+
+    /**
+     * Get every forecast transaction that was created as the expected other side of a given
+     * transfer transaction.
+     *
+     * <p>A transfer with several splits produces one counterpart per ad-hoc split, so this returns a
+     * list rather than a single row.
+     *
+     * @param idSourceTransaction the transaction the counterparts were created from
+     * @return the counterparts, in planned-date order; empty if there are none
+     */
+    public static List<ForecastTransaction> getCounterpartsOfSourceTransaction(UUID idSourceTransaction)
+            throws EntityException {
+
+        List<ForecastTransaction> counterparts = new ArrayList<>();
+        if (idSourceTransaction == null) {
+            return counterparts;
+        }
+
+        String query = getSelectQuery() +
+                " where ft.SourceTransaction_idTransaction = uuid_to_bin('" + idSourceTransaction + "') " +
+                "order by ft.plannedDate";
+        ResultSet rs = EntityInt.getRS(query, "Database error occurred attempting to retrieve the transfer " +
+                "counterparts of transaction " + idSourceTransaction + ".");
+        try {
+            while (rs != null && rs.next()) {
+                counterparts.add(new ForecastTransaction(rs));
+            }
+        } catch (SQLException e) {
+            EntityException ee = new EntityException("Database error occurred reading the transfer counterparts of " +
+                    "transaction " + idSourceTransaction + ".");
+            ee.initCause(e);
+            throw ee;
+        }
+        return counterparts;
+    }
+
+    /**
+     * Find a transfer counterpart in a forecast by the bank's own reference for the transfer.
+     *
+     * <p>This is the second idempotency check for Phase 5.5.  The source transaction id is the
+     * primary one, but it changes when a source row is deleted and re-imported; the bank reference
+     * is issued by the bank and is stable across re-imports, so it still recognises the pair.  It is
+     * only ever an extra way to find an existing counterpart -- a transfer with no reference is
+     * completely ordinary and is handled by the source transaction id alone.
+     *
+     * @param forecast  the forecast to search
+     * @param reference the bank reference, or null (in which case there is nothing to look up)
+     * @return the counterpart carrying that reference, or null
+     */
+    public static ForecastTransaction getCounterpartByReference(Forecast forecast, String reference)
+            throws EntityException {
+
+        if (forecast == null || reference == null || reference.isBlank()) {
+            return null;
+        }
+
+        String query = getSelectQuery() +
+                " inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "and ft.sourceReference = '" + Utility.escapeSqlString(reference) + "' " +
+                "order by ft.plannedDate";
+        ResultSet rs = EntityInt.getRS(query, "Database error occurred attempting to retrieve the transfer " +
+                "counterpart with reference " + reference + ".");
+        try {
+            if (rs != null && rs.next()) {
+                return new ForecastTransaction(rs);
+            }
+        } catch (SQLException e) {
+            EntityException ee = new EntityException("Database error occurred reading the transfer counterpart with " +
+                    "reference " + reference + ".");
+            ee.initCause(e);
+            throw ee;
+        }
+        return null;
     }
 
 

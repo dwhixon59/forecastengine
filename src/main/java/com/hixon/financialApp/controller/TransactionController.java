@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
@@ -194,6 +195,13 @@ public class TransactionController {
                                 updatedTransaction.setId(selectedTransaction.getId()); // Preserve the original ID
                                 updatedTransaction.update();
                                 view.say("Transaction successfully updated.");
+
+                                // If this transfer recorded an expected other side in another
+                                // register's forecast, that expectation carries this transaction's
+                                // date and negated amount, so the edit has to reach it -- otherwise
+                                // the far import scores against a stale expectation.
+                                new TransferCounterpartController(sessionController)
+                                        .updateCounterpartsFor(updatedTransaction);
                                 selectedTransaction = updatedTransaction; // Update reference for display
                                 searchResult.setSelectedTransaction(selectedTransaction);
                                 break;
@@ -239,8 +247,25 @@ public class TransactionController {
                                     view.say("Deleting this transaction will CASCADE DELETE all associated splits.");
                                 }
 
+                                // If this is a transfer, it may have recorded the expected other side
+                                // in another register's forecast. Say so before asking, since that
+                                // expectation goes with it.
+                                List<ForecastTransaction> transferCounterparts =
+                                        TransferCounterpartController.counterpartsOf(selectedTransaction);
+                                if (!transferCounterparts.isEmpty()) {
+                                    view.say("\nThis transfer recorded " + transferCounterparts.size() +
+                                            " expected counterpart(s) in another register's forecast. " +
+                                            "They will be removed with it.");
+                                }
+
                                 if (view.getYesOrNo("\nAre you sure you want to delete this transaction?")) {
                                     try {
+                                        // Remove the expectations first: they only exist because this
+                                        // transaction did, and left behind they age in the counterparty's
+                                        // forecast as a transfer that is never going to arrive.
+                                        new TransferCounterpartController(sessionController)
+                                                .deleteCounterpartsFor(selectedTransaction);
+
                                         selectedTransaction.delete();
                                         view.say("Transaction deleted successfully.");
 
@@ -897,12 +922,12 @@ public class TransactionController {
 
                 // If no forecast in context, or user wants to choose a different one, let them select
                 if (forecastToUse == null) {
-                    // Let user select a forecast for the budget
-                    forecastToUse = Forecast.selectForecast(budget);
+                    // Let user select a forecast belonging to this register
+                    forecastToUse = Forecast.selectForecast(register);
                 } else if (view.getYesOrNo("Current forecast: " + forecastToUse.getName() +
                         ". Do you want to select a different forecast?")) {
-                    // Let user select a different forecast for the budget
-                    forecastToUse = Forecast.selectForecast(budget);
+                    // Let user select a different forecast belonging to this register
+                    forecastToUse = Forecast.selectForecast(register);
                 }
 
                 if (forecastToUse != null) {

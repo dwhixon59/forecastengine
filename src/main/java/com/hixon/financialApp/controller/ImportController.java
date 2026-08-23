@@ -329,6 +329,11 @@ public class ImportController {
                 // Set (Phase 2.5) when a forecast match was found but the merchant couldn't be
                 // resolved yet, so the eventual merchant can be linked to this budget item once known.
                 UUID matchedBudgetItemPendingMerchant = null;
+                // Set (Phase 2.5) when this transaction is the other side of a transfer already
+                // processed elsewhere, but the budget item pairing was not known when the counterpart
+                // was created. Phases 3 and 4 ask as they normally would, and the answer is recorded
+                // as the pairing afterwards so the question is never asked again.
+                ForecastTransaction unpairedTransferCounterpart = null;
 
                 /*
                  * Phase 1:  The transaction has already been created by the financial institution
@@ -428,6 +433,19 @@ public class ImportController {
                                 ForecastTransactionMatcher.findMatchingForecastTransaction(
                                         currentTransaction, forecast, possibleMerchants, 14, 14);
 
+                        // If we found a confident match, but it is the other side of a transfer whose
+                        // budget item pairing was not known when it was created, then its budget item is
+                        // a placeholder rather than an answer. Assigning it would set splits non-null,
+                        // skip Phases 3 and 4, and suppress the very questions that should be asked --
+                        // silently wrong, rather than a question. So report the transfer and fall
+                        // through to the normal questions instead.
+                        if (matchedForecast != null && matchedForecast.isTransferPairingUnknown()) {
+                            view.sayH3(TransferCounterpartController.describeCounterpart(matchedForecast) +
+                                    ", which has not been categorized on this side before.");
+                            unpairedTransferCounterpart = matchedForecast;
+                            matchedForecast = null;
+                        }
+
                         // If we found a confident match
                         if (matchedForecast != null) {
                             // Get the budget item from the forecast transaction
@@ -438,8 +456,14 @@ public class ImportController {
                             splits.add(new TransactionSplit(currentTransaction.getAmount(), idBudgetItem,
                                     currentTransaction.getId(), null));
 
-                            // Inform the user about the auto-match as a heading
-                            view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                            // Inform the user about the auto-match as a heading. When the match is the
+                            // recorded other side of a transfer, say so instead -- it makes obvious why no
+                            // questions were asked.
+                            if (matchedForecast.isTransferCounterpart()) {
+                                view.sayH3(TransferCounterpartController.describeCounterpart(matchedForecast) + ".");
+                            } else {
+                                view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                            }
 
                             // Determine the merchant for this transaction.
                             // First try (transfers): if the raw payee still carries a masked
@@ -678,6 +702,17 @@ public class ImportController {
                         for (TransactionSplit split : splits) {
                             split.save(INSERT_ON_DUPLICATE_UPDATE);
                         }
+
+                        // If this transaction was the other side of a transfer whose pairing was not
+                        // known, the questions just answered are the pairing. Record it -- the question
+                        // has now been asked once, in the place the application already asks it, and
+                        // will not be asked again -- and drop the placeholder expectation, which has
+                        // served its purpose now that the real thing has arrived.
+                        if (unpairedTransferCounterpart != null) {
+                            new TransferCounterpartController(sessionController)
+                                    .learnPairingAndDropPlaceholder(unpairedTransferCounterpart, splits);
+                            unpairedTransferCounterpart = null;
+                        }
                     } else {
                         // Only print if we didn't auto-match — the auto-match block already logged this
                         if (!autoMatched) {
@@ -722,6 +757,18 @@ public class ImportController {
                         forecastController.reconcile(currentTransaction, splitsToReconcile);
                     }
                 }
+
+                /*
+                 * Phase 5.5:  Record the other side of a transfer.
+                 */
+                // A transfer between two registers is one movement of money and should be dealt with
+                // once. If this transaction is a transfer into a register that has a forecast, record
+                // the expected other side there now, so that when that register's statement is
+                // imported it auto-matches, reports where it came from, and is passed over without
+                // questions. Silent for everything else -- including transfers into a register with no
+                // forecast, which is how the application records that it has no import feed.
+                new TransferCounterpartController(sessionController)
+                        .recordOtherSideOfTransfer(currentTransaction, splits);
 
                 // This transaction was fully processed (it did not hit an early `continue`),
                 // so count it. This drives the post-loop lastImportDate update and success
@@ -1137,6 +1184,17 @@ public class ImportController {
                                     ForecastTransactionMatcher.findMatchingForecastTransaction(
                                             provisionalTransactions.get(provTrxIndex), forecast, possibleMerchants, 14, 14);
 
+                            // If the match is the other side of a transfer whose budget item pairing is
+                            // not known, its budget item is a placeholder rather than an answer. Report
+                            // the transfer and fall through to the normal questions -- and leave the
+                            // counterpart in place, since the pairing is learned when the cleared
+                            // transaction arrives, not from a pending one.
+                            if (matchedForecast != null && matchedForecast.isTransferPairingUnknown()) {
+                                view.sayH3(TransferCounterpartController.describeCounterpart(matchedForecast) +
+                                        ", which has not been categorized on this side before.");
+                                matchedForecast = null;
+                            }
+
                             // If we found a confident match
                             if (matchedForecast != null) {
                                 // Get the budget item from the forecast transaction
@@ -1148,7 +1206,11 @@ public class ImportController {
                                         idBudgetItem, provisionalTransactions.get(provTrxIndex).getId(), null));
 
                                 // Inform the user about the auto-match as a heading
-                                view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                                if (matchedForecast.isTransferCounterpart()) {
+                                    view.sayH3(TransferCounterpartController.describeCounterpart(matchedForecast) + ".");
+                                } else {
+                                    view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
+                                }
 
                                 // If we found a merchant from the payee, use it
                                 if (possibleMerchants != null && possibleMerchants.size() == 1) {
@@ -1539,6 +1601,12 @@ public class ImportController {
                                 // Add back the amount previously deducted from the register and save it:
                                 register.setBalance(register.getBalance() - fallenOff.getAmount());
                                 register.update();
+
+                                // If this was a transfer that had recorded the expected other side in
+                                // another register's forecast, that expectation goes with it -- the
+                                // transfer is not going to arrive there either.
+                                new TransferCounterpartController(sessionController)
+                                        .deleteCounterpartsFor(fallenOff);
 
                                 // And delete the transaction that has fallen off (this also removes its splits and
                                 // forecast_transaction_split links):

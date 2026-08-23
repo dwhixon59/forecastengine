@@ -6,6 +6,7 @@ import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.Entity;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.user.User;
@@ -47,8 +48,8 @@ public class CsvForecastView extends AbstractForecastView {
    /*
     * Constructors:
     */
-   public CsvForecastView() throws EntityException, SQLException {
-      super(Forecast.getMostRecent());
+   public CsvForecastView(Register register) throws EntityException, SQLException {
+      super(Forecast.getMostRecent(register));
 
    }
 
