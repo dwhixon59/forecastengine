@@ -259,6 +259,46 @@ public class WellsFargoBank extends FinancialInstitution {
      * @return A cleaned merchant name suitable for display and matching
      * @throws Exception If an error occurs during parsing or register lookup
      */
+    /**
+     * A masked counterparty account number as Wells Fargo writes it, e.g. {@code XXXXXXXXXXX4442}.
+     * Deliberately the same shape the transfer branch already scans for.
+     */
+    private static final java.util.regex.Pattern MASKED_ACCOUNT_TOKEN =
+            java.util.regex.Pattern.compile("^[Xx]{4,}[0-9]{4}$");
+
+    /**
+     * Stands in for {@code firstFewWords} when the payee is a bare {@code TO <masked account>}.
+     * Starts with a NUL so it can never collide with real payee text.
+     */
+    private static final String BARE_DIRECTIONAL_TRANSFER = "\u0000BARE_DIRECTIONAL_TRANSFER";
+
+    /**
+     * Whether the payee is a bare directional transfer -- {@code TO XXXXXXXXXXX4442} -- with no
+     * leading transfer keyword at all.
+     *
+     * <p>Wells Fargo writes SAVE AS YOU GO transfers, and some ATM transfers, this way:  the NAME
+     * field carries only the direction and the counterparty account, while the transfer type sits in
+     * the MEMO ({@code SAVE AS YOU GO TRANSFER DEBIT}).  Neither field alone starts with a keyword
+     * {@code isTransferPayee} recognises, so without this the payee falls through every case in
+     * {@link #parseMerchantPayee} to the generic default and collapses to the single word
+     * {@code "TO"} -- a key that identifies nothing, matches every such transfer, and gets a merchant
+     * memoized against it.
+     *
+     * <p>The masked account number is right there in the token that follows, and it is the one thing
+     * the transfer branch actually needs, so these are routed there instead.
+     *
+     * @param payeeTokens the payee split on spaces
+     * @return true when the payee is {@code TO}/{@code FROM} followed by a masked account number
+     */
+    static boolean isBareDirectionalTransfer(String[] payeeTokens) {
+        if (payeeTokens == null || payeeTokens.length < 2) {
+            return false;
+        }
+        boolean directional = payeeTokens[0].equalsIgnoreCase("TO")
+                || payeeTokens[0].equalsIgnoreCase("FROM");
+        return directional && MASKED_ACCOUNT_TOKEN.matcher(payeeTokens[1]).matches();
+    }
+
     @Override
     public String parseMerchantPayee(Calendar date, double amount, String payee) throws Exception {
         logger.debug("");
@@ -285,6 +325,14 @@ public class WellsFargoBank extends FinancialInstitution {
                 // Only 1 token
                 firstFewWords = payeeTokens[0];
             }
+        }
+        // A bare "TO <masked account>" carries no transfer keyword to switch on, but the masked
+        // account identifies the counterparty perfectly well.  Route it to the transfer branch rather
+        // than letting it reach the default and collapse to "TO".
+        boolean bareDirectionalTransfer = isBareDirectionalTransfer(payeeTokens);
+        if (bareDirectionalTransfer) {
+            logger.debug("  Bare directional transfer detected - routing to the transfer branch");
+            firstFewWords = BARE_DIRECTIONAL_TRANSFER;
         }
         logger.debug("  First few words: '{}'", firstFewWords);
 
@@ -325,6 +373,7 @@ public class WellsFargoBank extends FinancialInstitution {
             case "ATM TRANSFER AUTHORIZED":
             case "Transfer in Branch/Store":
             case "SAVE AS YOU":
+            case BARE_DIRECTIONAL_TRANSFER:
                 logger.debug("Processing as TRANSFER ('{}')", firstFewWords);
 
                 // Find the register by the last four digits of the account number, or if the account number is not
@@ -386,6 +435,11 @@ public class WellsFargoBank extends FinancialInstitution {
                 if (payeeTokens[0].equalsIgnoreCase("ATM")) {
                     toFrom1 = (payeeTokens[5].equalsIgnoreCase("TO")) ? "to" : "from";
                     toFrom2 = (payeeTokens[5].equalsIgnoreCase("TO")) ? "from" : "to";
+                } else if (bareDirectionalTransfer) {
+                    // "TO XXXXXXXXXXX4442" -- the direction is the first token, and there is no
+                    // token 2 to read, which is why this shape used to fall through entirely.
+                    toFrom1 = (payeeTokens[0].equalsIgnoreCase("TO")) ? "to" : "from";
+                    toFrom2 = (payeeTokens[0].equalsIgnoreCase("TO")) ? "from" : "to";
                 } else {
                     toFrom1 = (payeeTokens[2].equalsIgnoreCase("TO")) ? "to" : "from";
                     toFrom2 = (payeeTokens[2].equalsIgnoreCase("TO")) ? "from" : "to";
