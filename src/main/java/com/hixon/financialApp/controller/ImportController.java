@@ -1544,6 +1544,22 @@ public class ImportController {
                             ForecastController forecastController = new ForecastController(
                                     sessionController);
                             forecastController.reconcile(provisionalTransactions.get(provTrxIndex), splits);
+
+                            /*
+                             * Phase 5.5:  Record the other side of a transfer.
+                             */
+                            // Pending transfers deserve this as much as cleared ones do.  A transfer
+                            // between two accounts at the same bank is a single atomic operation, so
+                            // once one side shows up as pending the other side exists too -- which is
+                            // exactly when recording the expectation saves the second register's
+                            // import from asking.  Waiting for both sides to clear would mean
+                            // processing the same movement of money by hand twice, which is the
+                            // labour this whole feature exists to remove.
+                            //
+                            // A provisional that never arrives is handled: the fallen-off branch below
+                            // removes its counterparts along with the transaction.
+                            new TransferCounterpartController(sessionController)
+                                    .recordOtherSideOfTransfer(provisionalTransactions.get(provTrxIndex), splits);
                         }
 
                         // Move to the next provisional transaction:

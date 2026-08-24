@@ -350,6 +350,17 @@ transaction being imported:
 
 > **Phase 5.5: Record the other side of a transfer**
 
+It runs on the **provisional** import path as well as the cleared one. A transfer between two
+accounts at the same bank is a single atomic operation, so once one side shows up as pending the
+other side exists too — which is exactly when recording the expectation saves the second register's
+import from asking. Waiting for both sides to clear would mean processing the same movement of money
+by hand twice, which is the labour this feature exists to remove. A provisional that never arrives
+takes its counterparts with it: the fallen-off branch already calls `deleteCounterpartsFor`.
+
+The atomicity argument holds *because* of the feed convention — a transfer to an external
+institution is not atomic, but it also has no counterparty register with a forecast, so it never
+reaches Phase 5.5.
+
 ```
 if the transaction is not a transfer                        -> done
 if the counterparty register cannot be determined           -> done
