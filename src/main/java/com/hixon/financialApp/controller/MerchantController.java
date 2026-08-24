@@ -3,6 +3,7 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.entity.MatchQuery;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.merchant.MerchantPayee;
+import com.hixon.financialApp.model.merchant.MerchantUtilities;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.user.User;
@@ -90,10 +91,18 @@ public class MerchantController {
                                     boolean requireConfirmation)
             throws Exception {
 
+        // When the counterparty of a transfer could not be identified, the payee string is not an
+        // identity -- it is "a transfer out of this register to an account we could not name", and
+        // every future unidentifiable transfer out of the same register produces exactly the same
+        // string.  Remembering an answer against it, in this session or in merchant_payee, turns one
+        // "I don't know" into a permanent silent answer for transfers that have nothing to do with
+        // each other.  So: always ask, and never record what was chosen.
+        boolean unidentifiedTransfer = MerchantUtilities.isUnidentifiedTransferPayee(merchantPayeeString);
+
         // E8: Check the session cache before hitting the database.
         // If the user already confirmed this payee → merchant mapping in this session,
         // return the cached merchant immediately without asking again.
-        if (confirmedPayeeCache.containsKey(merchantPayeeString)) {
+        if (!unidentifiedTransfer && confirmedPayeeCache.containsKey(merchantPayeeString)) {
             return confirmedPayeeCache.get(merchantPayeeString);
         }
 
@@ -120,7 +129,10 @@ public class MerchantController {
             // behaviour, not payee→merchant identity.  When Merchant.getByPayee() returns a hit,
             // the payee is already explicitly mapped in the merchant_payee table — asking the user
             // to re-confirm an exact match every time is redundant.
-            boolean shouldAsk = !isTransferPayee && requireConfirmation;
+            // The transfer short-circuit above assumes the merchant name was derived from a
+            // resolved register name.  For an unidentified transfer there was no resolved register,
+            // so that assumption does not hold and the user must be asked.
+            boolean shouldAsk = unidentifiedTransfer || (!isTransferPayee && requireConfirmation);
 
             if (shouldAsk) {
                 view.say();  // blank line to separate from the previous transaction's output
@@ -175,7 +187,7 @@ public class MerchantController {
                 }
             }
 
-            if (!payeeExists) {
+            if (!payeeExists && !unidentifiedTransfer) {
                 // Before creating the new association, delete any existing association with a different merchant
                 // The payee field has a UNIQUE constraint, so we must delete the old one first
                 MerchantPayee.deleteByName(merchantPayeeString);
@@ -183,10 +195,15 @@ public class MerchantController {
                 MerchantPayee newPayee = new MerchantPayee(merchantPayeeString, merchant.getId());
                 newPayee.save();
                 view.say("Associated payee '" + merchantPayeeString + "' with merchant '" + merchant.getName() + "'");
+            } else if (unidentifiedTransfer) {
+                view.say("This transfer's counterparty could not be identified, so '" + merchant.getName() +
+                        "' applies to this transaction only. The next one like it will ask again.");
             }
 
             // E8: Cache this payee→merchant mapping for the rest of this session.
-            confirmedPayeeCache.put(merchantPayeeString, merchant);
+            if (!unidentifiedTransfer) {
+                confirmedPayeeCache.put(merchantPayeeString, merchant);
+            }
         }
 
         return merchant;
