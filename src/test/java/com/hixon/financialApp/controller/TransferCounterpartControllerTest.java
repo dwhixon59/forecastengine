@@ -56,8 +56,15 @@ public class TransferCounterpartControllerTest {
         /** Whether the counterparty register is pretending to already hold the other side. */
         boolean otherSideAlreadyThere = false;
 
+        /** What the controller told the user, so tests can assert on which register it named. */
+        List<String> messages = new ArrayList<>();
+
         RecordingController(SessionController sessionController) {
             super(sessionController);
+        }
+
+        void captureFrom(List<String> viewMessages) {
+            this.messages = viewMessages;
         }
 
         @Override
@@ -103,6 +110,7 @@ public class TransferCounterpartControllerTest {
 
     private SessionController sessionController;
     private ViewInt view;
+    private List<String> capturedMessages;
     private Register sourceRegister;
     private Register counterpartyRegister;
     private Budget sourceBudget;
@@ -112,6 +120,11 @@ public class TransferCounterpartControllerTest {
     @BeforeEach
     void setUp() {
         view = mock(ViewInt.class);
+        capturedMessages = new ArrayList<>();
+        Mockito.doAnswer(invocation -> {
+            capturedMessages.add(invocation.getArgument(0, String.class));
+            return null;
+        }).when(view).say(anyString());
 
         sourceRegister = mock(Register.class);
         when(sourceRegister.getId()).thenReturn(SOURCE_REGISTER_ID);
@@ -532,6 +545,70 @@ public class TransferCounterpartControllerTest {
 
         assertTrue(controller.inserted.isEmpty(),
                 "Both registers hold their own copy, so there is nothing left to expect");
+    }
+
+
+    @Test
+    @DisplayName("The masked account number in the payee beats a merchant_payee row that disagrees")
+    void testAccountNumberBeatsAStaleMerchantMapping() throws Exception {
+
+        // Taken from a real import. The payee plainly carries XXXXXX7394 -- Danni's Spending Account
+        // -- but merchant_payee maps "Transfer to Danni's Spending Account from Bill Pay Dave" to a
+        // merchant named "Dave", and MerchantController skips confirmation for transfer payees, so
+        // that wrong answer reaches us silently. The account number is a fact the bank stated; the
+        // mapping is user-maintained. Where they disagree, the bank wins.
+        Transaction transaction = transferTransaction(
+                "ONLINE TRANSFER TO HIXON D EVERYDAY CHECKING XXXXXX7394 REF #IB0ZFB4JC5 ON 08/18/26", -14.00);
+        Merchant staleMerchant = mock(Merchant.class);
+        when(staleMerchant.getName()).thenReturn("Dave's Spending Account");
+        when(transaction.getMerchant()).thenReturn(staleMerchant);
+
+        Register danniSpending = mock(Register.class);
+        when(danniSpending.getId()).thenReturn(UUID.randomUUID());
+        when(danniSpending.getName()).thenReturn("Danni's Spending Account");
+
+        Register davesSpending = mock(Register.class);
+        when(davesSpending.getId()).thenReturn(UUID.randomUUID());
+        when(davesSpending.getName()).thenReturn("Dave's Spending Account");
+
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        RecordingController controller;
+        try (MockedStatic<Register> registers = Mockito.mockStatic(Register.class);
+             MockedStatic<Forecast> forecasts = Mockito.mockStatic(Forecast.class);
+             MockedStatic<ForecastTransaction> forecastTransactions = Mockito.mockStatic(ForecastTransaction.class);
+             MockedStatic<ForecastItem> forecastItems = Mockito.mockStatic(ForecastItem.class);
+             MockedStatic<BudgetItem> budgetItems = Mockito.mockStatic(BudgetItem.class);
+             MockedStatic<TransferBudgetItemPair> pairings = Mockito.mockStatic(TransferBudgetItemPair.class)) {
+
+            registers.when(() -> Register.getByLastFourDigits("7394")).thenReturn(danniSpending);
+            registers.when(() -> Register.getByName("Dave's Spending Account")).thenReturn(davesSpending);
+
+            // Both registers have a forecast here, so only the resolution order decides where the
+            // counterpart lands -- the feedless convention cannot mask a wrong answer.
+            forecasts.when(() -> Forecast.getMostRecent(any(Register.class))).thenReturn(counterpartyForecast);
+            when(counterpartyForecast.getBudget()).thenReturn(targetBudget);
+            forecastTransactions.when(() -> ForecastTransaction.getCounterpartsOfSourceTransaction(any()))
+                    .thenReturn(new ArrayList<ForecastTransaction>());
+            forecastTransactions.when(() -> ForecastTransaction.getCounterpartByReference(any(), any()))
+                    .thenReturn(null);
+            pairings.when(() -> TransferBudgetItemPair.getBySourceAndTargetBudget(any(), any())).thenReturn(null);
+            budgetItems.when(() -> BudgetItem.getUnexpiredByPayee(any(), anyString()))
+                    .thenReturn(new ArrayList<BudgetItem>());
+            forecastItems.when(() -> ForecastItem.getByBudgetItemId(any(Forecast.class), any(UUID.class)))
+                    .thenReturn(null);
+
+            controller = new RecordingController(sessionController);
+            controller.captureFrom(capturedMessages);
+            controller.recordOtherSideOfTransfer(transaction, List.of(split(-14.00, sourceItem)));
+        }
+
+        assertEquals(1, controller.inserted.size());
+        assertTrue(controller.messages.stream().anyMatch(m -> m.contains("Danni's Spending Account")),
+                "The counterpart belongs to the register the bank named, not the one the stale " +
+                        "merchant mapping named. Messages were: " + controller.messages);
+        assertFalse(controller.messages.stream().anyMatch(m -> m.contains("Dave's Spending Account")),
+                "Messages were: " + controller.messages);
     }
 
 

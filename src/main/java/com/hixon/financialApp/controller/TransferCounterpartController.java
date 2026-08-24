@@ -446,9 +446,22 @@ public class TransferCounterpartController {
      * institution reads the masked account number out of the payee, and falls back to
      * {@link RegisterController#resolveUnmatchedAccount} when it is absent -- which narrows by
      * account type and user, asks only when still ambiguous, and caches the answer for the session.
-     * Its answer is recorded as the transaction's merchant, because transfer merchants are named
-     * after the counterparty register throughout the application.  This consumes the decision the
-     * import already made and adds no account-identification prompt of its own.
+     * This consumes the decision the import already made and adds no account-identification prompt
+     * of its own.
+     *
+     * <p><b>The bank's own evidence is consulted first.</b>  A masked account number in the raw
+     * payee is a fact the bank stated:  {@code XXXXXX7394} is an account number, matched directly
+     * against {@code register.account_number}.  The merchant is only a proxy for the same answer --
+     * transfer merchants are named after the counterparty register throughout the application -- but
+     * it reaches us through the user-maintained {@code merchant_payee} table, which can and does
+     * disagree.  A real example:  {@code Transfer to Danni's Spending Account from Bill Pay Dave} is
+     * mapped to a merchant named {@code Dave}, so a transfer whose payee plainly carries
+     * {@code XXXXXX7394} would otherwise be placed against whatever register that mapping happened
+     * to name.  Where the two disagree, the account number is right.
+     *
+     * <p>The merchant is still the answer when the payee carries no account number at all, which is
+     * exactly the case {@code resolveUnmatchedAccount} exists to settle -- there the merchant name
+     * records what the user was asked and answered.
      *
      * @return the counterparty register, or null if this is not a transfer we can place
      */
@@ -459,21 +472,22 @@ public class TransferCounterpartController {
             idSourceRegister = sessionController.getRegister().getId();
         }
 
-        // A transfer's merchant is the counterparty register's name:
-        Merchant merchant = transaction.getMerchant();
-        if (merchant != null && merchant.getName() != null) {
-            Register byMerchantName = Register.getByName(merchant.getName());
-            if (isUsableCounterparty(byMerchantName, idSourceRegister)) {
-                return byMerchantName;
-            }
-        }
-
-        // Failing that, the raw payee may still carry the masked counterparty account number:
+        // What the bank itself said:  the masked counterparty account number in the raw payee.
         String lastFour = MerchantUtilities.extractMaskedAccountLastFour(transaction.getPayee());
         if (lastFour != null) {
             Register byLastFour = Register.getByLastFourDigits(lastFour);
             if (isUsableCounterparty(byLastFour, idSourceRegister)) {
                 return byLastFour;
+            }
+        }
+
+        // Failing that, the payee carried no account number, so the merchant records the answer the
+        // import already obtained -- a transfer's merchant is the counterparty register's name.
+        Merchant merchant = transaction.getMerchant();
+        if (merchant != null && merchant.getName() != null) {
+            Register byMerchantName = Register.getByName(merchant.getName());
+            if (isUsableCounterparty(byMerchantName, idSourceRegister)) {
+                return byMerchantName;
             }
         }
 
