@@ -498,26 +498,65 @@ public class TransferCounterpartController {
      * Whether the counterparty register already holds the other side of this movement of money.
      *
      * <p>A transfer is one movement reported twice, so once both registers have their own copy the
-     * expectation has nothing to be about.  Candidates are matched on the opposite amount within a
-     * few days; when both sides carry a bank reference, a differing reference rules a candidate out
-     * outright, which is the one judgement amount-and-date proximity cannot make.  A missing
-     * reference is not evidence either way -- it is absent from most transfers.
+     * expectation has nothing to be about.
+     *
+     * <p>A candidate has to clear three hurdles, and the middle one is the important one:
+     * <ol>
+     *   <li>the opposite amount within a few days (the cheap database filter);</li>
+     *   <li><b>its own counterparty must be this transaction's register</b> -- it has to be the
+     *       other side of <em>this</em> transfer, not merely a transaction of the same size in the
+     *       same week;</li>
+     *   <li>if both sides carry a bank reference, they must not differ -- the one judgement
+     *       amount-and-date proximity cannot make.  A missing reference is not evidence either way,
+     *       since most transfers have none.</li>
+     * </ol>
+     *
+     * <p>Without the second hurdle this suppressed real counterparts.  A $1.00 transfer from Bill
+     * Pay Dave to Bill Pay Danni was ruled "already arrived" by an unrelated $1.00 SAVE AS YOU GO
+     * transfer from Bill Pay Dave to Joint Savings three days earlier:  same register, same amount,
+     * inside the window, and carrying no reference to distinguish it.
      */
     protected boolean otherSideAlreadyExists(Transaction transaction, Register counterpartyRegister,
                                              String reference) throws Exception {
+
+        UUID idSourceRegister = transaction.getIdRegister();
+        if (idSourceRegister == null && sessionController.getRegister() != null) {
+            idSourceRegister = sessionController.getRegister().getId();
+        }
+        if (idSourceRegister == null) {
+            return false;
+        }
 
         List<Transaction> candidates = Transaction.findOppositeSideInRegister(
                 counterpartyRegister.getId(), transaction.getAmount(), transaction.getDate(),
                 OTHER_SIDE_DAY_WINDOW);
 
         for (Transaction candidate : candidates) {
+
             String candidateReference = BankReferenceNumber.extract(candidate.getPayee());
             if (BankReferenceNumber.areDifferentMovements(reference, candidateReference)) {
                 continue;
             }
+
+            // The candidate must point back at the register this transfer came from.  Anything else
+            // is a different movement of money that happens to be the same size.
+            Register candidateCounterparty = counterpartyOf(candidate);
+            if (candidateCounterparty == null
+                    || !candidateCounterparty.getId().equals(idSourceRegister)) {
+                continue;
+            }
+
             return true;
         }
         return false;
+    }
+
+    /**
+     * The register on the other side of a transaction, as a seam so the rule above can be tested
+     * without a database.
+     */
+    protected Register counterpartyOf(Transaction transaction) throws Exception {
+        return resolveCounterpartyRegister(transaction);
     }
 
     private boolean isUsableCounterparty(Register candidate, UUID idSourceRegister) {

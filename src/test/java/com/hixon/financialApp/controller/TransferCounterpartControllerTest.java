@@ -25,6 +25,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -609,6 +611,119 @@ public class TransferCounterpartControllerTest {
                         "merchant mapping named. Messages were: " + controller.messages);
         assertFalse(controller.messages.stream().anyMatch(m -> m.contains("Dave's Spending Account")),
                 "Messages were: " + controller.messages);
+    }
+
+
+    /*
+     * The "has the other side already arrived?" guard.
+     */
+
+    /**
+     * Runs the real {@link TransferCounterpartController#otherSideAlreadyExists} while standing in
+     * for the one lookup that needs a database.
+     */
+    private static class GuardController extends TransferCounterpartController {
+
+        private final java.util.Map<Transaction, Register> counterparties = new java.util.HashMap<>();
+
+        GuardController(SessionController sessionController) {
+            super(sessionController);
+        }
+
+        void setCounterparty(Transaction transaction, Register register) {
+            counterparties.put(transaction, register);
+        }
+
+        @Override
+        protected Register counterpartyOf(Transaction transaction) {
+            return counterparties.get(transaction);
+        }
+    }
+
+    private Transaction candidate(String payee, double amount, UUID idRegister) {
+        Transaction candidate = mock(Transaction.class);
+        when(candidate.getPayee()).thenReturn(payee);
+        when(candidate.getAmount()).thenReturn(amount);
+        when(candidate.getIdRegister()).thenReturn(idRegister);
+        return candidate;
+    }
+
+    @Test
+    @DisplayName("A same-sized transaction to a DIFFERENT register is not the other side")
+    void testUnrelatedSameAmountTransactionIsNotTheOtherSide() throws Exception {
+
+        // The real case. A $1.00 transfer Bill Pay Dave -> Bill Pay Danni was being ruled "already
+        // arrived" by an unrelated $1.00 SAVE AS YOU GO transfer from Bill Pay Dave to Joint
+        // Savings three days earlier: same register, same amount, inside the window, and carrying
+        // no reference to tell them apart.
+        Transaction transfer = transferTransaction(
+                "ONLINE TRANSFER FROM HIXON D REF #IB0ZHFFH69 EV", 1.00);
+        when(transfer.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+
+        Register jointSavings = mock(Register.class);
+        when(jointSavings.getId()).thenReturn(UUID.randomUUID());
+
+        Transaction saveAsYouGo = candidate("TO XXXXXXXXXXX4442", -1.00, COUNTERPARTY_REGISTER_ID);
+
+        GuardController controller;
+        try (MockedStatic<Transaction> transactions = Mockito.mockStatic(Transaction.class)) {
+            transactions.when(() -> Transaction.findOppositeSideInRegister(any(), anyDouble(), any(), anyInt()))
+                    .thenReturn(List.of(saveAsYouGo));
+
+            controller = new GuardController(sessionController);
+            controller.setCounterparty(saveAsYouGo, jointSavings);   // points at Joint Savings, not us
+
+            assertFalse(controller.otherSideAlreadyExists(transfer, counterpartyRegister, "IB0ZHFFH69"),
+                    "A transaction of the same size in the same week is not the other side of this transfer");
+        }
+    }
+
+    @Test
+    @DisplayName("A same-sized transaction pointing back at this register IS the other side")
+    void testGenuineOtherSideIsRecognised() throws Exception {
+
+        Transaction transfer = transferTransaction(
+                "ONLINE TRANSFER FROM HIXON D REF #IB0ZHFFH69 EV", 1.00);
+        when(transfer.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+
+        Transaction genuine = candidate("ONLINE TRANSFER TO HIXON D REF #IB0ZHFFH69 EV", -1.00,
+                COUNTERPARTY_REGISTER_ID);
+
+        GuardController controller;
+        try (MockedStatic<Transaction> transactions = Mockito.mockStatic(Transaction.class)) {
+            transactions.when(() -> Transaction.findOppositeSideInRegister(any(), anyDouble(), any(), anyInt()))
+                    .thenReturn(List.of(genuine));
+
+            controller = new GuardController(sessionController);
+            controller.setCounterparty(genuine, sourceRegister);     // points back at us
+
+            assertTrue(controller.otherSideAlreadyExists(transfer, counterpartyRegister, "IB0ZHFFH69"),
+                    "Both registers hold their own copy, so there is nothing left to expect");
+        }
+    }
+
+    @Test
+    @DisplayName("A differing bank reference rules a candidate out even when it points back at us")
+    void testDifferingReferenceStillRulesOut() throws Exception {
+
+        Transaction transfer = transferTransaction(
+                "ONLINE TRANSFER FROM HIXON D REF #IB0ZHFFH69 EV", 1.00);
+        when(transfer.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+
+        // A different $1.00 transfer between the same two registers, same week, different movement.
+        Transaction otherTransfer = candidate("ONLINE TRANSFER TO HIXON D REF #IB0ZHFDMD3 EVER", -1.00,
+                COUNTERPARTY_REGISTER_ID);
+
+        GuardController controller;
+        try (MockedStatic<Transaction> transactions = Mockito.mockStatic(Transaction.class)) {
+            transactions.when(() -> Transaction.findOppositeSideInRegister(any(), anyDouble(), any(), anyInt()))
+                    .thenReturn(List.of(otherTransfer));
+
+            controller = new GuardController(sessionController);
+            controller.setCounterparty(otherTransfer, sourceRegister);
+
+            assertFalse(controller.otherSideAlreadyExists(transfer, counterpartyRegister, "IB0ZHFFH69"));
+        }
     }
 
 
