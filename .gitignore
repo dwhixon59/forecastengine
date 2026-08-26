@@ -48,3 +48,10 @@ desktop.ini
 # Database credentials — NEVER commit this file
 src/main/resources/db.properties
 
+
+# Real financial data — never commit (scrubbed from history 2026-08-26)
+Checking3_old.qfx
+*_old.qfx
+LongTermForecast-*.csv
+LongTermForecast-*.xlsx
+Import-Log.txt
