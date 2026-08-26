@@ -1,7 +1,8 @@
 package com.hixon.utilities;
 
+import com.hixon.financialApp.utility.DatabaseConnectionManager;
+
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -12,11 +13,10 @@ import java.util.regex.Pattern;
 
 public class BackfillUserDescriptions {
     public static void main(String[] args) throws Exception {
-        String jdbcUrl = "jdbc:mysql://localhost:3306/ForecastDatabase";
-        String user = "root";
-        String password = "***REMOVED-CREDENTIAL***";
+        // Credentials come from db.properties (excluded from version control) — never hardcode them.
+        DatabaseConnectionManager mgr = DatabaseConnectionManager.fromProperties();
 
-        try (Connection conn = DriverManager.getConnection(jdbcUrl, user, password)) {
+        try (Connection conn = mgr.getConnection()) {
 
             // Clear out the existing user_description field:
             String clearSql = "UPDATE transaction SET user_description = NULL WHERE user_description IS NOT NULL";

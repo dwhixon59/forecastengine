@@ -3,9 +3,12 @@ package com.hixon.financialApp.utility;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Properties;
 
 /**
  * Manages a single JDBC connection with automatic reconnection support.
@@ -17,8 +20,7 @@ import java.sql.SQLException;
  *
  * <p>Usage:
  * <pre>
- *     DatabaseConnectionManager mgr =
- *         new DatabaseConnectionManager("jdbc:mysql://localhost:3306/MyDB", "user", "pass");
+ *     DatabaseConnectionManager mgr = DatabaseConnectionManager.fromProperties();
  *     Utility.setConnectionManager(mgr);
  *     // ... later, in any model class:
  *     Connection conn = Utility.getDbConnection();   // always live
@@ -53,6 +55,33 @@ public class DatabaseConnectionManager {
         this.password = password;
         this.connection = openConnection();
         logger.info("Initial database connection established.");
+    }
+
+    /**
+     * Creates a manager from the credentials in {@code db.properties} on the classpath.
+     *
+     * <p>Credentials must never be hardcoded in source.  {@code db.properties} is excluded from
+     * version control; see {@code src/main/resources/db.properties.example} for the format.
+     *
+     * @return a manager connected using the configured credentials
+     * @throws IOException  if db.properties is missing or unreadable
+     * @throws SQLException if the initial connection cannot be established
+     */
+    public static DatabaseConnectionManager fromProperties() throws IOException, SQLException {
+        Properties dbProps = new Properties();
+        try (InputStream in = DatabaseConnectionManager.class.getClassLoader()
+                .getResourceAsStream("db.properties")) {
+            if (in == null) {
+                throw new IOException(
+                        "db.properties not found on the classpath.  " +
+                        "Copy src/main/resources/db.properties.example to " +
+                        "src/main/resources/db.properties and fill in your credentials.");
+            }
+            dbProps.load(in);
+        }
+        return new DatabaseConnectionManager(dbProps.getProperty("db.url"),
+                dbProps.getProperty("db.username"),
+                dbProps.getProperty("db.password"));
     }
 
     /**
