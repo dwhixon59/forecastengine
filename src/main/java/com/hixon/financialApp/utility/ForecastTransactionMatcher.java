@@ -70,6 +70,38 @@ public class ForecastTransactionMatcher {
     }
 
     /**
+     * Whether an unpaired transfer counterpart may be scored against this transaction at all.
+     *
+     * <p><b>An unpaired counterpart is admitted only on an identity, never on proximity.</b>  Its
+     * budget item is a placeholder rather than an answer, so it can never actually be assigned:
+     * every caller checks {@link ForecastTransaction#isTransferPairingUnknown()} and falls through
+     * to the ordinary import questions whenever one wins.  Letting it also compete on date/amount
+     * proximity therefore cannot produce a match -- it can only produce noise, and the noise is
+     * indiscriminate, because a counterpart is deliberately exempt from the merchant filter and so
+     * is a candidate for <em>every</em> transaction in the date window.  Observed in a real import:
+     * a $1.00 placeholder scoring 40 against a $2.00 savings transfer and 32 against a $35.00 credit
+     * card payment, in the same session.
+     *
+     * <p>The identity is the bank reference where there is one -- handled before this, and stronger
+     * -- or, for the majority of transfers that carry none, the exact amount the counterpart was
+     * created with.  The two sides of one movement of money are the same size; anything else is a
+     * different movement.
+     *
+     * <p>Every candidate that is not an unpaired counterpart is admitted unchanged.  Nothing about
+     * ordinary forecast matching may shift because of this rule.
+     *
+     * @param amount    the transaction amount being matched
+     * @param candidate the candidate forecast transaction
+     * @return true if the candidate may be scored
+     */
+    public static boolean admitsUnpairedCounterpart(double amount, ForecastTransaction candidate) {
+        if (candidate == null || !candidate.isTransferPairingUnknown()) {
+            return true;
+        }
+        return Utility.isEqualCurrency(amount, candidate.getRemainingAmount());
+    }
+
+    /**
      * Determines whether a cleared transaction amount is close enough to a forecast
      * transaction's remaining amount to be auto-assigned without user confirmation.
      *
@@ -351,6 +383,14 @@ public class ForecastTransactionMatcher {
                         ft.toStringConcise());
                 debugView.say("");
                 return ft;
+            }
+
+            // Reaching here means the verdict was UNDECIDED, so an unpaired counterpart has only its
+            // amount left to identify it with.
+            if (!admitsUnpairedCounterpart(amount, ft)) {
+                debugView.say("[Phase2.5]     not this movement (unpaired counterpart for "
+                        + Utility.formatDollarAmount(ft.getRemainingAmount()) + ")  " + ft.toStringConcise());
+                continue;
             }
 
             double score = calculateMatchScore(date, amount, ft, possibleMerchants);

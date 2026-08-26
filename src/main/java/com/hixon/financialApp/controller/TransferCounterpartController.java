@@ -314,6 +314,98 @@ public class TransferCounterpartController {
                 ". This will not be asked again.");
     }
 
+    /**
+     * Retire an expectation that has been overtaken by events, and learn from it on the way out.
+     *
+     * <p>The counterpart mechanism assumes the two sides of a transfer are imported in order:  one
+     * register records the expectation, the other consumes it.  When the order is the other way
+     * round -- this register already held its side, fully categorized, before the far register was
+     * imported and wrote the expectation -- the counterpart is created for a transfer that has
+     * already arrived, and nothing will ever reach it again.  Phases 2.5 through 5.5 all sit inside
+     * {@code if (splits == null)}, so an already-split transaction never runs any of them; the
+     * counterpart is not deleted by forecast regeneration either, because it is deliberately created
+     * {@code overridden} so that regeneration cannot silently undo the feature.  It therefore stays
+     * in the forecast permanently, and -- being exempt from the merchant filter -- turns up as a
+     * candidate against every unrelated transaction near its date.
+     *
+     * <p>{@link #otherSideAlreadyExists} is the guard that normally prevents this, and it is the
+     * right guard, but it can only see what is in the database when the far side is imported.  This
+     * is the other half:  the register that was there first cleans up after the fact.
+     *
+     * <p>The splits already assigned here <em>are</em> the answer the far side was going to ask for,
+     * so the pairing is learned from them exactly as if the question had just been answered.
+     *
+     * <p>A candidate has to be the other side of <b>this</b> movement of money, on the same three
+     * hurdles {@link #otherSideAlreadyExists} uses -- differing bank references rule it out, the
+     * amounts must be the same size, and its source transaction must sit in the register this
+     * transfer names.  Anything short of that is left alone:  a stale expectation is untidy, but
+     * deleting a live one loses a question that should have been asked.
+     *
+     * @param transaction an already-imported transaction that already has splits
+     * @param splits      the splits it already has
+     * @return true if a counterpart was retired
+     */
+    public boolean retireCounterpartAlreadyArrived(Transaction transaction, List<TransactionSplit> splits)
+            throws Exception {
+
+        if (transaction == null || transaction.getDate() == null || splits == null || splits.isEmpty()) {
+            return false;
+        }
+
+        Forecast forecast = sessionController.getForecast();
+        if (forecast == null) {
+            return false;
+        }
+
+        // This runs for every already-imported transaction on every import, and almost none of them
+        // are transfers with an expectation waiting.  So ask the most selective question first:
+        // usually there are no unpaired counterparts anywhere near this date, and we are done in one
+        // query without having to work out what this transaction even is.
+        Calendar from = (Calendar) transaction.getDate().clone();
+        from.add(Calendar.DATE, -OTHER_SIDE_DAY_WINDOW);
+        Calendar to = (Calendar) transaction.getDate().clone();
+        to.add(Calendar.DATE, OTHER_SIDE_DAY_WINDOW);
+
+        List<ForecastTransaction> candidates = unpairedCounterpartsInDateRange(forecast, from, to);
+        if (candidates.isEmpty()) {
+            return false;
+        }
+
+        // If we cannot say which register this went to, it is not a transfer we can place, and there
+        // is nothing for it to be the other side of.
+        Register counterpartyRegister = resolveCounterpartyRegister(transaction);
+        if (counterpartyRegister == null) {
+            return false;
+        }
+
+        String reference = BankReferenceNumber.extract(transaction.getPayee());
+
+        for (ForecastTransaction candidate : candidates) {
+
+            if (BankReferenceNumber.areDifferentMovements(reference, candidate.getSourceReference())) {
+                continue;
+            }
+            if (!Utility.isEqualCurrency(transaction.getAmount(), candidate.getRemainingAmount())) {
+                continue;
+            }
+
+            // The expectation was written from a transaction in another register.  That register has
+            // to be the one this transfer names, or this is a different movement of the same size.
+            Transaction source = sourceTransactionOf(candidate);
+            if (source == null || source.getIdRegister() == null
+                    || !source.getIdRegister().equals(counterpartyRegister.getId())) {
+                continue;
+            }
+
+            view.say("The other side of this transfer was already imported here and categorized, so the " +
+                    "expectation recorded for it has been removed.");
+            learnPairingAndDropPlaceholder(candidate, splits);
+            return true;
+        }
+
+        return false;
+    }
+
 
     /*
      * Lifecycle (section 4).
@@ -407,8 +499,18 @@ public class TransferCounterpartController {
     /*
      * Testability seams.  These exist so the decision logic above can be exercised without a live
      * database -- they can be overridden in test subclasses.  They are the only points at which this
-     * controller writes.
+     * controller writes, plus the two reads the retire rule needs.
      */
+    protected List<ForecastTransaction> unpairedCounterpartsInDateRange(Forecast forecast, Calendar from, Calendar to)
+            throws Exception {
+        return ForecastTransaction.getUnpairedCounterpartsInDateRange(forecast, from, to);
+    }
+
+    protected Transaction sourceTransactionOf(ForecastTransaction counterpart) throws Exception {
+        UUID idSourceTransaction = counterpart.getIdSourceTransaction();
+        return (idSourceTransaction == null) ? null : Transaction.getById(idSourceTransaction);
+    }
+
     protected void insert(BudgetItem budgetItem) throws Exception {
         budgetItem.save(INSERT);
     }

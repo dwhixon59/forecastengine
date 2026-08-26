@@ -20,7 +20,9 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,6 +95,23 @@ public class TransferCounterpartControllerTest {
         @Override
         protected void insert(ForecastItem forecastItem) {
             insertedForecastItems.add(forecastItem);
+        }
+
+        /** The unpaired counterparts this register's forecast is pretending to hold. */
+        List<ForecastTransaction> unpairedCounterparts = new ArrayList<>();
+
+        /** Where each counterpart's source transaction is pretending to live. */
+        final Map<ForecastTransaction, Transaction> sourceTransactions = new HashMap<>();
+
+        @Override
+        protected List<ForecastTransaction> unpairedCounterpartsInDateRange(Forecast forecast,
+                                                                            Calendar from, Calendar to) {
+            return unpairedCounterparts;
+        }
+
+        @Override
+        protected Transaction sourceTransactionOf(ForecastTransaction counterpart) {
+            return sourceTransactions.get(counterpart);
         }
 
         @Override
@@ -881,4 +900,185 @@ public class TransferCounterpartControllerTest {
 
         assertEquals("Taken from the corresponding transfer", description);
     }
+
+    /*
+     * Retiring an expectation that has been overtaken by events.
+     *
+     * The counterpart mechanism assumes the two sides of a transfer are imported in order.  When
+     * this register already held its side, categorized, before the far register was imported and
+     * wrote the expectation, the counterpart is created for a transfer that has already arrived --
+     * and nothing reaches it again, because Phases 2.5 through 5.5 all sit inside
+     * `if (splits == null)`.  It is not removed by forecast regeneration either, because a
+     * counterpart is deliberately created overridden.
+     */
+
+    /** A counterpart in this register's forecast, written from a transaction in {@code sourceRegisterId}. */
+    private ForecastTransaction arrivedCounterpart(RecordingController controller, double remainingAmount,
+                                                   String reference, UUID idSourceBudgetItem,
+                                                   UUID sourceRegisterId) {
+        ForecastTransaction counterpart = mock(ForecastTransaction.class);
+        when(counterpart.getRemainingAmount()).thenReturn(remainingAmount);
+        when(counterpart.getSourceReference()).thenReturn(reference);
+        when(counterpart.getIdSourceBudgetItem()).thenReturn(idSourceBudgetItem);
+
+        Transaction source = mock(Transaction.class);
+        when(source.getIdRegister()).thenReturn(sourceRegisterId);
+
+        controller.unpairedCounterparts = new ArrayList<>(List.of(counterpart));
+        controller.sourceTransactions.put(counterpart, source);
+        return counterpart;
+    }
+
+    /** Runs the retire rule with the static lookups it needs standing in. */
+    private boolean runRetire(RecordingController controller, Transaction transaction,
+                              List<TransactionSplit> splits, BudgetItem sourceItem) throws Exception {
+        UUID idSourceItem = sourceItem.getId();
+        try (MockedStatic<Register> registers = Mockito.mockStatic(Register.class);
+             MockedStatic<BudgetItem> budgetItems = Mockito.mockStatic(BudgetItem.class)) {
+            registers.when(() -> Register.getByName("Bill Pay Dave")).thenReturn(counterpartyRegister);
+            budgetItems.when(() -> BudgetItem.getById(idSourceItem)).thenReturn(sourceItem);
+            return controller.retireCounterpartAlreadyArrived(transaction, splits);
+        }
+    }
+
+    @Test
+    @DisplayName("A counterpart whose transfer was already imported here is retired, and its pairing learned")
+    void testCounterpartForATransferAlreadyHereIsRetired() throws Exception {
+
+        // The far register was imported after this one and wrote an expectation for a transfer that
+        // was already sitting here, categorized.  Observed in a real import: the expectation was
+        // still there weeks later, scoring against unrelated transactions.
+        Transaction transaction = transferTransaction(
+                "ONLINE TRANSFER TO HIXON D REF #IB0ZHFFH69 EVERYDAY CHECKING TEST XFR2", -1.00);
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+        BudgetItem alreadyChosen = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+        ForecastTransaction counterpart = arrivedCounterpart(
+                controller, -1.00, "IB0ZHFFH69", sourceItem.getId(), COUNTERPARTY_REGISTER_ID);
+
+        boolean retired = runRetire(controller, transaction, List.of(split(-1.00, alreadyChosen)), sourceItem);
+
+        assertTrue(retired, "The expectation has been overtaken by events");
+        assertEquals(List.of(counterpart), controller.deleted,
+                "Left in place it scores against every unrelated transaction near its date, forever");
+        assertEquals(List.of("Other -> Other in Bill Pay Danni"), controller.pairingsRecorded,
+                "The splits already assigned are the answer the far side was going to ask for");
+    }
+
+    @Test
+    @DisplayName("A transfer carrying no bank reference is still retired, on its amount and register")
+    void testRetireWorksWithoutABankReference() throws Exception {
+
+        // 57% of transfers carry no reference, so a rule that required one would do nothing for most
+        // of them.
+        Transaction transaction = transferTransaction("ONLINE TRANSFER TO HIXON D EVERYDAY CHECKING", -30.00);
+        BudgetItem sourceItem = budgetItem("Reimbursement", Item.PeriodType.ON_DEMAND);
+        BudgetItem alreadyChosen = budgetItem("Groceries", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+        ForecastTransaction counterpart = arrivedCounterpart(
+                controller, -30.00, null, sourceItem.getId(), COUNTERPARTY_REGISTER_ID);
+
+        assertTrue(runRetire(controller, transaction, List.of(split(-30.00, alreadyChosen)), sourceItem));
+        assertEquals(List.of(counterpart), controller.deleted);
+    }
+
+    @Test
+    @DisplayName("A counterpart carrying a different bank reference is left alone")
+    void testDifferentReferenceIsNotRetired() throws Exception {
+
+        Transaction transaction = transferTransaction(
+                "ONLINE TRANSFER TO HIXON D REF #IB0ZHFFH69 EVERYDAY CHECKING TEST XFR2", -1.00);
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+        arrivedCounterpart(controller, -1.00, "IB0ZHFDXMQ", sourceItem.getId(), COUNTERPARTY_REGISTER_ID);
+
+        assertFalse(runRetire(controller, transaction,
+                List.of(split(-1.00, budgetItem("Other", Item.PeriodType.ON_DEMAND))), sourceItem));
+        assertTrue(controller.deleted.isEmpty(),
+                "A stale expectation is untidy, but deleting a live one loses a question that should be asked");
+    }
+
+    @Test
+    @DisplayName("A counterpart of a different size is left alone")
+    void testDifferentAmountIsNotRetired() throws Exception {
+
+        Transaction transaction = transferTransaction("ONLINE TRANSFER TO HIXON D EVERYDAY CHECKING", -35.00);
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+        arrivedCounterpart(controller, -1.00, null, sourceItem.getId(), COUNTERPARTY_REGISTER_ID);
+
+        assertFalse(runRetire(controller, transaction,
+                List.of(split(-35.00, budgetItem("Other", Item.PeriodType.ON_DEMAND))), sourceItem));
+        assertTrue(controller.deleted.isEmpty(), "The two sides of one movement of money are the same size");
+    }
+
+    @Test
+    @DisplayName("A counterpart written from an unrelated register is left alone")
+    void testCounterpartFromAnotherRegisterIsNotRetired() throws Exception {
+
+        // Same amount, same window, and no reference to tell them apart -- but it is an expectation
+        // about a transfer with a third register, and this transfer says nothing about that one.
+        // This is the same hurdle otherSideAlreadyExists applies in the other direction.
+        Transaction transaction = transferTransaction("ONLINE TRANSFER TO HIXON D EVERYDAY CHECKING", -30.00);
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+        arrivedCounterpart(controller, -30.00, null, sourceItem.getId(), UUID.randomUUID());
+
+        assertFalse(runRetire(controller, transaction,
+                List.of(split(-30.00, budgetItem("Other", Item.PeriodType.ON_DEMAND))), sourceItem));
+        assertTrue(controller.deleted.isEmpty());
+    }
+
+    @Test
+    @DisplayName("An ordinary purchase retires nothing and says nothing")
+    void testNonTransferRetiresNothing() throws Exception {
+
+        // The regression guard: this runs for every already-imported transaction on every import, so
+        // it has to be silent and cheap for the overwhelming majority that are not transfers.
+        Transaction purchase = mock(Transaction.class);
+        when(purchase.getId()).thenReturn(UUID.randomUUID());
+        when(purchase.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+        when(purchase.getPayee()).thenReturn("PURCHASE AUTHORIZED ON 08/24 NETFLIX.COM");
+        when(purchase.getAmount()).thenReturn(-28.20);
+        when(purchase.getDate()).thenReturn(dateOf(2026, Calendar.AUGUST, 24));
+        Merchant netflix = mock(Merchant.class);
+        when(netflix.getName()).thenReturn("Netflix");
+        when(purchase.getMerchant()).thenReturn(netflix);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+
+        // There *is* an expectation of the same size sitting in the window. The purchase must not
+        // touch it: no merchant of a purchase names a register, so it is the other side of nothing.
+        arrivedCounterpart(controller, -28.20, null,
+                budgetItem("Other", Item.PeriodType.ON_DEMAND).getId(), COUNTERPARTY_REGISTER_ID);
+
+        boolean retired;
+        try (MockedStatic<Register> registers = Mockito.mockStatic(Register.class)) {
+            registers.when(() -> Register.getByName("Netflix")).thenReturn(null);
+            retired = controller.retireCounterpartAlreadyArrived(
+                    purchase, List.of(split(-28.20, budgetItem("Streaming TV", Item.PeriodType.MONTHLY))));
+        }
+
+        assertFalse(retired);
+        assertTrue(controller.deleted.isEmpty());
+        assertTrue(capturedMessages.isEmpty(), "Nothing to say about an ordinary purchase");
+    }
+
 }

@@ -1111,6 +1111,50 @@ public class ForecastTransaction extends IndependentEntity {
         return null;
     }
 
+    /**
+     * The transfer counterparts in a forecast whose budget item pairing is still unknown, planned
+     * within a few days either side of a date.
+     *
+     * <p>These are the expectations that are still waiting to be answered.  A counterpart whose
+     * pairing is already known is not returned:  it carries a real budget item, so Phase 2.5 can
+     * assign it in the ordinary way and it needs no special handling.
+     *
+     * @param forecast the forecast to search
+     * @param from     the earliest planned date to consider
+     * @param to       the latest planned date to consider
+     * @return the unpaired counterparts in planned-date order; empty if there are none
+     */
+    public static List<ForecastTransaction> getUnpairedCounterpartsInDateRange(Forecast forecast,
+                                                                              Calendar from, Calendar to)
+            throws EntityException {
+
+        List<ForecastTransaction> counterparts = new ArrayList<>();
+        if (forecast == null || from == null || to == null) {
+            return counterparts;
+        }
+
+        String query = getSelectQuery() +
+                " inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "and ft.transferPairingUnknown = true " +
+                "and ft.plannedDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to) + " " +
+                "order by ft.plannedDate";
+        ResultSet rs = EntityInt.getRS(query, "Database error occurred attempting to retrieve the unpaired " +
+                "transfer counterparts in forecast " + forecast.getId() + ".");
+        try {
+            while (rs != null && rs.next()) {
+                counterparts.add(new ForecastTransaction(rs));
+            }
+        } catch (SQLException e) {
+            EntityException ee = new EntityException("Database error occurred reading the unpaired transfer " +
+                    "counterparts in forecast " + forecast.getId() + ".");
+            ee.initCause(e);
+            throw ee;
+        }
+        return counterparts;
+    }
+
 
     /**
      * Convenience overload that resolves the applicable forecast transaction using the most recent

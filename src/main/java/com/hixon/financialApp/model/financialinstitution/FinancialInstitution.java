@@ -359,8 +359,17 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * Converts a QfxTransaction to a Transaction domain object.
      * Subclasses can override this if they need custom conversion logic.
      *
+     * <p><b>The returned transaction has no merchant payee yet.</b>  Parsing it can ask the user a
+     * question -- {@code WellsFargoBank.parseMerchantPayee} prompts for the counterparty register
+     * when a transfer's payee carries no account number -- and at this point nobody yet knows
+     * whether this row was already imported on a previous run.  Asking here means re-importing an
+     * overlapping statement re-asks the register question for every transfer already in the
+     * register, and the answer is thrown away.  So the parse is deferred to
+     * {@code ImportController}, which calls {@link #parseMerchantPayee} only once it has looked the
+     * import record id up and found nothing.  The provisional import path already works this way.
+     *
      * @param qfxTxn the QFX transaction
-     * @return a Transaction object
+     * @return a Transaction object, with a null merchant payee for the caller to fill in
      * @throws Exception if conversion fails
      */
     protected Transaction convertQfxToTransaction(QfxTransaction qfxTxn) throws Exception {
@@ -401,10 +410,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             importRecordId
         );
 
-        // Parse merchant/payee using institution-specific logic
-        String merchantPayee = parseMerchantPayee(postDate, qfxTxn.getAmount(), payee);
-        transaction.setMerchantPayee(merchantPayee);
-
+        // The merchant payee is deliberately left unset -- see the note on this method.
         return transaction;
     }
 

@@ -350,6 +350,28 @@ public class ImportController {
                     currentTransaction = existingTransaction;
                     merchant = currentTransaction.getMerchant();
                     splits = TransactionSplit.getSplitsForTransaction(currentTransaction);
+
+                    // This side of a transfer is already here and already categorized, so any
+                    // expectation still waiting for it in this register's forecast has been overtaken
+                    // by events. Retire it -- and take the pairing from the splits already assigned,
+                    // which is the answer the far side was going to ask for. Nothing below will ever
+                    // do this: Phases 2.5 through 5.5 all sit inside `if (splits == null)`, so a
+                    // counterpart whose transaction arrived first can never be reached again.
+                    if (splits != null && !splits.isEmpty()) {
+                        new TransferCounterpartController(sessionController)
+                                .retireCounterpartAlreadyArrived(currentTransaction, splits);
+                    }
+                } else {
+                    // Parse the merchant payee for this NEW transaction (deferred from the financial
+                    // institution's file conversion). Parsing can ask the user which register a
+                    // transfer came from, so doing it before the lookup above re-asks that question
+                    // for every transfer in an overlapping statement -- and then discards the answer,
+                    // because the existing row already records it. The provisional import path
+                    // already defers the parse for exactly this reason.
+                    currentTransaction.setMerchantPayee(financialInstitution.parseMerchantPayee(
+                            currentTransaction.getDate(),
+                            currentTransaction.getAmount(),
+                            currentTransaction.getPayee()));
                 }
 
                 // It is expected that transactions will be downloaded almost daily, so if the first transaction is more

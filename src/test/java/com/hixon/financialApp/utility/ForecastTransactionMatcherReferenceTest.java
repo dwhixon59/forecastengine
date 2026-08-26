@@ -1,10 +1,13 @@
 package com.hixon.financialApp.utility;
 
+import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.utility.ForecastTransactionMatcher.ReferenceVerdict;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for the bank-reference rule in {@link ForecastTransactionMatcher}.
@@ -66,5 +69,62 @@ public class ForecastTransactionMatcherReferenceTest {
         // 57% of transfers land here, and this is the behaviour that must not regress.
         assertEquals(ReferenceVerdict.UNDECIDED,
                 ForecastTransactionMatcher.compareReferences(null, null));
+    }
+
+    /*
+     * The unpaired-counterpart rule:  an identity, never proximity.
+     */
+
+    /** A counterpart still waiting for its budget item pairing, carrying the given amount. */
+    private static ForecastTransaction unpairedCounterpart(double remainingAmount) {
+        ForecastTransaction counterpart = mock(ForecastTransaction.class);
+        when(counterpart.isTransferPairingUnknown()).thenReturn(true);
+        when(counterpart.getRemainingAmount()).thenReturn(remainingAmount);
+        return counterpart;
+    }
+
+    @Test
+    @DisplayName("An unpaired counterpart of the same size is admitted - it is the same movement")
+    void testUnpairedCounterpartOfTheSameAmountIsAdmitted() {
+        assertTrue(ForecastTransactionMatcher.admitsUnpairedCounterpart(-1.00, unpairedCounterpart(-1.00)));
+    }
+
+    @Test
+    @DisplayName("An unpaired counterpart of a different size is refused, however close the dates")
+    void testUnpairedCounterpartOfADifferentAmountIsRefused() {
+        // Both observed in one real import: a $1.00 placeholder was scoring 40 against a $2.00
+        // savings transfer and 32 against a $35.00 credit card payment, purely on date proximity.
+        // It can never be assigned, so scoring it at all is noise -- and it is exempt from the
+        // merchant filter, which is what let it reach an unrelated credit card payment.
+        assertFalse(ForecastTransactionMatcher.admitsUnpairedCounterpart(-2.00, unpairedCounterpart(-1.00)));
+        assertFalse(ForecastTransactionMatcher.admitsUnpairedCounterpart(-35.00, unpairedCounterpart(-1.00)));
+    }
+
+    @Test
+    @DisplayName("A counterpart of the same size but the opposite sign is refused")
+    void testOppositeSignIsNotTheSameMovement() {
+        // The counterpart is created already negated, so it should carry this side's sign. One that
+        // does not is the register's own copy of the far side, not an expectation for this one.
+        assertFalse(ForecastTransactionMatcher.admitsUnpairedCounterpart(1.00, unpairedCounterpart(-1.00)));
+    }
+
+    @Test
+    @DisplayName("A counterpart whose pairing is known is admitted on its amount as before")
+    void testKnownPairingIsAdmittedRegardlessOfAmount() {
+        // It carries a real budget item, so it can actually be assigned and the ordinary score is
+        // allowed to decide - including for a partially reconciled remaining amount.
+        ForecastTransaction paired = mock(ForecastTransaction.class);
+        when(paired.isTransferPairingUnknown()).thenReturn(false);
+        assertTrue(ForecastTransactionMatcher.admitsUnpairedCounterpart(-35.00, paired));
+    }
+
+    @Test
+    @DisplayName("An ordinary forecast transaction is untouched by the rule")
+    void testOrdinaryForecastTransactionIsAlwaysAdmitted() {
+        // The regression guard: nothing about normal forecast matching may shift because of this.
+        ForecastTransaction ordinary = mock(ForecastTransaction.class);
+        when(ordinary.isTransferPairingUnknown()).thenReturn(false);
+        assertTrue(ForecastTransactionMatcher.admitsUnpairedCounterpart(-1234.56, ordinary));
+        assertTrue(ForecastTransactionMatcher.admitsUnpairedCounterpart(0.0, ordinary));
     }
 }

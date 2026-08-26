@@ -712,9 +712,10 @@ public class WellsFargoBank extends FinancialInstitution {
             }
         }
 
-        // Parse out the merchant name:
-        transaction.setMerchantPayee(parseMerchantPayee(transaction.getDate(), transaction.getAmount(),
-                transaction.getPayee()));
+        // The merchant payee is deliberately left unset here.  Parsing it can ask the user which
+        // register a transfer came from, and at this point nobody yet knows whether this row was
+        // already imported on a previous run -- so ImportController parses it after the import
+        // record id lookup, for new transactions only.  See convertQfxToTransaction.
 
         // Make sure that we update the database:
         transaction.setDirty(true);

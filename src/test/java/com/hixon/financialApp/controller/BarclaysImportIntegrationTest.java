@@ -67,7 +67,7 @@ class BarclaysImportIntegrationTest {
 
             List<Transaction> importedTransactions = new ArrayList<>();
             while (barclays.hasNext()) {
-                Transaction t = barclays.next();
+                Transaction t = nextAsTheImportWould(barclays);
                 importedTransactions.add(t);
             }
 
@@ -98,7 +98,7 @@ class BarclaysImportIntegrationTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction txn = barclays.next();
+            Transaction txn = nextAsTheImportWould(barclays);
 
             // Assert - Verify all required fields are populated
             assertNotNull(txn.getDate(), "Transaction date should be set");
@@ -137,7 +137,7 @@ class BarclaysImportIntegrationTest {
                 barclays.importRegisterTrxFile();
 
                 assertTrue(barclays.hasNext(), "Should have at least one transaction: " + testFile);
-                Transaction txn = barclays.next();
+                Transaction txn = nextAsTheImportWould(barclays);
 
                 // Assert
                 assertNotNull(txn, "Transaction should not be null: " + testFile);
@@ -191,7 +191,7 @@ class BarclaysImportIntegrationTest {
 
             int transactionCount = 0;
             while (financialInstitution.hasNext()) {
-                Transaction t = financialInstitution.next();
+                Transaction t = nextAsTheImportWould(financialInstitution);
                 // In real ImportController, transaction would be processed here
                 transactionCount++;
 
@@ -208,5 +208,22 @@ class BarclaysImportIntegrationTest {
             financialInstitution.close();
         }
     }
+
+    /**
+     * A transaction as the import actually ends up with it.
+     *
+     * <p>{@code next()} deliberately leaves the merchant payee unset:  parsing it can ask the user a
+     * question, and at that point nobody yet knows whether the row was already imported on an
+     * earlier run, so {@code ImportController} defers the parse until after its import-record-id
+     * lookup.  See {@code FinancialInstitution.convertQfxToTransaction}.  These tests mirror that
+     * second step so they assert on the finished article rather than the raw row.
+     */
+    private static Transaction nextAsTheImportWould(BarclaysBank bank) throws Exception {
+        Transaction transaction = bank.next();
+        transaction.setMerchantPayee(bank.parseMerchantPayee(
+                transaction.getDate(), transaction.getAmount(), transaction.getPayee()));
+        return transaction;
+    }
+
 }
 
