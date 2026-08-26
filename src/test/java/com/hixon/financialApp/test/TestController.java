@@ -74,8 +74,7 @@ public class TestController {
                           NotificationServiceInt notificationService) throws Exception {
 
         // Set up the user, the database connection manager, and the view:
-        DatabaseConnectionManager mgr = new DatabaseConnectionManager(
-                "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***");
+        DatabaseConnectionManager mgr = DatabaseConnectionManager.fromProperties();
         Utility.setConnectionManager(mgr);
         Utility.setUser(User.getByName(username));
         Utility.setView(view);

@@ -117,9 +117,7 @@ public static Connection getDbConnection() throws SQLException {
 ### `Main.java` changes
 
 ```java
-DatabaseConnectionManager mgr =
-    new DatabaseConnectionManager(
-        "jdbc:mysql://localhost:3306/ForecastDatabase", "root", "***REMOVED-CREDENTIAL***");
+DatabaseConnectionManager mgr = DatabaseConnectionManager.fromProperties();
 
 MainController mainController =
     new MainController("dwhixon", mgr, new ViewCmdline(),
