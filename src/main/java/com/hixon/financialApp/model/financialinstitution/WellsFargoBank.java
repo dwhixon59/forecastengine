@@ -80,15 +80,19 @@ public class WellsFargoBank extends FinancialInstitution {
             "MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|MP|OH|OK|OR|PW|PA|PR|RI|SC|SD|TN|TX|VT|VA|WA|WV|WI|WY|";
 
     /**
-     * Set of common stopwords to filter out when extracting user descriptions from transaction text.
-     * These words are typically bank-related terminology that don't contribute to meaningful
-     * user-provided descriptions.
+     * The Wells Fargo account-type names that can appear between the reference code and the user's
+     * memo, longest first.  The account type is a phrase anchored at the front of the post-reference
+     * tail -- not a bag of words -- which is why it is matched and stripped as a phrase.  This list
+     * is derived from the transfer descriptions actually present in the register; add to it when a
+     * new account type shows up.
      */
-    private static final Set<String> STOPWORDS = Set.of(
-            "RECURRING", "TRANSFER", "TO", "FROM", "REF", "#",
-            "EVERYDAY", "CHECKING", "SAVINGS", "WAY2SAVE",
-            "ACCOUNT", "JOINT", "BANKING", "BA", "ONLINE"
-    );
+    private static final String[][] ACCOUNT_TYPE_PHRASES = {
+            {"WELLS", "FARGO", "CLEAR", "ACCESS", "BANKING"},
+            {"WELLS", "FARGO", "AT", "WORK", "CHECKING"},
+            {"EVERYDAY", "CHECKING"},
+            {"WAY2SAVE", "SAVINGS"},
+            {"CHECKING"}
+    };
 
     /**
      * Pattern to match masked account numbers in Wells Fargo transaction descriptions.
@@ -108,6 +112,19 @@ public class WellsFargoBank extends FinancialInstitution {
      * Used to reject descriptions that contain only a date after cleaning.
      */
     private static final Pattern DATE_ONLY_PATTERN = Pattern.compile("^ON\\s+\\d{2}/\\d{2}/\\d{2,4}$", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Pattern to match a Wells Fargo reference code standing on its own as a word, such as
+     * "IB0Z8W2598".  Two letters, a digit, then at least seven more alphanumerics.
+     */
+    private static final Pattern REF_CODE_PATTERN = Pattern.compile("^[A-Z]{2}\\d[A-Z0-9]{7,}$");
+
+    /**
+     * Pattern to match a trailing posting date such as "ON 06/21/26".  The date is the bank's,
+     * never part of the user's memo, so it is stripped from the end of an extracted description.
+     */
+    private static final Pattern TRAILING_DATE_PATTERN =
+            Pattern.compile("\\s*\\bON\\s+\\d{2}/\\d{2}/\\d{2,4}$", Pattern.CASE_INSENSITIVE);
 
     /**
      * Enum representing the CSV column headers used in Wells Fargo transaction download files.
@@ -542,15 +559,36 @@ public class WellsFargoBank extends FinancialInstitution {
      * <ol>
      *   <li>Removing leading reference codes and dates</li>
      *   <li>Finding text after the last "REF #" marker</li>
-     *   <li>Filtering out bank terminology, account numbers, and duplicate reference codes</li>
+     *   <li>Dropping the reference code and the account-type phrase that follows it</li>
+     *   <li>Filtering out masked account numbers and trailing posting dates</li>
      *   <li>Rejecting results that are only dates</li>
      * </ol>
+     *
+     * <p>Everything the account type does not account for is kept.  Words are no longer filtered
+     * individually: the account type is a phrase anchored at the front of the tail, and filtering it
+     * word by word both left the longer phrases behind (leaving
+     * "WELLS FARGO CLEAR ACCESS JUSTIN SPENDING MONEY" as a description) and ate memo words such as
+     * JOINT and SAVINGS, which are real budget item names.
      *
      * @param rawText The raw transaction description from Wells Fargo CSV
      * @return The extracted user description, or null if no valid description could be found
      */
     @Override
     public String extractUserDescription(String rawText) {
+        return extractMemoFromPayee(rawText);
+    }
+
+    /**
+     * The implementation of {@link #extractUserDescription(String)}, exposed statically so that
+     * offline tools -- {@code com.hixon.utilities.BackfillUserDescriptions} in particular -- extract
+     * memos exactly the way an import does, without needing a session or a database connection to
+     * build an institution.  The backfill used to keep its own copy of this logic, which meant a fix
+     * here silently did not reach the historical rows.
+     *
+     * @param rawText The raw transaction description from Wells Fargo
+     * @return The extracted user description, or null if no valid description could be found
+     */
+    public static String extractMemoFromPayee(String rawText) {
         if (rawText == null || rawText.isBlank()) return null;
 
         rawText = rawText.trim();
@@ -563,33 +601,82 @@ public class WellsFargoBank extends FinancialInstitution {
         if (refIndex == -1) return null;
 
         String afterRef = rawText.substring(refIndex + 5).trim();
+        if (afterRef.isEmpty()) return null;
         String[] words = afterRef.split("\\s+");
 
-        List<String> cleaned = new ArrayList<>();
-        for (String word : words) {
-            String upper = word.toUpperCase();
+        // Step 3: Drop the reference code, then the account-type phrase that follows it.  What is
+        // left is the user's memo, if they typed one.
+        int start = REF_CODE_PATTERN.matcher(words[0].toUpperCase()).matches() ? 1 : 0;
+        String[] tail = Arrays.copyOfRange(words, start, words.length);
+        int memoStart = skipAccountTypePhrase(tail);
 
-            if (STOPWORDS.contains(upper) || MASKED_ACCOUNT_PATTERN.matcher(upper).matches()) {
+        List<String> cleaned = new ArrayList<>();
+        for (int i = memoStart; i < tail.length; i++) {
+            String upper = tail[i].toUpperCase();
+
+            if (MASKED_ACCOUNT_PATTERN.matcher(upper).matches()
+                    || REF_CODE_PATTERN.matcher(upper).matches()) {
                 continue;
             }
 
-            if (word.matches("^[A-Z]{2}\\d[A-Z0-9]{7,}$")) {
-                continue; // Skip duplicate reference codes
-            }
-
-            cleaned.add(word);
+            cleaned.add(tail[i]);
         }
 
         if (cleaned.isEmpty()) return null;
 
-        String result = String.join(" ", cleaned);
+        // Step 4: A trailing posting date belongs to the bank, not to the user.
+        String result = TRAILING_DATE_PATTERN.matcher(String.join(" ", cleaned)).replaceFirst("").trim();
 
-        // Step 3: Reject if the remaining description is just a date
-        if (DATE_ONLY_PATTERN.matcher(result.toUpperCase()).matches()) {
+        // Step 5: Reject if the remaining description is just a date
+        if (result.isEmpty() || DATE_ONLY_PATTERN.matcher(result.toUpperCase()).matches()) {
             return null;
         }
 
         return result;
+    }
+
+    /**
+     * Returns the index of the first word after the account-type phrase at the front of {@code words},
+     * or 0 if no account type is present.  The longest matching phrase wins, so the second SAVINGS in
+     * "WAY2SAVE SAVINGS SAVINGS JSV" survives as part of the memo.
+     *
+     * @param words the post-reference words, with the reference code already removed
+     * @return the index at which the user's memo begins
+     */
+    private static int skipAccountTypePhrase(String[] words) {
+        int longest = 0;
+        for (String[] phrase : ACCOUNT_TYPE_PHRASES) {
+            longest = Math.max(longest, matchAccountTypePhrase(words, phrase));
+        }
+        return longest;
+    }
+
+    /**
+     * Matches one account-type phrase against the front of {@code words}, tolerating the truncation
+     * Wells Fargo applies to the account-type field.  The truncation can cut the phrase short
+     * mid-word ("WELLS FARGO CLEAR ACCESS BA PATIO", where the memo PATIO still follows) or cut the
+     * whole description short ("...REF #IB0ZHVQXST WA" on a provisional row, where nothing follows).
+     *
+     * @param words  the post-reference words, with the reference code already removed
+     * @param phrase the account-type phrase to match, in upper case
+     * @return the number of words consumed, or 0 if the phrase does not match
+     */
+    private static int matchAccountTypePhrase(String[] words, String[] phrase) {
+        for (int i = 0; i < phrase.length; i++) {
+
+            // The description ran out part way through the account type: consume what there is.
+            if (i >= words.length) return i;
+
+            String word = words[i].toUpperCase();
+            if (word.equals(phrase[i])) continue;
+
+            // A partial word matches only where a truncation could plausibly have left one: at the
+            // end of the phrase, or at the end of the description.
+            boolean truncated = word.length() >= 2 && phrase[i].startsWith(word)
+                    && (i == phrase.length - 1 || i == words.length - 1);
+            return truncated ? i + 1 : 0;
+        }
+        return phrase.length;
     }
 
     /**
@@ -697,6 +784,10 @@ public class WellsFargoBank extends FinancialInstitution {
 
         // Create the transaction:
         Transaction transaction = new Transaction(getRegister(), postDate, payee, amount, cleared, checkNumber, importRecordId);
+
+        // Record the user's memo, if they typed one.  It is the only place the user says why they
+        // moved the money, and auto-matching reads it back out of user_description later.
+        transaction.setUserDescription(extractUserDescription(payee));
 
         // Tokenize the bank payee (single blank is the separator):
         payeeTokens = transaction.getPayee().split(" ");

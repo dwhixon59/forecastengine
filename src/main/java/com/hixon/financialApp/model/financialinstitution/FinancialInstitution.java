@@ -410,6 +410,10 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             importRecordId
         );
 
+        // Record the user's memo, if they typed one.  It is the only place the user says why they
+        // moved the money, and auto-matching reads it back out of user_description later.
+        transaction.setUserDescription(extractUserDescription(payee));
+
         // The merchant payee is deliberately left unset -- see the note on this method.
         return transaction;
     }

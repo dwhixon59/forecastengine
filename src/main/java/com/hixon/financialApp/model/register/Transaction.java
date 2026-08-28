@@ -34,6 +34,8 @@ public class Transaction extends IndependentEntity {
     public static final String CLEARED_TRANSACTIONS_FILE = "cleared transactions";
     /** File name for provisional transactions. */
     public static final String PROVISIONAL_TRANSACTIONS_FILE = "provisional transactions";
+    /** Width of the transaction.user_description column, which extracted memos are truncated to. */
+    public static final int USER_DESCRIPTION_MAX_LENGTH = 64;
 
     /*
      * Fields of the Transaction class:
@@ -48,6 +50,13 @@ public class Transaction extends IndependentEntity {
     private int checkNumber = 0;
     /** The payee for the transaction. */
     private String payee = null;
+    /**
+     * The user-provided memo extracted from the payee, or null if the user did not type one.
+     * Wells Fargo appends the memo to the transfer description; see
+     * {@code FinancialInstitutionInt.extractUserDescription}.  Limited to the 64 characters the
+     * {@code transaction.user_description} column holds.
+     */
+    private String userDescription = null;
     /** The amount of the transaction. */
     private double amount = 0;
     /** The balance after the transaction. */
@@ -78,6 +87,7 @@ public class Transaction extends IndependentEntity {
     private static final String selectColumns = "bin_to_uuid(tr.idTransaction) as 'tr.idTransaction', " +
             "tr.postDate as 'tr.postDate', tr.authorizationDate as 'tr.authorizationDate', tr.amount as 'tr.amount', " +
             "tr.cleared as 'tr.cleared', tr.checkNumber as 'tr.checkNumber', tr.payee as 'tr.payee', " +
+            "tr.user_description as 'tr.user_description', " +
             "tr.balance as 'tr.balance', tr.isImproper as 'tr.isImproper', tr.isNew as 'tr.isNew', " +
             "tr.importRecordId as 'tr.importRecordId', bin_to_uuid(tr.Register_idRegister) as 'tr.idRegister', " +
             "bin_to_uuid(tr.Merchant_idMerchant) as 'tr.idMerchant'";
@@ -111,8 +121,18 @@ public class Transaction extends IndependentEntity {
     }
 
     private static final String insertQuery = "insert into transaction (idTransaction, " +
-            "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
-            "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
+            "postDate, authorizationDate, amount, cleared, checkNumber, payee, user_description, balance, " +
+            "isImproper, isNew, importRecordId, Register_idRegister, Merchant_idMerchant) values(";
+
+    /**
+     * Returns the user description as a SQL literal, or NULL when the user typed no memo.
+     * Most transactions have no memo, so the column must hold a real NULL rather than the
+     * string "null".
+     * @return SQL literal for the user description
+     */
+    private String getUserDescriptionSqlValue() {
+        return (userDescription == null) ? "NULL" : "'" + Utility.escapeSqlString(userDescription) + "'";
+    }
 
     /**
      * Returns the SQL insert query for this transaction.
@@ -123,7 +143,8 @@ public class Transaction extends IndependentEntity {
         String merchantIdValue = (getIdMerchant() == null) ? "NULL" : "uuid_to_bin('" + getIdMerchant() + "')";
         return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
                 Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
-                checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", " + isNew + ", \"" +
+                checkNumber + ", \"" + payee + "\", " + getUserDescriptionSqlValue() + ", " + balance + ", " +
+                isImproper + ", " + isNew + ", \"" +
                 importRecordId + "\", uuid_to_bin('" + getIdRegister() + "'), " + merchantIdValue + ")";
     }
 
@@ -138,7 +159,8 @@ public class Transaction extends IndependentEntity {
         String merchantUpdateClause = (getIdMerchant() == null) ? "" : ", Merchant_idMerchant = " + merchantIdValue;
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
-                + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
+                + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\""
+                + ", user_description = " + getUserDescriptionSqlValue() + ", balance = "
                 + balance + ", isImproper = " + isImproper + ", isNew = " + isNew +
                 ", importRecordId = \"" + importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "')" +
                 merchantUpdateClause;
@@ -170,7 +192,8 @@ public class Transaction extends IndependentEntity {
     public String getUpdateByIdQuery() {
         return updateQuery + "postdate = " + Utility.calendarDateToSqlDateString(postDate) + ", authorizationDate = " +
                 Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount + ", cleared = " +
-                cleared + ", checkNumber = " + checkNumber + ", payee = '" + payee + "', balance = " + balance +
+                cleared + ", checkNumber = " + checkNumber + ", payee = '" + payee + "'" +
+                ", user_description = " + getUserDescriptionSqlValue() + ", balance = " + balance +
                 ", isImproper = " + isImproper + ", isNew = " + isNew + ", importRecordId = '" + importRecordId +
                 "', Register_idRegister = uuid_to_bin('" + idRegister + "'), Merchant_idMerchant = uuid_to_bin('" +
                 idMerchant + "') " +
@@ -507,6 +530,32 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * Gets the user-provided memo extracted from the payee.
+     * @return the user description, or null if the user typed no memo
+     */
+    public String getUserDescription() {
+        return userDescription;
+    }
+
+    /**
+     * Sets the user-provided memo extracted from the payee.  A blank memo is stored as null, and a
+     * long one is truncated to the 64 characters the column holds.
+     * @param userDescription the user description, or null if there is none
+     */
+    public void setUserDescription(String userDescription) {
+        if (userDescription != null) {
+            userDescription = userDescription.trim();
+            if (userDescription.isEmpty()) {
+                userDescription = null;
+            } else if (userDescription.length() > USER_DESCRIPTION_MAX_LENGTH) {
+                userDescription = userDescription.substring(0, USER_DESCRIPTION_MAX_LENGTH).trim();
+            }
+        }
+        this.userDescription = userDescription;
+        setDirty(true);
+    }
+
+    /**
      * Gets the import record ID.
      * @return import record ID
      */
@@ -721,6 +770,7 @@ public class Transaction extends IndependentEntity {
         cleared = rs.getBoolean("tr.cleared");
         checkNumber = rs.getInt("tr.checkNumber");
         payee = rs.getString("tr.payee");
+        userDescription = rs.getString("tr.user_description");
         amount = rs.getDouble("tr.amount");
         balance = rs.getDouble("tr.balance");
         isImproper = rs.getBoolean("tr.isImproper");
