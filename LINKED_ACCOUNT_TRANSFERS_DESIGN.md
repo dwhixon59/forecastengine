@@ -1,6 +1,38 @@
 # Linked Account Transfers — Design
 
-**Status:** draft for review. Nothing implemented yet.
+**Status:** implemented 2026-08-22. All six phases are built, the test suite is green (295 tests),
+and the three migrations have been applied to `ForecastDatabase`.
+
+Each migration has a rollback, written at the same time as the up and exercised against a scratch
+copy of the schema before either was run for real. There is no remote for this repository, so the
+database is the one thing `git checkout` cannot recover.
+
+| Up (applied) | Down |
+|---|---|
+| `add_forecast_register_column.sql` | `rollback_forecast_register_column.sql` |
+| `add_transfer_budget_item_pair.sql` | `rollback_transfer_budget_item_pair.sql` |
+| `add_forecast_transaction_transfer_columns.sql` | `rollback_forecast_transaction_transfer_columns.sql` |
+
+After the migration the data is exactly as predicted below: four forecasts, each owning the register
+that carries the money, and seven registers with no forecast — which is what makes the convention
+decide not to create counterpart expectations for them.
+
+Four things went slightly beyond what is written below, each noted at the point it arises:
+
+- **Phase 5.5 also checks whether the counterparty register already holds the other side**, and
+  records nothing if it does. Without this the expectation bounces: importing the second register
+  processes transfers too, and each one would write an expectation back into the register it came
+  from, for a transfer that had already happened there. The check also makes re-imports of either
+  side, in either order, come out the same.
+- `forecast_transaction.SourceBudgetItem_idBudgetItem`, so that a multi-split transfer learns its
+  pairing exactly rather than guessing which split a counterpart came from.
+- `Forecast.selectForecast(Budget)` no longer offers to create a forecast either. The design removed
+  the create-offer from the session path; leaving it on the budget path would have created forecasts
+  belonging to no register, which the register-scoped lookups can never find again.
+- A transfer counterpart is exempt from Phase 2.5's merchant filter and merchant-mismatch gate. Its
+  identity comes from the source transaction, and a transfer payee rarely maps to the merchants on
+  the far side's budget item — so leaving the gate in place would have asked about every transfer,
+  which is the question this feature exists to remove.
 
 ## Goal
 
@@ -153,7 +185,7 @@ register:
 | Bill Pay Account - Danni Forecast | Bill Pay Danni |
 | Bill Pay Account - Dave Forecast | Bill Pay Dave |
 | Bill Pay Envelopes Forecast | Bill Pay Envelopes |
-| Aviator Mastercard Forecast | Citi AAdvantage Mastercard |
+| Citi AAdvantage Mastercard Forecast | Citi AAdvantage Mastercard |
 
 In every case the forecast belongs to the register that carries the money, so the seven registers
 that share a budget with one of these — `Danni's Spending Account`, `Dave's Spending Account`, both
@@ -171,7 +203,7 @@ UPDATE forecast f
         WHEN 'Bill Pay Account - Danni Forecast' THEN 'Bill Pay Danni'
         WHEN 'Bill Pay Account - Dave Forecast'  THEN 'Bill Pay Dave'
         WHEN 'Bill Pay Envelopes Forecast'       THEN 'Bill Pay Envelopes'
-        WHEN 'Aviator Mastercard Forecast'       THEN 'Citi AAdvantage Mastercard'
+        WHEN 'Citi AAdvantage Mastercard Forecast'       THEN 'Citi AAdvantage Mastercard'
       END
   SET f.Register_idRegister = r.idRegister;
 ```
@@ -183,6 +215,132 @@ Your instinct that multiple forecasts per register might be useful for modelling
 is worth keeping in mind but not designing for now — one nullable column supports it whenever you
 want it.
 
+### Building the prerequisite: what step 1 actually touches
+
+The schema change is the small half. The behavioural half is that **a session on a register with no
+forecast becomes a normal state**, and today it is an error.
+
+#### The contract: a session with no forecast
+
+`SessionController.getRegisterBudgetForecast()` resolves the forecast with
+`Forecast.selectForecast(budget)`. When the budget has no forecast that method offers to create one,
+and if declined throws:
+
+```java
+throw new ForecastException("No forecast available for budget '" + budget.getName() + "'. Cannot proceed.");
+```
+
+Today no register reaches it, because all seven feedless registers borrow the forecast of the budget
+they share. After step 1 all seven reach it on every session. The convention this design rests on —
+"the presence of a forecast is the switch" — only holds if opening a session on a forecast-less
+register is unremarkable.
+
+**Decided: `getRegisterBudgetForecast()` leaves `forecast` null when the register has no forecast.
+No prompt, no throw.**
+
+This is not a new state being invented. `MainController` already handles it, in
+`updateFromExternalSource` (:323):
+
+```java
+if (sessionController.getForecast() != null) {
+    forecastController.updateFromExternalSource();
+} else {
+    view.say("There is no forecast to update.");
+}
+```
+
+Step 1 generalises a pattern that is already there and already user-visible.
+
+##### Which goals care
+
+All twenty-two goals call `getRegisterBudgetForecast()`; only some use what it loads.
+
+**Need a forecast** — these dereference `getForecast()` directly and would throw on null. Each needs
+the treatment already at :323, naming the register:
+
+`saveForecast` (:339), `renderShortTermForecast` (:367), `renderLongTermForecast` (:380),
+`renderEnvelopeReport` (:393), `renderItemsOfInterestReport` (:406),
+`renderOverdueAndUpcomingItemsReport` (:419).
+
+**Do not** — imports, `manageData`, `renderRegister`, `renderBudgetSummaryReport`, the spending
+reports, `verifyRegisterBalance`, `processUncategorizedTransactions`,
+`processUnreconciledTransactions`. These need register and budget only, and get quietly more correct:
+today they may load an unrelated register's forecast and never notice.
+
+##### The create-offer must leave the session path
+
+`selectForecast` offering to create a forecast is fine when reached deliberately. It is wrong on the
+session path, and this is the sharp edge:
+
+> Whether a register has a feed is a decision made once, by hand, when the forecast is or is not
+> created. Nothing infers it.
+
+A prompt during an ordinary import lets a stray Enter create a forecast for a feedless register —
+which silently turns on transfer counterparts for it, from a question that never mentions transfers.
+The convention would then be flippable by accident. **A forecast-required goal refuses with a plain
+message instead; creating a forecast stays deliberate, through `createForecast`.**
+
+##### Two things to check while implementing
+
+`Joint Savings Account` sits on budget `Justin's College Fund`, which already has no forecast, so it
+reaches this path today. Measure it before changing anything — it is the behaviour the other seven
+are about to inherit.
+
+And `dailyUpdate` (:442) carries a workaround for the very defect step 1 removes:
+
+```java
+// Clear session to ensure user selects the correct register
+// Without this, the forecast from a previous register would be used
+```
+
+Once a forecast belongs to a register, that `clearSession()` may no longer be needed. Worth
+revisiting, but not in the same change.
+
+#### Verified state of the data
+
+Confirmed against the database rather than assumed:
+
+| Budget | Registers | Forecasts |
+|---|---|---|
+| Bill Pay Danni | Bill Pay Danni, Danni's Spending Account | 1 |
+| Bill Pay Dave | Bill Pay Dave + 5 others | 1 |
+| Bill Pay Envelopes | Bill Pay Envelopes | 1 |
+| Citi AAdvantage Mastercard | Citi AAdvantage Mastercard | 1 |
+| Justin's College Fund | Joint Savings Account | **0** |
+
+Eleven registers, four with a forecast after the change, seven without. The migration's `CASE` on
+`f.description` resolves all four forecasts to a real register by name.
+
+#### Call sites
+
+- **`Forecast.selectForecast(...)`** — seven: `SessionController:128`, `TransactionController:901`
+  and `:905`, `ForecastTransactionController:283`, `DataManagerController:199`,
+  `BudgetController:1435` and `:1448`.
+- **Column lists in `Forecast`** — six places spell out the columns and all need `Register_idRegister`
+  threading through: `selectQuery` (:71), `getInsertQuery` (:243), `getUpdateByIdQuery` (:268), the
+  `ResultSet` constructor (:341), and the two prepared-statement inserts (:557, :602).
+- **`registers.get(0)`** — six: `Forecast:1311`, `AbstractForecastView:224-226`, `:672`, `:676`,
+  `:682`, `ForecastController:76`. All become `forecast.getRegister()`.
+- **Deprecated no-arg `Forecast.getMostRecent()`** — still live in `CsvForecastView:51`,
+  `ExcelForecastView:141`, `SpreadsheetXmlForecastView:226`. "Most recent globally" stops meaning
+  anything once forecasts are register-scoped; these need a register passed in.
+
+Add `getListOf(Register)` and `getMostRecent(Register)` alongside the budget-keyed versions rather
+than replacing them, then migrate callers. The budget association stays either way, since forecast
+items still reference budget items.
+
+> **`registers.get(0)` is a latent bug, not an active one.** `Budget.getRegisters()` has no
+> `ORDER BY`, so the row order is arbitrary. It happens to return the money-carrying register today
+> — `Bill Pay Dave` and `Bill Pay Danni` are physically first in their groups — which is why nothing
+> has gone visibly wrong. Nothing guarantees it stays that way. Owning the register makes it correct
+> by construction rather than by luck.
+
+#### Reversibility
+
+Write the down migration (`ALTER TABLE forecast DROP COLUMN Register_idRegister`) at the same time as
+the up. There is no remote for this repository, so the database is the one thing that cannot be
+recovered with `git checkout`.
+
 ## What gets built
 
 ### 1. Create the counterpart expectation
@@ -191,6 +349,17 @@ A new phase in `ImportController`, after the transaction, merchant and splits ar
 transaction being imported:
 
 > **Phase 5.5: Record the other side of a transfer**
+
+It runs on the **provisional** import path as well as the cleared one. A transfer between two
+accounts at the same bank is a single atomic operation, so once one side shows up as pending the
+other side exists too — which is exactly when recording the expectation saves the second register's
+import from asking. Waiting for both sides to clear would mean processing the same movement of money
+by hand twice, which is the labour this feature exists to remove. A provisional that never arrives
+takes its counterparts with it: the fallen-off branch already calls `deleteCounterpartsFor`.
+
+The atomicity argument holds *because* of the feed convention — a transfer to an external
+institution is not atomic, but it also has no counterparty register with a forecast, so it never
+reaches Phase 5.5.
 
 ```
 if the transaction is not a transfer                        -> done
@@ -318,6 +487,95 @@ doubles as the "already created" check in Phase 5.5 and as the audit trail.
 
 The regeneration point is easy to miss and would silently undo the feature.
 
+### 5. The bank reference number as a confirmation signal
+
+Wells Fargo issues its own reference for a transfer and writes **the same string into both sides**:
+
+```
+Bill Pay Dave    -30.00  ONLINE TRANSFER TO   HIXON D ... REF #IB0ZBFJRYR ON 08/11/26
+Bill Pay Danni   +30.00  ONLINE TRANSFER FROM HIXON D ... REF #IB0ZBFJRYR ON 08/11/26
+```
+
+Opposite signs, same date, different registers, one reference. Where both sides carry it, this is an
+*exact* identity for "these two rows are the same movement of money" — no scoring involved.
+
+It is tempting to build the whole feature on that. The measurements say otherwise.
+
+#### What the data actually shows
+
+For 2026:
+
+| | Count |
+|---|---|
+| Transfer transactions | 334  (Bill Pay Danni 236, Bill Pay Dave 98) |
+| …carrying a `REF #` at all | **143  (43%)** |
+| …forming a true cross-register pair | **15** |
+
+All time, the same shape: 2,639 transactions carry a reference, but of 2,492 distinct references
+**2,408 occur exactly once**. Only 83 occur twice, and only 47 of those are genuine cross-register,
+opposite-sign pairs.
+
+The reason is structural rather than a parsing defect. References live almost entirely in one
+register:
+
+```
+Bill Pay Dave        2,443
+Bill Pay Danni         130
+Bill Pay Envelopes      66
+```
+
+Most transfers point at a feedless register, so the other side is never imported and there is nothing
+for the reference to match. This is the same fact the forecast-per-register convention already
+encodes, seen from a different angle.
+
+Two further limits. The reference is not universally present even within one payee format — 186 of
+the 2026 `ONLINE TRANSFER TO/FROM` transactions carry none. And it exists only inside the `payee`
+varchar; there is no column, so any use of it means parsing.
+
+#### Why it cannot replace the counterpart
+
+Deeper than coverage: **a reference tells you two transactions are the same money. It does not tell
+you which budget item the far side should get.** That is the question this design exists to answer,
+and the counterpart forecast transaction is what carries the answer across — it exists *before* the
+far transaction arrives, which a reference on that transaction cannot. `transfer_budget_item_pair`
+and section 1 stand unchanged.
+
+#### The rule
+
+> **The reference confirms a match. It never gates one.**
+>
+> When both sides carry the same reference, a Phase 2.5 match is upgraded from "score ≥ 70" to
+> certain. When either side lacks one, nothing changes and the existing score decides.
+
+No code path may require a reference to be present, and no counterpart may be suppressed for want of
+one. Coverage is 43% and outside our control; anything conditional on presence would silently do
+nothing for the majority.
+
+| Situation | Behaviour |
+|---|---|
+| Both sides carry the same reference | Match is certain. Skip the score threshold and take it. |
+| Both carry references, but different ones | Not the same movement. Suppress the match regardless of score. |
+| Either side carries none | Unchanged — `ForecastTransactionMatcher` scores as it does today. |
+
+The second row is the one that earns its keep. The residual risk noted in section 1 is the matcher
+having two plausible candidates for the same money and stranding the planned one; a differing
+reference rules a candidate out outright, which scoring alone cannot do.
+
+Where it is worth reading the reference:
+
+- **Phase 5.5 idempotency.** `sourceTransaction` is the primary "already created" check. A reference
+  is bank-issued and stable across re-imports, so it still identifies the pair when a source row has
+  been deleted and recreated and the UUID has changed.
+- **Phase 2.5 confirmation**, per the table above.
+- **The audit trail**, alongside `sourceTransaction`, since it is the identifier the bank itself
+  would use if you ever had to reconcile by hand.
+
+> **Noticed in passing, and out of scope for this design.** The 36 same-register duplicate pairs above
+> are duplicate imports — same reference, amount, date and payee, imported twice. They survived
+> because `importRecordId` is the raw import line, and the two copies came from files that format it
+> differently (`-1625.00` vs `-1,625.00`, `*` vs `false`, truncated payee). Duplicate detection keyed
+> on a reference rather than on the raw line would not have been fooled. Worth its own piece of work.
+
 ## Phasing
 
 1. Forecast belongs to a register (prerequisite, own change).
@@ -326,8 +584,11 @@ The regeneration point is easy to miss and would silently undo the feature.
    `sourceTransaction`.
 4. Reporting in Phase 2.5.
 5. Lifecycle handling for edit and delete.
+6. Reference-number confirmation in Phase 2.5 (section 5).
 
 After step 3 the second import already auto-matches silently; step 4 is only about telling you why.
+Step 6 is independent of the rest and can land whenever — the feature is correct without it, only
+less certain in the minority of cases where both sides carry a reference.
 
 ## Testing
 
@@ -341,6 +602,10 @@ After step 3 the second import already auto-matches silently; step 4 is only abo
   chosen; the second is silent; and a pairing never applies to the wrong target budget.
 - An unpaired counterpart must **not** auto-match and must **not** assign a placeholder budget item —
   Phases 3 and 4 have to run.
+- Reference numbers: matching two sides sharing a reference is certain; two sides carrying
+  *different* references do not match however well they score; and a transfer where either side has
+  no reference behaves exactly as it does today. The last of these is the one that must not regress —
+  it is 57% of transfers.
 
 ## Decided
 
@@ -356,11 +621,20 @@ After step 3 the second import already auto-matches silently; step 4 is only abo
   item, and the pairing is learned from that choice. See section 2a.
 - **The pairing is keyed on source budget item plus target budget**, not on a payee string. That is
   the distinction from the `TransferMemoMapping` that was removed in `e6253c8`.
+- **The bank reference number confirms a match but never gates one.** It is present on only 43% of
+  transfers, so nothing may be conditional on having one. See section 5.
+- **A session on a register with no forecast is a normal state.**
+  `getRegisterBudgetForecast()` leaves `forecast` null rather than prompting or throwing, and the six
+  goals that need a forecast say so and decline cleanly. `updateFromExternalSource` already works
+  this way.
+- **Creating a forecast never happens as a side effect of a session.** Offering it during an import
+  would let the feed convention be switched on by accident; it stays deliberate, through
+  `createForecast`.
 
 ## Open questions
 
-None outstanding. The design is settled and the forecast-to-register mapping is decided, so step 1
-can be built as written.
+None outstanding. The session-with-no-forecast contract that blocked step 1 is settled — see
+"Building the prerequisite" above — and step 1 can now be built.
 
 One thing to watch once it is running, noted inline: the ad-hoc gate reads the *source* split's
 budget item, so a transfer that is budgeted on one side only will keep asking on the far side. If

@@ -31,6 +31,13 @@ public class MerchantUtilities {
     private static final Pattern MASKED_ACCOUNT_PATTERN = Pattern.compile("[xX*]{2,}(\\d{4,})");
 
     /**
+     * {@code "Transfer to  from Bill Pay Dave"} -- the counterparty name between the two keywords is
+     * empty, because it could not be determined.  See {@link #isUnidentifiedTransferPayee(String)}.
+     */
+    private static final Pattern UNIDENTIFIED_TRANSFER_PATTERN =
+            Pattern.compile("Transfer\\s+(?:to\\s+from|from\\s+to)\\s+\\S.*", Pattern.CASE_INSENSITIVE);
+
+    /**
      * Get a list of possible merchants for a given transaction payee.
      * This method attempts to identify merchants without user interaction.
      *
@@ -109,6 +116,36 @@ public class MerchantUtilities {
             return digits.substring(digits.length() - 4);
         }
         return null;
+    }
+
+    /**
+     * Whether a parsed transfer payee is one whose counterparty could <b>not</b> be identified.
+     *
+     * <p>A transfer payee normally reads {@code Transfer to <register> from <register>}.  When the
+     * payee carried no account number and {@link com.hixon.financialApp.controller.RegisterController
+     * #resolveUnmatchedAccount} could not settle it either -- no register fits, or the user rejected
+     * every candidate -- the name in the middle comes out empty, giving
+     * {@code "Transfer to  from Bill Pay Dave"}.
+     *
+     * <p>That string means "a transfer out of Bill Pay Dave to an account we could not identify".
+     * It is <b>not</b> an identity, and it must never be used as a cache key:  every future
+     * unidentifiable transfer out of that register produces the same string, so remembering a
+     * merchant against it silently answers a question that was never asked again.  That is exactly
+     * the mistake behind the {@code TransferMemoMapping} removed in {@code e6253c8} -- fixing an
+     * ambiguous payee to a single register.
+     *
+     * <p>A payee that names a masked account instead of a register, such as
+     * {@code Transfer to XXXXXX8249 from Bill Pay Danni}, is <b>not</b> unidentified:  the account
+     * number always means the same external account, so it is a perfectly good key.
+     *
+     * @param merchantPayee the parsed merchant payee string
+     * @return true when the counterparty name is missing, so nothing about this payee may be cached
+     */
+    public static boolean isUnidentifiedTransferPayee(String merchantPayee) {
+        if (merchantPayee == null) {
+            return false;
+        }
+        return UNIDENTIFIED_TRANSFER_PATTERN.matcher(merchantPayee).matches();
     }
 
     /**

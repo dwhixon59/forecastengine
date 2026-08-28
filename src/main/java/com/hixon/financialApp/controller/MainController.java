@@ -296,7 +296,12 @@ public class MainController {
                         double startingBalance = 0;
                         int numberOfMonths = 12;
                         int minimumBalance = 1000;
-                        Forecast forecast = new Forecast(sessionController.getBudget(), startDate, numberOfMonths, startingBalance, minimumBalance);
+                        Forecast forecast = new Forecast(sessionController.getBudget(), sessionController.getRegister(),
+                                startDate, numberOfMonths, startingBalance, minimumBalance);
+
+                        // Forecasts are selected by name within a register now, so give the new one a
+                        // name rather than leaving it null in the picker.
+                        forecast.setForecastName(sessionController.getRegister().getName() + " Forecast");
                         forecastEngine.generateForecast(forecast, startDate);
                         sessionController.setForecast(forecast);
 
@@ -336,6 +341,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Save the forecast:
+                        if (!sessionController.requireForecast("save")) break;
                         sessionController.getForecast().saveAll();
                         view.say("The forecast was successfully saved to the database.");
                         view.say("------------------------------------------------------------------------");
@@ -347,6 +353,7 @@ public class MainController {
 
                         // Set up the objects we need:
                         sessionController.getRegisterBudgetForecast();
+                        if (!sessionController.requireForecast("update")) break;
                         forecastController = new ForecastController(
                                 sessionController);
 
@@ -364,6 +371,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Render the short term forecast:
+                        if (!sessionController.requireForecast("render")) break;
                         sessionController.getForecastView().renderShortTermForecast(sessionController.getForecast());
                         view.say("Successfully rendered the short term forecast.");
                         view.say("------------------------------------------------------------------------");
@@ -377,6 +385,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Render the long term forecast:
+                        if (!sessionController.requireForecast("render")) break;
                         sessionController.getForecastView().renderLongTermForecast(sessionController.getForecast());
                         view.say("\nSuccessfully rendered the long term forecast.");
                         view.say("------------------------------------------------------------------------");
@@ -390,6 +399,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Render the items of interest report:
+                        if (!sessionController.requireForecast("report on")) break;
                         notificationService.sendEnvelopeReport(sessionController.getForecast());
                         view.say("Successfully rendered the Envelope Report.");
                         view.say("------------------------------------------------------------------------");
@@ -403,6 +413,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Render the items of interest report:
+                        if (!sessionController.requireForecast("report on")) break;
                         notificationService.sendItemsOfInterestReport(sessionController.getForecast());
                         view.say("Successfully rendered the Items of Interest Report.");
                         view.say("------------------------------------------------------------------------");
@@ -416,6 +427,7 @@ public class MainController {
                         sessionController.getRegisterBudgetForecast();
 
                         // Render the overdue and upcoming items report:
+                        if (!sessionController.requireForecast("report on")) break;
                         notificationService.sendOverdueAndUpcomingItemsReport(sessionController.getForecast());
                         view.say("Successfully rendered the Overdue and Upcoming Items Report.");
                         view.say("------------------------------------------------------------------------");

@@ -11,6 +11,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Calendar;
 import java.util.UUID;
 
@@ -658,6 +660,53 @@ public class Transaction extends IndependentEntity {
             transaction = new Transaction(rs);
         }
         return transaction;
+    }
+
+    /**
+     * Find the transactions in another register that could be the other side of this movement of
+     * money:  the opposite amount, within a few days.
+     *
+     * <p>Used to answer "has the other side of this transfer already arrived?".  A transfer is one
+     * movement of money reported twice, so once both registers hold their own copy there is nothing
+     * left to expect and no counterpart should be recorded -- otherwise importing the second
+     * register would write an expectation back into the first, for a transfer that has already
+     * happened there.
+     *
+     * <p>The amount comparison is exact (to the cent) and the date window is deliberately small.
+     * Being wrong in the permissive direction here only means an expectation is not recorded and the
+     * far import asks its questions as it does today, which is the pre-existing behaviour.
+     *
+     * @param idRegister the register to look in -- the counterparty, never this transaction's own
+     * @param amount     this transaction's amount; the search is for its negation
+     * @param date       this transaction's date
+     * @param dayWindow  how many days either side of {@code date} to consider
+     * @return the candidate transactions, possibly empty
+     */
+    public static List<Transaction> findOppositeSideInRegister(UUID idRegister, double amount, Calendar date,
+                                                              int dayWindow) throws EntityException, SQLException {
+
+        List<Transaction> candidates = new ArrayList<>();
+        if (idRegister == null || date == null) {
+            return candidates;
+        }
+
+        Calendar from = (Calendar) date.clone();
+        from.add(Calendar.DATE, -dayWindow);
+        Calendar to = (Calendar) date.clone();
+        to.add(Calendar.DATE, dayWindow);
+
+        String query = getSelectQuery() +
+                " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
+                " and abs(tr.amount - " + (-amount) + ") < 0.005" +
+                " and tr.postDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to);
+
+        ResultSet rs = getRS(query, "Database error encountered looking for the other side of a transfer in " +
+                "register " + idRegister + ".");
+        while (rs != null && rs.next()) {
+            candidates.add(new Transaction(rs));
+        }
+        return candidates;
     }
 
     /**

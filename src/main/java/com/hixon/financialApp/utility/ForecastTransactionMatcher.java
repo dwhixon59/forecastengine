@@ -33,6 +33,75 @@ public class ForecastTransactionMatcher {
     public static final double AUTO_MATCH_AMOUNT_TOLERANCE = 0.05; // 5%
 
     /**
+     * What the bank reference numbers alone say about a candidate, before any scoring.
+     *
+     * <p>The rule is:  <b>the reference confirms a match, it never gates one.</b>  Coverage is about
+     * 43% and outside our control, so {@link #UNDECIDED} -- "the existing score decides, exactly as
+     * it does today" -- has to be the answer whenever either side lacks a reference, which is the
+     * majority of the time.
+     */
+    public enum ReferenceVerdict {
+        /** Both sides carry the same reference:  an exact identity.  Take it, skipping the score. */
+        CERTAIN,
+        /** Both carry references and they differ:  not the same money, whatever the score says. */
+        RULED_OUT,
+        /** At least one side carries none:  no information, so nothing changes. */
+        UNDECIDED
+    }
+
+    /**
+     * Compare the bank reference of a transaction with that of a candidate forecast transaction.
+     *
+     * <p>Kept separate from the matching loop, and free of any database access, so the rule can be
+     * exercised directly:  the case that must never regress is the third one, which is 57% of
+     * transfers.
+     *
+     * @param transactionReference the transaction's reference, or null if it has none
+     * @param candidateReference   the candidate's reference, or null if it has none
+     */
+    public static ReferenceVerdict compareReferences(String transactionReference, String candidateReference) {
+        if (BankReferenceNumber.areSameMovement(transactionReference, candidateReference)) {
+            return ReferenceVerdict.CERTAIN;
+        }
+        if (BankReferenceNumber.areDifferentMovements(transactionReference, candidateReference)) {
+            return ReferenceVerdict.RULED_OUT;
+        }
+        return ReferenceVerdict.UNDECIDED;
+    }
+
+    /**
+     * Whether an unpaired transfer counterpart may be scored against this transaction at all.
+     *
+     * <p><b>An unpaired counterpart is admitted only on an identity, never on proximity.</b>  Its
+     * budget item is a placeholder rather than an answer, so it can never actually be assigned:
+     * every caller checks {@link ForecastTransaction#isTransferPairingUnknown()} and falls through
+     * to the ordinary import questions whenever one wins.  Letting it also compete on date/amount
+     * proximity therefore cannot produce a match -- it can only produce noise, and the noise is
+     * indiscriminate, because a counterpart is deliberately exempt from the merchant filter and so
+     * is a candidate for <em>every</em> transaction in the date window.  Observed in a real import:
+     * a $1.00 placeholder scoring 40 against a $2.00 savings transfer and 32 against a $35.00 credit
+     * card payment, in the same session.
+     *
+     * <p>The identity is the bank reference where there is one -- handled before this, and stronger
+     * -- or, for the majority of transfers that carry none, the exact amount the counterpart was
+     * created with.  The two sides of one movement of money are the same size; anything else is a
+     * different movement.
+     *
+     * <p>Every candidate that is not an unpaired counterpart is admitted unchanged.  Nothing about
+     * ordinary forecast matching may shift because of this rule.
+     *
+     * @param amount    the transaction amount being matched
+     * @param candidate the candidate forecast transaction
+     * @return true if the candidate may be scored
+     */
+    public static boolean admitsUnpairedCounterpart(double amount, ForecastTransaction candidate) {
+        if (candidate == null || !candidate.isTransferPairingUnknown()) {
+            return true;
+        }
+        return Utility.isEqualCurrency(amount, candidate.getRemainingAmount());
+    }
+
+    /**
      * Determines whether a cleared transaction amount is close enough to a forecast
      * transaction's remaining amount to be auto-assigned without user confirmation.
      *
@@ -97,13 +166,17 @@ public class ForecastTransactionMatcher {
         payeeDebugView.say("[Phase2.5] parsed payee : " + transaction.getMerchantPayee());
         // ---- END TEMP INSTRUMENTATION ----
 
+        // The bank's own reference for a transfer, when it issued one.  It lives only inside the
+        // payee varchar, so reading it means parsing; it is null for the majority of transactions
+        // and everything below treats that as "no information", never as a reason to reject.
         return findMatchingForecastTransaction(
                 transaction.getDate(),
                 transaction.getAmount(),
                 forecast,
                 possibleMerchants,
                 daysBefore,
-                daysAfter);
+                daysAfter,
+                BankReferenceNumber.extract(transaction.getPayee()));
     }
 
     /**
@@ -136,6 +209,44 @@ public class ForecastTransactionMatcher {
             List<Merchant> possibleMerchants,
             int daysBefore,
             int daysAfter) throws Exception {
+
+        return findMatchingForecastTransaction(date, amount, forecast, possibleMerchants,
+                daysBefore, daysAfter, null);
+    }
+
+    /**
+     * As {@link #findMatchingForecastTransaction(Calendar, double, Forecast, List, int, int)}, with
+     * the bank's own reference number for the transaction when it has one.
+     *
+     * <p><b>The reference confirms a match.  It never gates one.</b>  Only about 43% of transfers
+     * carry a reference and that is outside our control, so no code path may require one to be
+     * present and nothing may be suppressed for want of one -- anything conditional on presence
+     * would silently do nothing for the majority.  Concretely:
+     *
+     * <table>
+     *   <tr><th>Situation</th><th>Behaviour</th></tr>
+     *   <tr><td>Both sides carry the same reference</td>
+     *       <td>The match is certain.  Skip the score threshold and take it.</td></tr>
+     *   <tr><td>Both carry references, but different ones</td>
+     *       <td>Not the same movement.  Rule that candidate out regardless of its score.</td></tr>
+     *   <tr><td>Either side carries none</td>
+     *       <td>Unchanged -- the existing score decides.</td></tr>
+     * </table>
+     *
+     * <p>The second row is the one that earns its keep:  it lets the matcher reject a plausible but
+     * wrong candidate for the same money outright, which scoring alone cannot do, and so avoids
+     * stranding the right one.
+     *
+     * @param transactionReference the bank reference for this transaction, or null if it has none
+     */
+    public static ForecastTransaction findMatchingForecastTransaction(
+            Calendar date,
+            double amount,
+            Forecast forecast,
+            List<Merchant> possibleMerchants,
+            int daysBefore,
+            int daysAfter,
+            String transactionReference) throws Exception {
 
         // If no forecast is available, we cannot match
         if (forecast == null) {
@@ -177,6 +288,17 @@ public class ForecastTransactionMatcher {
             List<ForecastTransaction> filteredTransactions = new ArrayList<>();
 
             for (ForecastTransaction ft : candidateForecastTransactions) {
+
+                // A transfer counterpart is exempt from merchant filtering: it was created from a
+                // specific transaction in another register, so its identity does not depend on a
+                // merchant at all. A transfer payee ("Transfer from Bill Pay Danni") rarely maps to
+                // the merchants assigned to the far side's budget item, and filtering it out here
+                // would leave the far import asking the questions this whole feature removes.
+                if (ft.isTransferCounterpart()) {
+                    filteredTransactions.add(ft);
+                    continue;
+                }
+
                 // Get the budget item for this forecast transaction
                 UUID idBudgetItem = ft.getForecastItem().getIdBudgetItem();
                 BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
@@ -243,6 +365,34 @@ public class ForecastTransactionMatcher {
         double bestScore = 0.0;
 
         for (ForecastTransaction ft : candidateForecastTransactions) {
+
+            String candidateReference = ft.getSourceReference();
+            ReferenceVerdict verdict = compareReferences(transactionReference, candidateReference);
+
+            // Two different bank references cannot be the same movement of money, however well the
+            // candidate scores.  This is the one judgement scoring cannot make.
+            if (verdict == ReferenceVerdict.RULED_OUT) {
+                debugView.say("[Phase2.5]     ruled out (bank reference " + candidateReference +
+                        " != " + transactionReference + ")  " + ft.toStringConcise());
+                continue;
+            }
+
+            // The same reference on both sides is an exact identity, so take it without scoring.
+            if (verdict == ReferenceVerdict.CERTAIN) {
+                debugView.say("[Phase2.5]   result: CERTAIN (bank reference " + candidateReference + ") -> " +
+                        ft.toStringConcise());
+                debugView.say("");
+                return ft;
+            }
+
+            // Reaching here means the verdict was UNDECIDED, so an unpaired counterpart has only its
+            // amount left to identify it with.
+            if (!admitsUnpairedCounterpart(amount, ft)) {
+                debugView.say("[Phase2.5]     not this movement (unpaired counterpart for "
+                        + Utility.formatDollarAmount(ft.getRemainingAmount()) + ")  " + ft.toStringConcise());
+                continue;
+            }
+
             double score = calculateMatchScore(date, amount, ft, possibleMerchants);
 
             // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
@@ -279,7 +429,12 @@ public class ForecastTransactionMatcher {
         // existing $19.99 LinkedIn budget item. If the winning candidate's budget item has merchants
         // assigned and none of them match this transaction's identified merchant(s), don't silently
         // auto-assign - ask the user whether this is really another merchant for that budget item.
-        if (possibleMerchants != null) {
+        // A transfer counterpart is exempt:  its identity comes from the source transaction it was
+        // created from, not from a merchant.  A transfer's payee ("Transfer from Bill Pay Danni")
+        // rarely maps to the merchants assigned to the far side's budget item, so applying the gate
+        // here would ask about every transfer -- which is the question this whole feature exists to
+        // stop asking.
+        if (possibleMerchants != null && !bestMatch.isTransferCounterpart()) {
             UUID idBudgetItem = bestMatch.getForecastItem().getIdBudgetItem();
             BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
             List<BudgetItemMerchant> assignedMerchants =

@@ -278,9 +278,16 @@ public class ForecastTransactionController {
 
                 // Check if user wants to change forecast
                 if (searchString != null && searchString.trim().equalsIgnoreCase("F")) {
-                    // Allow user to select a different forecast
+                    // Allow user to select a different forecast.  Forecasts belong to a register, so
+                    // the choice is scoped to this session's register.
                     try {
-                        forecast = Forecast.selectForecast(budget);
+                        Forecast selected = Forecast.selectForecast(register);
+                        if (selected == null) {
+                            view.say("There is no forecast for " + register.getName() + ".");
+                            searchString = null;
+                            continue;
+                        }
+                        forecast = selected;
                         sessionController.setForecast(forecast);
                         view.say("Forecast changed to: " + forecast.getDescription());
                         searchString = null; // Reset to show menu again
@@ -1078,6 +1085,23 @@ public class ForecastTransactionController {
         return score;
     }
 
+    /**
+     * Whether a scored match must be rejected in favour of the period the charge actually falls in.
+     *
+     * <p>True only for a COLLECTION item whose best scoring candidate lies in a <em>later</em>
+     * period ({@code PRIOR_TO} means the transaction date comes before that candidate's window).
+     * Collection items accumulate many charges against one period's budget, and once that budget is
+     * exhausted the period's forecast transaction is zero -- so it is excluded from scoring, leaving
+     * only future periods to match against.  Taking one of those quietly moves the charge, and the
+     * overage, into a month it did not happen in.
+     *
+     * <p>{@code AFTER} is deliberately not included:  a charge later than the candidate's window is
+     * the ordinary roll-forward of unspent money, which the existing logic handles correctly.
+     */
+    static boolean mustDeferToPeriodForCollection(Item.HowOccurs howOccurs, ForecastTransaction.Timing timing) {
+        return howOccurs == Item.HowOccurs.COLLECTION && timing == ForecastTransaction.Timing.PRIOR_TO;
+    }
+
     public ForecastTransaction getApplicableForecastTransaction(Forecast forecast, TransactionSplit split)
             throws EntityException, Exception, BudgetException, RegisterException {
 
@@ -1176,6 +1200,16 @@ public class ForecastTransactionController {
 
                 case PRIOR_TO:
                 case AFTER:
+                    // A COLLECTION charge belongs to the period it happened in, even once that
+                    // period's budget is exhausted.  Only non-zero transactions are scored above, so
+                    // when the current period is spent out the sole candidate is a LATER period --
+                    // and auto-assigning it silently spends next period's grocery money on this
+                    // month's groceries.  Defer to the sequential logic below, which resolves this
+                    // case explicitly via getApplicableZeroOccurrence.
+                    if (mustDeferToPeriodForCollection(split.getBudgetItem().getHowOccurs(), timing)) {
+                        break;
+                    }
+
                     // Only ask user if score is marginal or variance is extreme
                     int variance = Math.abs(Utility.daysBetween(bestMatch.getPlannedDate(),
                             split.getTransaction().getDate()));

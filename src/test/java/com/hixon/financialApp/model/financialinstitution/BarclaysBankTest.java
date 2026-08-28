@@ -205,7 +205,7 @@ class BarclaysBankTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction transaction = barclays.next();
+            Transaction transaction = nextAsTheImportWould(barclays);
 
             // Assert
             assertNotNull(transaction, "Transaction should not be null");
@@ -231,7 +231,7 @@ class BarclaysBankTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction transaction = barclays.next();
+            Transaction transaction = nextAsTheImportWould(barclays);
 
             // Assert
             assertNotNull(transaction, "Transaction should not be null");
@@ -256,7 +256,7 @@ class BarclaysBankTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction transaction = barclays.next();
+            Transaction transaction = nextAsTheImportWould(barclays);
 
             // Assert
             assertNotNull(transaction, "Transaction should not be null");
@@ -280,7 +280,7 @@ class BarclaysBankTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction transaction = barclays.next();
+            Transaction transaction = nextAsTheImportWould(barclays);
 
             // Assert
             assertNotNull(transaction, "Transaction should not be null");
@@ -304,7 +304,7 @@ class BarclaysBankTest {
             barclays.importRegisterTrxFile();
 
             // Act
-            Transaction transaction = barclays.next();
+            Transaction transaction = nextAsTheImportWould(barclays);
 
             // Assert
             assertNotNull(transaction, "Transaction should not be null");
@@ -389,6 +389,51 @@ class BarclaysBankTest {
             barclays.close();
         }
     }
+
+    /**
+     * A transaction as the import actually ends up with it.
+     *
+     * <p>{@code next()} deliberately leaves the merchant payee unset:  parsing it can ask the user a
+     * question, and at that point nobody yet knows whether the row was already imported on an
+     * earlier run, so {@code ImportController} defers the parse until after its import-record-id
+     * lookup.  See {@code FinancialInstitution.convertQfxToTransaction}.  These tests mirror that
+     * second step so they assert on the finished article rather than the raw row.
+     */
+    private static Transaction nextAsTheImportWould(BarclaysBank bank) throws Exception {
+        Transaction transaction = bank.next();
+        transaction.setMerchantPayee(bank.parseMerchantPayee(
+                transaction.getDate(), transaction.getAmount(), transaction.getPayee()));
+        return transaction;
+    }
+
+
+    @Test
+    @DisplayName("next() leaves the merchant payee for the importer to parse, once it knows the row is new")
+    void testNextDefersTheMerchantPayeeParse() throws Exception {
+
+        // Parsing the merchant payee can ask the user a question -- WellsFargoBank.parseMerchantPayee
+        // prompts for the counterparty register when a transfer's payee carries no account number --
+        // and at conversion time nobody yet knows whether this row was already imported on an earlier
+        // run.  Parsing here made re-importing an overlapping statement re-ask the register question
+        // for every transfer already in the register, and then throw the answer away.  So the parse
+        // belongs to ImportController, after its import-record-id lookup.  This test pins that
+        // contract: everything the bank can know without asking is set, and the merchant payee is not.
+        String qfxFile = getResourceFilePath("/qfx/test-single-purchase.qfx");
+        SessionController sessionController = createMockSessionController(qfxFile);
+        BarclaysBank barclays = new BarclaysBank(sessionController);
+
+        try {
+            barclays.importRegisterTrxFile();
+
+            Transaction raw = barclays.next();
+
+            assertNull(raw.getMerchantPayee(), "The merchant payee parse is deferred to the importer");
+            assertNotNull(raw.getPayee(), "...but the raw payee it will be parsed from is here");
+            assertNotNull(raw.getImportRecordId(), "...as is the id the importer looks up first");
+            assertNotNull(raw.getDate());
+        } finally {
+            barclays.close();
+        }
+    }
+
 }
-
-

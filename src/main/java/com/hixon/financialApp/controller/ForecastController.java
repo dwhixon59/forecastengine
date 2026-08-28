@@ -72,13 +72,13 @@ public class ForecastController {
      * @throws Exception if an error occurs while calculating or saving running balances
      */
     public void calculateAndSaveRunningBalances(Forecast forecast) throws Exception {
-        // Get the starting balance from the first register associated with the budget
-        List<Register> registers = forecast.getBudget().getRegisters();
-        if (registers == null || registers.isEmpty()) {
-            return; // No registers, no running balance to calculate
+        // Get the starting balance from the register this forecast belongs to:
+        Register forecastRegister = forecast.getRegister();
+        if (forecastRegister == null) {
+            return; // No register, no running balance to calculate
         }
 
-        double runningBalance = registers.getFirst().getBalance();
+        double runningBalance = forecastRegister.getBalance();
 
         // Get all forecast transactions in chronological order
         ForecastTransactionIterator forecastTransactions =

@@ -9,6 +9,7 @@ import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.entity.IndependentEntity;
+import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -42,6 +43,10 @@ public class Forecast extends IndependentEntity {
     // Fields from the database:
     protected String description;
     protected UUID idBudget;
+    // The register this forecast belongs to.  A forecast belongs to one and only one register (a
+    // register may have several forecasts).  Nullable, so a forecast with no register is
+    // representable rather than an error -- see LINKED_ACCOUNT_TRANSFERS_DESIGN.md.
+    protected UUID idRegister;
     @Getter
     protected Calendar startDate;
     protected Calendar dateGenerated;
@@ -68,14 +73,16 @@ public class Forecast extends IndependentEntity {
 
     private static final String selectQuery = "select bin_to_uuid(idForecast) as idForecast, description, " +
             "dateGenerated, startDate, lastRenderedDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
-            "bin_to_uuid(Budget_idBudget) as idBudget from forecast ";
+            "bin_to_uuid(Budget_idBudget) as idBudget, bin_to_uuid(Register_idRegister) as idRegister " +
+            "from forecast ";
 
     public static String getSelectQuery() {
         return selectQuery;
     }
 
     private static final String insertQuery = "insert into forecast (idForecast, description, " +
-            "dateGenerated, startDate, lastRenderedDate, startingBalance, endDate, endingBalance, numberOfMonths, Budget_idBudget) " +
+            "dateGenerated, startDate, lastRenderedDate, startingBalance, endDate, endingBalance, numberOfMonths, " +
+            "Budget_idBudget, Register_idRegister) " +
             "values (";
     private static final String updateQuery = "update forecast set ";
     private static final String deleteQuery = "delete from forecast where ";
@@ -126,6 +133,38 @@ public class Forecast extends IndependentEntity {
     public void setBudgetId(UUID idBudget) {
         this.idBudget = idBudget;
         setDirty(true);
+    }
+
+    /**
+     * The id of the register this forecast belongs to, or null if it belongs to none.
+     */
+    public UUID getIdRegister() {
+        return idRegister;
+    }
+
+    public void setIdRegister(UUID idRegister) {
+        this.idRegister = idRegister;
+        setDirty(true);
+    }
+
+    public void setRegister(Register register) {
+        setIdRegister(register != null ? register.getId() : null);
+    }
+
+    /**
+     * Get the register this forecast belongs to.
+     *
+     * <p>A forecast belongs to one and only one register, so this is the register whose balance the
+     * forecast projects forward.  It replaces the old {@code getBudget().getRegisters().get(0)},
+     * which picked an arbitrary register out of however many shared the budget.
+     *
+     * @return the register this forecast belongs to, or null if it belongs to none.
+     */
+    public Register getRegister() throws EntityException, SQLException, RegisterException {
+        if (idRegister == null) {
+            return null;
+        }
+        return Register.getById(idRegister);
     }
 
     public void setStartDate(Calendar forecastStartDate) {
@@ -256,7 +295,8 @@ public class Forecast extends IndependentEntity {
                 endDateVal + ", " +
                 endingBalance + ", " +
                 numberOfMonths + ", " +
-                "uuid_to_bin('" + idBudget + "'))";
+                "uuid_to_bin('" + idBudget + "'), " +
+                (idRegister != null ? "uuid_to_bin('" + idRegister + "')" : "NULL") + ")";
     }
 
     @Override
@@ -272,7 +312,9 @@ public class Forecast extends IndependentEntity {
                 Utility.calendarDateToSqlDateString(startDate) + ", lastRenderedDate = " + lastRenderedDateVal + ", " +
                 "startingBalance = " + startingBalance + ", " +
                 "endDate = " + Utility.calendarDateToSqlDateString(endDate) + ", endingBalance = " + endingBalance +
-                ", numberOfMonths = " + numberOfMonths + ", Budget_idBudget = uuid_to_bin('" + idBudget + "') " +
+                ", numberOfMonths = " + numberOfMonths + ", Budget_idBudget = uuid_to_bin('" + idBudget + "'), " +
+                "Register_idRegister = " +
+                (idRegister != null ? "uuid_to_bin('" + idRegister + "')" : "NULL") + " " +
                 "where idForecast = uuid_to_bin('" + id + "')";
     }
 
@@ -294,8 +336,8 @@ public class Forecast extends IndependentEntity {
     /*
      * Constructors:
      */
-    public Forecast(Budget budget, Calendar startDate, int numberOfMonths, double startingBalance,
-                    double minimumBalance) throws ForecastException, SQLException {
+    public Forecast(Budget budget, Register register, Calendar startDate, int numberOfMonths,
+                    double startingBalance, double minimumBalance) throws ForecastException, SQLException {
 
         super(true);
         if (startDate == null) {
@@ -314,6 +356,7 @@ public class Forecast extends IndependentEntity {
         this.numberOfMonths = numberOfMonths;
         this.budgetName = budget.getName();
         this.idBudget = budget.getId();
+        this.idRegister = (register != null) ? register.getId() : null;
 
     }
 
@@ -339,6 +382,8 @@ public class Forecast extends IndependentEntity {
         this.endingBalance = rs.getDouble("endingBalance");
         this.numberOfMonths = rs.getInt("numberOfMonths");
         this.idBudget = UUID.fromString(rs.getString("idBudget"));
+        String registerId = rs.getString("idRegister");
+        this.idRegister = (registerId != null) ? UUID.fromString(registerId) : null;
     }
 
     // Default constructor for creating new forecasts:
@@ -365,10 +410,14 @@ public class Forecast extends IndependentEntity {
     }
 
     /**
-     * Select a forecast by name from a list of all the forecasts for a particular budget in the database.
+     * Select a forecast by name from all the forecasts associated with a particular budget.
      *
-     * @return Forecast The forecast that was selected.
-     * @throws ForecastException If there are no forecasts in the database or if no forecast was selected.
+     * <p>Prefer {@link #selectForecast(Register)}:  a forecast belongs to one and only one register,
+     * so a register is the natural scope.  This budget-keyed form remains for the places that are
+     * genuinely working with a budget and have no register in hand.
+     *
+     * @return Forecast The forecast that was selected, or null if the budget has none.
+     * @throws ForecastException If more than one forecast exists and none was selected.
      * @throws SQLException      If there is a database error.
      * @throws EntityException   If there is an error non-database error.
      * @throws SkipException
@@ -386,8 +435,8 @@ public class Forecast extends IndependentEntity {
      *
      * @param budget          The budget to get forecasts for.
      * @param defaultForecast The default forecast to pre-select (can be null).
-     * @return Forecast The forecast that was selected.
-     * @throws ForecastException If there are no forecasts in the database or if no forecast was selected.
+     * @return Forecast The forecast that was selected, or null if the budget has none.
+     * @throws ForecastException If more than one forecast exists and none was selected.
      * @throws SQLException      If there is a database error.
      * @throws EntityException   If there is an error non-database error.
      * @throws SkipException     If the user skips the selection.
@@ -399,29 +448,15 @@ public class Forecast extends IndependentEntity {
         // Get a list of all the forecasts for the budget:
         List<Forecast> forecasts = Forecast.getListOf(budget);
 
-        // If there are no forecasts, offer to create one:
-        if (forecasts.size() == 0) {
+        // A budget with no forecast is a normal answer, not an error, and creating one is never a
+        // side effect of being asked to select one.  A forecast belongs to one and only one
+        // register, and which register that is -- and therefore whether that register has an import
+        // feed at all -- is a decision made by hand, through the createForecast goal.  Offering to
+        // create here would let a stray Enter make it, and would produce a forecast belonging to no
+        // register, which the register-scoped lookups could never find again.
+        if (forecasts.isEmpty()) {
             Utility.getView().say("No forecasts exist for budget '" + budget.getName() + "'.");
-
-            if (Utility.getView().getYesOrNo("Would you like to create a forecast for this budget?")) {
-                // Create a new forecast
-                Forecast newForecast = new Forecast();
-                newForecast.setId(java.util.UUID.randomUUID());
-                newForecast.setForecastName(budget.getName() + " Forecast");
-                newForecast.setBudgetId(budget.getId());
-                newForecast.setStartDate(java.util.Calendar.getInstance());
-                newForecast.setNumberOfMonths(12);  // Default to 12 months (1 year) forecast period
-
-                try {
-                    newForecast.insert();
-                    Utility.getView().say("✓ Forecast '" + newForecast.getDescription() + "' created successfully.");
-                    return newForecast;
-                } catch (Exception e) {
-                    throw new ForecastException("Error creating forecast: " + e.getMessage());
-                }
-            } else {
-                throw new ForecastException("No forecast available for budget '" + budget.getName() + "'. Cannot proceed.");
-            }
+            return null;
         }
 
         // If there is only one forecast, return it:
@@ -449,6 +484,126 @@ public class Forecast extends IndependentEntity {
             return forecast;
         } else {
             throw new ForecastException("No forecast was selected.");
+        }
+    }
+
+    /**
+     * Select the forecast belonging to a register, asking the user only when the register has more
+     * than one.
+     *
+     * <p>Unlike {@link #selectForecast(Budget)} this <b>never offers to create a forecast</b>, and
+     * a register with no forecast is a normal answer rather than an error.  Whether a register has
+     * an import feed is a decision made once, by hand, when the forecast is or is not created:  a
+     * create prompt reached from an ordinary session would let a stray Enter switch that decision
+     * on from a question that never mentions it.  Creating a forecast stays deliberate, through the
+     * {@code createForecast} goal.
+     *
+     * @param register The register whose forecast is wanted.
+     * @return The register's forecast, or null if it has none.
+     * @throws ForecastException If more than one forecast exists and none was selected.
+     */
+    public static Forecast selectForecast(Register register) throws ForecastException, SQLException,
+            EntityException, SkipException, QuitException {
+
+        List<Forecast> forecasts = Forecast.getListOf(register);
+
+        // A register with no forecast is the feedless case, and it is unremarkable:
+        if (forecasts.isEmpty()) {
+            return null;
+        }
+
+        if (forecasts.size() == 1) {
+            return forecasts.get(0);
+        }
+
+        // A register may have several forecasts (e.g. modelling alternative budgets), so ask:
+        return selectForecast(register, null);
+    }
+
+    /**
+     * Select the forecast belonging to a register, with an optional default that is pre-selected
+     * when the user presses enter.  Behaves exactly like {@link #selectForecast(Register)}
+     * otherwise, including returning null for a register with no forecast.
+     *
+     * @param register        The register whose forecast is wanted.
+     * @param defaultForecast The forecast to pre-select (can be null).
+     * @return The register's forecast, or null if it has none.
+     */
+    public static Forecast selectForecast(Register register, Forecast defaultForecast)
+            throws ForecastException, SQLException, EntityException, SkipException, QuitException {
+
+        List<Forecast> forecasts = Forecast.getListOf(register);
+
+        if (forecasts.isEmpty()) {
+            return null;
+        }
+
+        if (forecasts.size() == 1) {
+            return forecasts.get(0);
+        }
+
+        // Only offer the default if it actually belongs to this register:
+        Forecast applicableDefault = null;
+        if (defaultForecast != null) {
+            for (Forecast candidate : forecasts) {
+                if (candidate.getId().equals(defaultForecast.getId())) {
+                    applicableDefault = candidate;
+                    break;
+                }
+            }
+        }
+
+        Forecast forecast;
+        try {
+            if (applicableDefault != null) {
+                forecast = Utility.getView().selectByNameFromList("Select a forecast for " +
+                                register.getName() + ":", forecasts, applicableDefault,
+                        ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+            } else {
+                forecast = Utility.getView().selectByNameFromList("Select a forecast for " +
+                        register.getName() + ":", forecasts, ViewInt.DO_NOT_ALLOW_NONE);
+            }
+        } catch (CancelException e) {
+            throw new ForecastException("No forecast was selected.");
+        }
+
+        if (forecast == null) {
+            throw new ForecastException("No forecast was selected.");
+        }
+        return forecast;
+    }
+
+    /**
+     * Retrieves all forecasts belonging to a given register.
+     *
+     * <p>A forecast belongs to one and only one register, so this is the authoritative way to ask
+     * "does this register have a forecast?" -- the question the linked-account-transfer feed
+     * convention is built on.  An empty list means the register has no forecast, which is a normal
+     * state and not an error.
+     *
+     * @param register The register whose forecasts should be retrieved.
+     * @return A list of Forecast objects belonging to the register (possibly empty).
+     * @throws ForecastException If an error occurs while retrieving forecasts.
+     */
+    public static List<Forecast> getListOf(Register register) throws ForecastException {
+        if (register == null) {
+            return new ArrayList<>();
+        }
+        String query = selectQuery + " where Register_idRegister = uuid_to_bin('" + register.getId() +
+                "') order by description";
+        try (Statement statement = Utility.getDbConnection().createStatement()) {
+            ResultSet rs = statement.executeQuery(query);
+            List<Forecast> forecasts = new ArrayList<>();
+            while (rs.next()) {
+                forecasts.add(new Forecast(rs));
+            }
+            return forecasts;
+        } catch (Exception e) {
+            ForecastException fe = new ForecastException("Error occurred trying to retrieve the list of forecasts " +
+                    "for register " + register.getName() + " with the sql statement " + query);
+            fe.initCause(e);
+            throw fe;
         }
     }
 
@@ -505,27 +660,6 @@ public class Forecast extends IndependentEntity {
     }
 
     /**
-     * Gets the most recent forecast across ALL budgets in the system.
-     * @return The most recent forecast, or null if no forecasts exist
-     * @throws EntityException If a database error occurs
-     * @throws SQLException If a SQL error occurs
-     * @deprecated Use {@link #getMostRecent(Budget)} instead to avoid cross-budget contamination.
-     * This method retrieves the globally most recent forecast regardless of budget, which may not be
-     * what you want when working with a specific register/budget.
-     */
-    @Deprecated
-    public static Forecast getMostRecent() throws EntityException, SQLException {
-        String selectMostRecentQuery = selectQuery + "order by dateGenerated desc";
-        ResultSet rs = getSingletonRS(selectMostRecentQuery, "Database error occurred " +
-                "trying to retrieve the most recent forecast.");
-        Forecast forecast = null;
-        if (rs != null) {
-            forecast = new Forecast(rs);
-        }
-        return forecast;
-    }
-
-    /**
      * Gets the most recent forecast for a specific budget.
      * @param budget The budget whose most recent forecast should be retrieved
      * @return The most recent forecast for the budget, or null if no forecasts exist for that budget
@@ -545,6 +679,30 @@ public class Forecast extends IndependentEntity {
         return forecast;
     }
 
+    /**
+     * Gets the most recent forecast belonging to a specific register.
+     *
+     * @param register The register whose most recent forecast should be retrieved
+     * @return The most recent forecast for the register, or null if it has none
+     * @throws EntityException If a database error occurs
+     * @throws SQLException If a SQL error occurs
+     */
+    public static Forecast getMostRecent(Register register) throws EntityException, SQLException {
+        if (register == null) {
+            return null;
+        }
+        String selectMostRecentQuery = selectQuery +
+                "where Register_idRegister = uuid_to_bin('" + register.getId() + "') " +
+                "order by dateGenerated desc";
+        ResultSet rs = getSingletonRS(selectMostRecentQuery, "Database error occurred " +
+                "trying to retrieve the most recent forecast for register " + register.getName() + ".");
+        Forecast forecast = null;
+        if (rs != null) {
+            forecast = new Forecast(rs);
+        }
+        return forecast;
+    }
+
     //  Save the forecast object:
     public void save() throws SQLException {
         Connection dbConnection = Utility.getDbConnection();
@@ -554,10 +712,12 @@ public class Forecast extends IndependentEntity {
             // Insert the forecast tuple:
             errorMessage = "SQL error attempting to insert the Forecast object into the database.";
             String query = "insert into forecast (idForecast, description, dateGenerated, " +
-                    "startDate, startingBalance, endDate, endingBalance, numberOfMonths, inSync, Budget_idBudget) " +
-                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?)) on duplicate key update " +
+                    "startDate, startingBalance, endDate, endingBalance, numberOfMonths, inSync, Budget_idBudget, " +
+                    "Register_idRegister) " +
+                    "values(UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?, UUID_TO_BIN(?), UUID_TO_BIN(?)) " +
+                    "on duplicate key update " +
                     "description = ?, dateGenerated = ?, startDate =?, startingBalance = ?, endDate = ?, " +
-                    "endingBalance = ?, numberOfMonths = ?, inSync = ?";
+                    "endingBalance = ?, numberOfMonths = ?, inSync = ?, Register_idRegister = UUID_TO_BIN(?)";
             preparedStmt = dbConnection.prepareStatement(query);
             preparedStmt.setString(1, id.toString());
             preparedStmt.setString(2, description);
@@ -569,14 +729,16 @@ public class Forecast extends IndependentEntity {
             preparedStmt.setInt(8, numberOfMonths);
             preparedStmt.setBoolean(9, true);
             preparedStmt.setString(10, idBudget.toString());
-            preparedStmt.setString(11, description);
-            preparedStmt.setObject(12, new java.sql.Timestamp(System.currentTimeMillis()));
-            preparedStmt.setDate(13, new java.sql.Date(startDate.getTimeInMillis()));
-            preparedStmt.setDouble(14, startingBalance);
-            preparedStmt.setDate(15, new java.sql.Date(endDate.getTimeInMillis()));
-            preparedStmt.setDouble(16, endingBalance);
-            preparedStmt.setInt(17, numberOfMonths);
-            preparedStmt.setBoolean(18, true);
+            preparedStmt.setString(11, idRegister != null ? idRegister.toString() : null);
+            preparedStmt.setString(12, description);
+            preparedStmt.setObject(13, new java.sql.Timestamp(System.currentTimeMillis()));
+            preparedStmt.setDate(14, new java.sql.Date(startDate.getTimeInMillis()));
+            preparedStmt.setDouble(15, startingBalance);
+            preparedStmt.setDate(16, new java.sql.Date(endDate.getTimeInMillis()));
+            preparedStmt.setDouble(17, endingBalance);
+            preparedStmt.setInt(18, numberOfMonths);
+            preparedStmt.setBoolean(19, true);
+            preparedStmt.setString(20, idRegister != null ? idRegister.toString() : null);
             preparedStmt.execute();
 
             // Mark the forecast as saved:
@@ -1307,8 +1469,13 @@ public class Forecast extends IndependentEntity {
 
         List<DailyBalance> dailyBalances = new ArrayList<>();
 
-        // Get the current balance of the applicable register:
-        double balance = forecast.getBudget().getRegisters().get(0).getBalance();
+        // Get the current balance of the register this forecast belongs to:
+        Register forecastRegister = forecast.getRegister();
+        if (forecastRegister == null) {
+            throw new ForecastException("Forecast '" + forecast.getDescription() + "' does not belong to a " +
+                    "register, so its daily balances cannot be computed.");
+        }
+        double balance = forecastRegister.getBalance();
 
         // Get a chronological list of the non-zero transactions in the forecast:
         ForecastTransactionIterator forecastTransactions = ForecastTransaction.getNonZeroForecastTransactions(forecast);

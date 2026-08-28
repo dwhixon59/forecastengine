@@ -46,7 +46,9 @@ class ForecastSummaryOutputIntegrationTest {
         Register register = mock(Register.class);
 
         when(forecast.getBudget()).thenReturn(budget);
-        when(budget.getRegisters()).thenReturn(List.of(register));
+        // A forecast belongs to one and only one register, so the starting balance comes from that
+        // register rather than from an arbitrary one of however many share the budget.
+        when(forecast.getRegister()).thenReturn(register);
         when(register.getReportType()).thenReturn("csv");
         when(register.getBalance()).thenReturn(500.0);
         when(register.getName()).thenReturn("Bill Pay Dave");
@@ -282,7 +284,9 @@ class ForecastSummaryOutputIntegrationTest {
         Register register = mock(Register.class);
 
         when(forecast.getBudget()).thenReturn(budget);
-        when(budget.getRegisters()).thenReturn(List.of(register));
+        // A forecast belongs to one and only one register, so the starting balance comes from that
+        // register rather than from an arbitrary one of however many share the budget.
+        when(forecast.getRegister()).thenReturn(register);
         when(register.getReportType()).thenReturn("csv");
         when(register.getBalance()).thenReturn(500.0);
         when(register.getName()).thenReturn("Bill Pay Dave");

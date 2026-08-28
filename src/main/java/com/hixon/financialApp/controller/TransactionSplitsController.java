@@ -81,6 +81,13 @@ public class TransactionSplitsController {
         // Sort budget items by relevancy score in descending order (highest scores first)
         sortByRelevancyScore(budgetItemsForMerchant, relevancyScores);
 
+        // ── Exact per-transaction amount shortcut ──────────────────────────────
+        // When the merchant is configured with a fixed per-transaction amount that this
+        // transaction matches exactly, the answer was decided in advance by the user.
+        if (autoAssignExactPerTransactionAmount(transaction, splits, merchant, budgetItemsForMerchant)) {
+            return;
+        }
+
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
         BudgetController budgetController = new BudgetController(sessionController);
@@ -533,6 +540,87 @@ public class TransactionSplitsController {
             // Silently ignore — memo defaulting is a best-effort feature
         }
         return null;
+    }
+
+    /**
+     * Whether this merchant/budget-item association names a fixed per-transaction amount that the
+     * transaction matches exactly.
+     *
+     * <p>This is a much narrower claim than "scored well".  A relevancy score is built from amount
+     * proximity, date proximity and importance -- a space that does not contain the information
+     * needed to tell a $150 rent transfer from a $150 grocery transfer by the same person.  A fixed
+     * per-transaction amount is different in kind:  it is a decision the user already made and
+     * recorded, saying "charges of exactly this amount from this merchant belong to this item".
+     * Matching it is reading an answer, not guessing one.
+     *
+     * @param association     the merchant/budget-item association
+     * @param transactionAmount the transaction amount (sign ignored)
+     */
+    static boolean hasExactPerTransactionAmount(BudgetItemMerchant association, double transactionAmount) {
+        if (association == null || association.getAmount() <= 0) {
+            return false;
+        }
+        return Utility.isEqualCurrency(association.getAmount(), Math.abs(transactionAmount));
+    }
+
+    /**
+     * Assign the whole transaction to the budget item whose configured per-transaction amount it
+     * matches exactly, and say so.
+     *
+     * <p>Declines whenever anything is in doubt:
+     * <ul>
+     *   <li>the merchant is flagged {@code askAlways} -- an explicit instruction to ask, which no
+     *       shortcut may override;</li>
+     *   <li>no association names an exact amount;</li>
+     *   <li><b>more than one does</b> -- then the configuration itself is ambiguous and the user is
+     *       the only one who can resolve it.</li>
+     * </ul>
+     *
+     * <p>An earlier version of this shortcut fired on a dominant <em>relevancy score</em> instead.
+     * It was removed after real data showed it would have silently assigned a $150 rent transfer to
+     * Groceries -- scoring 80.0 against a runner-up of 25.0, a wider lead than the case it was built
+     * for.  No threshold separates those two; the distinguishing signal was the word "RENT" in the
+     * payee, which relevancy scoring never sees.
+     *
+     * @return true if the split was assigned and the caller is done; false to fall through and ask
+     */
+    private boolean autoAssignExactPerTransactionAmount(Transaction transaction, List<TransactionSplit> splits,
+                                                        Merchant merchant,
+                                                        List<BudgetItemMerchant> budgetItemsForMerchant) {
+
+        if (merchant != null && merchant.isAskAlways()) {
+            return false;
+        }
+
+        BudgetItemMerchant onlyExactMatch = null;
+        for (BudgetItemMerchant candidate : budgetItemsForMerchant) {
+            if (hasExactPerTransactionAmount(candidate, transaction.getAmount())) {
+                if (onlyExactMatch != null) {
+                    return false;   // two items claim this amount; only the user can choose
+                }
+                onlyExactMatch = candidate;
+            }
+        }
+
+        if (onlyExactMatch == null) {
+            return false;
+        }
+
+        String itemLabel;
+        try {
+            itemLabel = onlyExactMatch.getBudgetItem().getPayee();
+        } catch (Exception e) {
+            // An auto-assignment that cannot be reported is exactly the silent kind to avoid.
+            return false;
+        }
+
+        splits.add(new TransactionSplit(transaction.getAmount(), onlyExactMatch, transaction,
+                getBudgetItemMemo(onlyExactMatch)));
+
+        view.say(String.format("\u25b8 Auto-assigned to %s (matches its configured %s per transaction).",
+                itemLabel, Utility.formatDollarAmount(onlyExactMatch.getAmount())));
+
+        return true;
     }
 
     /**

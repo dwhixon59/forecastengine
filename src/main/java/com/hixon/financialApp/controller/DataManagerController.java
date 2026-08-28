@@ -194,9 +194,14 @@ public class DataManagerController {
         // Ensure register and budget context first (always prompts with default)
         ensureRegisterContext();
 
-        // Always prompt for forecast selection, passing current forecast as default
+        // Always prompt for forecast selection, passing current forecast as default.  A forecast
+        // belongs to one and only one register, so the choice is scoped to the register just
+        // selected; a register with no forecast simply leaves the forecast null.
         Forecast previousForecast = forecast;
-        forecast = Forecast.selectForecast(budget, previousForecast);
+        forecast = Forecast.selectForecast(register, previousForecast);
         sessionController.setForecast(forecast);
+        if (forecast == null) {
+            view.say("There is no forecast for " + register.getName() + ".");
+        }
     }
 }
