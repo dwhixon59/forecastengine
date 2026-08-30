@@ -335,11 +335,12 @@ public class TransferCounterpartController {
      * <p>The splits already assigned here <em>are</em> the answer the far side was going to ask for,
      * so the pairing is learned from them exactly as if the question had just been answered.
      *
-     * <p>A candidate has to be the other side of <b>this</b> movement of money, on the same three
-     * hurdles {@link #otherSideAlreadyExists} uses -- differing bank references rule it out, the
-     * amounts must be the same size, and its source transaction must sit in the register this
-     * transfer names.  Anything short of that is left alone:  a stale expectation is untidy, but
-     * deleting a live one loses a question that should have been asked.
+     * <p>A candidate has to be the other side of <b>this</b> movement of money, on the same hurdles
+     * {@link #otherSideAlreadyExists} uses -- differing bank references rule it out, the amounts must
+     * be the same size, and its source transaction must sit in the register this transfer names,
+     * unless a shared bank reference has already settled the identity.  Anything short of that is
+     * left alone:  a stale expectation is untidy, but deleting a live one loses a question that
+     * should have been asked.
      *
      * @param transaction an already-imported transaction that already has splits
      * @param splits      the splits it already has
@@ -389,12 +390,19 @@ public class TransferCounterpartController {
                 continue;
             }
 
-            // The expectation was written from a transaction in another register.  That register has
-            // to be the one this transfer names, or this is a different movement of the same size.
-            Transaction source = sourceTransactionOf(candidate);
-            if (source == null || source.getIdRegister() == null
-                    || !source.getIdRegister().equals(counterpartyRegister.getId())) {
-                continue;
+            // A shared bank reference is an identity and settles it on its own, for the same reason
+            // it does in otherSideAlreadyExists:  the register question below can fail on an
+            // ambiguous payee even when the two sides are unmistakably one transfer.
+            if (!BankReferenceNumber.areSameMovement(reference, candidate.getSourceReference())) {
+
+                // The expectation was written from a transaction in another register.  That register
+                // has to be the one this transfer names, or this is a different movement of the same
+                // size.
+                Transaction source = sourceTransactionOf(candidate);
+                if (source == null || source.getIdRegister() == null
+                        || !source.getIdRegister().equals(counterpartyRegister.getId())) {
+                    continue;
+                }
             }
 
             view.say("The other side of this transfer was already imported here and categorized, so the " +
@@ -617,6 +625,16 @@ public class TransferCounterpartController {
      * Pay Dave to Bill Pay Danni was ruled "already arrived" by an unrelated $1.00 SAVE AS YOU GO
      * transfer from Bill Pay Dave to Joint Savings three days earlier:  same register, same amount,
      * inside the window, and carrying no reference to distinguish it.
+     *
+     * <p>But the second hurdle is a <em>weaker</em> test than a matching reference, not a stronger
+     * one, and applying it unconditionally let a real duplicate through.  Both sides of the $1.00
+     * {@code TEST XFR2} transfer read {@code HIXON D ... EVERYDAY CHECKING} and both carried
+     * {@code REF #IB0ZHFFH69}; the reference said "one movement" while the ambiguous payee failed to
+     * resolve back to the source register, so an expectation was written for a transfer that had
+     * already arrived and then sat in the forecast until the register happened to be imported again.
+     * So a shared reference now short-circuits:  it is the same identity rule
+     * {@code ForecastTransactionMatcher} applies for {@code ReferenceVerdict.CERTAIN}, and hurdle two
+     * remains in force for the majority of transfers, which carry no reference at all.
      */
     protected boolean otherSideAlreadyExists(Transaction transaction, Register counterpartyRegister,
                                              String reference) throws Exception {
@@ -638,6 +656,16 @@ public class TransferCounterpartController {
             String candidateReference = BankReferenceNumber.extract(candidate.getPayee());
             if (BankReferenceNumber.areDifferentMovements(reference, candidateReference)) {
                 continue;
+            }
+
+            // The same bank reference on both sides is an identity, not a coincidence:  this is the
+            // other side of this movement whether or not either payee names a register the
+            // application can resolve.  Taken before the hurdle below, because that hurdle asks a
+            // question -- which register does this payee mean? -- that a shared reference has
+            // already answered, and that resolution can fail on an ambiguous payee even when the two
+            // sides are unmistakably one transfer.
+            if (BankReferenceNumber.areSameMovement(reference, candidateReference)) {
+                return true;
             }
 
             // The candidate must point back at the register this transfer came from.  Anything else
