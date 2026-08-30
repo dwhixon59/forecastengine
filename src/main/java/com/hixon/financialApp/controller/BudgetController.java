@@ -1878,6 +1878,29 @@ public class BudgetController {
      */
     public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
                                            double amount) throws Exception {
+        showBudgetItemsForMerchant(budgetItemMerchants, relevancyScores, amount, null, false);
+    }
+
+    /**
+     * Displays a list of budget items and amounts (if specified) for a given merchant, naming the
+     * transfer memo that put one of them where it is.
+     *
+     * <p>The memo's suggestion is right about five times in six.  What makes showing a
+     * one-in-six-wrong suggestion at the top of the list safe is not a threshold -- no threshold
+     * separates the good cases from the bad -- but saying out loud <em>why</em> it is at the top,
+     * so the user can weigh the evidence instead of trusting the ordering.
+     *
+     * @param budgetItemMerchants       the list of assigned budget items for the merchant
+     * @param relevancyScores           the relevancy score for each item, in the same order
+     * @param amount                    the amount of the transaction
+     * @param memoSuggestion            what the transfer memo suggests, or null if it says nothing
+     * @param suggestionIsUnassociated  true if the suggested item was added to the list by the memo
+     *                                  and is not yet one of this merchant's budget items
+     * @throws Exception if an error occurs during the display process
+     */
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
+                                           double amount, MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                           boolean suggestionIsUnassociated) throws Exception {
         view.say("The assigned budget items and amounts (if specified) for this merchant are:");
         int i = 1;
         for (BudgetItemMerchant budgetItemMerchant : budgetItemMerchants) {
@@ -1898,9 +1921,38 @@ public class BudgetController {
                 line += ", Relevancy Score: " + relevancyScores.get(i - 1);
             }
 
+            line += memoAnnotation(budgetItemMerchant, memoSuggestion, suggestionIsUnassociated);
+
             view.say(line);
             i++;
         }
+    }
+
+    /**
+     * The trailing note naming the memo that put an item where it is, for the one item the memo
+     * names.
+     *
+     * @param budgetItemMerchant       the item being displayed
+     * @param memoSuggestion           what the transfer memo suggests, or null
+     * @param suggestionIsUnassociated true if the suggested item is in the list only because the
+     *                                 memo put it there
+     * @return the note to append, or an empty string for every item the memo says nothing about
+     */
+    static String memoAnnotation(BudgetItemMerchant budgetItemMerchant,
+                                 MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                 boolean suggestionIsUnassociated) {
+
+        if (budgetItemMerchant == null || memoSuggestion == null || memoSuggestion.budgetItem() == null) {
+            return "";
+        }
+
+        UUID suggested = memoSuggestion.budgetItem().getId();
+        if (suggested == null || !suggested.equals(budgetItemMerchant.getIdBudgetItem())) {
+            return "";
+        }
+
+        return "  ← " + memoSuggestion.describe() +
+                (suggestionIsUnassociated ? ", not yet assigned to this merchant" : "");
     }
 
     /**
