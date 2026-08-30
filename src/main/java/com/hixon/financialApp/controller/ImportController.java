@@ -210,6 +210,49 @@ public class ImportController {
      *                             Typically includes date, amount, and payee information.
      * @return The full import record ID with instance number appended
      */
+    /**
+     * Ask whether an incoming transaction is one the register already holds, when the bank's import
+     * record id failed to say so.
+     *
+     * <p>Reached only after {@link Transaction#getByImportRecordId(String, UUID)} has already missed,
+     * so for a bank with stable ids this never runs and nothing about the import changes.  It exists
+     * for the banks whose ids move:  see
+     * {@link Transaction#getByDateAmountAndPayee(UUID, java.util.Calendar, double, String)} for the
+     * Citi case that prompted it.
+     *
+     * <p>The question is asked rather than assumed, and defaults to importing.  Same date, same
+     * amount, same payee is a strong hint and not a proof -- two identical charges in one day are
+     * ordinary -- and the two mistakes are not equally bad:  a duplicate the user waves through is
+     * visible and fixable, while a real transaction silently dropped is money that never appears in
+     * the register, the forecast or any report.
+     *
+     * @param incoming the transaction just read from the import file
+     * @param register the register being imported into
+     * @return the transaction already held, if the user says it is the same charge; null to import
+     */
+    private Transaction confirmNotAlreadyImported(Transaction incoming, Register register) throws Exception {
+
+        Transaction alreadyHeld = Transaction.getByDateAmountAndPayee(register.getId(), incoming.getPostDate(),
+                incoming.getAmount(), incoming.getPayee());
+        if (alreadyHeld == null) {
+            return null;
+        }
+
+        view.say("This transaction has a different import id from anything in the register, but the register " +
+                "already holds one just like it:");
+        view.say("  " + calendarDateToStringDate(incoming.getPostDate()) + "  " +
+                formatDollarAmount(incoming.getAmount()) + "  " + incoming.getPayee());
+        view.say("  already held as import id " + alreadyHeld.getImportRecordId() +
+                ", incoming id " + incoming.getImportRecordId());
+
+        if (view.getYesOrNo("Is this a separate charge that should be imported as well")) {
+            return null;
+        }
+
+        view.say("Treating it as already imported.");
+        return alreadyHeld;
+    }
+
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
         return constructImportRecordId(map, importRecordBaseName, importRecordBaseName);
     }
@@ -341,6 +384,16 @@ public class ImportController {
                 // Track whether this is a new transaction (not previously imported)
                 String importRecordId = currentTransaction.getImportRecordId();
                 Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
+
+                // The import record id is supposed to be the bank's stable identity for the charge,
+                // and for most banks it is.  Citi's is not:  its FITID is the date followed by the
+                // transaction's position in that particular download, so re-downloading from an
+                // earlier start date hands every charge a new id and the lookup above finds nothing.
+                // Fall back to asking whether this is the same charge already held.
+                if (existingTransaction == null) {
+                    existingTransaction = confirmNotAlreadyImported(currentTransaction, register);
+                }
+
                 boolean isNewTransaction = (existingTransaction == null);
 
                 // Get the merchant and splits for this transaction if it already exists:
