@@ -307,13 +307,27 @@ public class ForecastController {
                 ") differs significantly from the planned amount (" +
                 Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount())) + ") for " +
                 forecastTransaction.toStringConcise() + ".");
-        view.ask("What would you like to do (s-assign anyway, i-do not assign, d-dispute)? ");
+        view.ask("What would you like to do (a-adjust, s-assign anyway, i-do not assign, d-dispute)? ");
 
         boolean done = false;
         while (!done) {
             done = true;
             String line = view.getResponseString();
             switch (line) {
+                case "a":
+                    // The amount differing is not always a mistake -- a subscription price goes up
+                    // and every future occurrence is wrong until the budget item is told.  Without
+                    // this the user had nowhere to say so:  the overage prompt that offers "adjust"
+                    // is reached only for COLLECTION items, and this question is asked only for the
+                    // items that are not COLLECTION, so the two never meet.
+                    //
+                    // Adjusts to the amount that actually arrived rather than asking for one, which
+                    // is both what the COLLECTION prompt does and the only way to be sure of the
+                    // sign:  a user typing "22.56" at a prompt would budget a positive amount for an
+                    // expense.
+                    response.setDisposition(ADJUST);
+                    break;
+
                 case "s":
                     response.setDisposition(ASSIGN);
                     break;
@@ -327,11 +341,39 @@ public class ForecastController {
                     break;
 
                 default:
-                    view.say("Please enter s, i, or d.");
+                    view.say("Please enter a, s, i, or d.");
                     done = false;
             }
         }
         return response;
+    }
+
+    /**
+     * Re-budget an item to the amount that actually came through, and bring the forecast transaction
+     * being reconciled with it.
+     *
+     * <p>Shared by the two questions that can end in "adjust", so that answering it means the same
+     * thing whichever one asked:  the budget item carries the new amount from here on, the forecast
+     * is marked out of sync so the next regeneration picks the change up, and the occurrence being
+     * reconciled right now is set to the new amount so that the split about to be deducted from it
+     * settles to zero rather than leaving a phantom remainder.
+     *
+     * @param split               the split whose amount prompted the question
+     * @param forecastTransaction the occurrence being reconciled
+     * @param newAmount           the amount to budget from now on
+     */
+    public void adjustBudgetItemAmount(TransactionSplit split, ForecastTransaction forecastTransaction,
+            double newAmount) throws Exception {
+
+        Forecast forecast = forecastTransaction.getForecastItem().getForecast();
+
+        split.getBudgetItem().setAmount(newAmount);
+        split.getBudgetItem().save(INSERT_ON_DUPLICATE_UPDATE);
+
+        forecast.setInSync(false);
+        forecast.save(UPDATE);
+
+        forecastTransaction.setRemainingAmount(newAmount);
     }
 
     /**
@@ -631,11 +673,7 @@ public class ForecastController {
                     switch (split.getDisposition()) {
 
                         case ADJUST:  // The user would like to increase the budgeted amount to cover the overage:
-                            split.getBudgetItem().setAmount(split.getAmount());
-                            split.getBudgetItem().save(INSERT_ON_DUPLICATE_UPDATE);
-                            forecast.setInSync(false);
-                            forecast.save(UPDATE);
-                            forecastTransaction.setRemainingAmount(split.getAmount());
+                            adjustBudgetItemAmount(split, forecastTransaction, split.getAmount());
                             break;
 
                         case DISPUTE:  // The user believes that the register transaction is in error and would like to

@@ -1176,6 +1176,16 @@ public class ForecastTransactionController {
                 split.setDisposition(resp.getDisposition());
                 switch (split.getDisposition()) {
 
+                    case ADJUST: // The planned amount was simply out of date -- re-budget and assign.
+                        forecastController.adjustBudgetItemAmount(split, bestMatch, split.getAmount());
+                        view.say("Budgeted amount for " + split.getBudgetItem().getPayee() + " changed to " +
+                                Utility.formatDollarAmount(split.getAmount()) + ".");
+
+                        // From here it is an ordinary assignment:  the item now budgets the amount
+                        // that actually arrived, so nothing about this split is exceptional any more.
+                        split.setDisposition(ASSIGN);
+                        return bestMatch;
+
                     case ASSIGN: // User confirmed: assign despite the amount difference.
                         return bestMatch;
 
