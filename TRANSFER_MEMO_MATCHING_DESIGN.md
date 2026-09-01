@@ -1,6 +1,6 @@
 # Transfer Memo in Auto-Matching — Design
 
-**Status:** phases 1, 2 and 2.1 shipped; phases 3 and 4 outstanding.  Every number below was measured
+**Status:** phases 1, 2, 2.1 and 3 shipped; phase 4 outstanding.  Every number below was measured
 against `ForecastDatabase`, re-measured on 2026-08-28 after the phase-1 backfill; the queries are in
 the appendix. Where a number here differs from the version of this document written on 2026-08-26,
 the 2026-08-28 figure is the one taken against the shipped code.
@@ -323,11 +323,53 @@ recorded in advance. It is not a guess, and the memo has no business in it. Left
 by both the ordering above and a test asserting an appended row can never satisfy
 `hasExactPerTransactionAmount` (it carries amount 0 and percentage 0 by construction).
 
-### 3.2 Phase 2.5 — forecast transaction scoring (tie-break only) — **not yet built**
+### 3.2 Phase 2.5 — forecast transaction scoring (tie-break only) — **shipped in phase 3**
 
 `ForecastTransactionMatcher.calculateMatchScore` gives date 0–40, amount 0–40, merchant 0–20, and
-auto-assigns at 70. This path sees only *planned* transfers — roughly 103 of the 334 — where a memo
-mostly breaks ties between near-identical candidates (`David's net pay 1` vs `David's net pay 2`).
+auto-assigns at 70. This path sees only *planned* transfers, where a memo breaks ties between
+near-identical candidates.
+
+**Which transfers those are, measured.** An earlier version of this section said "roughly 103 of the
+334" and illustrated it with `David's net pay 1` vs `David's net pay 2`. Both were wrong, in opposite
+directions, and the 2026-09-01 import that shipped phase 3 showed why.
+
+The example first: the net pay pair is an inbound ACH direct deposit from the employer. A memo exists
+only on a Wells Fargo *user-initiated online transfer* — §1 — so no paycheck can ever carry one, and
+this path can never separate that pair. The real case is two planned items in the same register that
+receive similarly sized transfers in the same week and are told apart by what the user typed:
+
+```
+Children's allowances       collection, Bill Pay Dave    JUSTIN SPENDING MONEY JDH  18x  -$50.00
+Justin's Weekly Expenses    periodic,   Bill Pay Dave    JDH EXPENSES               13x  -$32.54
+                                                         GAS FOR JDH                 5x  -$30.00
+```
+
+The amounts genuinely collide — `Justin's Weekly Expenses` took nine transfers at exactly $-30.00 and
+eleven at $-33.00, and `Children's allowances` took one at $-30.00 and others at $-31.26, $-42.98,
+$-53.00. Same register, same week, same person, and on such a week the memo is the only thing that
+names which item was meant.
+
+The reachability was understated. Counting memo-bearing single-split transfers since 2025 by whether
+their budget item generates forecast transactions at all (appendix):
+
+```
+planned  (C/P/VP/E)   356        unplanned (U)   169
+```
+
+68%, not 31%. The "103 of 334" figure counted *all* transfers, and §3.1's finding that most transfers
+go to on-demand items is true of transfers in general but not of the ones that carry a memo — those
+skew heavily toward planned items:
+
+```
+Joint Spending Money    113  (60 distinct memos)     Bill Pay Envelopes    24  (14)
+Children's allowances    38  (15)                    Room rental           24   (2)
+Savings                  25  (17)                    Justin's Weekly Exp.  18   (3)
+David's support payment  25   (3)
+```
+
+That is an upper bound on what phase 3 can act on, not a forecast of how often it fires: the planned
+forecast transaction still has to fall in the date window and be unreconciled, and the tie-break only
+changes an outcome when **two** candidates clear 70.
 
 **Change, and the safety property that comes with it:**
 
@@ -343,6 +385,43 @@ silent auto-assignment.
 Where a transfer counterpart already carries a bank reference, `ReferenceVerdict.CERTAIN`
 short-circuits before scoring and the memo is never reached. That is correct — the reference is the
 stronger fact.
+
+**How the invariant is expressed in code.** The scoring loop no longer tracks a running best. It
+builds one `ScoredCandidate(candidate, score, memoBonus)` per candidate — the memo's opinion kept
+*beside* the score rather than added into it, because nothing can test a threshold on a memo-free
+score once the two have been summed — and `selectMatch` picks the winner:
+
+```java
+for (ScoredCandidate candidate : scored) {
+    if (!candidate.qualifies()) {      // score >= AUTO_MATCH_THRESHOLD, memo not consulted
+        continue;
+    }
+    if (best == null || candidate.total() > best.total()) {   // score + memoBonus
+        best = candidate;
+    }
+}
+```
+
+Two lines, and both halves of the invariant are structural: a candidate the matcher would not have
+assigned on its own is never eligible to be ranked, and among those that are, the memo only reorders.
+With no memo every bonus is zero and this reduces to "highest score wins, earliest on a tie", which
+is exactly what the loop did before — the regression guard the ~50% of transfers with no memo
+depend on.
+
+`MEMO_TIE_BREAK` is 15, half of the ranked list's `MEMO_BONUS`, and the halving is not arbitrary
+symmetry: the ranked list orders something the user is about to read, this chooses something the
+matcher is about to assign silently. 15 is deliberately below the smallest factual input (merchant
+agreement, 0–20), so the memo cannot on its own overturn a candidate that is a business day closer
+(−8/day) or a percent nearer on amount. Unlike the ranked list there is no half weight for a
+single-prior memo, because there is nothing here for it to protect — every candidate it chooses
+between has already been judged confident on the facts alone.
+
+The suggestion is looked up once per transaction, in the `Transaction`-taking overload — the only
+one that has a memo to read — and threaded through as a parameter, the same way the bank reference
+is. The other overloads (`RegisterController.resolveUnmatchedAccount` passes only a date and an
+amount) pass null and are unchanged. The lookup returns null without touching the database when the
+transaction carries no memo, so nothing new is queried for the transactions this feature says
+nothing about; a lookup that throws is swallowed to null, exactly as in §3.1.
 
 ### 3.3 Register resolution (already exists, no change)
 
@@ -533,7 +612,7 @@ Each phase is independently useful and independently revertible.
 | 1 | Fix `extractUserDescription` phrase-stripping (§1); add `userDescription` to `Transaction` and write it at import (§5); re-run the backfill | Better register-nickname matching immediately; the data §2–§4 need | **shipped** — `219a234` |
 | 2 | `MemoBudgetItemHistory` lookup (§4) + Phase 4 ranking bonus and display (§3.1) | **The feature as asked for** | **shipped** |
 | 2.1 | Bound the history window to 18 months (§2, §10) | 447 correct suggestions instead of 432, and 54 burials instead of 69 | **shipped** |
-| 3 | Phase 2.5 tie-break with the memo-free threshold invariant (§3.2) | Planned transfers | outstanding |
+| 3 | Phase 2.5 tie-break with the memo-free threshold invariant (§3.2) | Planned transfers | **shipped** |
 | 4 | Late-memo confirmation at reconcile (§6b) | Pending-first transfers; protects the history | outstanding |
 
 Phase 1 had to land and be backfilled before Phase 2 could be measured honestly, and it was.
@@ -546,6 +625,16 @@ Phase 1 had to land and be backfilled before Phase 2 could be measured honestly,
 | `controller/TransactionSplitsController.java` | `MEMO_BONUS`, `MEMO_BONUS_SINGLE_PRIOR`, `lookUpMemoSuggestion`, `appendMemoSuggestedItem`, `applyMemoBonus`, `memoBonus`, `settleMemoSuggestedItem`; `calculateRelevancyScores` and `sortByRelevancyScore` made `static` |
 | `controller/BudgetController.java` | five-argument `showBudgetItemsForMerchant` overload and `memoAnnotation` |
 | `utilities/MemoRankingBacktest.java` | new — the bulk measurement harness |
+
+### What phase 3 added
+
+| File | |
+|---|---|
+| `utility/ForecastTransactionMatcher.java` | `AUTO_MATCH_THRESHOLD` (the 70 that was three literals), `MEMO_TIE_BREAK`, the `ScoredCandidate` record, `selectMatch`/`selectBest`, `memoTieBreak`, `lookUpMemoSuggestion`, and an eight-argument `findMatchingForecastTransaction` overload carrying the suggestion |
+| `test/.../ForecastTransactionMatcherMemoTest.java` | new — 14 tests, all of them the invariant from some angle |
+
+No call site changed: the `Transaction`-taking overload looks the memo up itself, so both
+`ImportController` Phase 2.5 sites got the tie-break without an edit.
 
 `calculateRelevancyScores`, `sortByRelevancyScore`, `applyMemoBonus` and `appendMemoSuggestedItem`
 are `public static` rather than private, so the backtest in `com.hixon.utilities` can replay the real
@@ -606,13 +695,24 @@ consulted" asserts something about the lookup rather than about the fake:
 - an appended row can never satisfy `hasExactPerTransactionAmount`
 - the annotation labels the memo's row, only that row, and says when the item is not yet associated
 
-**Phase 2.5 — `ForecastTransactionMatcherMemoTest`.** Not yet written; phase 3. The invariant is the
+**Phase 2.5 — `ForecastTransactionMatcherMemoTest`** (14 tests, phase 3). The invariant is the
 point:
 
 - memo agreement reorders two candidates that both clear 70
 - **a candidate whose memo-free score is 69 is not auto-matched, whatever the memo says**
+- a 69 + 15 = 84 candidate still loses to a memo-free 72 — ineligible, not merely outranked
+- 70 exactly qualifies, and the memo may then rank it
+- the tie-break goes to the memo's budget item and to nothing else, and is worth less than 20
+- a single prior is not weighted down, unlike the ranked list
+- a candidate whose budget item cannot be read scores 0 rather than throwing
+- no memo → the highest score wins, and equal scores still leave the earliest candidate winning
+  *(the regression guard for the ~50% with no memo)*
 - `ReferenceVerdict.CERTAIN` still short-circuits before any memo is consulted
 - `RULED_OUT` still wins over memo agreement
+
+The last two are asserted where the decision is actually made — on the verdict, and on the fact that
+a candidate that never becomes a `ScoredCandidate` is never asked for its budget item. Neither needs
+a database, which is the reason the selection rule was extracted out of the loop in the first place.
 
 **Backtest harness — `com.hixon.utilities.MemoRankingBacktest`.** Ranking changes are only honestly
 judged in bulk, so this is a `main()`-style tool that hits the real database, like the others in that
@@ -810,6 +910,27 @@ name is ambiguous or expired in the current budget, so the harness makes slightl
 than raw id-matching would. The unbounded row is the clearest case — SQL 574/432 against the
 harness's 566/432, the same correct answers with eight fewer suggestions. At the shipped 18-month
 window the harness reports **553 suggestions, 447 correct (80.8%)** against this table's 559/447.
+
+**Phase 3 reachability (§3.2)**, run 2026-09-01 against `ForecastDatabase`. `howOccurs = 'U'` is the
+unplanned item that generates no forecast transaction and so can never be a candidate here; every
+other value can:
+
+```sql
+SELECT bi.howOccurs, COUNT(*) AS transfers_with_memo
+FROM   transaction t
+JOIN   transaction_split ts ON ts.Transaction_idTransaction = t.idTransaction
+JOIN   budget_item bi       ON bi.idBudgetItem = ts.BudgetItem_idBudgetItem
+WHERE  t.postDate >= '2025-01-01'
+  AND  t.user_description IS NOT NULL AND t.user_description <> ''
+  AND  (SELECT COUNT(*) FROM transaction_split s
+        WHERE s.Transaction_idTransaction = t.idTransaction) = 1
+GROUP BY bi.howOccurs;
+
+→ C 173   U 169   P 167   E 10   VP 6        planned 356, unplanned 169  (68% planned)
+```
+
+Add `bi.payee` and `r.name` to the grouping, with `AND bi.howOccurs <> 'U'`, for the per-item table in
+§3.2; add `t.amount` for the amount-collision figures in the same section.
 
 **Ranking movement and the bonus sweep** come from `MemoRankingBacktest` itself; see §8 for the
 invocation. The sweep in §3.1 was produced by rebuilding with `MEMO_BONUS` set to each value in turn.
