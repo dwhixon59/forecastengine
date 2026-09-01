@@ -794,6 +794,23 @@ public class ImportController {
                             view.say("Already assigned splits.");
                         }
 
+                        // A transfer categorized while it was still pending was categorized without
+                        // its memo:  the pending feed truncates the bank's description, and the
+                        // truncation lands before the memo every time.  The cleared copy carries it,
+                        // so this is the one moment that late fact can still be acted on -- and only
+                        // when it disagrees with what is already assigned.  Silent otherwise.
+                        if (reconciledWithProvisional && new LateMemoController(sessionController)
+                                .confirmLateMemo(currentTransaction, splits)) {
+
+                            // The splits in hand were deleted and replaced, so the ones Phase 5 and
+                            // 5.5 go on to use have to be the new ones.
+                            List<TransactionSplit> recategorizedSplits =
+                                    TransactionSplit.getSplitsForTransaction(currentTransaction);
+                            if (recategorizedSplits != null && !recategorizedSplits.isEmpty()) {
+                                splits = recategorizedSplits;
+                            }
+                        }
+
                         // If splits were modified during provisional reconciliation (e.g., tip adjustment),
                         // they need to be saved to persist the changes
                         for (TransactionSplit split : splits) {

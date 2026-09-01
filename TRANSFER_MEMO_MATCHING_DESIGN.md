@@ -1,6 +1,6 @@
 # Transfer Memo in Auto-Matching — Design
 
-**Status:** phases 1, 2, 2.1 and 3 shipped; phase 4 outstanding.  Every number below was measured
+**Status:** all phases shipped (1, 2, 2.1, 3, 4).  Every number below was measured
 against `ForecastDatabase`, re-measured on 2026-08-28 after the phase-1 backfill; the queries are in
 the appendix. Where a number here differs from the version of this document written on 2026-08-26,
 the 2026-08-28 figure is the one taken against the shipped code.
@@ -552,7 +552,7 @@ the real search term. The `ORDER BY relevance DESC` therefore ranked by similari
 
 ---
 
-## 6. The pending/cleared problem — **not yet addressed**
+## 6. The pending/cleared problem — **addressed in phase 4**
 
 Restating it precisely, because it is the one thing that limits this feature.
 
@@ -575,9 +575,9 @@ that does, the memo is late.
 Three ways to handle it:
 
 **(a) Accept it.** The memo helps transfers that clear directly; pending-first ones are unchanged.
-Zero extra work, zero risk. Worth stating plainly that this is a legitimate stopping point — most of
-the value in §2 is available without touching the reconcile path at all. **This is where the code
-stands today.**
+Zero extra work, zero risk. Worth stating plainly that this was a legitimate stopping point — most of
+the value in §2 is available without touching the reconcile path at all. Phases 1–3 shipped and sat
+here.
 
 **(b) Treat the memo as a late-arriving fact — recommended.** At reconcile, if the cleared payee
 yields a memo whose historical budget item disagrees with the split already assigned, say so and
@@ -597,6 +597,53 @@ This also protects the data §4 depends on. Without it, provisional-first transf
 record a categorization made in ignorance of the memo, and those rows then become priors that teach
 the wrong answer.
 
+**Shipped in phase 4, as `LateMemoController`.** The hook is the one branch in `ImportController`
+that this design has been pointing at since it was written — the `else` of `if (splits == null)`,
+where the splits came from the provisional and Phases 2.5, 3 and 4 are skipped:
+
+```java
+if (reconciledWithProvisional && new LateMemoController(sessionController)
+        .confirmLateMemo(currentTransaction, splits)) {
+    List<TransactionSplit> recategorizedSplits =
+            TransactionSplit.getSplitsForTransaction(currentTransaction);
+    ...
+}
+```
+
+It asks on **disagreement with a memo that has priors**, and on nothing else. All four conditions
+have to hold: the transaction was reconciled with a provisional one (so the answer really was given
+without the memo); the cleared copy yields a memo with history; there is exactly one split; and the
+item the memo names is not the item already assigned. `reconciledWithProvisional` is what keeps this
+off the auto-matched path — phase 3 already consulted the memo there, and asking again would be
+asking the same question twice.
+
+The prompt names the evidence and the count, as §3.1's does:
+
+```
+▸ This transfer cleared with the memo "RENT", which you have assigned to Room rental 42 times.
+  It is currently split to Groceries.
+Change it? (y/n)
+```
+
+"Yes" routes through `TransactionController.recategorizeTransaction`, which is the same path Manage
+Data and the import summary already use — no second recategorization flow, per this section's own
+instruction. Backing out of it (cancel or skip) is treated as "no": that method rolls its own changes
+back, and the splits are left exactly as they were found. The caller reloads the splits afterwards,
+because Phase 5's forecast reconciliation and Phase 5.5's counterpart recording both go on to use
+them.
+
+**Why a question here is worth more than its 80.8% suggests.** In the §8 backtest the memo is
+measured against what the user chose *knowing the memo*. Here they answered *without* it — the
+pending description was truncated before the memo could be read — so a disagreement carries more
+information than the same disagreement does anywhere else in this design. That is the argument for
+asking at all; it is not an argument for changing anything silently, and nothing here does.
+
+**Frequency is not measurable from the stored data.** Whether a given transaction was categorized as
+provisional first is not recorded once it clears, so there is no query that counts how often this
+will fire. What can be said: it needs a transfer that the user hand-entered into the provisional file
+*and* that carries a memo *and* whose memo disagrees — roughly one in five of those that reach the
+question, on §8's numbers.
+
 **(c) Defer the question for transfers until they clear.** Rejected. It would leave uncategorized
 transactions sitting in the register for days, break the forecast reconciliation the pending sweep
 depends on, and trade a small accuracy gain for a large behavioural change.
@@ -613,7 +660,7 @@ Each phase is independently useful and independently revertible.
 | 2 | `MemoBudgetItemHistory` lookup (§4) + Phase 4 ranking bonus and display (§3.1) | **The feature as asked for** | **shipped** |
 | 2.1 | Bound the history window to 18 months (§2, §10) | 447 correct suggestions instead of 432, and 54 burials instead of 69 | **shipped** |
 | 3 | Phase 2.5 tie-break with the memo-free threshold invariant (§3.2) | Planned transfers | **shipped** |
-| 4 | Late-memo confirmation at reconcile (§6b) | Pending-first transfers; protects the history | outstanding |
+| 4 | Late-memo confirmation at reconcile (§6b) | Pending-first transfers; protects the history | **shipped** |
 
 Phase 1 had to land and be backfilled before Phase 2 could be measured honestly, and it was.
 
@@ -635,6 +682,18 @@ Phase 1 had to land and be backfilled before Phase 2 could be measured honestly,
 
 No call site changed: the `Transaction`-taking overload looks the memo up itself, so both
 `ImportController` Phase 2.5 sites got the tie-break without an edit.
+
+### What phase 4 added
+
+| File | |
+|---|---|
+| `controller/LateMemoController.java` | new — `confirmLateMemo`, and the two seams `disagreeingItem` and `describeDisagreement` |
+| `controller/ImportController.java` | six lines in the `else` branch where provisional splits are kept, plus the reload of the splits Phases 5 and 5.5 use |
+| `test/.../LateMemoControllerTest.java` | new — 9 tests, mostly about when the offer stays silent |
+
+The controller holds no state and decides nothing on its own: the lookup is §4's, the change is
+`TransactionController.recategorizeTransaction`, and everything in between is the four conditions and
+one sentence of English.
 
 `calculateRelevancyScores`, `sortByRelevancyScore`, `applyMemoBonus` and `appendMemoSuggestedItem`
 are `public static` rather than private, so the backtest in `com.hixon.utilities` can replay the real
@@ -714,6 +773,17 @@ The last two are asserted where the decision is actually made — on the verdict
 a candidate that never becomes a `ScoredCandidate` is never asked for its budget item. Neither needs
 a database, which is the reason the selection rule was extracted out of the loop in the first place.
 
+**Phase 4 — `LateMemoControllerTest`** (9 tests). The offer is narrow, so most of these are about
+the cases where it stays quiet:
+
+- a memo naming a different item than the one assigned is worth asking about *(the §6 case)*
+- a memo that agrees asks nothing — the common case, and a question there would fire on nearly
+  every reconciled transfer that carries a memo
+- a single prior still asks, and the prompt says "1 time" rather than "1 times"
+- no memo, a memo with no history, a multi-split transfer, and no splits at all each ask nothing
+- a split whose budget item cannot be read asks nothing rather than throwing
+- the prompt names the memo, the item it points to, the count, and what is currently assigned
+
 **Backtest harness — `com.hixon.utilities.MemoRankingBacktest`.** Ranking changes are only honestly
 judged in bulk, so this is a `main()`-style tool that hits the real database, like the others in that
 package. It replays every single-split memo-bearing transfer from a given year, rebuilding the list
@@ -767,6 +837,15 @@ was 69, because no single behaviour was wrong, only the aggregate.
 - **Silent regression for the ~50% with no memo** was the main correctness risk, and is covered by
   the byte-identical-scores test above.
 - **Multi-split transfers** would poison the history if counted; excluded in §4.
+- **Phase 4 interrupts an answer the user gave deliberately.** Narrowed to four conditions (§6) and
+  it never changes anything without a yes, but it is the only place in this design where the memo
+  argues with a decision rather than ordering a list. If it proves noisy, the first thing to try is
+  requiring more than one prior.
+- **Phase 4 inherits whatever `recategorizeTransaction` does about the forecast.** That was the
+  instruction in §6b — route the change through the existing flow rather than writing a second one —
+  and it means the deleted splits' effect on `forecast_transaction.remainingAmount` is handled
+  exactly as well, or as badly, as it is for Manage Data and the import summary. Worth a look on its
+  own merits; it is not a phase 4 question.
 - **The list can now contain a row the merchant is not associated with.** Handled at every branch of
   the split-entry loop (`allFixed`, the `askAlways` shortcut, `d`-delete, and the settle step), but it
   is the part of phase 2 with the widest blast radius if a branch was missed.
