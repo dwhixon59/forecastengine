@@ -799,9 +799,12 @@ public class TransactionSplitsController {
      * @param merchant               the merchant the transaction belongs to
      * @param budgetItemsForMerchant the list the row was appended to
      * @param memoExtraRow           the appended row, or null if none was appended
+     * @throws QuitException if the user quits at the prompt -- an answer about the session rather
+     *                       than about this question, and the caller has to see it
      */
-    private void settleMemoSuggestedItem(List<TransactionSplit> splits, Merchant merchant,
-            List<BudgetItemMerchant> budgetItemsForMerchant, BudgetItemMerchant memoExtraRow) {
+    void settleMemoSuggestedItem(List<TransactionSplit> splits, Merchant merchant,
+            List<BudgetItemMerchant> budgetItemsForMerchant, BudgetItemMerchant memoExtraRow)
+            throws QuitException {
 
         if (memoExtraRow == null) {
             return;
@@ -828,6 +831,14 @@ public class TransactionSplitsController {
             } else {
                 budgetItemsForMerchant.remove(memoExtraRow);
             }
+        } catch (QuitException qe) {
+            // Quit is not an answer to this question, it is the user ending the session, and this
+            // file's convention -- and MainController's database cleanup -- depend on it reaching
+            // the top.  Take the unsaved row back out on the way past, so the caller's list is left
+            // the way it was found either way.
+            budgetItemsForMerchant.remove(memoExtraRow);
+            throw qe;
+
         } catch (Exception e) {
             // The splits the user just entered are the valuable part.  Failing to record the
             // association -- or the user cancelling out of the question -- must not lose them.

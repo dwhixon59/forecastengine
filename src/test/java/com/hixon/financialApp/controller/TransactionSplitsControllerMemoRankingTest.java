@@ -3,8 +3,10 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.budget.MemoBudgetItemHistory;
+import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.view.base.ViewInt;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +17,12 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -325,5 +332,84 @@ public class TransactionSplitsControllerMemoRankingTest {
                 association(roomRental, 0), suggestion(roomRental, 42), true);
 
         assertTrue(annotation.contains("not yet assigned to this merchant"), annotation);
+    }
+
+
+    /*
+     * Settling the appended row:  the escape hatches the view can throw at that prompt.
+     */
+    /** A controller wired to a mocked view, which is all settleMemoSuggestedItem touches. */
+    private static TransactionSplitsController controllerWith(ViewInt view) {
+        SessionController sessionController = mock(SessionController.class);
+        when(sessionController.getView()).thenReturn(view);
+        return new TransactionSplitsController(sessionController);
+    }
+
+    /** The prompt settleMemoSuggestedItem asks, stubbed to throw. */
+    private static ViewInt viewThrowingAt(Exception atThePrompt) throws Exception {
+        ViewInt view = mock(ViewInt.class);
+        when(view.getResponseString(anyString(), anyString(), anyBoolean(), anyBoolean(),
+                anyBoolean(), anyBoolean(), anyBoolean(), any())).thenThrow(atThePrompt);
+        return view;
+    }
+
+    /** A memo-suggested row the user assigned a split to, so the prompt is reached. */
+    private static BudgetItemMerchant usedMemoRow(List<BudgetItemMerchant> list, List<TransactionSplit> splits) {
+        BudgetItem roomRental = budgetItem(ROOM_RENTAL, "Room rental", 750.00);
+        BudgetItemMerchant memoRow = association(roomRental, 0);
+        list.add(memoRow);
+
+        TransactionSplit split = mock(TransactionSplit.class);
+        when(split.getIdBudgetItem()).thenReturn(ROOM_RENTAL);
+        splits.add(split);
+        return memoRow;
+    }
+
+    @Test
+    @DisplayName("Quitting at the association prompt quits, rather than counting as 'no'")
+    void testQuitAtTheAssociationPromptPropagates() throws Exception {
+
+        // QuitException extends FinancialAppException extends Exception, so a broad catch here
+        // swallowed the user's 'Q' and moved on to the next transaction -- skipping the database
+        // cleanup MainController does when a quit reaches the top.
+        List<BudgetItemMerchant> list = listOf();
+        List<TransactionSplit> splits = new ArrayList<>();
+        BudgetItemMerchant memoRow = usedMemoRow(list, splits);
+        Merchant merchant = mock(Merchant.class);
+        when(merchant.getName()).thenReturn("HIXON D");
+
+        TransactionSplitsController controller =
+                controllerWith(viewThrowingAt(new QuitException("user quit")));
+
+        assertThrows(QuitException.class,
+                () -> controller.settleMemoSuggestedItem(splits, merchant, list, memoRow));
+
+        // The unsaved row still leaves the caller's list the way it was found, and never becomes
+        // an association on the way out.
+        assertFalse(list.contains(memoRow));
+        verify(memoRow, never()).save();
+    }
+
+    @Test
+    @DisplayName("Cancelling at the association prompt is a 'no', and keeps the splits")
+    void testCancelAtTheAssociationPromptIsNo() throws Exception {
+
+        // The case the broad catch was written for, and it still behaves the same way:  the splits
+        // the user just entered are the valuable part, and declining to record the association
+        // must not cost them.
+        List<BudgetItemMerchant> list = listOf();
+        List<TransactionSplit> splits = new ArrayList<>();
+        BudgetItemMerchant memoRow = usedMemoRow(list, splits);
+        Merchant merchant = mock(Merchant.class);
+        when(merchant.getName()).thenReturn("HIXON D");
+
+        TransactionSplitsController controller =
+                controllerWith(viewThrowingAt(new CancelException("user cancelled")));
+
+        assertDoesNotThrow(() -> controller.settleMemoSuggestedItem(splits, merchant, list, memoRow));
+
+        assertFalse(list.contains(memoRow));
+        assertEquals(1, splits.size());
+        verify(memoRow, never()).save();
     }
 }
