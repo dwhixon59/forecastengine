@@ -1222,6 +1222,13 @@ public class ImportController {
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
 
+                    // Whether the transaction about to be processed is one the register already
+                    // holds, being reprocessed because its splits or its forecast reconciliation did
+                    // not complete last time.  Its money was credited to the balance when it was
+                    // first imported, and crediting it again would count the same pending charge
+                    // twice -- the row is an upsert, so nothing else about it duplicates.
+                    boolean alreadyInTheRegister = false;
+
                     // Compare the current provisional transaction to the current register transaction:
                     int comparison;
                     if (provTrxIndex < provisionalTransactions.size() && regTrxIndex < registerTransactions.size()) {
@@ -1255,6 +1262,7 @@ public class ImportController {
                         // don't try to insert the provisional transaction into the database:
                         if (comparison == -1) {
                             provisionalTransactions.set(provTrxIndex, registerTransactions.get(regTrxIndex));
+                            alreadyInTheRegister = true;
                         }
                     }
 
@@ -1398,7 +1406,9 @@ public class ImportController {
                                     // Save the provisional transaction with merchant info, and only
                                     // then credit the money it moved -- see creditToRegisterBalance.
                                     provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
-                                    creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                                    if (!alreadyInTheRegister) {
+                                        creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                                    }
 
                                     // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                                     // branch kept the original primary-key UUID.  Sync the in-memory object (and any
@@ -1642,7 +1652,9 @@ public class ImportController {
                         // Save the provisional transaction, and only then credit the money it moved
                         // -- see creditToRegisterBalance.
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
-                        creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                        if (!alreadyInTheRegister) {
+                            creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                        }
 
                         // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                         // branch kept the original primary-key UUID.  Sync the in-memory object (and any
