@@ -821,7 +821,7 @@ public class TransactionSplitsController {
             String itemLabel = memoExtraRow.getBudgetItem().getDisplayString();
             String associate = view.getResponseString(
                     "Permanently associate '" + itemLabel + "' with merchant '" + merchant.getName() +
-                            "'? (y/n) [y]:",
+                            "'? (y/n)",
                     "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                     ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 

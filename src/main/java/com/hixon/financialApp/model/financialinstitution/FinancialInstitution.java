@@ -356,6 +356,26 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     }
 
     /**
+     * The transfer types a Wells Fargo description can open with.  Note that {@code RECURRING
+     * PAYMENT} is deliberately absent:  that is a card charge whose MEMO is the bank's own
+     * annotation, not the tail of a transfer description.
+     */
+    private static final String[] TRANSFER_TYPES = {
+            "ONLINE TRANSFER",
+            "RECURRING TRANSFER",
+            "ATM TRANSFER",
+            "SAVE AS YOU",
+            "TRANSFER IN BRANCH"
+    };
+
+    /**
+     * The number of characters the bank leaves in the OFX NAME field when it has moved the transfer
+     * type into the MEMO.  A NAME of exactly this length is the signature of a hard cut -- see
+     * {@link #joinNameAndMemo}.
+     */
+    private static final int NAME_FIELD_WIDTH = 32;
+
+    /**
      * Converts a QfxTransaction to a Transaction domain object.
      * Subclasses can override this if they need custom conversion logic.
      *
@@ -376,19 +396,10 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         // Convert LocalDate to Calendar
         Calendar postDate = Utility.localDateToCalendarDate(qfxTxn.getPostedDate());
 
-        // Get payee from QFX transaction.
-        // Enhancement 1: For transfer transactions, append the MEMO field to the payee string.
-        // Wells Fargo QFX files put the critical disambiguation data (including masked account numbers
-        // like XXXXXX7394) in the MEMO field, not the NAME field. WellsFargoBank.parseMerchantPayee()
-        // already handles combined NAME+MEMO strings, so we combine them here for transfer types.
-        String rawName = qfxTxn.getName();
-        String memo = qfxTxn.getMemo();
-        String payee;
-        if (isTransferPayee(rawName) && memo != null && !memo.isBlank()) {
-            payee = rawName + " " + memo.trim();
-        } else {
-            payee = rawName;
-        }
+        // Get payee from QFX transaction.  A transfer's description does not fit one OFX field, so
+        // the bank splits it across NAME and MEMO and this puts it back together -- see
+        // joinNameAndMemo, which is where the two shapes it uses are documented.
+        String payee = joinNameAndMemo(qfxTxn.getName(), qfxTxn.getMemo());
 
         // QFX transactions are always cleared
         boolean cleared = true;
@@ -443,13 +454,93 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * @return true if this looks like a transfer transaction
      */
     private static boolean isTransferPayee(String name) {
-        if (name == null) return false;
-        String upper = name.toUpperCase();
-        return upper.startsWith("ONLINE TRANSFER")
-                || upper.startsWith("RECURRING TRANSFER")
-                || upper.startsWith("ATM TRANSFER")
-                || upper.startsWith("SAVE AS YOU")
-                || upper.startsWith("TRANSFER IN BRANCH");
+        return leadingTransferType(name) != null;
+    }
+
+    /**
+     * The transfer type a bank description opens with, if it opens with one.
+     *
+     * @param text the text to inspect, either an OFX NAME or an OFX MEMO
+     * @return the matched type in its original casing, or null if the text does not start with one
+     */
+    private static String leadingTransferType(String text) {
+        if (text == null) {
+            return null;
+        }
+
+        String upper = text.toUpperCase();
+        for (String type : TRANSFER_TYPES) {
+            if (upper.startsWith(type)) {
+                return text.substring(0, type.length());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Rebuild one transaction description from the two OFX fields the bank splits it across.
+     *
+     * <p>Wells Fargo writes a transfer's description into NAME and MEMO in one of two shapes, and
+     * the difference is not cosmetic:  the memo the user typed lives at the end of the description,
+     * so getting the join wrong loses it or mangles it.  Both shapes below are taken from real
+     * statements, and the reconstruction reproduces the CSV-era payee for the same transfer exactly.
+     *
+     * <p><b>Shape 1 -- the type stays in the NAME.</b>  The NAME is filled with as many whole words
+     * as fit and the MEMO holds the rest, so the split falls on a space and the join restores it:
+     *
+     * <pre>
+     *   NAME  ONLINE TRANSFER FROM RYBICKI C
+     *   MEMO  REF #IB0ZKYDNXN EVERYDAY CHECKING GROCERY
+     *   -->   ONLINE TRANSFER FROM RYBICKI C REF #IB0ZKYDNXN EVERYDAY CHECKING GROCERY
+     * </pre>
+     *
+     * <p><b>Shape 2 -- the type is moved into the MEMO.</b>  The NAME then holds exactly
+     * {@link #NAME_FIELD_WIDTH} characters of what is left, cut wherever it lands -- <em>mid-word</em>
+     * -- and the MEMO is the type followed by the remainder.  Joining these with a space is what a
+     * reader would do and it is wrong:  it splits EVERYDAY into EVERY DAY, the account-type phrase
+     * stops being recognizable, and {@code extractUserDescription} returns the whole garbled tail
+     * instead of the memo:
+     *
+     * <pre>
+     *   NAME  TO HIXON D REF #OP0ZLPN68K EVERY          (32 characters, cut inside EVERYDAY)
+     *   MEMO  RECURRING TRANSFER DAY CHECKING MICHELE ALIMONY DWH
+     *   -->   RECURRING TRANSFER TO HIXON D REF #OP0ZLPN68K EVERYDAY CHECKING MICHELE ALIMONY DWH
+     *   -->   user description:  MICHELE ALIMONY DWH
+     * </pre>
+     *
+     * <p>The 32-character test is what separates the two.  It is the signature of a hard cut:  shape
+     * 1 breaks on word boundaries and lands short of the width (28 and 30 characters in the samples
+     * above), so a MEMO that merely starts with a transfer type -- {@code SAVE AS YOU GO TRANSFER
+     * DEBIT} against a short NAME, which is a complete phrase and not a continuation -- is left
+     * alone rather than glued on.
+     *
+     * @param name the OFX NAME field
+     * @param memo the OFX MEMO field, which may be null or blank
+     * @return the reassembled description, or the name alone when the memo is not part of it
+     */
+    static String joinNameAndMemo(String name, String memo) {
+
+        if (name == null || memo == null || memo.isBlank()) {
+            return name;
+        }
+
+        String trimmedMemo = memo.trim();
+
+        // Shape 1:  the words that did not fit in the NAME, split on a space.
+        if (isTransferPayee(name)) {
+            return name + " " + trimmedMemo;
+        }
+
+        // Shape 2:  the type was relocated, so the NAME was cut at the field width and the memo
+        // carries on from that character.  No space at the seam -- there was none in the original.
+        String type = leadingTransferType(trimmedMemo);
+        if (type != null && name.length() == NAME_FIELD_WIDTH) {
+            return type + " " + name + trimmedMemo.substring(type.length()).stripLeading();
+        }
+
+        // Everything else:  an ordinary purchase, whose MEMO is the bank's own annotation
+        // ("PURCHASE 08/29 SARASOTA FL CARD 1955") and not part of the payee.
+        return name;
     }
 
     // ========================================
