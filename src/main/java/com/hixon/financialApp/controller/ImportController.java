@@ -1392,15 +1392,13 @@ public class ImportController {
                                         }
                                     }
 
-                                    // Update the balance in the register and save it:
-                                    register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
-                                    register.update();
-
                                     // Log the import event
                                     importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
-                                    // Save the provisional transaction with merchant info
+                                    // Save the provisional transaction with merchant info, and only
+                                    // then credit the money it moved -- see creditToRegisterBalance.
                                     provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
+                                    creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
 
                                     // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                                     // branch kept the original primary-key UUID.  Sync the in-memory object (and any
@@ -1641,12 +1639,10 @@ public class ImportController {
                         // Log the import event now that merchant is determined
                         importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
-                        // Update the balance in the register and save it:
-                        register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
-                        register.update();
-
-                        // Save the provisional transaction:
+                        // Save the provisional transaction, and only then credit the money it moved
+                        // -- see creditToRegisterBalance.
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
+                        creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
 
                         // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                         // branch kept the original primary-key UUID.  Sync the in-memory object (and any
@@ -1735,19 +1731,22 @@ public class ImportController {
                                     }
                                 }
 
-                                // Add back the amount previously deducted from the register and save it:
-                                register.setBalance(register.getBalance() - fallenOff.getAmount());
-                                register.update();
-
                                 // If this was a transfer that had recorded the expected other side in
                                 // another register's forecast, that expectation goes with it -- the
                                 // transfer is not going to arrive there either.
                                 new TransferCounterpartController(sessionController)
                                         .deleteCounterpartsFor(fallenOff);
 
-                                // And delete the transaction that has fallen off (this also removes its splits and
+                                // Delete the transaction that has fallen off (this also removes its splits and
                                 // forecast_transaction_split links):
                                 fallenOff.delete();
+
+                                // ...and only then take its money back out of the balance.  Same rule
+                                // as creditToRegisterBalance, in the other direction:  reversing first
+                                // and failing to delete leaves a transaction in the register whose
+                                // amount has already been removed from the balance.
+                                register.setBalance(register.getBalance() - fallenOff.getAmount());
+                                register.update();
 
                                 // Remove any unplanned forecast transaction that is now left with no linked split:
                                 for (ForecastTransaction ft : candidateForecastTransactions) {
