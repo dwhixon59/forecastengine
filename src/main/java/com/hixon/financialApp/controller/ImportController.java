@@ -481,13 +481,6 @@ public class ImportController {
                                 currentTransaction, provisionalTransaction, register, splits);
                     }
 
-                    // If no provisional transaction was found and this is a new transaction,
-                    // update the register balance
-                    if (!reconciledWithProvisional && isNewTransaction) {
-                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                        register.update();
-                    }
-
                     /*
                      * Phase 2.5: Auto-match with forecast transactions (if enabled)
                      */
@@ -660,9 +653,12 @@ public class ImportController {
                                         currentTransaction.setMerchant(merchant);
                                         currentTransaction.setIdMerchant(merchant.getId());
                                     }
+                                    // Saved under the unknown merchant, so it is in the register and
+                                    // the money it moved counts.  This branch leaves the loop without
+                                    // reaching the save below, so it does its own balance update --
+                                    // the only one on this path.
                                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                                    register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                                    register.update();
+                                    creditToRegisterBalance(currentTransaction);
                                     continue;
 
                                 case QUIT:
@@ -698,6 +694,21 @@ public class ImportController {
 
                     // At this point the transaction is complete, so save it off:
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                    // ...and only now does the register balance move.  This used to happen up in
+                    // Phase 2, before the merchant and split questions, which put minutes of user
+                    // interaction between the balance change and the row that justifies it.  Anything
+                    // that ended the run in that window -- a kill, a quit, a cancelled merchant
+                    // assignment -- left the balance moved with no transaction saved, and the next
+                    // import counted the same charge again.  Observed on 09-02-2026:  an interrupted
+                    // run left Bill Pay Danni $150.00 light, exactly the transfer that was in flight.
+                    //
+                    // A transfer reconciled with a provisional transaction is exempt:  its money was
+                    // counted when the provisional was imported, and reconcileProvisionalTransaction
+                    // has already adjusted the balance by the difference if the amount changed.
+                    if (!reconciledWithProvisional && isNewTransaction) {
+                        creditToRegisterBalance(currentTransaction);
+                    }
 
                     // Tell the user what we just did — but skip if auto-matched, since the
                     // auto-match block already recorded the event and printed its own output.
@@ -914,6 +925,24 @@ public class ImportController {
                     register.getName() + " from file " + importFilePath + ".");
         }
         return forecast.getInSync();
+    }
+
+    /**
+     * Add a newly imported transaction's amount to the register balance.
+     *
+     * <p><b>Call this only after the transaction has been saved.</b>  The balance is an accumulated
+     * figure, not a derived one -- nothing recomputes it from the transactions -- so a credit made
+     * for a row that never lands is permanent, and the same charge is counted again the next time
+     * the statement is imported.  Keeping the credit next to the save is what bounds that window to
+     * the two statements rather than to however long the user takes to answer the import's
+     * questions.
+     *
+     * @param transaction the transaction that was just saved
+     * @throws Exception if the register cannot be updated
+     */
+    private void creditToRegisterBalance(Transaction transaction) throws Exception {
+        register.setBalance(register.getBalance() + transaction.getAmount());
+        register.update();
     }
 
     /**
