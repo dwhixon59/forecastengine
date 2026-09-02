@@ -280,6 +280,16 @@ public class MemoBudgetItemHistory {
      * and the 2026 one (73.3%) is this.  Fall back to the item of the same name in the current
      * budget, and give up rather than guess when that name is ambiguous.
      *
+     * <p><b>An expired item is never suggested</b>, even when the id still resolves inside this
+     * budget.  Ending an item is the user saying they are done with it, and history is exactly the
+     * thing that does not know that yet:  Bill Pay Dave's <i>Room rental</i> ended 01-05-2026 and
+     * was replaced by <i>Danni's contribution</i>, but RENT had named it 19 times before that and
+     * the 18-month window still reaches all of them.  Suggesting it put a retired item second in the
+     * list wearing the memo's endorsement, and offered to attach the merchant to it permanently.
+     * The same-name fallback below has always been unexpired-only ({@code getUnexpiredByPayee});
+     * this makes the direct hit agree with it, and with the {@code getAssignedUnexpiredBudgetItems}
+     * the rest of the list is built from.
+     *
      * @param candidate     the winning history row
      * @param currentBudget the budget the suggestion has to live in
      * @return the budget item to suggest, or null if it cannot be resolved unambiguously
@@ -288,7 +298,8 @@ public class MemoBudgetItemHistory {
 
         try {
             BudgetItem budgetItem = loadById(candidate.idBudgetItem());
-            if (budgetItem != null && currentBudget.getId().equals(budgetItem.getIdBudget())) {
+            if (budgetItem != null && currentBudget.getId().equals(budgetItem.getIdBudget())
+                    && !budgetItem.isExpired()) {
                 return budgetItem;
             }
         } catch (EntityException | BudgetException e) {

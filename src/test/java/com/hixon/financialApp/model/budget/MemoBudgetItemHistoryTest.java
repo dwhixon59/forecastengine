@@ -176,6 +176,13 @@ public class MemoBudgetItemHistoryTest {
         return budgetItem;
     }
 
+    /** An item the user has finished with:  in this budget, but past its end date. */
+    private static BudgetItem expiredItem(UUID id, String payee, UUID idBudget) {
+        BudgetItem budgetItem = item(id, payee, idBudget);
+        when(budgetItem.isExpired()).thenReturn(true);
+        return budgetItem;
+    }
+
     private static Budget budget(UUID id) {
         Budget budget = mock(Budget.class);
         when(budget.getId()).thenReturn(id);
@@ -315,6 +322,40 @@ public class MemoBudgetItemHistoryTest {
 
         MemoBudgetItemHistory.Suggestion suggestion =
                 history.lookup(transfer("RENT", DAVES_CHECKING, 750.00), budget(CURRENT_BUDGET));
+
+        assertNotNull(suggestion);
+        assertSame(thisYearsRoomRental, suggestion.budgetItem());
+    }
+
+    @Test
+    @DisplayName("An item the user has ended is not suggested, however often the memo named it")
+    void testExpiredItemIsNotSuggested() throws Exception {
+
+        // Observed on 09-01-2026:  Bill Pay Dave's 'Room rental' ended 01-05-2026 and was replaced
+        // by 'Danni's contribution', but RENT had named it 19 times before that and the 18-month
+        // window still reaches every one of them.  The suggestion put a retired item second in the
+        // list wearing the memo's endorsement, and offered to attach the merchant to it for good.
+        MemoBudgetItemHistory history = new HistoryTable()
+                .with(rentInto(DAVES_CHECKING, ROOM_RENTAL, "Room rental"))
+                .knowing(expiredItem(ROOM_RENTAL, "Room rental", CURRENT_BUDGET));
+
+        assertNull(history.lookup(transfer("RENT", DAVES_CHECKING, 1700.00), budget(CURRENT_BUDGET)));
+    }
+
+    @Test
+    @DisplayName("An ended item gives way to the unexpired one of the same name")
+    void testExpiredItemFallsBackToItsReplacement() throws Exception {
+
+        // Ending an item and re-creating it under the same name is how this budget gets re-cut, so
+        // the expired hit falls through to the same-name lookup rather than simply giving up.
+        BudgetItem thisYearsRoomRental = item(ROOM_RENTAL, "Room rental", CURRENT_BUDGET);
+        MemoBudgetItemHistory history = new HistoryTable()
+                .with(rentInto(DAVES_CHECKING, STALE_ROOM_RENTAL, "Room rental"))
+                .knowing(expiredItem(STALE_ROOM_RENTAL, "Room rental", CURRENT_BUDGET))
+                .named(thisYearsRoomRental);
+
+        MemoBudgetItemHistory.Suggestion suggestion =
+                history.lookup(transfer("RENT", DAVES_CHECKING, 1700.00), budget(CURRENT_BUDGET));
 
         assertNotNull(suggestion);
         assertSame(thisYearsRoomRental, suggestion.budgetItem());
