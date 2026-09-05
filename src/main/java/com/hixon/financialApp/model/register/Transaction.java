@@ -814,6 +814,10 @@ public class Transaction extends IndependentEntity {
      * all.  The user was being asked to choose between two numbers with nothing to go on;  a
      * transaction of exactly the difference is the evidence they were missing.
      *
+     * <p>Finding nothing is an answer too, and a useful one:  it rules out a double count and points
+     * at a charge that never reached the register at all, which is what the $323.99 on 09-04-2026
+     * turned out to be.
+     *
      * <p>Exact to the cent deliberately.  A near-match is not evidence of anything, and offering one
      * would send the user looking at an innocent transaction.
      *

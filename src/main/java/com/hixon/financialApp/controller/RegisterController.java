@@ -24,6 +24,7 @@ import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -318,60 +319,82 @@ public class RegisterController {
         // Get the balance from QFX file if available
         Double qfxBalance = sessionController.getFinancialInstitution().getImportedLedgerBalance();
 
-        view.sayH4("Current balance of " + register.getName() + ": " +
-                Utility.formatDollarAmount(register.getBalance()));
-
         if (qfxBalance != null) {
-            view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
-            // Check if balances differ
-            if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
-                view.say("\nThe balances differ!");
-                explainBalanceDifference(register, qfxBalance);
+            // The question can be asked more than once:  option 4 imports another file, which
+            // changes both the register balance and the downloaded balance, so both are printed
+            // inside the loop and the choice is offered against whatever the re-import produced.
+            boolean settled = false;
+            while (!settled) {
+                settled = true;
 
-                // Offer user three choices
-                String[] choices = {
-                    "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
-                    "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
-                    "3 - Enter a different balance"
-                };
+                view.sayH4("Current balance of " + register.getName() + ": " +
+                        Utility.formatDollarAmount(register.getBalance()));
+                view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
-                view.say("\nWhat would you like to do?");
-                for (String choice : choices) {
-                    view.say("  " + choice);
+                // Check if balances differ
+                if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
+                    view.say("\nThe balances differ!");
+                    explainBalanceDifference(register, qfxBalance);
+
+                    // Offer user four choices
+                    String[] choices = {
+                        "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
+                        "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
+                        "3 - Enter a different balance",
+                        "4 - Import a wider statement file to find what is missing"
+                    };
+
+                    view.say("\nWhat would you like to do?");
+                    for (String choice : choices) {
+                        view.say("  " + choice);
+                    }
+
+                    String response = view.getResponseString("Enter your choice (1-4)", null,
+                        ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+                    Double newBalance = null;
+                    switch (response) {
+                        case "1":
+                            newBalance = qfxBalance;
+                            break;
+                        case "2":
+                            // Keep current balance - do nothing
+                            break;
+                        case "3":
+                            newBalance = view.getResponseCurrency("Enter new balance",
+                                    register.getBalance(), true, true, false, false, false, null);
+                            break;
+                        case "4":
+                            if (importWiderStatement(register)) {
+                                Double refreshed =
+                                        sessionController.getFinancialInstitution().getImportedLedgerBalance();
+                                if (refreshed != null) {
+                                    qfxBalance = refreshed;
+                                }
+                                // Ask again against the balances the re-import produced.
+                                settled = false;
+                            }
+                            break;
+                        default:
+                            view.say("Invalid choice. Keeping current balance.");
+                            break;
+                    }
+
+                    if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
+                        register.setBalance(newBalance);
+                        register.update();
+                        wasCorrect = false;
+                    }
+                } else {
+                    view.say("Balance matches QFX file. No update needed.");
                 }
-
-                String response = view.getResponseString("Enter your choice (1-3)", null,
-                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
-
-                Double newBalance = null;
-                switch (response) {
-                    case "1":
-                        newBalance = qfxBalance;
-                        break;
-                    case "2":
-                        // Keep current balance - do nothing
-                        break;
-                    case "3":
-                        newBalance = view.getResponseCurrency("Enter new balance",
-                                register.getBalance(), true, true, false, false, false, null);
-                        break;
-                    default:
-                        view.say("Invalid choice. Keeping current balance.");
-                        break;
-                }
-
-                if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
-                    register.setBalance(newBalance);
-                    register.update();
-                    wasCorrect = false;
-                }
-            } else {
-                view.say("Balance matches QFX file. No update needed.");
             }
         } else {
             // QFX balance not available (CSV file or other format)
+            view.sayH4("Current balance of " + register.getName() + ": " +
+                    Utility.formatDollarAmount(register.getBalance()));
             Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
                     register.getBalance(), true, true, false, false, false, null);
 
@@ -386,16 +409,89 @@ public class RegisterController {
     }
 
     /**
-     * Say what the balance difference amounts to, and name the transaction it matches if there is
-     * one.
+     * Import a file the user names, to recover a charge that fell between two download windows.
      *
-     * <p>The three choices offered above all just <em>overwrite</em> the balance;  none of them
-     * explains it, so the user was picking between two numbers blind.  A register balance is
-     * accumulated rather than derived, so a discrepancy is rarely drift:  it is usually one charge
-     * that moved the balance twice or never moved it at all.  Observed on 09-04-2026, the Citi
-     * register was short by exactly $323.99 -- a Manatee County Utilities charge from 08-27 that the
-     * importer had already recorded as imported.  Naming it turns the question into one the user can
-     * actually answer.
+     * <p>The gap this exists for:  the bank posts a charge late, so it is absent from the download
+     * that covered its date and older than the start of the next one.  It is then in no file the
+     * app will ever be handed, and the register is permanently short by it.  Observed on
+     * 09-04-2026:  a $323.99 Manatee County Utilities charge dated 08-27 is in neither
+     * qdl20260828.QFX (which covers 08-27 and has that day's other two charges) nor
+     * qdl20260904.QFX (which starts 08-28), and exists nowhere in the database.
+     *
+     * <p>Re-importing an overlapping statement is safe.  The import already has two lines of
+     * defence against re-inserting a charge it holds:  the bank's import record id, and behind it
+     * a date/amount/payee question for the banks whose ids move -- Citi's FITID is its position in
+     * that particular download, so a wider pull renames every charge.  The user is asked once per
+     * apparent duplicate rather than having the answer assumed.
+     *
+     * @param register the register being verified
+     * @return true if a file was imported, so the caller should re-read the balances and ask again
+     */
+    private boolean importWiderStatement(Register register) throws QuitException, CancelException {
+
+        view.say("A charge the bank posted late can be missing from every file downloaded so far:  " +
+                "too late for the download covering its date, too old for the next one.");
+        view.say("Download a statement covering a wider date range, then name it here.  Charges " +
+                "already in the register are recognised, and you will be asked about any that " +
+                "cannot be told apart.");
+        view.say("Note that the file is renamed with an '_old' suffix once imported, as every " +
+                "import file is.");
+
+        String filePath;
+        try {
+            filePath = view.getResponseString("Full path of the statement file to import", null,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+        } catch (SkipException e) {
+            return false;
+        }
+
+        if (filePath == null || filePath.isBlank()) {
+            view.say("No file named.  Leaving the balance question as it was.");
+            return false;
+        }
+
+        filePath = filePath.trim().replace("\"", "");
+        if (!new File(filePath).isFile()) {
+            view.say("There is no file at " + filePath + ".");
+            return false;
+        }
+
+        // The override lives in the register's path cache, so it applies to this import and no
+        // other;  the register's configured filename and directory are untouched.
+        register.overrideTrxImportFilePath(filePath);
+        try {
+            new ImportController(sessionController).importRegisterTransactionFile();
+            return true;
+
+        } catch (QuitException e) {
+            throw e;
+
+        } catch (Exception e) {
+            // A failed re-import must not cost the user the balance question they were already in
+            // the middle of;  report it and let them choose one of the other three options.
+            view.say("The statement could not be imported:  " + e.getMessage());
+            logger.debug("Wider statement import failed for " + filePath, e);
+            return false;
+
+        } finally {
+            register.clearTrxImportFilePathCache();
+        }
+    }
+
+    /**
+     * Say what the balance difference amounts to, and name any transaction of exactly that amount.
+     *
+     * <p>The choices offered above overwrite the balance;  none of them explains it, so the user was
+     * picking between two numbers blind.  A register balance is accumulated rather than derived, so
+     * a discrepancy is rarely drift:  it is usually one charge counted twice, or one never counted.
+     *
+     * <p>A named transaction is the good case, not the only one.  The $323.99 that prompted this on
+     * 09-04-2026 turned out to have no row at all -- the bank posted it after the download window
+     * that covered its date, so it reached no import file and nothing in the database -- and this
+     * lookup finds nothing for a gap of that shape.  Saying the difference out loud is still worth
+     * doing:  it is what distinguishes a missing charge from a double count, and option 4 exists for
+     * the case this method comes up empty on.
      *
      * <p>Read-only:  this reports, it never repairs.  Nothing here changes a balance.
      *
