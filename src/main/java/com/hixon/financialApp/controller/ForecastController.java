@@ -532,6 +532,18 @@ public class ForecastController {
                     view.say("Created a new forecast transaction for this split as there was no applicable " +
                             "forecast transaction in the forecast.");
 
+                    // Say what was actually recorded before printing the occurrence.  toStringConcise
+                    // reports the forecast item's amount as the "Budgeted Amount", and that item is
+                    // shared by every occurrence -- so a $99.95 charge against an on-demand item
+                    // budgeting $25 printed "Budgeted Amount = $-25.00", which reads as though the
+                    // forecast had recorded $25 for this charge.  It has not:  the occurrence carries
+                    // a remaining amount of zero and contributes nothing to any forecast total, which
+                    // is right, because the money has already left the account and the register holds
+                    // it.  Only the label was misleading.
+                    view.say("It records the split amount of " + Utility.formatDollarAmount(split.getAmount()) +
+                            " as already spent; the budgeted amount shown below belongs to the budget " +
+                            "item and is what it plans for each occurrence.");
+
                     // Let the user know about the new forecast transaction we created for the split:
                     view.say("New " + forecastTransaction.toStringConcise());
 
