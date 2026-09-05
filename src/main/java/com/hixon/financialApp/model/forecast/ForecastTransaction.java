@@ -859,7 +859,10 @@ public class ForecastTransaction extends IndependentEntity {
                 // If we can't get split amount, just don't show it
             }
 
-            s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
+            // The leading date is the version, not the planned date.  Unlabelled it read as a
+            // second, contradictory planned date -- "Forecast Transaction (08-29):  Planned Date =
+            // 09-30-2026" -- so it says which one it is.
+            s = "Forecast Transaction (version " + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
                     + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
                     this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
                     ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +

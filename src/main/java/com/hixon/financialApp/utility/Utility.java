@@ -996,9 +996,10 @@ public class Utility {
         // Delete the previous save file:
         String saveFileName = appendToFilename(currentFilename, oldFilenameExtension);
         File saveFile = new File(saveFileName);
-        if (!saveFile.exists()) {
-            getView().say("Old file " + saveFileName + " was not deleted because it does not exist.");
-        }
+        // There being no previous version to move aside is the ordinary case -- the first render of
+        // a report, and every render after a cleanup.  Announcing it told the user nothing they
+        // could act on, four times in a single daily update, so it is left unsaid.  A versioning
+        // that actually fails still reports itself below.
 
         // Rename the current file to the save file name:
         File currentFile = new File(currentFilename);

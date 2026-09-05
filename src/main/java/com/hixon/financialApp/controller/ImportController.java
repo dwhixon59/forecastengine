@@ -1701,7 +1701,7 @@ public class ImportController {
                         importLog.logImportEvent(provisionalTransactions.get(provTrxIndex), ImportLog.ImportRecord.Status.ALREADY_IMPORTED);
 
                         // Tell the user what we did:
-                        view.say("Transaction wws previously imported.");
+                        view.say("Transaction was previously imported.");
                         List<TransactionSplit> txSplits = TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex));
                         if (txSplits != null) {
                             logSplitsAndReconciliation(forecast, txSplits);

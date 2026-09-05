@@ -17,6 +17,16 @@ public class Main {
 
     private static final Logger logger = LogManager.getLogger(Main.class);
 
+    static {
+        // ofx4j logs through java.util.logging, which prints to the console by default and so
+        // lands in the middle of the import conversation.  Every QFX we read produces the same
+        // two lines -- "Processing OFX 1 headers" and "Element INTU.BID is not supported on
+        // aggregate SONRS" -- neither of which is a problem:  INTU.BID is Intuit's private
+        // extension and there is nothing for us to do about it.  Warnings and errors still print.
+        java.util.logging.Logger.getLogger("com.webcohesion.ofx4j")
+                .setLevel(java.util.logging.Level.WARNING);
+    }
+
     public static void main(String[] goals) {
         DatabaseConnectionManager mgr = null;
         try {

@@ -1918,7 +1918,10 @@ public class BudgetController {
             // then there won't be a relevancy score for it, so we check if the index is valid:
             // Note: The relevancyScores list is expected to be one less than the budgetItemMerchants list
             if (relevancyScores != null && (i - 1) < relevancyScores.size() && relevancyScores.get(i - 1) != null) {
-                line += ", Relevancy Score: " + relevancyScores.get(i - 1);
+                // Rounded for display only:  the raw double carries a binary-fraction tail
+                // (68.57314285714287) that reads as false precision on a heuristic score.  The
+                // stored score is untouched -- only what the user sees is rounded.
+                line += String.format(", Relevancy Score: %.1f", relevancyScores.get(i - 1));
             }
 
             line += memoAnnotation(budgetItemMerchant, memoSuggestion, suggestionIsUnassociated);
