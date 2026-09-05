@@ -7,8 +7,13 @@ import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 
+import com.hixon.financialApp.utility.Utility;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -157,6 +162,93 @@ public class Budget extends IndependentEntity {
     // Get the register for the budget:
     public Register getRegister() throws BudgetException, SQLException, RegisterException, EntityException {
         return getRegisters().get(0);
+    }
+
+
+    /**
+     * One budget item payee that differs from another only by letter case.
+     *
+     * @param payee    the payee exactly as it is stored
+     * @param category the category the item sits in
+     * @param count    how many budget items carry this exact spelling
+     */
+    public record CaseVariantPayee(String payee, String category, int count) {
+    }
+
+    /**
+     * Find budget item payees that are the same name spelled with different capitalisation.
+     *
+     * <p>They behave as separate items everywhere:  two budget items, two sets of assigned
+     * merchants, two lines in the forecast's expense breakdown, and two candidates competing for
+     * the same relevancy score when an import asks which item a charge belongs to.  The 09-04-2026
+     * forecast reported "Smart Phones" and "Smart phones" as distinct payees inside one Utilities
+     * category, and the Visible charge was offered three near-identical choices spanning both.
+     *
+     * <p>Reporting only.  Merging two items means deciding which spelling wins and moving every
+     * merchant assignment, split and forecast item behind the loser, which is not a decision to
+     * make on the user's behalf during a daily update.
+     *
+     * <p>The grouping is done in Java rather than SQL so it is testable without a database, and so
+     * that it does not depend on the column's collation -- MySQL's default collation is
+     * case-insensitive, which is exactly what makes these pairs easy to create and hard to notice.
+     *
+     * @return the variant spellings, grouped so that every returned list holds two or more
+     *         spellings of one name; empty when every payee is spelled one way
+     * @throws SQLException if the budget items cannot be read
+     */
+    public List<List<CaseVariantPayee>> checkForCaseVariantPayees() throws SQLException {
+
+        String query =
+            "SELECT bi.payee as payee, bi.category as category, COUNT(*) as itemCount " +
+            "FROM budget_item bi " +
+            "WHERE bi.Budget_idBudget = UUID_TO_BIN('" + this.getId() + "') " +
+            "GROUP BY bi.payee, bi.category " +
+            "ORDER BY bi.payee";
+
+        List<CaseVariantPayee> allPayees = new ArrayList<>();
+        try (Statement statement = Utility.getDbConnection().createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
+
+            while (rs.next()) {
+                allPayees.add(new CaseVariantPayee(
+                        rs.getString("payee"),
+                        rs.getString("category"),
+                        rs.getInt("itemCount")));
+            }
+        }
+
+        return groupCaseVariantPayees(allPayees);
+    }
+
+    /**
+     * Group payees that match case-insensitively but are not spelled identically.
+     *
+     * <p>Separated from the query so the rule can be tested directly.  A name spelled one way is
+     * not a finding however many items carry it -- duplicates of a single spelling are an ordinary
+     * and deliberate thing, several budget items for one payee -- so only names with two or more
+     * distinct spellings are returned.
+     *
+     * @param allPayees every distinct payee/category pairing in the budget
+     * @return one list per name that is spelled more than one way, in name order
+     */
+    public static List<List<CaseVariantPayee>> groupCaseVariantPayees(List<CaseVariantPayee> allPayees) {
+
+        Map<String, List<CaseVariantPayee>> byLowercaseName = new TreeMap<>();
+        for (CaseVariantPayee payee : allPayees) {
+            if (payee == null || payee.payee() == null) {
+                continue;
+            }
+            byLowercaseName.computeIfAbsent(payee.payee().toLowerCase(), key -> new ArrayList<>()).add(payee);
+        }
+
+        List<List<CaseVariantPayee>> variants = new ArrayList<>();
+        for (Map.Entry<String, List<CaseVariantPayee>> entry : byLowercaseName.entrySet()) {
+            long distinctSpellings = entry.getValue().stream().map(CaseVariantPayee::payee).distinct().count();
+            if (distinctSpellings > 1) {
+                variants.add(entry.getValue());
+            }
+        }
+        return variants;
     }
 
 

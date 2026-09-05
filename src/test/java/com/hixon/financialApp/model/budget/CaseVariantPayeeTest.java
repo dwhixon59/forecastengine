@@ -1,0 +1,116 @@
+package com.hixon.financialApp.model.budget;
+
+import com.hixon.financialApp.model.budget.Budget.CaseVariantPayee;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Unit tests for spotting budget item payees that are one name spelled two ways.
+ *
+ * <p>MySQL's default collation is case-insensitive, which is what makes these pairs easy to create
+ * and hard to notice:  nothing rejects the second spelling, and from then on there are two budget
+ * items, two sets of assigned merchants, two lines in the forecast's expense breakdown and two
+ * candidates competing for the same relevancy score at import time.
+ *
+ * <p>Ten such pairs were in the budget on 09-04-2026.  {@code Smart Phones} / {@code Smart phones}
+ * across six items is the one the import log showed:  the forecast listed both as separate payees
+ * inside one Utilities category, and the Visible charge was offered three near-identical choices
+ * spanning both spellings.
+ */
+@DisplayName("Case Variant Payee Tests")
+class CaseVariantPayeeTest {
+
+    private static CaseVariantPayee item(String payee, String category, int count) {
+        return new CaseVariantPayee(payee, category, count);
+    }
+
+    @Test
+    @DisplayName("One name spelled two ways is reported")
+    void testTwoSpellingsAreFound() {
+
+        // The real pair, with the real item counts.
+        List<List<CaseVariantPayee>> variants = Budget.groupCaseVariantPayees(List.of(
+                item("Smart Phones", "Utilities", 4),
+                item("Smart phones", "Utilities", 2)));
+
+        assertEquals(1, variants.size(), "the two spellings are one finding, not two");
+        assertEquals(2, variants.get(0).size(), "both spellings are reported so the user can pick one");
+    }
+
+    @Test
+    @DisplayName("Several items sharing one spelling is not a finding")
+    void testRepeatedSpellingIsNotAFinding() {
+
+        // Several budget items for one payee is ordinary and deliberate -- four Car Maintenance
+        // items is a way of budgeting, not a mistake.  Only a second *spelling* is the problem, so
+        // a single spelling must stay silent however many items carry it.
+        assertTrue(Budget.groupCaseVariantPayees(List.of(
+                item("Car Maintenance", "Automotive", 4))).isEmpty(),
+                "one spelling is never a finding, whatever its item count");
+    }
+
+    @Test
+    @DisplayName("Distinct names are left alone")
+    void testDistinctNamesAreNotGrouped() {
+
+        // The check must not reach for near-misses.  "Smart Phones" and "Smart Phone" are different
+        // names, and guessing that one is a typo of the other would put the user in front of a
+        // question with no right answer.
+        assertTrue(Budget.groupCaseVariantPayees(List.of(
+                item("Smart Phones", "Utilities", 1),
+                item("Smart Phone", "Utilities", 1),
+                item("Electricity", "Utilities", 1))).isEmpty(),
+                "only case differences are reported, never similar spellings");
+    }
+
+    @Test
+    @DisplayName("Several distinct findings come back separately, in name order")
+    void testMultipleFindingsAreSeparateAndOrdered() {
+
+        List<List<CaseVariantPayee>> variants = Budget.groupCaseVariantPayees(List.of(
+                item("Smart Phones", "Utilities", 4),
+                item("Smart phones", "Utilities", 2),
+                item("Home Goods", "Household", 1),
+                item("Home goods", "Household", 1),
+                item("Electricity", "Utilities", 1)));
+
+        assertEquals(2, variants.size(), "two names spelled two ways are two findings");
+        // Ordered by the lower-cased name so the report reads the same way twice running.
+        assertEquals("Home Goods", variants.get(0).get(0).payee());
+        assertEquals("Smart Phones", variants.get(1).get(0).payee());
+    }
+
+    @Test
+    @DisplayName("A variant spanning two categories is still one name spelled two ways")
+    void testVariantsAcrossCategories() {
+
+        // Grouping is by name, not by name-and-category:  the same payee spelled two ways in two
+        // categories is the same confusion, and reporting it twice would not help.
+        List<List<CaseVariantPayee>> variants = Budget.groupCaseVariantPayees(List.of(
+                item("Internet Access", "Utilities", 1),
+                item("Internet access", "Online Services", 1)));
+
+        assertEquals(1, variants.size());
+        assertEquals(2, variants.get(0).size(), "both categories are shown so the user can tell them apart");
+    }
+
+    @Test
+    @DisplayName("Nothing to check is not an error")
+    void testEmptyAndNullTolerated() {
+
+        // The check runs inside the daily update, where an exception costs the user their run.
+        assertTrue(Budget.groupCaseVariantPayees(List.of()).isEmpty());
+
+        List<CaseVariantPayee> withNulls = new java.util.ArrayList<>();
+        withNulls.add(null);
+        withNulls.add(item(null, "Utilities", 1));
+        withNulls.add(item("Electricity", "Utilities", 1));
+        assertTrue(Budget.groupCaseVariantPayees(withNulls).isEmpty(),
+                "a missing payee is skipped, not thrown over");
+    }
+}
