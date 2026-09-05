@@ -806,6 +806,48 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * Find transactions in a register whose amount is exactly some figure -- used to put a name to a
+     * balance discrepancy.
+     *
+     * <p>A register balance is accumulated, not derived, so when it disagrees with the bank the
+     * difference is usually not drift but one specific charge that moved the balance twice or not at
+     * all.  The user was being asked to choose between two numbers with nothing to go on;  a
+     * transaction of exactly the difference is the evidence they were missing.
+     *
+     * <p>Exact to the cent deliberately.  A near-match is not evidence of anything, and offering one
+     * would send the user looking at an innocent transaction.
+     *
+     * @param idRegister the register whose balance is in question
+     * @param amount     the difference to look for; matched on absolute value, since whether the
+     *                   balance is over or under does not say which sign the charge had
+     * @param since      only consider transactions on or after this date, or null for no limit
+     * @return the matching transactions, most recent first, possibly empty
+     */
+    public static List<Transaction> findByExactAmountInRegister(UUID idRegister, double amount, Calendar since)
+            throws EntityException, SQLException {
+
+        List<Transaction> matches = new ArrayList<>();
+        if (idRegister == null) {
+            return matches;
+        }
+
+        String query = getSelectQuery() +
+                " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
+                " and abs(abs(tr.amount) - " + Math.abs(amount) + ") < 0.005";
+        if (since != null) {
+            query += " and tr.postDate >= " + Utility.calendarDateToSqlDateString(since);
+        }
+        query += " order by tr.postDate desc";
+
+        ResultSet rs = getRS(query, "Database error encountered looking for a transaction matching a " +
+                "balance difference in register " + idRegister + ".");
+        while (rs != null && rs.next()) {
+            matches.add(new Transaction(rs));
+        }
+        return matches;
+    }
+
+    /**
      * Loads transaction data from a ResultSet.
      * @param rs the ResultSet
      * @throws SQLException if a SQL error occurs

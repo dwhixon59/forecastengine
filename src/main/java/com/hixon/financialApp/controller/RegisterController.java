@@ -37,6 +37,14 @@ import static com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatc
 public class RegisterController {
     private static final Logger logger = LogManager.getLogger(RegisterController.class);
 
+    /**
+     * How far back to look for a transaction that explains a balance difference.  Long enough to
+     * cover the statement the import just read, short enough that a coincidence from an old period
+     * is not offered as evidence.
+     */
+    private static final int BALANCE_DIFFERENCE_LOOKBACK_MONTHS = 6;
+
+
     /*
      * Fields for RegisterController:
      */
@@ -319,6 +327,7 @@ public class RegisterController {
             // Check if balances differ
             if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
                 view.say("\nThe balances differ!");
+                explainBalanceDifference(register, qfxBalance);
 
                 // Offer user three choices
                 String[] choices = {
@@ -374,6 +383,55 @@ public class RegisterController {
         }
 
         return wasCorrect;
+    }
+
+    /**
+     * Say what the balance difference amounts to, and name the transaction it matches if there is
+     * one.
+     *
+     * <p>The three choices offered above all just <em>overwrite</em> the balance;  none of them
+     * explains it, so the user was picking between two numbers blind.  A register balance is
+     * accumulated rather than derived, so a discrepancy is rarely drift:  it is usually one charge
+     * that moved the balance twice or never moved it at all.  Observed on 09-04-2026, the Citi
+     * register was short by exactly $323.99 -- a Manatee County Utilities charge from 08-27 that the
+     * importer had already recorded as imported.  Naming it turns the question into one the user can
+     * actually answer.
+     *
+     * <p>Read-only:  this reports, it never repairs.  Nothing here changes a balance.
+     *
+     * @param register   the register being verified
+     * @param qfxBalance the balance the bank sent down
+     */
+    private void explainBalanceDifference(Register register, double qfxBalance) {
+        double difference = qfxBalance - register.getBalance();
+
+        view.say("The register is off by " + Utility.formatDollarAmount(difference) +
+                " against the downloaded balance.");
+
+        try {
+            Calendar since = Calendar.getInstance();
+            since.add(Calendar.MONTH, -BALANCE_DIFFERENCE_LOOKBACK_MONTHS);
+
+            List<Transaction> matches =
+                    Transaction.findByExactAmountInRegister(register.getId(), difference, since);
+
+            if (matches.isEmpty()) {
+                return;
+            }
+
+            view.say("The difference is exactly the amount of " +
+                    (matches.size() == 1 ? "this transaction:" : "each of these transactions:"));
+            for (Transaction transaction : matches) {
+                view.say("   " + Utility.calendarDateToStringDate(transaction.getPostDate()) + "  " +
+                        Utility.formatDollarAmount(transaction.getAmount()) + "  " + transaction.getPayee());
+            }
+            view.say("Check whether it was counted twice or not counted at all before choosing.");
+
+        } catch (EntityException | SQLException e) {
+            // Reporting is a courtesy;  failing to report must never stop the user correcting the
+            // balance, which is what they came here to do.
+            logger.debug("Could not look for a transaction matching the balance difference", e);
+        }
     }
 
     /**
