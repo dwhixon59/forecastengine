@@ -295,16 +295,24 @@ public class ForecastController {
      *
      * @param split               the transaction split being reconciled
      * @param forecastTransaction the candidate forecast transaction whose amount differs
+     * @param budgetedAmount      the budget item's planned amount for that occurrence, passed in
+     *                            because the caller has already read it
      * @return the user's chosen disposition (ASSIGN, IGNORE, or DISPUTE)
      * @throws EntityException
      * @throws SQLException
      */
     public UserResponse confirmForecastTransactionAmountMatch(TransactionSplit split,
-            ForecastTransaction forecastTransaction) throws EntityException, SQLException {
+            ForecastTransaction forecastTransaction, double budgetedAmount)
+            throws EntityException, SQLException {
         UserResponse response = new UserResponse();
 
+        // Name both amounts.  The check is now against either of them, so quoting only one left the
+        // user comparing their transaction to a number it was never measured against -- and calling
+        // the remaining amount "the planned amount" made that worse when the two had drifted apart.
         view.say("The transaction amount (" + Utility.formatDollarAmount(Math.abs(split.getAmount())) +
                 ") differs significantly from the planned amount (" +
+                Utility.formatDollarAmount(Math.abs(budgetedAmount)) +
+                ") and from the remaining amount (" +
                 Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount())) + ") for " +
                 forecastTransaction.toStringConcise() + ".");
         view.ask("What would you like to do (a-adjust, s-assign anyway, i-do not assign, d-dispute)? ");

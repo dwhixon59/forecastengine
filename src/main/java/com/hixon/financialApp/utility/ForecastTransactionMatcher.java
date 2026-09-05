@@ -9,6 +9,8 @@ import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -20,6 +22,17 @@ import java.util.UUID;
  * Provides scoring algorithms and matching logic to determine how well a transaction matches a planned forecast transaction.
  */
 public class ForecastTransactionMatcher {
+
+    /**
+     * Where the matcher explains itself.
+     *
+     * <p>The "[Phase2.5]" trace was written to the user's view while the scoring was being tuned,
+     * which put a dozen lines of candidate arithmetic between the user and the question they were
+     * being asked.  It is diagnostic, so it goes to the log; log4j2.properties turns it on for this
+     * class when the scoring needs looking at again.  Nothing about it is temporary any more --
+     * the trace is the only record of why a match was or was not made.
+     */
+    private static final Logger logger = LogManager.getLogger(ForecastTransactionMatcher.class);
 
     /**
      * Maximum fractional difference between a cleared transaction amount and a forecast
@@ -162,6 +175,33 @@ public class ForecastTransactionMatcher {
 
         double percentDiff = Math.abs(txn - forecast) / larger;
         return percentDiff <= AUTO_MATCH_AMOUNT_TOLERANCE;
+    }
+
+    /**
+     * Whether a cleared transaction's amount is close enough to a candidate occurrence to assign it
+     * without asking, judged against <em>either</em> of the two amounts that occurrence carries.
+     *
+     * <p>The safeguard exists to stop a $1,200 charge being auto-assigned to a $50 planned expense,
+     * and comparing against the <b>remaining</b> amount is the right test for an occurrence that has
+     * been partly consumed already.  But remaining and budgeted do drift apart, and when they do the
+     * remaining-only test raises a false alarm on a transaction that matches the plan exactly:
+     * observed on 09-04-2026, a $309.23 State Farm charge against an item budgeting $309.00 whose
+     * occurrence was carrying a remaining of $563.72.  The user was asked, answered "adjust", and
+     * re-budgeted the item by 23 cents for no reason.
+     *
+     * <p>So a match against either amount is enough.  Nothing the safeguard was built to catch gets
+     * through:  a wildly wrong amount is wildly wrong against both.
+     *
+     * @param transactionAmount the cleared transaction amount (sign ignored)
+     * @param remainingAmount   the occurrence's remaining amount (sign ignored)
+     * @param budgetedAmount    the budget item's planned amount for the occurrence (sign ignored)
+     * @return true if the amounts are close enough to auto-assign
+     */
+    public static boolean isAmountPlausibleForAutoMatch(double transactionAmount,
+                                                        double remainingAmount,
+                                                        double budgetedAmount) {
+        return isAmountWithinAutoMatchTolerance(transactionAmount, remainingAmount)
+                || isAmountWithinAutoMatchTolerance(transactionAmount, budgetedAmount);
     }
 
     /**
@@ -357,14 +397,10 @@ public class ForecastTransactionMatcher {
             int daysBefore,
             int daysAfter) throws Exception {
 
-        // ---- TEMP INSTRUMENTATION (Phase 2.5) — remove when done tuning ----
-        // Show the raw input payee (the line from the import file) and the parsed payee so the
-        // matcher output can be judged against the actual source text.
-        ViewInt payeeDebugView = Utility.getView();
-        payeeDebugView.say("");
-        payeeDebugView.say("[Phase2.5] raw payee    : " + transaction.getPayee());
-        payeeDebugView.say("[Phase2.5] parsed payee : " + transaction.getMerchantPayee());
-        // ---- END TEMP INSTRUMENTATION ----
+        // The raw input payee (the line from the import file) alongside the parsed payee, so the
+        // matcher trace below can be judged against the actual source text.
+        logger.debug("raw payee    : {}", transaction.getPayee());
+        logger.debug("parsed payee : {}", transaction.getMerchantPayee());
 
         // The bank's own reference for a transfer, when it issued one.  It lives only inside the
         // payee varchar, so reading it means parsing; it is null for the majority of transactions
@@ -568,32 +604,28 @@ public class ForecastTransactionMatcher {
             return null;
         }
 
-        // ============================ TEMP INSTRUMENTATION (Phase 2.5) ============================
-        // Prints the possible merchants and every scored forecast candidate so the matching
-        // algorithm can be judged during tuning. REMOVE this block (and the two smaller TEMP
-        // blocks below, plus the ViewInt import) when done.
-        ViewInt debugView = Utility.getView();
-        debugView.say("[Phase2.5] Matching cleared txn  date=" + Utility.calendarDateToStringDate(date)
-                + "  amount=" + Utility.formatDollarAmount(amount));
+        // The possible merchants and every scored forecast candidate, so the matching algorithm can
+        // be judged after the fact.  See the logger field for why this is a log and not a say().
+        logger.debug("Matching cleared txn  date={}  amount={}",
+                Utility.calendarDateToStringDate(date), Utility.formatDollarAmount(amount));
         if (possibleMerchants == null) {
-            debugView.say("[Phase2.5]   possibleMerchants: null (no merchant filtering)");
+            logger.debug("  possibleMerchants: null (no merchant filtering)");
         } else if (possibleMerchants.isEmpty()) {
-            debugView.say("[Phase2.5]   possibleMerchants: (none)");
+            logger.debug("  possibleMerchants: (none)");
         } else {
             StringBuilder merchantNames = new StringBuilder();
             for (Merchant m : possibleMerchants) {
                 if (merchantNames.length() > 0) merchantNames.append(", ");
                 merchantNames.append(m.getName());
             }
-            debugView.say("[Phase2.5]   possibleMerchants (" + possibleMerchants.size() + "): " + merchantNames);
+            logger.debug("  possibleMerchants ({}): {}", possibleMerchants.size(), merchantNames);
         }
-        debugView.say("[Phase2.5]   considering " + candidateForecastTransactions.size()
-                + " forecast transaction(s) [score / threshold " + (int) AUTO_MATCH_THRESHOLD + "]:");
+        logger.debug("  considering {} forecast transaction(s) [score / threshold {}]:",
+                candidateForecastTransactions.size(), (int) AUTO_MATCH_THRESHOLD);
         if (memoSuggestion != null) {
-            debugView.say("[Phase2.5]   " + memoSuggestion.describe() + " -> '"
-                    + memoSuggestion.budgetItem().getPayee() + "'  (tie-break only)");
+            logger.debug("  {} -> '{}'  (tie-break only)",
+                    memoSuggestion.describe(), memoSuggestion.budgetItem().getPayee());
         }
-        // ========================== END TEMP INSTRUMENTATION ==========================
 
         // Score each remaining forecast transaction.  The memo's opinion is carried alongside the
         // score rather than folded into it, so that selectMatch can rank on the total while testing
@@ -608,24 +640,23 @@ public class ForecastTransactionMatcher {
             // Two different bank references cannot be the same movement of money, however well the
             // candidate scores.  This is the one judgement scoring cannot make.
             if (verdict == ReferenceVerdict.RULED_OUT) {
-                debugView.say("[Phase2.5]     ruled out (bank reference " + candidateReference +
-                        " != " + transactionReference + ")  " + ft.toStringConcise());
+                logger.debug("    ruled out (bank reference {} != {})  {}",
+                        candidateReference, transactionReference, ft.toStringConcise());
                 continue;
             }
 
             // The same reference on both sides is an exact identity, so take it without scoring.
             if (verdict == ReferenceVerdict.CERTAIN) {
-                debugView.say("[Phase2.5]   result: CERTAIN (bank reference " + candidateReference + ") -> " +
-                        ft.toStringConcise());
-                debugView.say("");
+                logger.debug("  result: CERTAIN (bank reference {}) -> {}",
+                        candidateReference, ft.toStringConcise());
                 return ft;
             }
 
             // Reaching here means the verdict was UNDECIDED, so an unpaired counterpart has only its
             // amount left to identify it with.
             if (!admitsUnpairedCounterpart(amount, ft)) {
-                debugView.say("[Phase2.5]     not this movement (unpaired counterpart for "
-                        + Utility.formatDollarAmount(ft.getRemainingAmount()) + ")  " + ft.toStringConcise());
+                logger.debug("    not this movement (unpaired counterpart for {})  {}",
+                        Utility.formatDollarAmount(ft.getRemainingAmount()), ft.toStringConcise());
                 continue;
             }
 
@@ -633,31 +664,26 @@ public class ForecastTransactionMatcher {
             double memoBonus = memoTieBreak(ft, memoSuggestion);
             scoredCandidates.add(new ScoredCandidate(ft, score, memoBonus));
 
-            // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
-            debugView.say(String.format("[Phase2.5]     %6.2f%s  %s", score,
+            logger.debug(String.format("    %6.2f%s  %s", score,
                     (memoBonus > 0.0) ? String.format(" (+%.0f memo)", memoBonus) : "",
                     ft.toStringConcise()));
-            // ---- END TEMP INSTRUMENTATION ----
         }
 
         // The memo may reorder the candidates that already qualify; it may not add one.
         ScoredCandidate winner = selectBest(scoredCandidates);
         ForecastTransaction bestMatch = (winner == null) ? null : winner.candidate();
 
-        // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
         ScoredCandidate highest = highestScoringCandidate(scoredCandidates);
         if (highest == null) {
-            debugView.say("[Phase2.5]   result: no candidate scored above 0");
+            logger.debug("  result: no candidate scored above 0");
         } else if (winner != null) {
-            debugView.say(String.format("[Phase2.5]   result: AUTO-MATCH (best=%.2f%s) -> %s",
+            logger.debug(String.format("  result: AUTO-MATCH (best=%.2f%s) -> %s",
                     winner.score(), (winner.memoBonus() > 0.0) ? " +memo tie-break" : "",
                     bestMatch.toStringConcise()));
         } else {
-            debugView.say(String.format("[Phase2.5]   result: NO MATCH (best=%.2f below threshold) -> %s",
+            logger.debug(String.format("  result: NO MATCH (best=%.2f below threshold) -> %s",
                     highest.score(), highest.candidate().toStringConcise()));
         }
-        debugView.say("");
-        // ---- END TEMP INSTRUMENTATION ----
 
         // Only return a match if confidence is at least the threshold, on the memo-free score.
         if (bestMatch == null) {
@@ -698,16 +724,17 @@ public class ForecastTransactionMatcher {
                             ? "This transaction's merchant"
                             : "This transaction's merchant ('" + possibleMerchants.get(0).getName() + "')";
 
-                    boolean confirmed = debugView.getYesOrNo(txnMerchantDescription
+                    ViewInt view = Utility.getView();
+                    boolean confirmed = view.getYesOrNo(txnMerchantDescription
                             + " does not match any merchant assigned to budget item '" + budgetItem.getPayee()
                             + "', though it otherwise matches on date/amount. Is this transaction another "
                             + "merchant for '" + budgetItem.getPayee() + "'?");
 
                     if (!confirmed) {
-                        debugView.say("[Phase2.5]   merchant mismatch declined by user -> no match");
+                        logger.debug("  merchant mismatch declined by user -> no match");
                         return null;
                     }
-                    debugView.say("[Phase2.5]   merchant mismatch confirmed by user -> proceeding with match");
+                    logger.debug("  merchant mismatch confirmed by user -> proceeding with match");
                 }
             }
         }

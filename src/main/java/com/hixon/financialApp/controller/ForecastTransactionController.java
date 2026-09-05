@@ -1158,21 +1158,27 @@ public class ForecastTransactionController {
 
             // AMOUNT SAFEGUARD (shared across all financial institutions):
             // Never silently auto-assign a split whose amount differs materially from the
-            // matched forecast transaction's remaining amount. A strong merchant/date match is
-            // NOT sufficient on its own - a $1,200 charge must not be auto-assigned to a $50
-            // planned expense. When the amounts are outside the shared tolerance, ask the user.
+            // matched forecast transaction. A strong merchant/date match is NOT sufficient on its
+            // own - a $1,200 charge must not be auto-assigned to a $50 planned expense. When the
+            // amounts are outside the shared tolerance, ask the user.
+            //
+            // Judged against the remaining amount OR the budgeted amount:  the two drift apart, and
+            // a remaining-only test then fires on a transaction that matches the plan to the cent.
+            // See ForecastTransactionMatcher.isAmountPlausibleForAutoMatch.
             //
             // Skip this for COLLECTION items (e.g. Groceries): a single trip is expected to be
             // less than the remaining budgeted/planned amount for the period - that's the whole
             // point of a collection item accumulating multiple transactions - so comparing one
             // split's amount to the remaining amount produces a false "differs significantly"
             // warning on every normal partial purchase.
+            double budgetedAmount = bestMatch.getForecastItem().getAmount();
             if (split.getBudgetItem().getHowOccurs() != Item.HowOccurs.COLLECTION
-                    && !ForecastTransactionMatcher.isAmountWithinAutoMatchTolerance(
-                    split.getAmount(), bestMatch.getRemainingAmount())) {
+                    && !ForecastTransactionMatcher.isAmountPlausibleForAutoMatch(
+                    split.getAmount(), bestMatch.getRemainingAmount(), budgetedAmount)) {
 
                 ForecastController forecastController = new ForecastController(sessionController);
-                UserResponse resp = forecastController.confirmForecastTransactionAmountMatch(split, bestMatch);
+                UserResponse resp = forecastController.confirmForecastTransactionAmountMatch(
+                        split, bestMatch, budgetedAmount);
                 split.setDisposition(resp.getDisposition());
                 switch (split.getDisposition()) {
 
