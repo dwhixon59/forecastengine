@@ -40,6 +40,7 @@ public class Register extends IndependentEntity {
 
     public static final String CHECKING = "Checking";
     public static final String SAVINGS = "Savings";
+    public static final String CREDIT_CARD = "Credit Card";
 
     /*
      * Fields in the Register class:
@@ -160,12 +161,44 @@ public class Register extends IndependentEntity {
     }
 
     /**
+     * Whether this register is a line of credit rather than an account holding money.
+     *
+     * <p>The distinction matters to anything that reads a negative balance as trouble.  On a
+     * checking account it is an overdraft;  on a credit card it is the ordinary state of the
+     * account, and the whole vocabulary of float, runway and "deposit this much to stay solvent"
+     * stops meaning anything.  The forecast summary asks this before printing any of it.
+     *
+     * @return true when the register is a credit line
+     */
+    public boolean isCreditLine() {
+        return CREDIT_CARD.equalsIgnoreCase(accountType);
+    }
+
+    /**
      * Clears the cached transaction import file path, forcing the next call to
      * getTrxImportFilePath() to perform a fresh file search.
      * This should be called when you expect a new file might be available.
      */
     public void clearTrxImportFilePathCache() {
         cachedTrxImportFilePath = null;
+    }
+
+    /**
+     * Point the next import at one specific file instead of the register's configured pattern.
+     *
+     * <p>For the one case where the user names the file:  the balance disagreed with the bank, and
+     * the difference is a charge that fell between two download windows -- posted late by the bank,
+     * so it is missing from the download that covered its date and older than the start of the next
+     * one.  Nothing the register knows can find it;  only a wider statement contains it.
+     *
+     * <p>The override is the path cache, so it lasts exactly as long as the cache does and
+     * {@link #clearTrxImportFilePathCache()} undoes it.  It does not touch the register's stored
+     * import filename or directory:  the next ordinary import looks where it always looks.
+     *
+     * @param filePath the full path of the file to import instead
+     */
+    public void overrideTrxImportFilePath(String filePath) {
+        cachedTrxImportFilePath = filePath;
     }
 
     /**
