@@ -17,14 +17,40 @@ public class Main {
 
     private static final Logger logger = LogManager.getLogger(Main.class);
 
-    static {
-        // ofx4j logs through java.util.logging, which prints to the console by default and so
-        // lands in the middle of the import conversation.  Every QFX we read produces the same
-        // two lines -- "Processing OFX 1 headers" and "Element INTU.BID is not supported on
-        // aggregate SONRS" -- neither of which is a problem:  INTU.BID is Intuit's private
-        // extension and there is nothing for us to do about it.  Warnings and errors still print.
-        java.util.logging.Logger.getLogger("com.webcohesion.ofx4j")
+    /**
+     * Held deliberately.  {@code LogManager} keeps only a weak reference to a logger, so a level set
+     * on one nobody holds is collected and lost -- and when the child logger is created afterwards
+     * its parent resolves to the root logger instead, at INFO.  That is what happened on 09-06-2026:
+     * the level was set in this class's initializer and the INTU.BID line still printed during the
+     * import, minutes later.
+     */
+    private static final java.util.logging.Logger OFX4J_LOGGER = silenceOfxParserChatter();
+
+    /**
+     * Stop the OFX parser narrating itself into the middle of the import conversation.
+     *
+     * <p>ofx4j logs through commons-logging, which with no log4j 1.x and no jcl-over-slf4j on the
+     * classpath resolves to its {@code Jdk14Logger} -- so this is java.util.logging, whose default
+     * handler writes to the console.  Every QFX read produces the same two lines, "Processing OFX 1
+     * headers" and "Element INTU.BID is not supported on aggregate SONRS", and neither is a problem:
+     * INTU.BID is Intuit's private extension and there is nothing for us to do about it.
+     *
+     * <p>The child loggers are set as well as the parent.  Setting the parent alone is enough only
+     * while the parent survives, and the two ofx4j classes that log during an import are known, so
+     * naming them costs nothing and does not depend on when the collector runs.
+     *
+     * <p>Warnings and errors still print.
+     *
+     * @return the parent logger, so the caller can hold it
+     */
+    static java.util.logging.Logger silenceOfxParserChatter() {
+        java.util.logging.Logger parent = java.util.logging.Logger.getLogger("com.webcohesion.ofx4j");
+        parent.setLevel(java.util.logging.Level.WARNING);
+        java.util.logging.Logger.getLogger("com.webcohesion.ofx4j.io.BaseOFXReader")
                 .setLevel(java.util.logging.Level.WARNING);
+        java.util.logging.Logger.getLogger("com.webcohesion.ofx4j.io.AggregateStackContentHandler")
+                .setLevel(java.util.logging.Level.WARNING);
+        return parent;
     }
 
     public static void main(String[] goals) {
