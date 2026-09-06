@@ -116,6 +116,16 @@ public class ImportController {
      */
     private final ImportLog importLog = new ImportLog();
 
+    /**
+     * Set once the user answers "a" at the already-imported question:  every later charge in this
+     * file that matches one the register holds is treated as already imported without asking again.
+     *
+     * <p>Per import run, because the controller is built per run.  It is deliberately not persisted
+     * -- the answer means "for the rest of this file", not "forever":  a genuine second identical
+     * charge in a later statement must still be able to ask.
+     */
+    private boolean treatLookAlikesAsAlreadyHeld = false;
+
 
     // Fields:
 
@@ -238,6 +248,11 @@ public class ImportController {
             return null;
         }
 
+        // The user has already answered this for the rest of the file.
+        if (treatLookAlikesAsAlreadyHeld) {
+            return alreadyHeld;
+        }
+
         view.say("This transaction has a different import id from anything in the register, but the register " +
                 "already holds one just like it:");
         view.say("  " + calendarDateToStringDate(incoming.getPostDate()) + "  " +
@@ -245,8 +260,42 @@ public class ImportController {
         view.say("  already held as import id " + alreadyHeld.getImportRecordId() +
                 ", incoming id " + incoming.getImportRecordId());
 
-        if (view.getYesOrNo("Is this a separate charge that should be imported as well")) {
-            return null;
+        // Three answers, not two.  Re-importing a wider statement to recover one missing charge asks
+        // this question about every charge the register already holds, and for Citi that is every
+        // charge in the file:  its FITID is the position in that particular download, so a wider
+        // pull renames all of them and the id lookup misses on all of them.  The download that would
+        // recover the 09-04-2026 gap holds 115 transactions of which 114 are already in the
+        // register, so without "all" the user answers this 114 times to reach one charge.
+        //
+        // "All" is scoped to look-alikes:  the charge that is actually missing has nothing in the
+        // register matching its date, amount and payee, so it never reaches this question and is
+        // still imported and still asked about normally.
+        boolean done = false;
+        while (!done) {
+            done = true;
+            String answer = view.getResponseString(
+                    "Is this a separate charge that should be imported as well? " +
+                            "(y - yes, n - no it is already held, a - no, and treat every later " +
+                            "look-alike the same way)",
+                    "n", ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            switch (answer == null ? "" : answer.trim().toLowerCase()) {
+                case "y":
+                    return null;
+
+                case "a":
+                    treatLookAlikesAsAlreadyHeld = true;
+                    view.say("Treating this and every later look-alike as already imported.");
+                    return alreadyHeld;
+
+                case "n":
+                    break;
+
+                default:
+                    view.say("Please enter y, n, or a.");
+                    done = false;
+            }
         }
 
         view.say("Treating it as already imported.");
