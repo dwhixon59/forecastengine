@@ -15,6 +15,7 @@ import java.sql.Statement;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -198,26 +199,41 @@ public class Budget extends IndependentEntity {
      */
     public List<List<CaseVariantPayee>> checkForCaseVariantPayees() throws SQLException {
 
-        String query =
-            "SELECT bi.payee as payee, bi.category as category, COUNT(*) as itemCount " +
-            "FROM budget_item bi " +
-            "WHERE bi.Budget_idBudget = UUID_TO_BIN('" + this.getId() + "') " +
-            "GROUP BY bi.payee, bi.category " +
-            "ORDER BY bi.payee";
-
         List<CaseVariantPayee> allPayees = new ArrayList<>();
         try (Statement statement = Utility.getDbConnection().createStatement();
-             ResultSet rs = statement.executeQuery(query)) {
+             ResultSet rs = statement.executeQuery(caseVariantPayeeQuery(this.getId()))) {
 
             while (rs.next()) {
-                allPayees.add(new CaseVariantPayee(
-                        rs.getString("payee"),
-                        rs.getString("category"),
-                        rs.getInt("itemCount")));
+                // One row per budget item, so the count is one and the tallying happens in Java.
+                allPayees.add(new CaseVariantPayee(rs.getString("payee"), rs.getString("category"), 1));
             }
         }
 
         return groupCaseVariantPayees(allPayees);
+    }
+
+    /**
+     * The query behind {@link #checkForCaseVariantPayees()}:  every budget item's payee and
+     * category, one row each, counted and grouped nowhere.
+     *
+     * <p><b>It must not GROUP BY the payee.</b>  That is not a style preference -- {@code payee} is
+     * {@code utf8mb3_general_ci}, so MySQL considers "Smart Phones" and "Smart phones" equal and
+     * folds them into a single row before any of this code sees them.  The first version of this
+     * check did group, and reported "No budget item payees differ only by capitalisation" against a
+     * budget holding ten such pairs, in the same run whose own expense breakdown listed both
+     * spellings.  It could never have found anything.
+     *
+     * <p>The case-insensitive collation is the reason the pairs exist and the reason they are hard
+     * to notice;  a check for them cannot be built on top of it.
+     *
+     * @param idBudget the budget whose items to read
+     * @return the SQL, extracted so the absence of that grouping can be asserted without a database
+     */
+    static String caseVariantPayeeQuery(UUID idBudget) {
+        return "SELECT bi.payee as payee, bi.category as category " +
+               "FROM budget_item bi " +
+               "WHERE bi.Budget_idBudget = UUID_TO_BIN('" + idBudget + "') " +
+               "ORDER BY bi.payee";
     }
 
     /**
@@ -233,11 +249,23 @@ public class Budget extends IndependentEntity {
      */
     public static List<List<CaseVariantPayee>> groupCaseVariantPayees(List<CaseVariantPayee> allPayees) {
 
-        Map<String, List<CaseVariantPayee>> byLowercaseName = new TreeMap<>();
+        // Tally exact spellings first.  The query returns one row per budget item precisely so that
+        // this comparison happens here in Java rather than in a case-insensitive collation, so it is
+        // this loop that decides two spellings are different -- and it does so on the string.
+        Map<List<String>, CaseVariantPayee> byExactSpelling = new LinkedHashMap<>();
         for (CaseVariantPayee payee : allPayees) {
             if (payee == null || payee.payee() == null) {
                 continue;
             }
+            List<String> key = List.of(payee.payee(), String.valueOf(payee.category()));
+            CaseVariantPayee running = byExactSpelling.get(key);
+            byExactSpelling.put(key, running == null
+                    ? payee
+                    : new CaseVariantPayee(payee.payee(), payee.category(), running.count() + payee.count()));
+        }
+
+        Map<String, List<CaseVariantPayee>> byLowercaseName = new TreeMap<>();
+        for (CaseVariantPayee payee : byExactSpelling.values()) {
             byLowercaseName.computeIfAbsent(payee.payee().toLowerCase(), key -> new ArrayList<>()).add(payee);
         }
 
