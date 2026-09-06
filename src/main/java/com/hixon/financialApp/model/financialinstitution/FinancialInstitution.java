@@ -79,6 +79,8 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     private TransactionParser<QfxTransaction> qfxParser;
     private boolean isQfxOpen = false;
     private Double cachedLedgerBalance = null;
+    /** When the bank said the cached ledger balance was true, or null if it did not say. */
+    private java.util.Calendar cachedLedgerBalanceAsOf = null;
 
     // CSV import fields (using Apache Commons CSV directly)
     private org.apache.commons.csv.CSVParser csvApacheParser;
@@ -249,6 +251,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
         this.qfxParser = new QfxParser();
         this.cachedLedgerBalance = null;
+        this.cachedLedgerBalanceAsOf = null;
 
         // Use try-with-resources to ensure FileInputStream is properly closed after parsing
         // The parser loads all transactions into memory, so we don't need to keep the stream open
@@ -261,6 +264,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
                 QfxStatement statement = ((QfxParser) qfxParser).getStatement();
                 if (statement != null) {
                     this.cachedLedgerBalance = statement.getLedgerBalance();
+                    this.cachedLedgerBalanceAsOf = statement.getLedgerBalanceAsOf();
                 }
             }
 
@@ -270,6 +274,7 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             this.isQfxOpen = false;
             this.qfxParser = null;
             this.cachedLedgerBalance = null;
+            this.cachedLedgerBalanceAsOf = null;
             throw e;
         }
 
@@ -596,6 +601,20 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
      * @return the ledger balance from the import file, or null if not available
      *         (e.g., for CSV files or before import)
      */
+    /**
+     * When the bank said the imported ledger balance was true (OFX DTASOF), or null if unknown.
+     *
+     * <p>A statement covering a wider date range is not necessarily a newer one, and without this
+     * there is no way to tell.  See QfxParser.extractLedgerBalanceAsOf for the download that made
+     * the difference.
+     *
+     * @return the as-of date of the balance from the import file, or null if not available
+     */
+    @Override
+    public java.util.Calendar getImportedLedgerBalanceAsOf() {
+        return cachedLedgerBalanceAsOf;
+    }
+
     @Override
     public Double getImportedLedgerBalance() {
         Double balance = null;

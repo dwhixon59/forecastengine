@@ -316,8 +316,9 @@ public class RegisterController {
                     dbRegister.getBalance()) + ".  You should update it.");
         }
 
-        // Get the balance from QFX file if available
+        // Get the balance from QFX file if available, and the date the bank said it was true on
         Double qfxBalance = sessionController.getFinancialInstitution().getImportedLedgerBalance();
+        Calendar qfxBalanceAsOf = sessionController.getFinancialInstitution().getImportedLedgerBalanceAsOf();
 
         if (qfxBalance != null) {
 
@@ -368,10 +369,25 @@ public class RegisterController {
                             break;
                         case "4":
                             if (importWiderStatement(register)) {
-                                Double refreshed =
+                                Double reimported =
                                         sessionController.getFinancialInstitution().getImportedLedgerBalance();
-                                if (refreshed != null) {
-                                    qfxBalance = refreshed;
+                                Calendar reimportedAsOf =
+                                        sessionController.getFinancialInstitution().getImportedLedgerBalanceAsOf();
+
+                                // A wider statement is not necessarily a newer one.  Keep whichever
+                                // balance the bank dated later;  see keepLaterLedgerBalance.
+                                Double kept = keepLaterLedgerBalance(qfxBalance, qfxBalanceAsOf,
+                                        reimported, reimportedAsOf);
+                                if (reimported != null && !Objects.equals(kept, reimported)) {
+                                    view.say("That statement's balance of " +
+                                            Utility.formatDollarAmount(reimported) + " is dated " +
+                                            Utility.calendarDateToStringDate(reimportedAsOf) +
+                                            ", older than the one already downloaded.  Keeping the " +
+                                            "newer figure to compare against.");
+                                }
+                                qfxBalance = kept;
+                                if (isLater(reimportedAsOf, qfxBalanceAsOf)) {
+                                    qfxBalanceAsOf = reimportedAsOf;
                                 }
                                 // Ask again against the balances the re-import produced.
                                 settled = false;
@@ -406,6 +422,53 @@ public class RegisterController {
         }
 
         return wasCorrect;
+    }
+
+    /**
+     * Choose between the balance already in hand and the one a re-import just produced, keeping
+     * whichever the bank dated later.
+     *
+     * <p>A statement pulled over a wider date range is not necessarily a newer statement, and the
+     * feature that fetches one exists precisely to reach further back.  The wider Citi download that
+     * would recover the 09-04-2026 gap carries <b>DTASOF 20260901, -11,886.30</b> -- three days older
+     * than the -11,986.25 already imported, and $99.95 short of it, because it predates the Echst
+     * charge.  Taking it as "the downloaded balance" would offer to move the register backwards, and
+     * the user has no way to see that from the number alone.
+     *
+     * <p>Undated balances lose to dated ones, and when neither is dated the newly imported one wins:
+     * that is the existing behaviour, and there is nothing to justify overriding it.
+     *
+     * @param current       the balance the question has been working with, or null
+     * @param currentAsOf   when the bank said {@code current} was true, or null if unknown
+     * @param reimported    the balance the re-import produced, or null
+     * @param reimportedAsOf when the bank said {@code reimported} was true, or null if unknown
+     * @return whichever balance is the more recent statement of the account
+     */
+    static Double keepLaterLedgerBalance(Double current, Calendar currentAsOf,
+                                         Double reimported, Calendar reimportedAsOf) {
+        if (reimported == null) {
+            return current;
+        }
+        if (current == null) {
+            return reimported;
+        }
+        // Only a date can demote the newly imported balance;  without one there is nothing to say it
+        // is stale, and the file the user just chose is the better guess.
+        if (currentAsOf != null && reimportedAsOf != null && reimportedAsOf.before(currentAsOf)) {
+            return current;
+        }
+        return reimported;
+    }
+
+    /**
+     * Whether {@code candidate} is a later date than {@code existing}, treating an unknown date as
+     * never later -- an undated balance must not displace a dated one.
+     */
+    static boolean isLater(Calendar candidate, Calendar existing) {
+        if (candidate == null) {
+            return false;
+        }
+        return existing == null || candidate.after(existing);
     }
 
     /**
