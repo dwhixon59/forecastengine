@@ -1047,7 +1047,10 @@ public class Utility {
                 }
             }
         } else {
-            getView().say("Current file " + currentFilename + " was not renamed because it does not exist.");
+            // The sibling of the message removed above, and unsaid for the same reason:  there being
+            // no current file to version is the ordinary case the first time a report is written for
+            // a user, and it was announced three times in the run of 09-07-2026.  The false return
+            // still tells the caller nothing was versioned.
             result = false;
         }
 
