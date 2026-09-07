@@ -98,6 +98,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         if (monthlyNet >= 0) {
             return Double.POSITIVE_INFINITY;
         }
+        // A balance that is already at or below zero has no runway to run down.  Dividing anyway
+        // produced a negative duration and printed it as one:  on 09-07-2026, a starting balance of
+        // -$181 against a burn of -$309 gave -0.59, reported as "runway is about -1 months".  There
+        // is no such quantity;  the honest answer is none left, and the caller says so in words.
+        if (startingBalance <= 0) {
+            return 0.0;
+        }
         return roundCurrency(startingBalance / -monthlyNet);
     }
 
@@ -674,10 +681,23 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 }
                 forecastTransaction = forecastTransactions.getNext();
             }
-            getView().say(new StringBuilder().append("The required float on the date of the lowest balance (").
-                    append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(") taking into account the " +
-                            "effect of fixing the out-of-balance issue is ").
-                    append(Utility.formatRoundedDollarAmount(-lowestBalance)).toString());
+            // Deliberately not "the date of the lowest balance".  That phrase is already spoken for
+            // by the trough reported above, and this is a different date:  the loop just above
+            // recomputed the balances assuming the monthly shortfall is corrected, which moves the
+            // low point.  Both were called the same thing on 09-07-2026 -- "$-3,746 on 08-11-2027"
+            // and "the date of the lowest balance (05-12-2027)" -- and read as a contradiction.
+            if (lowestBalance < 0) {
+                getView().say(new StringBuilder().append("Once the monthly shortfall is corrected the low point moves to ").
+                        append(Utility.calendarDateToStringDate(dateOfLowestBalance)).
+                        append(", and the float needed to cover it is ").
+                        append(Utility.formatRoundedDollarAmount(-lowestBalance)).append(".").toString());
+            } else {
+                // The correction cleared the deficit outright, so there is no low point to name --
+                // and dateOfLowestBalance still holds the uncorrected one, which naming would be
+                // worse than saying nothing.  This is the case that printed "the required float ...
+                // is $0" on 09-04-2026.
+                getView().say("Correcting the monthly shortfall removes the projected deficit, so no float is required.");
+            }
             requiredFloat = roundCurrency(-lowestBalance);
 
             // Tell the user how much they need to deposit to fix the float issue:
@@ -786,18 +806,34 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             double monthlyExpenseAverage = totalExpense == 0 ? 0 : roundCurrency(-totalExpense / numberOfMonthsInForecast);
             double baselineMonthlyNet = roundCurrency(monthlyIncomeAverage - monthlyExpenseAverage);
             double baselineRunway = monthsOfRunway(firstFirstOfMonthBalance, baselineMonthlyNet);
-            if (Double.isInfinite(baselineRunway)) {
+
+            // The whole section asks how long a balance lasts.  With nothing left to last, every
+            // sentence in it is arithmetic on a number that is already spent -- including the
+            // per-source lines below, which on 09-07-2026 offered "if David's net pay 1 stopped,
+            // runway drops to about 0 months" against a balance that was already $-181.  Say the
+            // one true thing instead of four false ones.
+            if (firstFirstOfMonthBalance <= 0) {
+                getView().say(new StringBuilder().append("  - The balance is already in deficit (").
+                        append(Utility.formatRoundedDollarAmount(firstFirstOfMonthBalance)).
+                        append("), so there is no runway to measure.").toString());
+
+            } else if (Double.isInfinite(baselineRunway)) {
                 getView().say("  - Current monthly net is non-negative, so runway is not constrained by burn rate.");
+
             } else {
                 getView().say(new StringBuilder().append("  - At the current net burn of ").
                         append(Utility.formatRoundedDollarAmount(baselineMonthlyNet)).append("/month, runway is about ").
                         append(Math.round(baselineRunway)).append(" months.").toString());
             }
 
-            List<Map.Entry<String, Double>> topIncomeSources = incomeBySource.entrySet().stream()
-                    .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
-                    .limit(2)
-                    .toList();
+            // Skipped in deficit for the reason given above:  "runway drops to about N months" is
+            // a claim about a balance that is not there.
+            List<Map.Entry<String, Double>> topIncomeSources = firstFirstOfMonthBalance <= 0
+                    ? List.of()
+                    : incomeBySource.entrySet().stream()
+                        .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                        .limit(2)
+                        .toList();
             for (Map.Entry<String, Double> source : topIncomeSources) {
                 double sourceMonthly = roundCurrency(source.getValue() / numberOfMonthsInForecast);
                 double netIfRemoved = roundCurrency(baselineMonthlyNet - sourceMonthly);
