@@ -283,6 +283,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // float to keep the forecast solvent.
         Calendar firstFirstOfMonth = getNextFirstOfMonth(Calendar.getInstance());
         double firstFirstOfMonthBalance = 0.0;
+        boolean periodOpeningBalanceCaptured = false;
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput(reportType);
@@ -317,20 +318,41 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 // Write out a month header if this report type requires it:
                 renderLongTermForecastMonthHeader(reportType, forecastTransaction.getPlannedDate(), runningBalance);
 
-                // If this is the first first-of-the-month, then save off the balance on that date for reporting purposes:
-                if (dateOnlyCompare(firstFirstOfMonth, forecastTransaction.getPlannedDate()) == 0) {
-                    firstFirstOfMonthBalance = runningBalance;
-                    lowestBalance = runningBalance;
-                    dateOfLowestBalance = firstFirstOfMonth;
+            }
 
-                    // The balance carried into the summary period seeds the period low point on the line above, so it
-                    // has to count as a balance within the period here as well.  Otherwise a period that opens in the
-                    // red gets reported as non-negative while the low point names that very balance:
-                    if (runningBalance < 0) {
-                        periodOpensInDeficit = true;
-                        firstPeriodNegativeBalance = runningBalance;
-                        dateOfFirstPeriodNegativeBalance = copyCalendar(firstFirstOfMonth);
-                    }
+            // The balance carried into the summary period, taken at the first occurrence that falls
+            // inside it.
+            //
+            // This used to require an occurrence dated *exactly* on the first of the month, and to
+            // sit inside the month-change block above.  Both made it a coincidence.  The iterator
+            // drops fully reconciled occurrences -- it takes remainingAmount <> 0, plus zero rows
+            // only where the item amount is also zero -- so whether anything survives to land on
+            // the 1st depends on what has already been reconciled.  On 09-06-2026 the Citi forecast
+            // had one occurrence dated 10-01, a Boat Storage already reconciled to zero against a
+            // -$170 item;  it was filtered out, the first October row the loop actually saw was
+            // 10-04, the comparison failed, and this stayed at its initialised 0.
+            //
+            // Zero looks like a balance, so nothing flagged it.  It is subtracted from the closing
+            // balance to get the net change and the out-of-balance amount, so the report concluded
+            // the forecast was "out of balance by $4,242" and asked for $848/month of cuts on an
+            // account whose true opening balance was -$13,444.57 and which clears $9,203 across the
+            // period.  Register balance -11,986.25 plus -1,458.32 of pre-October occurrences is that
+            // opening figure, and -13,444.57 + 649 is the -12,795 the monthly table reported for
+            // October -- the number was right there in the same report.
+            if (!periodOpeningBalanceCaptured
+                    && dateOnlyCompare(forecastTransaction.getPlannedDate(), firstFirstOfMonth) >= 0) {
+                periodOpeningBalanceCaptured = true;
+                firstFirstOfMonthBalance = runningBalance;
+                lowestBalance = runningBalance;
+                dateOfLowestBalance = firstFirstOfMonth;
+
+                // The balance carried into the summary period seeds the period low point on the line above, so it
+                // has to count as a balance within the period here as well.  Otherwise a period that opens in the
+                // red gets reported as non-negative while the low point names that very balance:
+                if (runningBalance < 0) {
+                    periodOpensInDeficit = true;
+                    firstPeriodNegativeBalance = runningBalance;
+                    dateOfFirstPeriodNegativeBalance = copyCalendar(firstFirstOfMonth);
                 }
             }
 
@@ -440,6 +462,15 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             // Move to the next transaction:
             lastForecastTransaction = forecastTransaction;
             forecastTransaction = forecastTransactions.getNext();
+        }
+
+        // Nothing at all falls inside the summary period.  The opening balance is then the closing
+        // one -- nothing happens between them -- and saying so makes the net change zero and the
+        // forecast balanced, which is the truth about a period with no occurrences in it.  Leaving
+        // the initialised 0.0 instead would report the whole closing balance as the period's net
+        // change, which is the same defect this capture was moved to fix.
+        if (!periodOpeningBalanceCaptured) {
+            firstFirstOfMonthBalance = runningBalance;
         }
 
         // Finish up and closeout the forecast rendering:

@@ -312,6 +312,86 @@ class ForecastSummaryOutputIntegrationTest {
         return String.join("\n", outputCaptor.getAllValues());
     }
 
+    /**
+     * The summary period's opening balance is the balance carried into it, whether or not anything
+     * happens to fall on the first of the month.
+     *
+     * <p>It used to be captured only on an occurrence dated exactly the 1st.  Whether one exists is
+     * a coincidence:  the iterator drops fully reconciled occurrences, so it depends on what has
+     * already been reconciled.  The Citi forecast of 09-06-2026 had a single occurrence on 10-01 --
+     * a Boat Storage already reconciled to zero -- which was filtered out, leaving 10-04 as the
+     * first row the loop saw and the opening balance at its initialised 0.
+     *
+     * <p>Zero looks like a balance.  It is subtracted from the closing balance to get the net
+     * change, so the report announced the forecast was out of balance by the whole closing figure
+     * and asked for monthly cuts on an account that was in fact paying itself down.
+     */
+    @Test
+    @DisplayName("The opening balance is carried in even when nothing lands on the first of the month")
+    void openingBalanceIsCapturedWithoutAnOccurrenceOnTheFirst() throws Exception {
+        ViewInt originalView = Utility.getView();
+        ViewInt mockView = mock(ViewInt.class);
+        Utility.setView(mockView);
+
+        Forecast forecast = mock(Forecast.class);
+        Budget budget = mock(Budget.class);
+        Register register = mock(Register.class);
+
+        when(forecast.getBudget()).thenReturn(budget);
+        when(forecast.getRegister()).thenReturn(register);
+        when(register.getReportType()).thenReturn("csv");
+        when(register.getBalance()).thenReturn(-1000.00);
+        when(register.getName()).thenReturn("Citi AAdvantage Mastercard");
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+        Calendar secondMonth = (Calendar) firstOfMonth.clone();
+        secondMonth.add(Calendar.MONTH, 1);
+
+        // -1000 on the register, -400 spent before the period opens, and the first thing inside the
+        // period lands on the 4th.  Nothing is dated the 1st -- which is the whole point.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(addDays(firstOfMonth, -5), -400.00, "Household", "Pest Control"),
+                mockTransaction(addDays(firstOfMonth, 3), 100.00, "Income", "Credit card payment"),
+                mockTransaction(addDays(secondMonth, 2), 200.00, "Income", "Credit card payment")
+        );
+
+        ForecastTransactionIterator mainIterator = new ListForecastTransactionIterator(transactions);
+        ForecastTransactionIterator floatIterator = new ListForecastTransactionIterator(transactions);
+
+        TestForecastView forecastView = new TestForecastView(forecast);
+
+        try (MockedStatic<Forecast> forecastStatic = mockStatic(Forecast.class);
+             MockedStatic<ForecastTransaction> transactionStatic = mockStatic(ForecastTransaction.class)) {
+
+            forecastStatic.when(() -> Forecast.getFirstNonZeroTransactionDate(forecast))
+                    .thenReturn(addDays(firstOfMonth, -5));
+            transactionStatic.when(() -> ForecastTransaction.zeroRunningBalances(forecast)).thenAnswer(invocation -> null);
+            transactionStatic.when(() -> ForecastTransaction.getForecastTransactionsStartingOn(eq(forecast), any(Calendar.class)))
+                    .thenReturn(mainIterator, floatIterator);
+
+            forecastView.renderLongTermForecast(forecast);
+        } finally {
+            Utility.setView(originalView);
+        }
+
+        ArgumentCaptor<String> outputCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockView, atLeastOnce()).say(outputCaptor.capture());
+        String output = String.join("\n", outputCaptor.getAllValues());
+
+        // -1000 carried on the register, less the 400 spent before the period opens.
+        assertTrue(output.contains("The starting balance is: $-1,400"),
+                "the opening balance is what was carried in, not the initialised zero:\n" + output);
+        assertFalse(output.contains("The starting balance is: $0"),
+                "a zero opening balance here is the defect, not a reading");
+
+        // And the number it feeds:  +300 arrives during the period, so the forecast improves.  Read
+        // against an opening of zero the same figures said "out of balance by $700".
+        assertTrue(output.contains("The forecast is balanced"),
+                "the period gains $300, so there is no shortfall to report:\n" + output);
+        assertFalse(output.contains("out of balance"),
+                "asking for cuts on an improving forecast is what the zero caused");
+    }
+
     private static ForecastTransaction mockTransaction(Calendar plannedDate, double remainingAmount, String category,
                                                        String payee) throws Exception {
         ForecastTransaction transaction = mock(ForecastTransaction.class);
