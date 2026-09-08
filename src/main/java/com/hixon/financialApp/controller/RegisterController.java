@@ -17,6 +17,7 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.BankReferenceNumber;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.UserResponse;
@@ -543,6 +544,71 @@ public class RegisterController {
     }
 
     /**
+     * How many days either side of a transfer to look for its other side.
+     *
+     * <p>Both sides of an internal transfer normally post the same day;  a few days covers a weekend
+     * and a bank that posts the two legs separately.  It is deliberately small -- the reference is
+     * doing the identifying, and a wide window only adds chances for an unrelated row to carry a
+     * repeated reference.
+     */
+    private static final int TRANSFER_REFERENCE_DAY_WINDOW = 5;
+
+    /**
+     * Identify the register a transfer came from by the bank's own reference number.
+     *
+     * <p>Wells Fargo writes the same reference into both sides, so where one is present and one row
+     * matches it, that row <em>is</em> the other side.  Both legs of the 09-07-2026 transfer are in
+     * the database carrying {@code REF #IB0338WKXT}, for $261.00 and -$261.00 on the same day, in
+     * Bill Pay Dave and Bill Pay Danni -- and the import still guessed the wrong register and asked.
+     *
+     * <p>Ambiguity is not resolved here.  If the matching rows span more than one register the
+     * reference has not identified anything, and inventing an answer would be worse than the
+     * question:  it falls through and the user is asked, as before.
+     *
+     * @return the register the transfer came from, or null when the reference is absent, matches
+     *         nothing, or matches more than one register
+     */
+    private Register resolveByBankReference(Calendar date, double amount, String payee) {
+
+        String reference = BankReferenceNumber.extract(payee);
+        if (reference == null) {
+            logger.debug("  No bank reference in payee; falling through to the register filters");
+            return null;
+        }
+
+        try {
+            List<Transaction> matches = Transaction.findByBankReference(
+                    reference, register.getId(), date, amount, TRANSFER_REFERENCE_DAY_WINDOW);
+
+            Set<UUID> registerIds = new HashSet<>();
+            for (Transaction match : matches) {
+                registerIds.add(match.getIdRegister());
+            }
+
+            if (registerIds.size() != 1) {
+                logger.debug("  Bank reference {} matched {} register(s); falling through",
+                        reference, registerIds.size());
+                return null;
+            }
+
+            Register resolved = Register.getById(registerIds.iterator().next());
+            if (resolved == null) {
+                return null;
+            }
+
+            view.say("\u25b8 Identified by the bank reference " + reference + ": " + resolved.getName() + ".");
+            logger.debug("  Bank reference {} identified register '{}'", reference, resolved.getName());
+            return resolved;
+
+        } catch (Exception e) {
+            // An accelerator that fails must cost nothing but its own benefit.  The filters and the
+            // question below are exactly what would have run had there been no reference at all.
+            logger.debug("Bank reference lookup failed; falling through to the register filters", e);
+            return null;
+        }
+    }
+
+    /**
      * Say what the balance difference amounts to, and name any transaction of exactly that amount.
      *
      * <p>The choices offered above overwrite the balance;  none of them explains it, so the user was
@@ -646,6 +712,19 @@ public class RegisterController {
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
+
+        // The bank's own reference for this transfer, when it issued one.  This is the strongest
+        // evidence available and it is checked before anything else, because everything below is a
+        // guess by comparison:  the filters narrow on account type and user, and when they cannot
+        // settle it the user is asked.  On 09-07-2026 that chain guessed Dave's Spending Account for
+        // a transfer whose reference named Bill Pay Danni outright, and the user had to correct it.
+        //
+        // The reference confirms;  it never gates.  No reference, or nothing matching it, and this
+        // returns null so the transfer reaches exactly the questions it reaches today.
+        Register byReference = resolveByBankReference(date, amount, payee);
+        if (byReference != null) {
+            return byReference;
+        }
 
         // if this is a recurring transfer:
         if (recurring) {

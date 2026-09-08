@@ -806,6 +806,75 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * The query behind {@link #findByBankReference}, extracted so it can be asserted without a
+     * database.
+     *
+     * <p>The reference is matched as a substring of the payee because there is no column for it --
+     * the bank writes it into the description and nothing parses it on the way in.  That is loose on
+     * its own, so two further conditions carry the weight:  the amount must be this transaction's
+     * exact negation, and the date must be close.  A reference is 10 alphanumerics; a row that
+     * carries the same one, for the opposite amount, within days, in another register, is the other
+     * side of this movement and not a coincidence.
+     *
+     * @param reference        the bank reference, already extracted from the payee
+     * @param excludeRegister  the register being imported, whose own side must not match itself
+     * @param from             earliest post date to consider
+     * @param to               latest post date to consider
+     * @param amount           this side's amount; the search is for its negation
+     */
+    static String bankReferenceQuery(String reference, UUID excludeRegister, Calendar from, Calendar to,
+                                     double amount) {
+        return getSelectQuery() +
+                " where tr.Register_idRegister <> uuid_to_bin('" + excludeRegister + "')" +
+                " and tr.payee like '%" + Utility.escapeSqlString(reference) + "%'" +
+                " and abs(tr.amount - " + (-amount) + ") < 0.005" +
+                " and tr.postDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to);
+    }
+
+    /**
+     * Find the other side of a transfer by the bank's own reference number.
+     *
+     * <p>Wells Fargo writes the same reference into both sides of a transfer, so where one exists it
+     * is an identity rather than a guess.  About 79% of the transfer payees in this database carry
+     * one -- measured as payees containing "TRANSFER", 2,504 of 3,170 -- which makes it the most
+     * reliable signal available for the question "which register did this come from".
+     *
+     * <p><b>The reference confirms a match.  It never gates one.</b>  A transfer without one, or with
+     * one nothing matches, must reach exactly the questions it reaches today:  this returns an empty
+     * list and the caller carries on.  See {@link BankReferenceNumber} for the rule.
+     *
+     * @param reference       the bank reference, or null when the payee carries none
+     * @param excludeRegister the register being imported
+     * @param date            this transaction's date
+     * @param amount          this transaction's amount; the search is for its negation
+     * @param dayWindow       how many days either side of {@code date} to consider
+     * @return the matching transactions, possibly empty; never null
+     */
+    public static List<Transaction> findByBankReference(String reference, UUID excludeRegister, Calendar date,
+                                                        double amount, int dayWindow)
+            throws EntityException, SQLException {
+
+        List<Transaction> matches = new ArrayList<>();
+        if (reference == null || reference.isBlank() || excludeRegister == null || date == null) {
+            return matches;
+        }
+
+        Calendar from = (Calendar) date.clone();
+        from.add(Calendar.DATE, -dayWindow);
+        Calendar to = (Calendar) date.clone();
+        to.add(Calendar.DATE, dayWindow);
+
+        ResultSet rs = getRS(bankReferenceQuery(reference, excludeRegister, from, to, amount),
+                "Database error encountered looking for the other side of a transfer by bank reference " +
+                        reference + ".");
+        while (rs != null && rs.next()) {
+            matches.add(new Transaction(rs));
+        }
+        return matches;
+    }
+
+    /**
      * Find transactions in a register whose amount is exactly some figure -- used to put a name to a
      * balance discrepancy.
      *
