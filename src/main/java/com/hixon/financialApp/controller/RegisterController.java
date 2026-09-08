@@ -332,18 +332,36 @@ public class RegisterController {
 
                 view.sayH4("Current balance of " + register.getName() + ": " +
                         Utility.formatDollarAmount(register.getBalance()));
-                view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
-                // Check if balances differ
-                if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
+                // What the bank has counted, and what this register holds over the same
+                // transactions.  Compared like with like;  see settledBalance.
+                double pendingTotal = pendingTotalFor(register);
+                double settledHere = settledBalance(register.getBalance(), pendingTotal);
+                double shouldHold = registerBalanceFor(qfxBalance, pendingTotal);
+
+                view.say("The bank says " + Utility.formatDollarAmount(qfxBalance) + ".");
+                if (!Utility.isEqualCurrency(pendingTotal, 0.0)) {
+                    view.say("Pending transactions not yet counted by the bank total " +
+                            Utility.formatDollarAmount(pendingTotal) + ".");
+                }
+
+                // Check whether they differ -- on the same transactions
+                if (!Utility.isEqualCurrency(settledHere, qfxBalance)) {
                     view.say("\nThe balances differ!");
-                    explainBalanceDifference(register, qfxBalance);
+                    if (!Utility.isEqualCurrency(pendingTotal, 0.0)) {
+                        view.say("Allowing for what is pending, this register should read " +
+                                Utility.formatDollarAmount(shouldHold) + ".");
+                    }
+                    explainBalanceDifference(register, shouldHold);
 
-                    // Offer user four choices
+                    // Option 1 sets the balance to what the register should hold, not to the bank's
+                    // figure:  the bank has not counted the pending transactions and this register
+                    // has to keep counting them.
                     String[] choices = {
-                        "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
+                        "1 - Go with the bank (sets this register to " +
+                                Utility.formatDollarAmount(shouldHold) + ")",
                         "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
-                        "3 - Enter a different balance",
+                        "3 - Enter the balance the bank shows",
                         "4 - Import a wider statement file to find what is missing"
                     };
 
@@ -359,14 +377,19 @@ public class RegisterController {
                     Double newBalance = null;
                     switch (response) {
                         case "1":
-                            newBalance = qfxBalance;
+                            newBalance = shouldHold;
                             break;
                         case "2":
                             // Keep current balance - do nothing
                             break;
                         case "3":
-                            newBalance = view.getResponseCurrency("Enter new balance",
-                                    register.getBalance(), true, true, false, false, false, null);
+                            // The figure asked for is the bank's, so this option means the same as
+                            // option 1:  what is pending is added back either way.
+                            Double bankSays = view.getResponseCurrency("Enter the balance the bank shows",
+                                    qfxBalance, true, true, false, false, false, null);
+                            if (bankSays != null) {
+                                newBalance = registerBalanceFor(bankSays, pendingTotal);
+                            }
                             break;
                         case "4":
                             if (importWiderStatement(register)) {
@@ -423,6 +446,67 @@ public class RegisterController {
         }
 
         return wasCorrect;
+    }
+
+    /**
+     * The total still pending in a register, or zero when it cannot be read.
+     *
+     * <p>Zero is the safe answer:  it makes the comparison behave exactly as it did before pending
+     * was accounted for, rather than inventing an adjustment from a failed query.
+     */
+    private double pendingTotalFor(Register register) {
+        try {
+            return Transaction.pendingTotalForRegister(register.getId());
+        } catch (Exception e) {
+            logger.debug("Could not total the pending transactions; comparing balances without them", e);
+            return 0.0;
+        }
+    }
+
+    /**
+     * The register's balance over the transactions the bank has actually counted.
+     *
+     * <p>The register counts a provisional transaction as soon as it is saved.  A downloaded balance
+     * does not -- it is a balance over settled transactions, and a pending charge is not in it.
+     * Comparing the two directly compares different sets of transactions, so while anything is
+     * pending they differ by exactly the pending total, correctly and every time.
+     *
+     * <p>The old prompt compared them anyway, announced "The balances differ!", and offered to
+     * overwrite.  Taking that offer on Bill Pay Danni on 09-08-2026 set the balance to the bank's
+     * figure and dropped $255.91 of pending charges out of it -- four charges that had rows in the
+     * register and, from that moment, no effect on its balance.  Nothing recomputes an accumulated
+     * balance, so that is permanent.
+     *
+     * <p>None of this is put to the user.  They see one balance in their bank and one here;  being
+     * asked to reconcile a settled balance against a pending one is a question about bookkeeping,
+     * not about their money, and it is the app's arithmetic to do.
+     *
+     * @param registerBalance the register's balance, which includes everything pending
+     * @param pendingTotal    the total of what is still pending, negative for net spending
+     * @return the balance over settled transactions only, which is what the bank's figure measures
+     */
+    static double settledBalance(double registerBalance, double pendingTotal) {
+        return roundCurrency(registerBalance - pendingTotal);
+    }
+
+    /**
+     * What the register should hold, given what the bank says it has settled.
+     *
+     * <p>The inverse of {@link #settledBalance}, and the fix for the defect described there:  when
+     * the user accepts the bank's figure, the register has to keep counting what is still pending.
+     * Setting the balance to the bank's number alone silently discards it.
+     *
+     * @param bankBalance  the balance the bank reports over settled transactions
+     * @param pendingTotal the total of what is still pending, negative for net spending
+     * @return the balance the register should carry
+     */
+    static double registerBalanceFor(double bankBalance, double pendingTotal) {
+        return roundCurrency(bankBalance + pendingTotal);
+    }
+
+    /** Rounds to cents, so a comparison is never decided by a binary-fraction tail. */
+    private static double roundCurrency(double amount) {
+        return Math.round(amount * 100.0) / 100.0;
     }
 
     /**
@@ -624,11 +708,13 @@ public class RegisterController {
      *
      * <p>Read-only:  this reports, it never repairs.  Nothing here changes a balance.
      *
-     * @param register   the register being verified
-     * @param qfxBalance the balance the bank sent down
+     * @param register    the register being verified
+     * @param shouldHold  the balance this register ought to carry -- the bank's figure with whatever
+     *                    is still pending added back, so the difference is measured over the same
+     *                    transactions on both sides
      */
-    private void explainBalanceDifference(Register register, double qfxBalance) {
-        double difference = qfxBalance - register.getBalance();
+    private void explainBalanceDifference(Register register, double shouldHold) {
+        double difference = shouldHold - register.getBalance();
 
         view.say("The register is off by " + Utility.formatDollarAmount(difference) +
                 " against the downloaded balance.");
