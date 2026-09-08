@@ -918,6 +918,29 @@ public class ForecastTransaction extends IndependentEntity {
     }
 
     /**
+     * Whether any split has been applied to this occurrence.
+     *
+     * <p>Asks existence rather than a total, because a total cannot answer it:  splits can net to
+     * zero, and {@link #getTotalSplitAmount()} returns 0.0 both for "no splits" and for "splits that
+     * cancel out".  The distinction matters where this is used -- an occurrence with nothing left
+     * was either consumed by a split or deliberately skipped, and those are different things to tell
+     * a user.
+     *
+     * @return true when at least one split is linked to this occurrence
+     */
+    public boolean hasSplit() {
+        try {
+            String query = "select count(*) from forecast_transaction_split " +
+                    "where ForecastTransaction_idForecastTransaction = uuid_to_bin('" + this.getId() + "')";
+            ResultSet rs = EntityInt.getRS(query, "checking whether a forecast transaction has splits");
+            return rs != null && rs.next() && rs.getInt(1) > 0;
+        } catch (Exception e) {
+            // Used only to choose the wording of a note;  not knowing is not worth an exception.
+            return false;
+        }
+    }
+
+    /**
      * Get the total amount of all splits associated with this forecast transaction.
      * @return The total split amount, or 0.0 if no splits exist
      */

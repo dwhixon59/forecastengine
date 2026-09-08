@@ -605,7 +605,7 @@ public class ForecastTransactionController {
             // Ask what to update
             String choice = view.selectFromMenu("What would you like to update?",
                     List.of("planned date", "remaining amount", "running balance", "memo",
-                            "overridden flag", "found flag", "Save changes"),
+                            "overridden flag", "found flag", "won't do this occurrence", "Save changes"),
                     DO_NOT_ALLOW_NONE, SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
 
             switch (choice) {
@@ -652,6 +652,25 @@ public class ForecastTransactionController {
                             transaction.isFound() ? "y" : "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                             ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
                     transaction.setFound(foundStr.equalsIgnoreCase("y"));
+                    break;
+
+                case "w":  // won't do this occurrence -- decided against, not spent
+                    // Zeroing alone does not survive.  updateForecast deletes and regenerates every
+                    // occurrence from its start date that is "not overridden and has no split", so a
+                    // zeroed occurrence in a future month comes back at the full amount and the
+                    // decision is silently undone.  The two have to be set together, which is the
+                    // whole reason this is an action rather than an instruction to edit the amount.
+                    //
+                    // It also makes the state legible.  Remaining zero with no split means at least
+                    // three different things -- skipped, zeroed by the spreadsheet-delete path, or an
+                    // ignored overage -- and the overridden flag is what separates this one, so the
+                    // import can say "you skipped it" rather than "it is already spent".
+                    transaction.setRemainingAmount(0);
+                    transaction.setOverridden(true);
+                    view.say("Nothing is planned for " +
+                            calendarDateToStringDate(transaction.getPlannedDate()) +
+                            " any more, and regenerating the forecast will not bring it back.");
+                    view.say("Save changes to keep it.");
                     break;
 
                 case "s":  // Save changes

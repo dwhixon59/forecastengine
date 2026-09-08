@@ -1975,9 +1975,12 @@ public class BudgetController {
 
             ForecastTransaction nearest = ForecastTransaction.findNearestOccurrenceForBudgetItem(
                     budgetItem.getId(), forecast.getId(), transactionDate, SPENT_OCCURRENCE_DAY_WINDOW);
+            if (nearest == null) {
+                return "";
+            }
 
-            return spentOccurrenceNote(nearest == null ? null : nearest.getPlannedDate(),
-                    nearest == null ? 1.0 : nearest.getRemainingAmount());
+            return spentOccurrenceNote(nearest.getPlannedDate(), nearest.getRemainingAmount(),
+                    nearest.isOverridden(), nearest.hasSplit());
 
         } catch (Exception e) {
             return "";
@@ -2004,16 +2007,40 @@ public class BudgetController {
      *
      * <p>Separated from the lookup so the rule can be tested without a forecast or a database.
      *
+     * <p>An occurrence with nothing left got there one of three ways, and they are worth telling
+     * apart because they call for different things from the reader:
+     *
+     * <ul>
+     *   <li><b>A split consumed it.</b>  The money really was spent against this item and the charge
+     *       in hand is a second one.</li>
+     *   <li><b>It was skipped.</b>  Zeroed and marked overridden together, which is what the "won't
+     *       do this occurrence" action does -- the period was deliberately passed over, so nothing
+     *       was spent and there is no earlier charge to go looking for.</li>
+     *   <li><b>Neither.</b>  Zero with no split and no override:  the spreadsheet-delete path zeroes
+     *       in bulk and an ignored overage zeroes on the spot, and neither records itself.  Saying
+     *       "already spent" there would be a guess, so it says only what is certain.</li>
+     * </ul>
+     *
      * @param plannedDate     the nearest occurrence's planned date, or null when there is none
      * @param remainingAmount what is left of it
+     * @param overridden      whether the occurrence was deliberately overridden
+     * @param hasSplit        whether any split is applied to it
      * @return the note to append, including its leading separator, or an empty string
      */
-    static String spentOccurrenceNote(Calendar plannedDate, double remainingAmount) {
+    static String spentOccurrenceNote(Calendar plannedDate, double remainingAmount,
+                                      boolean overridden, boolean hasSplit) {
         if (plannedDate == null || !Utility.isEqualCurrency(remainingAmount, 0.0)) {
             return "";
         }
-        return "  <- its " + Utility.calendarDateToStringDate(plannedDate)
-                + " occurrence is already fully spent";
+        String date = Utility.calendarDateToStringDate(plannedDate);
+
+        if (hasSplit) {
+            return "  <- its " + date + " occurrence is already fully spent";
+        }
+        if (overridden) {
+            return "  <- you skipped its " + date + " occurrence";
+        }
+        return "  <- its " + date + " occurrence has nothing left";
     }
 
     /**

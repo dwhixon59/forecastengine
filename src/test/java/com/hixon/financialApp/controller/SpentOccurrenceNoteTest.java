@@ -36,12 +36,44 @@ class SpentOccurrenceNoteTest {
     }
 
     @Test
-    @DisplayName("A spent occurrence is named, with its date")
+    @DisplayName("An occurrence a split consumed is reported as spent")
     void testSpentOccurrenceIsReported() {
 
-        // The 09-02 occurrence of the Walmart+ Membership item, at zero when the 09-08 charge arrived.
+        // Money really did go out against this item, so the charge in hand is a second one.
         assertEquals("  <- its 09-02-2026 occurrence is already fully spent",
-                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), 0.00));
+                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), 0.00, false, true));
+    }
+
+    @Test
+    @DisplayName("An occurrence that was skipped says so, not that it was spent")
+    void testSkippedOccurrenceIsDistinguished() {
+
+        // Zeroed and overridden together is what the "won't do this occurrence" action leaves behind.
+        // Nothing was spent, so telling the user it was would send them looking for a charge that
+        // does not exist.
+        assertEquals("  <- you skipped its 09-02-2026 occurrence",
+                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), 0.00, true, false));
+    }
+
+    @Test
+    @DisplayName("Zero with neither a split nor an override claims nothing about why")
+    void testUnexplainedZeroIsNotGuessedAt() {
+
+        // The state the Walmart+ occurrence was actually in.  The spreadsheet-delete path zeroes in
+        // bulk and an ignored overage zeroes on the spot, and neither records itself -- so "already
+        // spent" would be a guess.  It says only what is certain.
+        assertEquals("  <- its 09-02-2026 occurrence has nothing left",
+                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), 0.00, false, false));
+    }
+
+    @Test
+    @DisplayName("A split outranks the override flag")
+    void testSplitWinsOverOverridden() {
+
+        // An occurrence can be both consumed and edited.  The split is the fact about where the money
+        // went;  the flag only records that someone changed something.
+        assertEquals("  <- its 09-02-2026 occurrence is already fully spent",
+                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), 0.00, true, true));
     }
 
     @Test
@@ -50,24 +82,26 @@ class SpentOccurrenceNoteTest {
 
         // If there is budget left then the item is a live candidate and the failure to match had some
         // other cause;  claiming otherwise would send the user looking in the wrong place.
-        assertEquals("", BudgetController.spentOccurrenceNote(on(2026, Calendar.OCTOBER, 27), -12.95));
+        assertEquals("", BudgetController.spentOccurrenceNote(on(2026, Calendar.OCTOBER, 27), -12.95, false, false));
+        assertEquals("", BudgetController.spentOccurrenceNote(on(2026, Calendar.OCTOBER, 27), -12.95, true, false),
+                "an overridden occurrence that still has budget is not skipped");
     }
 
     @Test
     @DisplayName("No occurrence nearby means nothing to report")
     void testNoOccurrenceIsSilent() {
 
-        assertEquals("", BudgetController.spentOccurrenceNote(null, 0.00));
+        assertEquals("", BudgetController.spentOccurrenceNote(null, 0.00, false, true));
     }
 
     @Test
-    @DisplayName("A rounding-error remainder counts as spent")
+    @DisplayName("A rounding-error remainder counts as nothing left")
     void testCurrencyComparisonNotExactZero() {
 
         // Currency is compared through the shared threshold, never with ==.  A tenth of a cent left
         // on an occurrence is spent for every purpose the user cares about.
         assertEquals("  <- its 09-02-2026 occurrence is already fully spent",
-                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), -0.0001));
+                BudgetController.spentOccurrenceNote(on(2026, Calendar.SEPTEMBER, 2), -0.0001, false, true));
     }
 
     @Test
