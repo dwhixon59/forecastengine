@@ -26,6 +26,9 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 
 import java.io.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -114,6 +117,15 @@ public class ImportController {
     /**
      * Logger for tracking import events and actions during the import process
      */
+    private static final Logger logger = LogManager.getLogger(ImportController.class);
+
+    /**
+     * How far back of the file's own earliest date to look when checking that every provisional
+     * transaction reached the register.  Wide enough that a charge posted a little earlier than the
+     * file claims is still found, narrow enough not to read the whole register.
+     */
+    private static final int PROVISIONAL_CHECK_LOOKBACK_DAYS = 30;
+
     private final ImportLog importLog = new ImportLog();
 
     /**
@@ -977,6 +989,87 @@ public class ImportController {
     }
 
     /**
+     * Check that every provisional transaction read from the file is now in the register, and say so
+     * when one is not.
+     *
+     * <p>The merge that precedes this decides, row by row, whether a charge is new or already held.
+     * When it is wrong in the "already held" direction the charge is not inserted and nothing is
+     * raised -- the import reports success, the summary lists it as skipped, and the money is simply
+     * absent. The balance check further down the daily update is the only thing that notices, and it
+     * reports a number rather than a cause.
+     *
+     * <p>Matched on the same key the merge uses, payee and amount, because that is the claim being
+     * checked:  the merge said this row corresponds to something in the register, and this asks the
+     * register whether it does.
+     *
+     * @param provisionalTransactions the transactions read from the file, after the merge
+     */
+    private void reportProvisionalTransactionsNotInRegister(List<Transaction> provisionalTransactions) {
+
+        try {
+            // Deliberately not restricted to uncleared rows.  The cleared import runs before this one
+            // and reconciles provisional transactions as it goes, so a charge from this file may
+            // already have been cleared by the time the check runs -- and reporting that as missing
+            // would be a false alarm on a charge that is present and correct.  The question is
+            // whether the register holds it at all.
+            Calendar earliest = null;
+            for (Transaction fromFile : provisionalTransactions) {
+                if (fromFile.getDate() != null && (earliest == null || fromFile.getDate().before(earliest))) {
+                    earliest = fromFile.getDate();
+                }
+            }
+            if (earliest == null) {
+                return;
+            }
+            Calendar from = (Calendar) earliest.clone();
+            from.add(Calendar.DATE, -PROVISIONAL_CHECK_LOOKBACK_DAYS);
+
+            List<Transaction> held = new ArrayList<>();
+            ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() +
+                            " where tr.Register_idRegister = uuid_to_bin('" + register.getId() + "')" +
+                            " and tr.postDate >= " + calendarDateToSqlDateString(from),
+                    "attempting to re-read the register to check the provisional import.");
+            while (rs != null && rs.next()) {
+                held.add(new Transaction(rs));
+            }
+
+            List<Transaction> missing = new ArrayList<>();
+            for (Transaction fromFile : provisionalTransactions) {
+                boolean found = false;
+                for (Transaction inRegister : held) {
+                    if (Objects.equals(fromFile.getPayee(), inRegister.getPayee())
+                            && isEqualCurrency(fromFile.getAmount(), inRegister.getAmount())) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    missing.add(fromFile);
+                }
+            }
+
+            if (missing.isEmpty()) {
+                return;
+            }
+
+            double total = 0.0;
+            view.say("\nWARNING:  these transactions were in the file but are not in the register:");
+            for (Transaction transaction : missing) {
+                total += transaction.getAmount();
+                view.say("   " + calendarDateToStringDate(transaction.getDate()) + "  " +
+                        formatDollarAmount(transaction.getAmount()) + "  " + transaction.getPayee());
+            }
+            view.say("They total " + formatDollarAmount(total) +
+                    ", which is how far the register balance will be out because of them.");
+            view.say("Nothing has been changed.  Re-import the file to pick them up.");
+
+        } catch (Exception e) {
+            // A check that fails must not fail the import it was checking.
+            logger.debug("Could not verify that every provisional transaction reached the register", e);
+        }
+    }
+
+    /**
      * Add a newly imported transaction's amount to the register balance.
      *
      * <p><b>Call this only after the transaction has been saved.</b>  The balance is an accumulated
@@ -1743,6 +1836,21 @@ public class ImportController {
                         // Move to the next provisional transaction:
                         provTrxIndex++;
 
+                        // And past the register row too, when this was a re-process rather than a new
+                        // transaction.  The comparison arrived here as 0 -- the register already holds
+                        // this charge -- and was downgraded to -1 only because its splits or its
+                        // forecast reconciliation did not finish last time.  The row was consumed:  it
+                        // was copied into the provisional slot a few lines above and has just been
+                        // processed.  Leaving the index on it desynchronises the merge, and both lists
+                        // are sorted on the same key, so from that point every remaining provisional is
+                        // compared against a register row that is already behind it.  What follows is a
+                        // run of comparisons greater than zero, which is the "this provisional has
+                        // fallen off the bank's list" branch -- and that branch offers to delete the
+                        // register transaction and reverses its amount out of the balance.
+                        if (alreadyInTheRegister) {
+                            regTrxIndex++;
+                        }
+
                     } else if (comparison == 0) {  // else, if the transaction was previously imported:
 
                         // Log the import event
@@ -1824,6 +1932,22 @@ public class ImportController {
                         regTrxIndex++;
                     } // End else the key to the imported transaction is greater than the key to existing transaction.
                 } // End while there are provisional or register transactions left to process.
+
+                // Every row in the file has to end up in the register, one way or another:  inserted
+                // as new, or matched to a row already there.  This checks that it did.
+                //
+                // It exists because on 09-08-2026 four charges did not.  Klarna $199.05, HelloFresh
+                // $39.96, Google $5.99 and Starbucks $10.91 were each announced as "already imported",
+                // each shown a split belonging to a different transaction, and none of them existed in
+                // the database afterwards -- not in that register, not in any register, at any date.
+                // $255.91 of real spending, gone without an error, and the run reported the register
+                // as off by exactly $255.91 a few lines later without connecting the two.
+                //
+                // Reporting only.  Re-importing here would mean deciding what went wrong, and this
+                // cannot know;  what it can do is make sure the next one is noticed rather than
+                // reconciled away by hand months later.
+                reportProvisionalTransactionsNotInRegister(provisionalTransactions);
+
             } // End if there were any transactions in the provisional transactions file.
 
             // Save off the pending transactions file:
