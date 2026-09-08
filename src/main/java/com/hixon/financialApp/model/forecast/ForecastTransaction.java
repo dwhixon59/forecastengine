@@ -534,6 +534,50 @@ public class ForecastTransaction extends IndependentEntity {
         return forecastTransactions;
     }
 
+    /**
+     * The occurrence of a budget item nearest a date, whether or not anything is left of it.
+     *
+     * <p>Deliberately not filtered on {@code remainingAmount}, unlike almost every other lookup here
+     * -- a spent occurrence is precisely what this is for.  When an import cannot match a charge, the
+     * reason is often that the occurrence it belongs to has already been consumed, and the user is
+     * shown a ranked list of budget items with nothing to say why the obvious one did not take it.
+     *
+     * @param idBudgetItem the budget item whose occurrences to search
+     * @param idForecast   the forecast to search within
+     * @param date         the transaction date to measure from
+     * @param dayWindow    how many days either side to consider;  matching the window the matcher
+     *                     gathers candidates over keeps the answer relevant to why it failed
+     * @return the nearest occurrence, or null when the item has none in that window
+     */
+    public static ForecastTransaction findNearestOccurrenceForBudgetItem(UUID idBudgetItem, UUID idForecast,
+                                                                         Calendar date, int dayWindow)
+            throws EntityException, SQLException {
+        if (idBudgetItem == null || idForecast == null || date == null) {
+            return null;
+        }
+
+        Calendar from = (Calendar) date.clone();
+        from.add(Calendar.DATE, -dayWindow);
+        Calendar to = (Calendar) date.clone();
+        to.add(Calendar.DATE, dayWindow);
+
+        String query = getSelectQuery() +
+                " inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem" +
+                " where fi.BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "')" +
+                " and fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "')" +
+                " and ft.plannedDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to) +
+                " order by abs(datediff(ft.plannedDate, " + Utility.calendarDateToSqlDateString(date) +
+                ")) asc, ft.plannedDate asc";
+
+        ResultSet rs = EntityInt.getRS(query, "Database error encountered looking for the nearest occurrence of " +
+                "budget item " + idBudgetItem + ".");
+        if (rs != null && rs.next()) {
+            return new ForecastTransaction(rs);
+        }
+        return null;
+    }
+
     public static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 

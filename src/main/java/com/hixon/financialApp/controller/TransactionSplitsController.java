@@ -149,9 +149,11 @@ public class TransactionSplitsController {
             // Assume we will get this done in one iteration:
             done = true;
 
-            // Show the assigned budget items to the user:
+            // Show the assigned budget items to the user.  The date goes with them so a periodic item
+            // whose occurrence is already spent can say so -- which is usually why the list is being
+            // shown at all rather than the charge having been matched.
             budgetController.showBudgetItemsForMerchant(budgetItemsForMerchant, relevancyScores,
-                    transaction.getAmount(), memoSuggestion, memoExtraRow != null);
+                    transaction.getAmount(), memoSuggestion, memoExtraRow != null, transaction.getDate());
 
             /*
              * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the

@@ -1901,6 +1901,20 @@ public class BudgetController {
     public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
                                            double amount, MemoBudgetItemHistory.Suggestion memoSuggestion,
                                            boolean suggestionIsUnassociated) throws Exception {
+        showBudgetItemsForMerchant(budgetItemMerchants, relevancyScores, amount, memoSuggestion,
+                suggestionIsUnassociated, null);
+    }
+
+    /**
+     * As above, with the transaction's date, so a periodic item whose occurrence has already been
+     * spent can say so.
+     *
+     * @param transactionDate the date of the transaction being assigned, or null to skip the check
+     */
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
+                                           double amount, MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                           boolean suggestionIsUnassociated, Calendar transactionDate)
+            throws Exception {
         view.say("The assigned budget items and amounts (if specified) for this merchant are:");
         int i = 1;
         for (BudgetItemMerchant budgetItemMerchant : budgetItemMerchants) {
@@ -1925,10 +1939,81 @@ public class BudgetController {
             }
 
             line += memoAnnotation(budgetItemMerchant, memoSuggestion, suggestionIsUnassociated);
+            line += spentOccurrenceAnnotation(budgetItemMerchant, transactionDate);
 
             view.say(line);
             i++;
         }
+    }
+
+    /**
+     * How far either side of a transaction to look for the occurrence it belongs to.  The same window
+     * the matcher gathers candidates over, so the note explains the decision the matcher just made.
+     */
+    private static final int SPENT_OCCURRENCE_DAY_WINDOW = 14;
+
+    /**
+     * The trailing note saying that a periodic item's occurrence has already been spent.
+     *
+     * <p>Answers a question the ranked list otherwise leaves hanging.  A Walmart+ membership charge
+     * of $12.95 on 09-08-2026 was offered "Groceries ... $-13 Monthly ... Walmart+ Membership" at a
+     * relevancy of 79.4 and no explanation of why it had not simply been assigned there.  It had not
+     * because every occurrence of that item near the date was already at zero -- there was nothing
+     * to match against, and nothing said so.
+     *
+     * <p>Reporting is read-only and best-effort:  a failure here costs the note, never the prompt.
+     */
+    private String spentOccurrenceAnnotation(BudgetItemMerchant budgetItemMerchant, Calendar transactionDate) {
+        if (transactionDate == null || forecast == null) {
+            return "";
+        }
+        try {
+            BudgetItem budgetItem = budgetItemMerchant.getBudgetItem();
+            if (budgetItem == null || !reportsSpentOccurrences(budgetItem.getHowOccurs())) {
+                return "";
+            }
+
+            ForecastTransaction nearest = ForecastTransaction.findNearestOccurrenceForBudgetItem(
+                    budgetItem.getId(), forecast.getId(), transactionDate, SPENT_OCCURRENCE_DAY_WINDOW);
+
+            return spentOccurrenceNote(nearest == null ? null : nearest.getPlannedDate(),
+                    nearest == null ? 1.0 : nearest.getRemainingAmount());
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Which kinds of budget item this note applies to.
+     *
+     * <p>Only {@code PERIODIC}.  A {@code COLLECTION} item is expected to be drawn down across many
+     * charges and already says so in its own words when it runs out -- the overage prompt asks what
+     * to do about it.  An {@code UNPLANNED} item generates no occurrences at all, so there is never
+     * one to have been spent.  Saying it for either would be noise at best and wrong at worst.
+     *
+     * @param howOccurs the budget item's kind, or null
+     * @return true when a spent occurrence is worth reporting for this kind of item
+     */
+    static boolean reportsSpentOccurrences(Item.HowOccurs howOccurs) {
+        return howOccurs == Item.HowOccurs.PERIODIC;
+    }
+
+    /**
+     * The note itself, given what was found.
+     *
+     * <p>Separated from the lookup so the rule can be tested without a forecast or a database.
+     *
+     * @param plannedDate     the nearest occurrence's planned date, or null when there is none
+     * @param remainingAmount what is left of it
+     * @return the note to append, including its leading separator, or an empty string
+     */
+    static String spentOccurrenceNote(Calendar plannedDate, double remainingAmount) {
+        if (plannedDate == null || !Utility.isEqualCurrency(remainingAmount, 0.0)) {
+            return "";
+        }
+        return "  <- its " + Utility.calendarDateToStringDate(plannedDate)
+                + " occurrence is already fully spent";
     }
 
     /**
