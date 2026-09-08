@@ -18,8 +18,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.List;
 import java.util.Locale;
 
 import static java.util.Calendar.*;
@@ -879,29 +881,124 @@ public class Utility {
         }
     }
 
-    /*
-     *  US bank holidays for 2025:
-     *  New Year’s Day – Wednesday, January 1, 2025
-     *  Martin Luther King Jr. Day – Monday, January 20, 2025
-     *  Presidents Day (Washington’s Birthday) – Monday, February 17, 2025
-     *  Memorial Day – Monday, May 26, 2025
-     *  Juneteenth National Independence Day – Thursday, June 19, 2025
-     *  Independence Day – Friday, July 4, 2025
-     *  Labor Day – Monday, September 1, 2025
-     *  Columbus Day / Indigenous Peoples’ Day – Monday, October 13, 2025
-     *  Veterans Day – Tuesday, November 11, 2025
-     *  Thanksgiving Day – Thursday, November 27, 2025
-     *  Christmas Day – Thursday, December 25, 2025
+    /**
+     * Whether a date is a US bank holiday, computed rather than listed.
+     *
+     * <p>This was a hardcoded array of the eleven 2025 dates.  It went stale in January and nothing
+     * said so:  by September 2026 every holiday in the year was being counted as a business day.
+     * That is not cosmetic -- {@link #businessDaysBeteween} feeds the date-proximity half of the
+     * forecast match score, so a holiday inside the gap moves the score by eight points.  A Walmart+
+     * membership charge on 09-08-2026 scored 68 against its occurrence and missed the 70 threshold
+     * by two;  with Labor Day 2026 counted, the gap is three business days rather than four, the
+     * score is 76, and it matches.  {@link #setToLastBusinessDayBefore} reads the same table, so
+     * planned dates were shifted by it too.
+     *
+     * <p>The eleven federal holidays are all defined by rule -- a fixed date, or an nth weekday of a
+     * month -- so they are derived for whatever year is asked about and cannot go stale again.
+     *
+     * <p>Observance follows the Federal Reserve, which is what "bank holiday" means here:  a fixed
+     * date falling on a Sunday is observed the following Monday, and one falling on a Saturday is
+     * <em>not</em> moved to the Friday -- Reserve Banks are open that day.  Since the callers skip
+     * weekends anyway, only the Sunday rule can change an answer.
+     *
+     * @param date the date to test, formatted as {@code MM-dd-yyyy}
+     * @return true if banks are closed that day
      */
     public static boolean isaBankHoliday(String date) {
-        String holidays[] = {"01-01-2025", "01-20-2025", "02-17-2025", "05-26-2025", "06-19-2025", "07-04-2025",
-                "09-01-2025", "10-13-2025", "11-11-2025", "11-27-2025", "12-25-2025"};
-        for (int i = 0; i < holidays.length; i++) {
-            if (date.equalsIgnoreCase(holidays[i])) {
+        if (date == null) {
+            return false;
+        }
+        try {
+            String[] parts = date.split("-");
+            if (parts.length != 3) {
+                return false;
+            }
+            Calendar calendar = Calendar.getInstance();
+            calendar.clear();
+            calendar.set(Integer.parseInt(parts[2]), Integer.parseInt(parts[0]) - 1, Integer.parseInt(parts[1]));
+            return isaBankHoliday(calendar);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * As {@link #isaBankHoliday(String)}, without going through a formatted string.
+     *
+     * @param date the date to test
+     * @return true if banks are closed that day
+     */
+    public static boolean isaBankHoliday(Calendar date) {
+        if (date == null) {
+            return false;
+        }
+        int year = date.get(YEAR);
+        for (Calendar holiday : bankHolidaysFor(year)) {
+            if (dateOnlyCompare(holiday, date) == 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The eleven US federal bank holidays observed in a given year.
+     *
+     * <p>Six are fixed dates and five are an nth weekday of a month.  Fixed ones are shifted to the
+     * Monday when they land on a Sunday;  see {@link #isaBankHoliday(String)} for why Saturday is
+     * left alone.
+     *
+     * @param year the calendar year
+     * @return the observed dates, in no particular order
+     */
+    public static List<Calendar> bankHolidaysFor(int year) {
+        List<Calendar> holidays = new ArrayList<>();
+
+        holidays.add(observedFixedHoliday(year, JANUARY, 1));      // New Year's Day
+        holidays.add(nthWeekdayOfMonth(year, JANUARY, MONDAY, 3));  // Martin Luther King Jr. Day
+        holidays.add(nthWeekdayOfMonth(year, FEBRUARY, MONDAY, 3)); // Presidents Day
+        holidays.add(lastWeekdayOfMonth(year, MAY, MONDAY));        // Memorial Day
+        holidays.add(observedFixedHoliday(year, JUNE, 19));         // Juneteenth
+        holidays.add(observedFixedHoliday(year, JULY, 4));          // Independence Day
+        holidays.add(nthWeekdayOfMonth(year, SEPTEMBER, MONDAY, 1));// Labor Day
+        holidays.add(nthWeekdayOfMonth(year, OCTOBER, MONDAY, 2));  // Columbus Day
+        holidays.add(observedFixedHoliday(year, NOVEMBER, 11));     // Veterans Day
+        holidays.add(nthWeekdayOfMonth(year, NOVEMBER, THURSDAY, 4));// Thanksgiving Day
+        holidays.add(observedFixedHoliday(year, DECEMBER, 25));     // Christmas Day
+
+        return holidays;
+    }
+
+    /** A fixed-date holiday, moved to the Monday when it falls on a Sunday. */
+    private static Calendar observedFixedHoliday(int year, int month, int dayOfMonth) {
+        Calendar date = Calendar.getInstance();
+        date.clear();
+        date.set(year, month, dayOfMonth);
+        if (date.get(DAY_OF_WEEK) == SUNDAY) {
+            date.add(DATE, 1);
+        }
+        return date;
+    }
+
+    /** The nth given weekday of a month, e.g. the third Monday of January. */
+    private static Calendar nthWeekdayOfMonth(int year, int month, int dayOfWeek, int occurrence) {
+        Calendar date = Calendar.getInstance();
+        date.clear();
+        date.set(year, month, 1);
+        int daysToFirst = (dayOfWeek - date.get(DAY_OF_WEEK) + 7) % 7;
+        date.add(DATE, daysToFirst + (occurrence - 1) * 7);
+        return date;
+    }
+
+    /** The last given weekday of a month, e.g. the last Monday of May. */
+    private static Calendar lastWeekdayOfMonth(int year, int month, int dayOfWeek) {
+        Calendar date = Calendar.getInstance();
+        date.clear();
+        date.set(year, month, 1);
+        date.set(DATE, date.getActualMaximum(DATE));
+        int daysBack = (date.get(DAY_OF_WEEK) - dayOfWeek + 7) % 7;
+        date.add(DATE, -daysBack);
+        return date;
     }
 
     // Create a file:
