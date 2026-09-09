@@ -475,8 +475,12 @@ public class TransactionSplitsController {
                                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 
                         if (associate.equalsIgnoreCase("y")) {
-                            // Add to merchant permanently and re-display updated budget items
-                            budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                            // Record the item the user just picked, then re-display the updated list.
+                            // Deliberately not assignBudgetItemsToMerchant:  that prompts for a budget
+                            // item of its own and never looks at selectedBudgetItem, so confirming the
+                            // association used to throw the choice away and start the search again.
+                            budgetController.associateBudgetItemWithMerchant(merchant, selectedBudgetItem,
+                                    budgetItemsForMerchant);
                             done = false;  // Re-loop to show updated list and ask for amounts
                         } else {
                             // One-time use: create a transient BudgetItemMerchant (unsaved) and add split

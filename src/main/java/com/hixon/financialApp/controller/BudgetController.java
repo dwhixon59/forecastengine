@@ -496,6 +496,61 @@ public class BudgetController {
     }
 
     /**
+     * Record an association the user has already chosen between a budget item and a merchant.
+     *
+     * <p>Split out of {@link #assignBudgetItemsToMerchant}, which prompts for the budget item
+     * itself.  A caller that has <em>already</em> asked the user which budget item they want must
+     * not call that method:  it ignores the choice and starts a fresh search from nothing.  On
+     * 09-08-2026 a user picked "Danni's Work Expenses - Food for work" for merchant 7-Eleven and
+     * confirmed the permanent association, and was then asked to search for a budget item from
+     * scratch -- the redisplayed list did not contain the item they had just chosen, and they had to
+     * find and pick it a second time.
+     *
+     * @param merchant               the merchant to associate with
+     * @param selectedBudgetItem     the budget item the caller already obtained from the user
+     * @param budgetItemsForMerchant the in-memory list, kept in step with the database
+     * @return true when the association was added to the list, false when it was already there
+     */
+    public boolean associateBudgetItemWithMerchant(Merchant merchant, BudgetItem selectedBudgetItem,
+                                                   List<BudgetItemMerchant> budgetItemsForMerchant)
+            throws Exception {
+
+        if (selectedBudgetItem == null || budgetItemsForMerchant == null) {
+            return false;
+        }
+
+        // If the budget item is already associated with this merchant in memory, there is nothing to do:
+        if (isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
+            view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                    "associated with the merchant \"" + merchant.getName() + "\".");
+            return false;
+        }
+
+        // Check whether the association already exists in the database (it might not be in the in-memory list):
+        BudgetItemMerchant existingAssociation =
+                BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
+
+        if (existingAssociation == null) {
+
+            // The association doesn't exist in the database, so it is safe to create.  The user has already
+            // selected this budget item, so add it without asking again:
+            BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(merchant, selectedBudgetItem);
+            budgetItemMerchant.save();
+            budgetItemsForMerchant.add(budgetItemMerchant);
+
+        } else {
+
+            // The association already exists in the database, so use the existing one:
+            view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                    "associated with the merchant \"" + merchant.getName() + "\" in the database.");
+            existingAssociation.setBudgetItem(selectedBudgetItem);
+            budgetItemsForMerchant.add(existingAssociation);
+        }
+
+        return true;
+    }
+
+    /**
      * Assign budget items to an existing list of budget items for a merchant.  There does not need to be any budget
      * items in the list that is provided.
      *
@@ -517,53 +572,10 @@ public class BudgetController {
                 view.say("\nSelect a budget item to add to merchant '" + merchant.getName() + "'.");
             }
 
-            boolean firstTime = true;
-            boolean done = false;
-            int percentage = 0;
-            double amount = 0.0;
-            BudgetItem firstSelectedBudgetItem = null;
-            BudgetItem selectedBudgetItem = null;
-            while (!done) {
-
-                // Get a budget item that the user wants to associate with this merchant:
-                selectedBudgetItem = getBudgetItemByNameFullText(null);
-                BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(merchant, selectedBudgetItem);
-
-                // then if the budget item isn't already associated with this merchant:
-                if (!isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
-
-                    // Check if the association already exists in the database (might not be in the in-memory list)
-                    BudgetItemMerchant existingAssociation = BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
-
-                    if (existingAssociation == null) {
-                        // Association doesn't exist in database - safe to create.
-                        // The user just searched for and selected this budget item, so add it automatically.
-                        firstTime = false;
-
-                        // Associate the budget item with the merchant in the database:
-                        budgetItemMerchant.save();
-
-                        // Add the budget item to the list of budget items passed in:
-                        budgetItemsForMerchant.add(budgetItemMerchant);
-                    } else {
-                        // Association already exists in database - use existing one
-                        view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
-                                "associated with the merchant \"" + merchant.getName() + "\" in the database.");
-
-                        // Add the existing association to the in-memory list
-                        existingAssociation.setBudgetItem(selectedBudgetItem);
-                        budgetItemsForMerchant.add(existingAssociation);
-                    }
-                } else {
-                    // Tell the user that this budget item is already associated with this merchant:
-                    view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
-                            "associated with the merchant \"" + merchant.getName() + "\".");
-                }
-
-                // User is done after selecting one budget item
-                done = true;
-
-            } // End while there are budget items to enter.
+            // Get a budget item that the user wants to associate with this merchant, then record it.
+            // The recording half is shared with callers that already know which budget item the user
+            // chose -- see associateBudgetItemWithMerchant:
+            associateBudgetItemWithMerchant(merchant, getBudgetItemByNameFullText(null), budgetItemsForMerchant);
 
         } catch (CancelException | QuitException | SkipException e) {
             throw e;
