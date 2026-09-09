@@ -681,8 +681,12 @@ public class ForecastController {
                     view.say("You exceeded the remaining amount for this budget item by " +
                             Utility.formatDollarAmount(
                                     calculateOverage(isIncome, remainingInPeriod, split.getAmount())) + ".  ");
-                    ForecastTransactionIterator it = ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(
-                            split.getIdBudgetItem(), forecast.getId());
+                    // Roll-forward targets only:  the occurrence being overdrawn, and everything
+                    // before it, are excluded.  A partly-overdrawn occurrence still has a non-zero
+                    // remainder, so the unfiltered lookup used to return that same occurrence as the
+                    // thing to roll into -- see getRollForwardTargets.
+                    ForecastTransactionIterator it = ForecastTransaction.getRollForwardTargets(
+                            split.getIdBudgetItem(), forecast.getId(), forecastTransaction);
                     ForecastTransaction nextNonZeroForecastTransaction = it.getNext();
 
                     // Both occurrences, each labelled with the answer it belongs to.  Only "roll"

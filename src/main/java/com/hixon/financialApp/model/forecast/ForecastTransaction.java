@@ -578,6 +578,68 @@ public class ForecastTransaction extends IndependentEntity {
         return null;
     }
 
+    /**
+     * The occurrences a roll-forward may move an overage into:  everything with something left,
+     * except the occurrence being overdrawn and everything before it.
+     *
+     * <p>{@link #getNonZeroForecastTransactionsForBudgetItem} is deliberately not used here.  It
+     * filters on {@code remainingAmount <> 0} and orders from the start of the forecast, so when an
+     * occurrence is only <em>partly</em> overdrawn -- the split is larger than what is left, but
+     * something is still left -- that occurrence is itself the first row it returns.  Rolling then
+     * deducts the overage from the very occurrence it is rolling out of, double-counting the split
+     * against one period.  On 09-08-2026 a $-4.99 charge against an occurrence holding $-3.18
+     * offered "Roll would use" and named that same 09-04 occurrence.
+     *
+     * <p>The date floor matters as much as the exclusion:  matching by id alone would still admit
+     * <em>earlier</em> occurrences, moving an overage backwards into a period that has already been
+     * reported and closed.  Same-day siblings are allowed through, being neither the overdrawn
+     * occurrence nor in the past.
+     *
+     * @param idBudgetItem the budget item whose occurrences to roll into
+     * @param idForecast   the forecast to search within
+     * @param overdrawn    the occurrence being overdrawn, excluded along with everything before it
+     * @return the occurrences a roll-forward may use, earliest first;  possibly empty
+     */
+    public static ForecastTransactionIterator getRollForwardTargets(UUID idBudgetItem, UUID idForecast,
+                                                                    ForecastTransaction overdrawn)
+            throws EntityException {
+
+        if (overdrawn == null) {
+            return getNonZeroForecastTransactionsForBudgetItem(idBudgetItem, idForecast);
+        }
+
+        ResultSet rs = EntityInt.getRS(rollForwardTargetQuery(idBudgetItem, idForecast, overdrawn),
+                "Database error occurred attempting to " +
+                        "get the roll-forward targets for budget item " + idBudgetItem + ".");
+
+        return new ForecastTransactionDatabaseIterator(rs);
+    }
+
+    /**
+     * The SQL behind {@link #getRollForwardTargets}, extracted so the two clauses that make it
+     * different from an ordinary non-zero lookup can be asserted without a database.
+     *
+     * <p>Both clauses are load-bearing.  Without the id exclusion a partly-overdrawn occurrence
+     * matches {@code remainingAmount <> 0} and comes back as its own roll-forward target;  without
+     * the date floor the query would happily return an earlier occurrence and move the overage
+     * backwards into a period that has already been reported.
+     *
+     * @param idBudgetItem the budget item whose occurrences to roll into
+     * @param idForecast   the forecast to search within
+     * @param overdrawn    the occurrence being overdrawn
+     * @return the SQL
+     */
+    static String rollForwardTargetQuery(UUID idBudgetItem, UUID idForecast, ForecastTransaction overdrawn) {
+        return getSelectQuery() + " " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "where ft.remainingAmount <> 0 and " +
+                "fi.BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') and " +
+                "fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "') and " +
+                "ft.plannedDate >= " + Utility.calendarDateToSqlDateString(overdrawn.getPlannedDate()) + " and " +
+                "ft.idForecastTransaction <> uuid_to_bin('" + overdrawn.getId() + "') " +
+                "order by ft.plannedDate asc ";
+    }
+
     public static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 
