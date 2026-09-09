@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition;
+
 import java.util.Calendar;
 import java.util.Collections;
 
@@ -363,6 +365,93 @@ public class ImportSummaryControllerTest {
             summaryController.showSummaryAndRecategorize();
 
             verify(mockView, never()).say(contains("Provisional"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Occurrence due date")
+    class OccurrenceDueDate {
+
+        private Calendar on(int year, int month, int day) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(year, month, day, 0, 0, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            return calendar;
+        }
+
+        @Test
+        @DisplayName("A planned occurrence shows the date it was planned for")
+        void testPlannedOccurrenceShowsDate() {
+
+            // The case the segment exists for:  the item planned 09-09 and the charge was assigned
+            // to it, so the date tells the user which occurrence absorbed the money.
+            assertEquals(" [due 09-09-2026]",
+                    ImportSummaryController.occurrenceSuffix(
+                            on(2026, Calendar.SEPTEMBER, 9), false, SplitDisposition.ASSIGN));
+        }
+
+        @Test
+        @DisplayName("An unplanned occurrence shows nothing")
+        void testUnplannedOccurrenceShowsNothing() {
+
+            // On-demand items generate no occurrences, so the one a split links to was created for
+            // that split and dated from the transaction.  The 09-07-2026 summary read
+            //   Bill Pay Danni  +$261.00  Other [due 09-03-2026]
+            // for a transaction dated 09-03 -- the Date column two fields to the left, restated.
+            assertEquals("",
+                    ImportSummaryController.occurrenceSuffix(
+                            on(2026, Calendar.SEPTEMBER, 3), true, SplitDisposition.ASSIGN),
+                    "an item that planned nothing has no due date to report");
+        }
+
+        @Test
+        @DisplayName("A rolled split says so, rather than implying the money came from that date")
+        void testRolledSplitIsAnnotated() {
+
+            // The 09-07-2026 summary said "[due 09-02-2026]" for a split the same run had just
+            // reported as "deducted from ... Planned date = 09-09".  The link records the period the
+            // spend belongs to;  ROLL_FORWARD records that later occurrences paid for it.
+            assertEquals(" [due 09-02-2026, rolled forward]",
+                    ImportSummaryController.occurrenceSuffix(
+                            on(2026, Calendar.SEPTEMBER, 2), false, SplitDisposition.ROLL_FORWARD));
+        }
+
+        @Test
+        @DisplayName("Unplanned wins over a roll, since there is still no date worth showing")
+        void testUnplannedRolledShowsNothing() {
+
+            // Annotating a date that should not be printed at all would be worse than either bug.
+            assertEquals("",
+                    ImportSummaryController.occurrenceSuffix(
+                            on(2026, Calendar.SEPTEMBER, 3), true, SplitDisposition.ROLL_FORWARD));
+        }
+
+        @Test
+        @DisplayName("Other dispositions are not annotated")
+        void testOtherDispositionsAreUnannotated() {
+
+            // Only ROLL_FORWARD moves the money off the linked occurrence.  ADJUST re-budgets it and
+            // DISPUTE flags the transaction;  in both the linked date is where the money went, so
+            // adding a note would say something untrue.
+            for (SplitDisposition disposition :
+                    new SplitDisposition[]{SplitDisposition.ADJUST, SplitDisposition.DISPUTE,
+                                           SplitDisposition.IGNORE, SplitDisposition.ZERO_OUT}) {
+                assertEquals(" [due 09-09-2026]",
+                        ImportSummaryController.occurrenceSuffix(
+                                on(2026, Calendar.SEPTEMBER, 9), false, disposition),
+                        disposition + " does not move the money to another occurrence");
+            }
+        }
+
+        @Test
+        @DisplayName("A missing date or disposition is not an error")
+        void testMissingValuesTolerated() {
+
+            // This runs while rendering a summary the user is waiting on;  a null must drop the
+            // segment, not the summary.
+            assertEquals("", ImportSummaryController.occurrenceSuffix(null, false, SplitDisposition.ASSIGN));
+            assertEquals(" [due 09-09-2026]",
+                    ImportSummaryController.occurrenceSuffix(on(2026, Calendar.SEPTEMBER, 9), false, null));
         }
     }
 

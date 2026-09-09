@@ -2,11 +2,15 @@ package com.hixon.financialApp.utility;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.budget.MemoBudgetItemHistory;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastItem;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.view.base.ViewInt;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -20,6 +24,17 @@ import java.util.UUID;
 public class ForecastTransactionMatcher {
 
     /**
+     * Where the matcher explains itself.
+     *
+     * <p>The "[Phase2.5]" trace was written to the user's view while the scoring was being tuned,
+     * which put a dozen lines of candidate arithmetic between the user and the question they were
+     * being asked.  It is diagnostic, so it goes to the log; log4j2.properties turns it on for this
+     * class when the scoring needs looking at again.  Nothing about it is temporary any more --
+     * the trace is the only record of why a match was or was not made.
+     */
+    private static final Logger logger = LogManager.getLogger(ForecastTransactionMatcher.class);
+
+    /**
      * Maximum fractional difference between a cleared transaction amount and a forecast
      * transaction's remaining amount that is still considered close enough to auto-assign
      * WITHOUT asking the user. If a candidate forecast transaction matches on merchant/date
@@ -31,6 +46,40 @@ public class ForecastTransactionMatcher {
      * do not have to re-add this safeguard each time a new institution is introduced.
      */
     public static final double AUTO_MATCH_AMOUNT_TOLERANCE = 0.05; // 5%
+
+    /**
+     * The score at or above which a candidate is confident enough to assign without asking.
+     *
+     * <p>Named rather than repeated as a literal because {@link #selectMatch} has to say something
+     * precise about it:  the threshold is evaluated on the <b>memo-free</b> score.
+     */
+    public static final double AUTO_MATCH_THRESHOLD = 70.0;
+
+    /**
+     * What a transfer memo is worth when it names the budget item behind a candidate.
+     *
+     * <p>Half of the {@code MEMO_BONUS} the ranked budget item list uses, and for a reason.  There
+     * the memo orders a list the user is about to read; here it chooses between candidates the
+     * matcher is about to assign <em>silently</em>.  A tie-break is all it may be, so it is worth
+     * less than the smallest factual input (merchant agreement, 0-20) and cannot on its own overturn
+     * a candidate that is a business day closer (-8/day) or a percent nearer on amount.
+     *
+     * <p>Only planned transfers are scored here -- on-demand budget items generate no forecast
+     * transactions at all -- but that is a smaller restriction than it sounds:  of the memo-bearing
+     * single-split transfers since 2025, 356 went to an item that does generate them against 169
+     * that did not.  Transfers in general go mostly to on-demand items; the ones carrying a memo do
+     * not.
+     *
+     * <p>What is left is near-identical candidates in one register, which is exactly the case a
+     * tie-break is for.  <i>Children's allowances</i> and <i>Justin's Weekly Expenses</i> are both
+     * planned, both in Bill Pay Dave, and their amounts collide -- nine transfers at $-30.00 to the
+     * second and one to the first -- so on such a week the memo (<i>JUSTIN SPENDING MONEY JDH</i>
+     * against <i>GAS FOR JDH</i>) is the only thing that names which was meant.  Note what is
+     * <b>not</b> an example:  a paycheck.  A memo exists only on a user-initiated online transfer,
+     * so an inbound direct deposit never carries one and this can never separate <i>David's net pay
+     * 1</i> from <i>David's net pay 2</i>.
+     */
+    public static final double MEMO_TIE_BREAK = 15.0;
 
     /**
      * What the bank reference numbers alone say about a candidate, before any scoring.
@@ -129,6 +178,197 @@ public class ForecastTransactionMatcher {
     }
 
     /**
+     * Whether a cleared transaction's amount is close enough to a candidate occurrence to assign it
+     * without asking, judged against <em>either</em> of the two amounts that occurrence carries.
+     *
+     * <p>The safeguard exists to stop a $1,200 charge being auto-assigned to a $50 planned expense,
+     * and comparing against the <b>remaining</b> amount is the right test for an occurrence that has
+     * been partly consumed already.  But remaining and budgeted do drift apart, and when they do the
+     * remaining-only test raises a false alarm on a transaction that matches the plan exactly:
+     * observed on 09-04-2026, a $309.23 State Farm charge against an item budgeting $309.00 whose
+     * occurrence was carrying a remaining of $563.72.  The user was asked, answered "adjust", and
+     * re-budgeted the item by 23 cents for no reason.
+     *
+     * <p>So a match against either amount is enough.  Nothing the safeguard was built to catch gets
+     * through:  a wildly wrong amount is wildly wrong against both.
+     *
+     * @param transactionAmount the cleared transaction amount (sign ignored)
+     * @param remainingAmount   the occurrence's remaining amount (sign ignored)
+     * @param budgetedAmount    the budget item's planned amount for the occurrence (sign ignored)
+     * @return true if the amounts are close enough to auto-assign
+     */
+    public static boolean isAmountPlausibleForAutoMatch(double transactionAmount,
+                                                        double remainingAmount,
+                                                        double budgetedAmount) {
+        return isAmountWithinAutoMatchTolerance(transactionAmount, remainingAmount)
+                || isAmountWithinAutoMatchTolerance(transactionAmount, budgetedAmount);
+    }
+
+    /**
+     * One candidate the matcher scored, with the memo's opinion of it kept separate.
+     *
+     * <p>Separate deliberately:  {@link #selectMatch} ranks candidates on the total and tests the
+     * threshold on the score alone, and it can only do that if nothing has already added the two
+     * together.
+     *
+     * @param candidate the forecast transaction that was scored
+     * @param score     its memo-free match score, 0-100
+     * @param memoBonus {@link #MEMO_TIE_BREAK} if the memo names this candidate's budget item, else 0
+     */
+    public record ScoredCandidate(ForecastTransaction candidate, double score, double memoBonus) {
+
+        /**
+         * @return the score candidates are ranked against each other on
+         */
+        public double total() {
+            return score + memoBonus;
+        }
+
+        /**
+         * @return true if this candidate is confident enough to assign without asking, on its own
+         *         score and without any help from the memo
+         */
+        public boolean qualifies() {
+            return score >= AUTO_MATCH_THRESHOLD;
+        }
+    }
+
+    /**
+     * Pick the auto-match from the scored candidates.
+     *
+     * <p><b>The invariant:</b>  {@link #AUTO_MATCH_THRESHOLD} is evaluated on the memo-free score,
+     * and only candidates that already clear it on their own are ranked at all.  The memo can change
+     * <em>which</em> candidate wins; it can never change <em>whether</em> one wins.  That is the
+     * rule the whole feature obeys -- the memo prefers a budget item, it never selects one --
+     * expressed as a single testable property, and it means no memo, however emphatic, can push a
+     * marginal candidate into a silent assignment.
+     *
+     * <p>With no memo every bonus is zero and this reduces to "the highest score wins, earliest on a
+     * tie", which is exactly what the scoring loop did before the memo existed.
+     *
+     * <p>Only {@link ReferenceVerdict#UNDECIDED} candidates reach here.  A
+     * {@link ReferenceVerdict#CERTAIN} one has already been returned and a
+     * {@link ReferenceVerdict#RULED_OUT} one was never scored, so the memo is structurally
+     * unreachable for both:  the bank reference is the stronger fact and stays that way by ordering
+     * rather than by a rule someone has to remember.
+     *
+     * @param scored the candidates that were scored, in the order they were considered
+     * @return the winning forecast transaction, or null if none reached the threshold on its own
+     */
+    public static ForecastTransaction selectMatch(List<ScoredCandidate> scored) {
+        ScoredCandidate best = selectBest(scored);
+        return (best == null) ? null : best.candidate();
+    }
+
+    /**
+     * As {@link #selectMatch}, keeping the winner's scores so the caller can report them.
+     *
+     * @param scored the candidates that were scored, in the order they were considered
+     * @return the winning candidate, or null if none reached the threshold on its own score
+     */
+    static ScoredCandidate selectBest(List<ScoredCandidate> scored) {
+
+        ScoredCandidate best = null;
+        for (ScoredCandidate candidate : scored) {
+
+            // The threshold, on the memo-free score.  A candidate the matcher would not have
+            // assigned without the memo is not a candidate the memo gets to vote on.
+            if (!candidate.qualifies()) {
+                continue;
+            }
+
+            // Among those, the memo is allowed to decide the order.  Strictly greater, so that the
+            // earliest of equal candidates wins as it always has.
+            if (best == null || candidate.total() > best.total()) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The best-scoring candidate with the memo left out of it, for the tuning output only.
+     *
+     * <p>TEMP (Phase 2.5) -- remove with the instrumentation it feeds.
+     *
+     * @param scored the candidates that were scored
+     * @return the highest memo-free score, or null if nothing scored above zero
+     */
+    private static ScoredCandidate highestScoringCandidate(List<ScoredCandidate> scored) {
+
+        ScoredCandidate highest = null;
+        for (ScoredCandidate candidate : scored) {
+            if (candidate.score() > 0.0 && (highest == null || candidate.score() > highest.score())) {
+                highest = candidate;
+            }
+        }
+        return highest;
+    }
+
+    /**
+     * The memo's opinion of one candidate.
+     *
+     * <p>Failing to read the candidate's budget item is not worth an abandoned import.  It means the
+     * memo says nothing about this candidate, which is what it says about most of them anyway.
+     *
+     * @param candidate  the forecast transaction being scored
+     * @param suggestion what the memo history suggests, or null when there is no memo or no history
+     * @return {@link #MEMO_TIE_BREAK} if the memo's budget item is this candidate's, otherwise 0
+     */
+    static double memoTieBreak(ForecastTransaction candidate, MemoBudgetItemHistory.Suggestion suggestion) {
+
+        if (candidate == null || suggestion == null || suggestion.budgetItem() == null) {
+            return 0.0;
+        }
+
+        UUID suggested = suggestion.budgetItem().getId();
+        if (suggested == null) {
+            return 0.0;
+        }
+
+        try {
+            ForecastItem forecastItem = candidate.getForecastItem();
+            return (forecastItem != null && suggested.equals(forecastItem.getIdBudgetItem()))
+                    ? MEMO_TIE_BREAK : 0.0;
+        } catch (Exception e) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * Ask the history what this transaction's memo has meant before, in the budget this forecast
+     * projects.
+     *
+     * <p>A failure here must never cost the user an import:  the memo is a tie-break, and every
+     * question the import asks works exactly as it did without one, so a broken lookup degrades to
+     * the behaviour that shipped before this feature.
+     *
+     * @param transaction the cleared transaction being matched
+     * @param forecast    the forecast being matched against
+     * @return the suggestion, or null if there is no memo, no history, or the lookup failed
+     */
+    private static MemoBudgetItemHistory.Suggestion lookUpMemoSuggestion(Transaction transaction, Forecast forecast) {
+
+        if (transaction == null || forecast == null) {
+            return null;
+        }
+
+        // Answer the common case without touching the database.  Most transactions carry no memo at
+        // all -- every non-transfer, and the growing majority of transfers -- and loading the budget
+        // to ask a question with no subject would be a query per imported transaction for nothing.
+        String memo = transaction.getUserDescription();
+        if (memo == null || memo.isBlank()) {
+            return null;
+        }
+
+        try {
+            return new MemoBudgetItemHistory().lookup(transaction, forecast.getBudget());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Attempts to find a matching forecast transaction for a cleared transaction based on date and amount proximity.
      * This method provides automatic matching for planned transactions without requiring merchant identification
      * or budget item selection from the user.
@@ -157,18 +397,18 @@ public class ForecastTransactionMatcher {
             int daysBefore,
             int daysAfter) throws Exception {
 
-        // ---- TEMP INSTRUMENTATION (Phase 2.5) — remove when done tuning ----
-        // Show the raw input payee (the line from the import file) and the parsed payee so the
-        // matcher output can be judged against the actual source text.
-        ViewInt payeeDebugView = Utility.getView();
-        payeeDebugView.say("");
-        payeeDebugView.say("[Phase2.5] raw payee    : " + transaction.getPayee());
-        payeeDebugView.say("[Phase2.5] parsed payee : " + transaction.getMerchantPayee());
-        // ---- END TEMP INSTRUMENTATION ----
+        // The raw input payee (the line from the import file) alongside the parsed payee, so the
+        // matcher trace below can be judged against the actual source text.
+        logger.debug("raw payee    : {}", transaction.getPayee());
+        logger.debug("parsed payee : {}", transaction.getMerchantPayee());
 
         // The bank's own reference for a transfer, when it issued one.  It lives only inside the
         // payee varchar, so reading it means parsing; it is null for the majority of transactions
         // and everything below treats that as "no information", never as a reason to reject.
+        //
+        // The memo is read here too, and only here:  it is the one signal that needs the whole
+        // transaction rather than a date and an amount.  It breaks ties between candidates that
+        // already qualify -- see MEMO_TIE_BREAK and selectMatch.
         return findMatchingForecastTransaction(
                 transaction.getDate(),
                 transaction.getAmount(),
@@ -176,7 +416,8 @@ public class ForecastTransactionMatcher {
                 possibleMerchants,
                 daysBefore,
                 daysAfter,
-                BankReferenceNumber.extract(transaction.getPayee()));
+                BankReferenceNumber.extract(transaction.getPayee()),
+                lookUpMemoSuggestion(transaction, forecast));
     }
 
     /**
@@ -247,6 +488,32 @@ public class ForecastTransactionMatcher {
             int daysBefore,
             int daysAfter,
             String transactionReference) throws Exception {
+
+        return findMatchingForecastTransaction(date, amount, forecast, possibleMerchants,
+                daysBefore, daysAfter, transactionReference, null);
+    }
+
+    /**
+     * As {@link #findMatchingForecastTransaction(Calendar, double, Forecast, List, int, int, String)},
+     * with what the transfer memo has meant before when the transaction carries one.
+     *
+     * <p><b>The memo breaks ties.  It never makes a match.</b>  Only candidates that reach
+     * {@link #AUTO_MATCH_THRESHOLD} on their memo-free score are ranked at all, so a memo can decide
+     * which of two plausible candidates is taken and can never turn a marginal one into a silent
+     * assignment.  See {@link #selectMatch}, which owns that invariant.
+     *
+     * @param memoSuggestion what the memo history suggests for this transaction, or null when it has
+     *                       no memo, the memo has no history, or the lookup failed
+     */
+    public static ForecastTransaction findMatchingForecastTransaction(
+            Calendar date,
+            double amount,
+            Forecast forecast,
+            List<Merchant> possibleMerchants,
+            int daysBefore,
+            int daysAfter,
+            String transactionReference,
+            MemoBudgetItemHistory.Suggestion memoSuggestion) throws Exception {
 
         // If no forecast is available, we cannot match
         if (forecast == null) {
@@ -337,32 +604,33 @@ public class ForecastTransactionMatcher {
             return null;
         }
 
-        // ============================ TEMP INSTRUMENTATION (Phase 2.5) ============================
-        // Prints the possible merchants and every scored forecast candidate so the matching
-        // algorithm can be judged during tuning. REMOVE this block (and the two smaller TEMP
-        // blocks below, plus the ViewInt import) when done.
-        ViewInt debugView = Utility.getView();
-        debugView.say("[Phase2.5] Matching cleared txn  date=" + Utility.calendarDateToStringDate(date)
-                + "  amount=" + Utility.formatDollarAmount(amount));
+        // The possible merchants and every scored forecast candidate, so the matching algorithm can
+        // be judged after the fact.  See the logger field for why this is a log and not a say().
+        logger.debug("Matching cleared txn  date={}  amount={}",
+                Utility.calendarDateToStringDate(date), Utility.formatDollarAmount(amount));
         if (possibleMerchants == null) {
-            debugView.say("[Phase2.5]   possibleMerchants: null (no merchant filtering)");
+            logger.debug("  possibleMerchants: null (no merchant filtering)");
         } else if (possibleMerchants.isEmpty()) {
-            debugView.say("[Phase2.5]   possibleMerchants: (none)");
+            logger.debug("  possibleMerchants: (none)");
         } else {
             StringBuilder merchantNames = new StringBuilder();
             for (Merchant m : possibleMerchants) {
                 if (merchantNames.length() > 0) merchantNames.append(", ");
                 merchantNames.append(m.getName());
             }
-            debugView.say("[Phase2.5]   possibleMerchants (" + possibleMerchants.size() + "): " + merchantNames);
+            logger.debug("  possibleMerchants ({}): {}", possibleMerchants.size(), merchantNames);
         }
-        debugView.say("[Phase2.5]   considering " + candidateForecastTransactions.size()
-                + " forecast transaction(s) [score / threshold 70]:");
-        // ========================== END TEMP INSTRUMENTATION ==========================
+        logger.debug("  considering {} forecast transaction(s) [score / threshold {}]:",
+                candidateForecastTransactions.size(), (int) AUTO_MATCH_THRESHOLD);
+        if (memoSuggestion != null) {
+            logger.debug("  {} -> '{}'  (tie-break only)",
+                    memoSuggestion.describe(), memoSuggestion.budgetItem().getPayee());
+        }
 
-        // Score each remaining forecast transaction
-        ForecastTransaction bestMatch = null;
-        double bestScore = 0.0;
+        // Score each remaining forecast transaction.  The memo's opinion is carried alongside the
+        // score rather than folded into it, so that selectMatch can rank on the total while testing
+        // the threshold on the score -- which is the invariant the memo has to obey here.
+        List<ScoredCandidate> scoredCandidates = new ArrayList<>();
 
         for (ForecastTransaction ft : candidateForecastTransactions) {
 
@@ -372,54 +640,53 @@ public class ForecastTransactionMatcher {
             // Two different bank references cannot be the same movement of money, however well the
             // candidate scores.  This is the one judgement scoring cannot make.
             if (verdict == ReferenceVerdict.RULED_OUT) {
-                debugView.say("[Phase2.5]     ruled out (bank reference " + candidateReference +
-                        " != " + transactionReference + ")  " + ft.toStringConcise());
+                logger.debug("    ruled out (bank reference {} != {})  {}",
+                        candidateReference, transactionReference, ft.toStringConcise());
                 continue;
             }
 
             // The same reference on both sides is an exact identity, so take it without scoring.
             if (verdict == ReferenceVerdict.CERTAIN) {
-                debugView.say("[Phase2.5]   result: CERTAIN (bank reference " + candidateReference + ") -> " +
-                        ft.toStringConcise());
-                debugView.say("");
+                logger.debug("  result: CERTAIN (bank reference {}) -> {}",
+                        candidateReference, ft.toStringConcise());
                 return ft;
             }
 
             // Reaching here means the verdict was UNDECIDED, so an unpaired counterpart has only its
             // amount left to identify it with.
             if (!admitsUnpairedCounterpart(amount, ft)) {
-                debugView.say("[Phase2.5]     not this movement (unpaired counterpart for "
-                        + Utility.formatDollarAmount(ft.getRemainingAmount()) + ")  " + ft.toStringConcise());
+                logger.debug("    not this movement (unpaired counterpart for {})  {}",
+                        Utility.formatDollarAmount(ft.getRemainingAmount()), ft.toStringConcise());
                 continue;
             }
 
             double score = calculateMatchScore(date, amount, ft, possibleMerchants);
+            double memoBonus = memoTieBreak(ft, memoSuggestion);
+            scoredCandidates.add(new ScoredCandidate(ft, score, memoBonus));
 
-            // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
-            debugView.say(String.format("[Phase2.5]     %6.2f  %s", score, ft.toStringConcise()));
-            // ---- END TEMP INSTRUMENTATION ----
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMatch = ft;
-            }
+            logger.debug(String.format("    %6.2f%s  %s", score,
+                    (memoBonus > 0.0) ? String.format(" (+%.0f memo)", memoBonus) : "",
+                    ft.toStringConcise()));
         }
 
-        // ---- TEMP INSTRUMENTATION (Phase 2.5) ----
-        if (bestMatch == null) {
-            debugView.say("[Phase2.5]   result: no candidate scored above 0");
-        } else if (bestScore >= 70.0) {
-            debugView.say(String.format("[Phase2.5]   result: AUTO-MATCH (best=%.2f) -> %s",
-                    bestScore, bestMatch.toStringConcise()));
+        // The memo may reorder the candidates that already qualify; it may not add one.
+        ScoredCandidate winner = selectBest(scoredCandidates);
+        ForecastTransaction bestMatch = (winner == null) ? null : winner.candidate();
+
+        ScoredCandidate highest = highestScoringCandidate(scoredCandidates);
+        if (highest == null) {
+            logger.debug("  result: no candidate scored above 0");
+        } else if (winner != null) {
+            logger.debug(String.format("  result: AUTO-MATCH (best=%.2f%s) -> %s",
+                    winner.score(), (winner.memoBonus() > 0.0) ? " +memo tie-break" : "",
+                    bestMatch.toStringConcise()));
         } else {
-            debugView.say(String.format("[Phase2.5]   result: NO MATCH (best=%.2f below threshold) -> %s",
-                    bestScore, bestMatch.toStringConcise()));
+            logger.debug(String.format("  result: NO MATCH (best=%.2f below threshold) -> %s",
+                    highest.score(), highest.candidate().toStringConcise()));
         }
-        debugView.say("");
-        // ---- END TEMP INSTRUMENTATION ----
 
-        // Only return a match if confidence is at least 70%
-        if (bestScore < 70.0) {
+        // Only return a match if confidence is at least the threshold, on the memo-free score.
+        if (bestMatch == null) {
             return null;
         }
 
@@ -457,16 +724,17 @@ public class ForecastTransactionMatcher {
                             ? "This transaction's merchant"
                             : "This transaction's merchant ('" + possibleMerchants.get(0).getName() + "')";
 
-                    boolean confirmed = debugView.getYesOrNo(txnMerchantDescription
+                    ViewInt view = Utility.getView();
+                    boolean confirmed = view.getYesOrNo(txnMerchantDescription
                             + " does not match any merchant assigned to budget item '" + budgetItem.getPayee()
                             + "', though it otherwise matches on date/amount. Is this transaction another "
                             + "merchant for '" + budgetItem.getPayee() + "'?");
 
                     if (!confirmed) {
-                        debugView.say("[Phase2.5]   merchant mismatch declined by user -> no match");
+                        logger.debug("  merchant mismatch declined by user -> no match");
                         return null;
                     }
-                    debugView.say("[Phase2.5]   merchant mismatch confirmed by user -> proceeding with match");
+                    logger.debug("  merchant mismatch confirmed by user -> proceeding with match");
                 }
             }
         }

@@ -167,6 +167,15 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
      * {@inheritDoc}
      */
     @Override
+    public java.util.Calendar getImportedLedgerBalanceAsOf() {
+        // No file import, so there is no balance and nothing to date it
+        return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void importRegisterTrxFile() throws IOException {
         throw new UnsupportedOperationException("GenericClassifier does not support file import");
     }

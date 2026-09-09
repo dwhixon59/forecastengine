@@ -362,6 +362,41 @@ public class DailyUpdateController {
                 }
             }
 
+            // Check for budget item payees that differ only by capitalisation (they behave as two
+            // separate items everywhere, which is almost never what was intended):
+            try {
+               view.sayH2("CHECKING FOR BUDGET ITEMS THAT DIFFER ONLY BY CAPITALISATION");
+               List<List<Budget.CaseVariantPayee>> caseVariants = budget.checkForCaseVariantPayees();
+               if (caseVariants.isEmpty()) {
+                   view.sayH4("No budget item payees differ only by capitalisation.");
+               } else {
+                   view.say("These payees are spelled more than one way, so each spelling is a " +
+                           "separate budget item with its own merchants and its own forecast line:");
+                   for (List<Budget.CaseVariantPayee> variants : caseVariants) {
+                       StringBuilder line = new StringBuilder("   ");
+                       for (Budget.CaseVariantPayee variant : variants) {
+                           if (line.length() > 3) {
+                               line.append("   vs   ");
+                           }
+                           line.append("'").append(variant.payee()).append("'")
+                                   .append(" (").append(variant.category()).append(", ")
+                                   .append(variant.count())
+                                   .append(variant.count() == 1 ? " item)" : " items)");
+                       }
+                       view.say(line.toString());
+                   }
+                   // Reported, not repaired.  Merging means choosing which spelling wins and moving
+                   // every merchant assignment, split and forecast item behind the loser -- not a
+                   // decision to take on the user's behalf in the middle of a daily update.
+                   view.say("Rename or merge them from manageData when convenient.");
+               }
+            } catch (Exception e) {
+                if (!view.askContinue("The error '" + e + "' occurred while checking for budget items " +
+                        "that differ only by capitalisation.")) {
+                    throw e;
+                }
+            }
+
             // Check for orphan unplanned/on-demand forecast transactions (zero remaining amount and no
             // linked split - these serve no purpose and are almost certainly left-over data):
             try {

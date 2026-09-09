@@ -745,6 +745,61 @@ public class TransferCounterpartControllerTest {
         }
     }
 
+    @Test
+    @DisplayName("A shared bank reference settles it even when neither payee resolves to a register")
+    void testSharedReferenceIsAnIdentity() throws Exception {
+
+        // The real leak.  Both sides of the $1.00 TEST XFR2 transfer read "HIXON D ... EVERYDAY
+        // CHECKING" -- ambiguous between two people -- so the candidate could not be resolved back
+        // to the source register and the guard let a duplicate expectation through.  It then sat in
+        // the forecast, rendering as a phantom row, until that register happened to be imported
+        // again.  REF #IB0ZHFFH69 on both sides had said "one movement" the whole time.
+        Transaction transfer = transferTransaction(
+                "ONLINE TRANSFER FROM HIXON D REF #IB0ZHFFH69 EVERYDAY CHECKING TEST XFR2", 1.00);
+        when(transfer.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+
+        Transaction genuine = candidate(
+                "ONLINE TRANSFER TO HIXON D REF #IB0ZHFFH69 EVERYDAY CHECKING TEST XFR2", -1.00,
+                COUNTERPARTY_REGISTER_ID);
+
+        GuardController controller;
+        try (MockedStatic<Transaction> transactions = Mockito.mockStatic(Transaction.class)) {
+            transactions.when(() -> Transaction.findOppositeSideInRegister(any(), anyDouble(), any(), anyInt()))
+                    .thenReturn(List.of(genuine));
+
+            controller = new GuardController(sessionController);
+            // Deliberately not registered: counterpartyOf returns null, as it does for a payee the
+            // application cannot pin to one register.
+
+            assertTrue(controller.otherSideAlreadyExists(transfer, counterpartyRegister, "IB0ZHFFH69"),
+                    "A matching bank reference is an identity and does not need the payee resolved");
+        }
+    }
+
+    @Test
+    @DisplayName("Without a reference, an unresolvable candidate is still not the other side")
+    void testUnresolvableCandidateWithoutAReferenceIsStillRuledOut() throws Exception {
+
+        // The regression guard for the short-circuit above: most transfers carry no reference at
+        // all, and for those the register hurdle is the only thing standing between a real
+        // expectation and a same-sized coincidence.  It has to stay in force.
+        Transaction transfer = transferTransaction("ONLINE TRANSFER FROM HIXON D EVERYDAY CHECKING", 1.00);
+        when(transfer.getIdRegister()).thenReturn(SOURCE_REGISTER_ID);
+
+        Transaction unrelated = candidate("TO XXXXXXXXXXX4442", -1.00, COUNTERPARTY_REGISTER_ID);
+
+        GuardController controller;
+        try (MockedStatic<Transaction> transactions = Mockito.mockStatic(Transaction.class)) {
+            transactions.when(() -> Transaction.findOppositeSideInRegister(any(), anyDouble(), any(), anyInt()))
+                    .thenReturn(List.of(unrelated));
+
+            controller = new GuardController(sessionController);   // counterpartyOf returns null
+
+            assertFalse(controller.otherSideAlreadyExists(transfer, counterpartyRegister, null),
+                    "With no reference, proximity alone must not be treated as identity");
+        }
+    }
+
 
     /*
      * Learning the pairing from what the far import chose.
@@ -1042,6 +1097,30 @@ public class TransferCounterpartControllerTest {
         assertFalse(runRetire(controller, transaction,
                 List.of(split(-30.00, budgetItem("Other", Item.PeriodType.ON_DEMAND))), sourceItem));
         assertTrue(controller.deleted.isEmpty());
+    }
+
+    @Test
+    @DisplayName("A shared reference retires a counterpart whose source register cannot be checked")
+    void testSharedReferenceRetiresWithoutTheRegisterHurdle() throws Exception {
+
+        // The cleanup half of the identity rule.  A counterpart written from a register that no
+        // longer resolves -- or from a source transaction that has since been deleted -- is still
+        // unmistakably this movement when the bank reference matches.
+        Transaction transaction = transferTransaction(
+                "ONLINE TRANSFER TO HIXON D REF #IB0ZHFFH69 EVERYDAY CHECKING TEST XFR2", -1.00);
+        BudgetItem sourceItem = budgetItem("Other", Item.PeriodType.ON_DEMAND);
+
+        when(sessionController.getForecast()).thenReturn(counterpartyForecast);
+        RecordingController controller = new RecordingController(sessionController);
+        controller.captureFrom(capturedMessages);
+
+        // Written from some third register, so the register hurdle alone would reject it.
+        ForecastTransaction counterpart =
+                arrivedCounterpart(controller, -1.00, "IB0ZHFFH69", sourceItem.getId(), UUID.randomUUID());
+
+        assertTrue(runRetire(controller, transaction,
+                List.of(split(-1.00, budgetItem("Other", Item.PeriodType.ON_DEMAND))), sourceItem));
+        assertTrue(controller.deleted.contains(counterpart), "The reference identifies the movement");
     }
 
     @Test

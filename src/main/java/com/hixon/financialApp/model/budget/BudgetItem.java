@@ -123,6 +123,7 @@ public class BudgetItem extends Item {
 
         return insertQuery + "uuid_to_bin('" + id + "'), \"" + category + "\", \"" + payee + "\", \"" + memo + "\", '" +
                 generatePeriodType(period, periodDays) + "', " + amount + ", " + runningBalance + ", " +
+                minimumBalance + ", " +
                 Utility.calendarDateToSqlDateString(startDate) + ", " + numberOfPayments + ", " +
                 Utility.calendarDateToSqlDateString(endDate) + ", '" + generateItemType(itemType) + "', '" +
                 generateHowImportant(howImportant) + "', '" + generateHowOccurs(howOccurs) + "', '" +

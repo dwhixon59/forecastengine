@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -92,11 +93,13 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
             String accountNumber = extractAccountNumber(envelope);
             String currency = extractCurrency(envelope);
             double ledgerBalance = extractLedgerBalance(envelope);
+            Calendar ledgerBalanceAsOf = extractLedgerBalanceAsOf(envelope);
 
             this.statement = QfxStatement.builder()
                     .accountNumber(accountNumber)
                     .currency(currency)
                     .ledgerBalance(ledgerBalance)
+                    .ledgerBalanceAsOf(ledgerBalanceAsOf)
                     .transactions(transactions)
                     .build();
 
@@ -347,6 +350,30 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
      * Extracts ledger balance from the envelope.
      */
     private double extractLedgerBalance(ResponseEnvelope envelope) {
+        com.webcohesion.ofx4j.domain.data.common.BalanceInfo info = extractLedgerBalanceInfo(envelope);
+        return info == null ? 0.0 : info.getAmount();
+    }
+
+    /**
+     * When the bank says the ledger balance was true (OFX DTASOF), or null if it did not say.
+     *
+     * <p>Read because a statement pulled over a wider date range is not necessarily a <em>newer</em>
+     * statement:  the wider Citi download taken to recover a missing charge on 09-04-2026 carried
+     * DTASOF 20260901 and a balance of -11,886.30, three days older than the -11,986.25 already in
+     * hand.  Without the date there is nothing to tell the two apart, and the balance question would
+     * offer to move the register backwards.
+     */
+    private Calendar extractLedgerBalanceAsOf(ResponseEnvelope envelope) {
+        com.webcohesion.ofx4j.domain.data.common.BalanceInfo info = extractLedgerBalanceInfo(envelope);
+        if (info == null || info.getAsOfDate() == null) {
+            return null;
+        }
+        Calendar asOf = Calendar.getInstance();
+        asOf.setTime(info.getAsOfDate());
+        return asOf;
+    }
+
+    private com.webcohesion.ofx4j.domain.data.common.BalanceInfo extractLedgerBalanceInfo(ResponseEnvelope envelope) {
         try {
             // Try banking message set first
             ResponseMessageSet bankMessageSet = envelope.getMessageSet(MessageSetType.banking);
@@ -356,7 +383,7 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
                 if (responses != null && !responses.isEmpty() &&
                     responses.get(0).getMessage() != null &&
                     responses.get(0).getMessage().getLedgerBalance() != null) {
-                    return responses.get(0).getMessage().getLedgerBalance().getAmount();
+                    return responses.get(0).getMessage().getLedgerBalance();
                 }
             }
 
@@ -368,13 +395,13 @@ public class QfxParser implements TransactionParser<QfxTransaction> {
                 if (responses != null && !responses.isEmpty() &&
                     responses.get(0).getMessage() != null &&
                     responses.get(0).getMessage().getLedgerBalance() != null) {
-                    return responses.get(0).getMessage().getLedgerBalance().getAmount();
+                    return responses.get(0).getMessage().getLedgerBalance();
                 }
             }
         } catch (Exception e) {
             System.err.println("Warning: Failed to extract ledger balance: " + e.getMessage());
         }
-        return 0.0;
+        return null;
     }
 
     /**

@@ -148,5 +148,11 @@ public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoClos
      *         (e.g., for CSV files or before import)
      */
     Double getImportedLedgerBalance();
+
+    /**
+     * When the bank said the imported ledger balance was true (OFX DTASOF), or null if it did not
+     * say or the format carries no balance.  Used to tell a newer statement from a merely wider one.
+     */
+    java.util.Calendar getImportedLedgerBalanceAsOf();
 }
 

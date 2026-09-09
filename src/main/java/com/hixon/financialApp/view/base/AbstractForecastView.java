@@ -98,6 +98,13 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         if (monthlyNet >= 0) {
             return Double.POSITIVE_INFINITY;
         }
+        // A balance that is already at or below zero has no runway to run down.  Dividing anyway
+        // produced a negative duration and printed it as one:  on 09-07-2026, a starting balance of
+        // -$181 against a burn of -$309 gave -0.59, reported as "runway is about -1 months".  There
+        // is no such quantity;  the honest answer is none left, and the caller says so in words.
+        if (startingBalance <= 0) {
+            return 0.0;
+        }
         return roundCurrency(startingBalance / -monthlyNet);
     }
 
@@ -228,6 +235,17 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         }
         String reportType = forecastRegister.getReportType();
         double startingBalance = forecastRegister.getBalance();
+
+        // A credit line is not an account holding money, and most of the analysis below assumes it
+        // is.  Float, runway, "the account went negative", "deposit this much to stay solvent" --
+        // all of it reads a negative balance as trouble, which on a credit card is simply the
+        // balance owed.  Rendering it anyway produced a summary that argued with itself:  on
+        // 09-04-2026 the Citi report said "You have sufficient float to ensure no negative
+        // balances" directly beneath "Lowest projected balance is $-14,321".  Both were true to
+        // their own arithmetic and neither meant anything.  The cash-flow figures, the monthly
+        // table and the expense breakdown are sound either way, so only the asset-account sections
+        // are withheld.
+        boolean creditLine = forecastRegister.isCreditLine();
         double runningBalance = roundCurrency(startingBalance);
 
         // Variables to save significant events over the period of the forecast and the date on which they occurred:
@@ -265,6 +283,7 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // float to keep the forecast solvent.
         Calendar firstFirstOfMonth = getNextFirstOfMonth(Calendar.getInstance());
         double firstFirstOfMonthBalance = 0.0;
+        boolean periodOpeningBalanceCaptured = false;
 
         // Open and initialize the forecast rendering output file:
         openLongTermForecastOutput(reportType);
@@ -299,20 +318,41 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 // Write out a month header if this report type requires it:
                 renderLongTermForecastMonthHeader(reportType, forecastTransaction.getPlannedDate(), runningBalance);
 
-                // If this is the first first-of-the-month, then save off the balance on that date for reporting purposes:
-                if (dateOnlyCompare(firstFirstOfMonth, forecastTransaction.getPlannedDate()) == 0) {
-                    firstFirstOfMonthBalance = runningBalance;
-                    lowestBalance = runningBalance;
-                    dateOfLowestBalance = firstFirstOfMonth;
+            }
 
-                    // The balance carried into the summary period seeds the period low point on the line above, so it
-                    // has to count as a balance within the period here as well.  Otherwise a period that opens in the
-                    // red gets reported as non-negative while the low point names that very balance:
-                    if (runningBalance < 0) {
-                        periodOpensInDeficit = true;
-                        firstPeriodNegativeBalance = runningBalance;
-                        dateOfFirstPeriodNegativeBalance = copyCalendar(firstFirstOfMonth);
-                    }
+            // The balance carried into the summary period, taken at the first occurrence that falls
+            // inside it.
+            //
+            // This used to require an occurrence dated *exactly* on the first of the month, and to
+            // sit inside the month-change block above.  Both made it a coincidence.  The iterator
+            // drops fully reconciled occurrences -- it takes remainingAmount <> 0, plus zero rows
+            // only where the item amount is also zero -- so whether anything survives to land on
+            // the 1st depends on what has already been reconciled.  On 09-06-2026 the Citi forecast
+            // had one occurrence dated 10-01, a Boat Storage already reconciled to zero against a
+            // -$170 item;  it was filtered out, the first October row the loop actually saw was
+            // 10-04, the comparison failed, and this stayed at its initialised 0.
+            //
+            // Zero looks like a balance, so nothing flagged it.  It is subtracted from the closing
+            // balance to get the net change and the out-of-balance amount, so the report concluded
+            // the forecast was "out of balance by $4,242" and asked for $848/month of cuts on an
+            // account whose true opening balance was -$13,444.57 and which clears $9,203 across the
+            // period.  Register balance -11,986.25 plus -1,458.32 of pre-October occurrences is that
+            // opening figure, and -13,444.57 + 649 is the -12,795 the monthly table reported for
+            // October -- the number was right there in the same report.
+            if (!periodOpeningBalanceCaptured
+                    && dateOnlyCompare(forecastTransaction.getPlannedDate(), firstFirstOfMonth) >= 0) {
+                periodOpeningBalanceCaptured = true;
+                firstFirstOfMonthBalance = runningBalance;
+                lowestBalance = runningBalance;
+                dateOfLowestBalance = firstFirstOfMonth;
+
+                // The balance carried into the summary period seeds the period low point on the line above, so it
+                // has to count as a balance within the period here as well.  Otherwise a period that opens in the
+                // red gets reported as non-negative while the low point names that very balance:
+                if (runningBalance < 0) {
+                    periodOpensInDeficit = true;
+                    firstPeriodNegativeBalance = runningBalance;
+                    dateOfFirstPeriodNegativeBalance = copyCalendar(firstFirstOfMonth);
                 }
             }
 
@@ -424,6 +464,15 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
             forecastTransaction = forecastTransactions.getNext();
         }
 
+        // Nothing at all falls inside the summary period.  The opening balance is then the closing
+        // one -- nothing happens between them -- and saying so makes the net change zero and the
+        // forecast balanced, which is the truth about a period with no occurrences in it.  Leaving
+        // the initialised 0.0 instead would report the whole closing balance as the period's net
+        // change, which is the same defect this capture was moved to fix.
+        if (!periodOpeningBalanceCaptured) {
+            firstFirstOfMonthBalance = runningBalance;
+        }
+
         // Finish up and closeout the forecast rendering:
         renderLongTermForecastBackMatter(reportType);
         closeLongTermForecastOutput(reportType);
@@ -499,8 +548,8 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(".").toString());
 
         // If there are one or more negative balances, display the first negative balance and the date on which it
-        // occurred:
-        if (firstNegativeBalance < 0) {
+        // occurred.  Not for a credit line, where going below zero is what the account is for:
+        if (firstNegativeBalance < 0 && !creditLine) {
             Calendar today = Calendar.getInstance();
             if (dateOnlyCompare(dateOfFirstNegativBalance, today) < 0) {
                 // The first negative balance date is in the past — it already occurred
@@ -640,32 +689,77 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         double excessFloat = 0.0;
 
         // If there are any negative balances, then the float is insufficient.  Calculate the required float and let
-        // the user know how much they need to deposit to fix the float issue:
-        if (lowestBalance < 0) {
+        // the user know how much they need to deposit to fix the float issue.  A credit line has no float to be
+        // insufficient:
+        if (lowestBalance < 0 && !creditLine) {
 
-            // Recompute the required float by recomputing the running balances assuming that the user fixes the
-            // out-of-balance issue:
-            forecastTransactions = ForecastTransaction.getForecastTransactionsStartingOn(forecast, firstFirstOfMonth);
-            forecastTransaction = forecastTransactions.getNext();
-            runningBalance = 0;
-            lowestBalance = 0;
-            currentMonth = -1;
-            while (forecastTransaction != null) {
-                if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
-                    runningBalance -= outOfBalanceMonthlyAmount;
-                    currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
-                }
-                runningBalance += forecastTransaction.getRemainingAmount();
-                if (runningBalance < lowestBalance) {
-                    lowestBalance = runningBalance;
-                    dateOfLowestBalance = forecastTransaction.getPlannedDate();
-                }
+            // Only a forecast that is actually out of balance has a monthly shortfall to correct.
+            // Everything below used to run unconditionally, so a balanced forecast with a temporary
+            // dip was told "once the monthly shortfall is corrected" about a shortfall it did not
+            // have -- and worse, outOfBalanceMonthlyAmount is positive when balanced, so the loop
+            // subtracted a surplus each month, made the projection worse, and reported the result as
+            // the corrected case.  On 09-09-2026 Bill Pay Dave was balanced (+$1,234 over the
+            // period) and was asked to deposit $1,021 against a trough of $-434.
+            if (outOfBalanceMonthlyAmount < 0) {
+
+                // Recompute the required float by recomputing the running balances assuming that the user fixes the
+                // out-of-balance issue:
+                forecastTransactions = ForecastTransaction.getForecastTransactionsStartingOn(forecast, firstFirstOfMonth);
                 forecastTransaction = forecastTransactions.getNext();
+                runningBalance = 0;
+                lowestBalance = 0;
+                currentMonth = -1;
+                while (forecastTransaction != null) {
+                    if (forecastTransaction.getPlannedDate().get(Calendar.MONTH) != currentMonth) {
+                        runningBalance -= outOfBalanceMonthlyAmount;
+                        currentMonth = forecastTransaction.getPlannedDate().get(Calendar.MONTH);
+                    }
+                    runningBalance += forecastTransaction.getRemainingAmount();
+                    if (runningBalance < lowestBalance) {
+                        lowestBalance = runningBalance;
+                        dateOfLowestBalance = forecastTransaction.getPlannedDate();
+                    }
+                    forecastTransaction = forecastTransactions.getNext();
+                }
+                // Deliberately not "the date of the lowest balance".  That phrase is already spoken for
+                // by the trough reported above, and this is a different date:  the loop just above
+                // recomputed the balances assuming the monthly shortfall is corrected, which moves the
+                // low point.  Both were called the same thing on 09-07-2026 -- "$-3,746 on 08-11-2027"
+                // and "the date of the lowest balance (05-12-2027)" -- and read as a contradiction.
+                if (lowestBalance < 0) {
+                    getView().say(new StringBuilder().append("Once the monthly shortfall is corrected the low point moves to ").
+                            append(Utility.calendarDateToStringDate(dateOfLowestBalance)).
+                            append(", and the float needed to cover it is ").
+                            append(Utility.formatRoundedDollarAmount(-lowestBalance)).append(".").toString());
+                } else {
+                    // The correction cleared the deficit outright, so there is no low point to name --
+                    // and dateOfLowestBalance still holds the uncorrected one, which naming would be
+                    // worse than saying nothing.  This is the case that printed "the required float ...
+                    // is $0" on 09-04-2026.
+                    getView().say("Correcting the monthly shortfall removes the projected deficit, so no float is required.");
+                }
+
+            } else {
+
+                // The forecast covers its own outgoings over the period, so the dip is a matter of
+                // when money arrives relative to when it leaves rather than of how much there is.
+                // There is nothing to recompute:  the trough the main pass already found is the real
+                // one.
+                //
+                // It does have to be put on the same footing as the branch above, though.  The main
+                // pass tracks lowestBalance as an ACTUAL balance -- it is seeded from the balance
+                // carried into the period -- whereas the correction loop reseeds it to 0 and
+                // accumulates, making it a drawdown from the opening balance.  Everything below here,
+                // requiredDeposit and excessFloat included, reads it the second way, so the opening
+                // balance comes off before it is handed on.  Leaving it absolute would understate the
+                // deposit by exactly that opening balance.
+                lowestBalance = roundCurrency(lowestBalance - firstFirstOfMonthBalance);
+                getView().say(new StringBuilder().append("The forecast is balanced over the period, so this is a " +
+                                "timing gap rather than a shortfall:  the low point is ").
+                        append(Utility.calendarDateToStringDate(dateOfLowestBalance)).
+                        append(", and the float needed to cover it is ").
+                        append(Utility.formatRoundedDollarAmount(-lowestBalance)).append(".").toString());
             }
-            getView().say(new StringBuilder().append("The required float on the date of the lowest balance (").
-                    append(Utility.calendarDateToStringDate(dateOfLowestBalance)).append(") taking into account the " +
-                            "effect of fixing the out-of-balance issue is ").
-                    append(Utility.formatRoundedDollarAmount(-lowestBalance)).toString());
             requiredFloat = roundCurrency(-lowestBalance);
 
             // Tell the user how much they need to deposit to fix the float issue:
@@ -691,33 +785,47 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         // Improvement 4: explicit risk warnings.
         getView().say("\nRisk Warnings:");
         Calendar today = Calendar.getInstance();
-        if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
-            if (dateOnlyCompare(dateOfFirstNegativBalance, today) < 0) {
-                getView().say(new StringBuilder().append("  - Note: The account went negative on ")
-                        .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
-                        .append(" at ").append(Utility.formatRoundedDollarAmount(firstNegativeBalance))
-                        .append(" — this is in the past.").toString());
-            } else {
-                getView().say(new StringBuilder().append("  - Critical: The account first goes negative on ").
-                        append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" at ").
-                        append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(".").toString());
+        if (creditLine) {
+
+            // On a credit line the balance owed is the thing worth watching, and it is not a risk
+            // in the sense the rest of this section means.  "The account went negative" is not news
+            // about a card, and float is not a quantity it has, so the trough is reported as what
+            // it is -- an amount owed -- and nothing else is claimed.
+            if (dateOfPeriodLowestBalance != null) {
+                getView().say(new StringBuilder().append("  - Largest projected balance owed is ").
+                        append(Utility.formatRoundedDollarAmount(-periodLowestBalance)).append(" on ").
+                        append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(".").toString());
             }
+
         } else {
-            getView().say("  - No negative balances are forecast in this period.");
-        }
-        if (dateOfPeriodLowestBalance != null) {
-            getView().say(new StringBuilder().append("  - Lowest projected balance is ").
-                    append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(" on ").
-                    append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(".").toString());
-        }
-        if (requiredFloat > 0) {
-            getView().say(new StringBuilder().append("  - Required float to remain solvent is at least ").
-                    append(Utility.formatRoundedDollarAmount(requiredFloat)).append(".").toString());
-        }
-        if (excessFloat > 0 && requiredFloat > excessFloat) {
-            getView().say(new StringBuilder().append("  - Current excess float is ").
-                    append(Utility.formatRoundedDollarAmount(excessFloat)).append(", which is insufficient for the worst-case month.").
-                    toString());
+            if (firstNegativeBalance < 0 && dateOfFirstNegativBalance != null) {
+                if (dateOnlyCompare(dateOfFirstNegativBalance, today) < 0) {
+                    getView().say(new StringBuilder().append("  - Note: The account went negative on ")
+                            .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                            .append(" at ").append(Utility.formatRoundedDollarAmount(firstNegativeBalance))
+                            .append(" — this is in the past.").toString());
+                } else {
+                    getView().say(new StringBuilder().append("  - Critical: The account first goes negative on ").
+                            append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance)).append(" at ").
+                            append(Utility.formatRoundedDollarAmount(firstNegativeBalance)).append(".").toString());
+                }
+            } else {
+                getView().say("  - No negative balances are forecast in this period.");
+            }
+            if (dateOfPeriodLowestBalance != null) {
+                getView().say(new StringBuilder().append("  - Lowest projected balance is ").
+                        append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(" on ").
+                        append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(".").toString());
+            }
+            if (requiredFloat > 0) {
+                getView().say(new StringBuilder().append("  - Required float to remain solvent is at least ").
+                        append(Utility.formatRoundedDollarAmount(requiredFloat)).append(".").toString());
+            }
+            if (excessFloat > 0 && requiredFloat > excessFloat) {
+                getView().say(new StringBuilder().append("  - Current excess float is ").
+                        append(Utility.formatRoundedDollarAmount(excessFloat)).append(", which is insufficient for the worst-case month.").
+                        toString());
+            }
         }
 
         // Improvement 5: actionable recommendations.
@@ -751,128 +859,182 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         }
 
         // Improvement 6: financial runway analysis.
-        getView().say("\nFinancial Runway Analysis:");
-        double monthlyIncomeAverage = totalIncome == 0 ? 0 : roundCurrency(totalIncome / numberOfMonthsInForecast);
-        double monthlyExpenseAverage = totalExpense == 0 ? 0 : roundCurrency(-totalExpense / numberOfMonthsInForecast);
-        double baselineMonthlyNet = roundCurrency(monthlyIncomeAverage - monthlyExpenseAverage);
-        double baselineRunway = monthsOfRunway(firstFirstOfMonthBalance, baselineMonthlyNet);
-        if (Double.isInfinite(baselineRunway)) {
-            getView().say("  - Current monthly net is non-negative, so runway is not constrained by burn rate.");
-        } else {
-            getView().say(new StringBuilder().append("  - At the current net burn of ").
-                    append(Utility.formatRoundedDollarAmount(baselineMonthlyNet)).append("/month, runway is about ").
-                    append(Math.round(baselineRunway)).append(" months.").toString());
-        }
+        // Runway asks how long the money lasts at the current burn.  A credit line has no money to
+        // last:  the answer on 09-04-2026 was "If 'Credit card payment' stopped, runway drops to
+        // about 0 months", which is arithmetic on a balance owed and says nothing about the card.
+        if (!creditLine) {
+            getView().say("\nFinancial Runway Analysis:");
+            double monthlyIncomeAverage = totalIncome == 0 ? 0 : roundCurrency(totalIncome / numberOfMonthsInForecast);
+            double monthlyExpenseAverage = totalExpense == 0 ? 0 : roundCurrency(-totalExpense / numberOfMonthsInForecast);
+            double baselineMonthlyNet = roundCurrency(monthlyIncomeAverage - monthlyExpenseAverage);
+            double baselineRunway = monthsOfRunway(firstFirstOfMonthBalance, baselineMonthlyNet);
 
-        List<Map.Entry<String, Double>> topIncomeSources = incomeBySource.entrySet().stream()
-                .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
-                .limit(2)
-                .toList();
-        for (Map.Entry<String, Double> source : topIncomeSources) {
-            double sourceMonthly = roundCurrency(source.getValue() / numberOfMonthsInForecast);
-            double netIfRemoved = roundCurrency(baselineMonthlyNet - sourceMonthly);
-            double runwayIfRemoved = monthsOfRunway(firstFirstOfMonthBalance, netIfRemoved);
-            if (Double.isInfinite(runwayIfRemoved)) {
-                getView().say(new StringBuilder().append("  - If '").append(source.getKey()).
-                        append("' stopped, the forecast still remains non-negative month-to-month.").toString());
+            // The whole section asks how long a balance lasts.  With nothing left to last, every
+            // sentence in it is arithmetic on a number that is already spent -- including the
+            // per-source lines below, which on 09-07-2026 offered "if David's net pay 1 stopped,
+            // runway drops to about 0 months" against a balance that was already $-181.  Say the
+            // one true thing instead of four false ones.
+            if (firstFirstOfMonthBalance <= 0) {
+                getView().say(new StringBuilder().append("  - The balance is already in deficit (").
+                        append(Utility.formatRoundedDollarAmount(firstFirstOfMonthBalance)).
+                        append("), so there is no runway to measure.").toString());
+
+            } else if (Double.isInfinite(baselineRunway)) {
+                getView().say("  - Current monthly net is non-negative, so runway is not constrained by burn rate.");
+
             } else {
-                getView().say(new StringBuilder().append("  - If '").append(source.getKey()).append("' stopped (").
-                        append(Utility.formatRoundedDollarAmount(sourceMonthly)).append("/month), runway drops to about ").
-                        append(Math.round(runwayIfRemoved)).append(" months.").toString());
+                getView().say(new StringBuilder().append("  - At the current net burn of ").
+                        append(Utility.formatRoundedDollarAmount(baselineMonthlyNet)).append("/month, runway is about ").
+                        append(Math.round(baselineRunway)).append(" months.").toString());
+            }
+
+            // Skipped in deficit for the reason given above:  "runway drops to about N months" is
+            // a claim about a balance that is not there.
+            List<Map.Entry<String, Double>> topIncomeSources = firstFirstOfMonthBalance <= 0
+                    ? List.of()
+                    : incomeBySource.entrySet().stream()
+                        .sorted((left, right) -> Double.compare(right.getValue(), left.getValue()))
+                        .limit(2)
+                        .toList();
+            for (Map.Entry<String, Double> source : topIncomeSources) {
+                double sourceMonthly = roundCurrency(source.getValue() / numberOfMonthsInForecast);
+                double netIfRemoved = roundCurrency(baselineMonthlyNet - sourceMonthly);
+                double runwayIfRemoved = monthsOfRunway(firstFirstOfMonthBalance, netIfRemoved);
+                if (Double.isInfinite(runwayIfRemoved)) {
+                    getView().say(new StringBuilder().append("  - If '").append(source.getKey()).
+                            append("' stopped, the forecast still remains non-negative month-to-month.").toString());
+                } else {
+                    getView().say(new StringBuilder().append("  - If '").append(source.getKey()).append("' stopped (").
+                            append(Utility.formatRoundedDollarAmount(sourceMonthly)).append("/month), runway drops to about ").
+                            append(Math.round(runwayIfRemoved)).append(" months.").toString());
+                }
             }
         }
 
         // Improvement 7: timeline visualization as key milestones.
-        getView().say("\nForecast Timeline:");
-        // A deficit before the summary period began is reported as history.  It says nothing about whether the
-        // balance has recovered by the time the period opens, so it must not be used to claim that the balances
-        // within the period are sound — that claim is only true when no deficit occurs inside the period:
-        boolean historicalDeficit = firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
-                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) < 0;
-        if (historicalDeficit) {
-            getView().say(new StringBuilder().append("  - Historical deficit occurred on ")
-                    .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
-                    .append(" (before the forecast summary period).").toString());
-        }
+        // Every line of the timeline is a deficit narrative -- historical deficit, positive balance
+        // phase, first deficit, persistent deficit -- and on a credit line all of it describes the
+        // balance owed rather than any event.  The trough is already reported as an amount owed
+        // under Risk Warnings, so there is nothing left here worth saying about a card.
+        if (!creditLine) {
+            getView().say("\nForecast Timeline:");
+            // A deficit before the summary period began is reported as history.  It says nothing about whether the
+            // balance has recovered by the time the period opens, so it must not be used to claim that the balances
+            // within the period are sound — that claim is only true when no deficit occurs inside the period:
+            boolean historicalDeficit = firstNegativeBalance < 0 && dateOfFirstNegativBalance != null
+                    && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) < 0;
+            if (historicalDeficit) {
+                getView().say(new StringBuilder().append("  - Historical deficit occurred on ")
+                        .append(Utility.calendarDateToStringDate(dateOfFirstNegativBalance))
+                        .append(" (before the forecast summary period).").toString());
+            }
 
-        if (periodOpensInDeficit) {
+            if (periodOpensInDeficit) {
 
-            // The account was already in the red when the summary period opened, so there is no positive phase and no
-            // new deficit event to report — the deficit simply has not been cleared:
-            getView().say(new StringBuilder().append("  - The balance is still in deficit when the summary period " +
-                            "opens on ").
-                    append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" (").
-                    append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
-        } else if (dateOfFirstPeriodNegativeBalance != null) {
+                // The account was already in the red when the summary period opened, so there is no positive phase and no
+                // new deficit event to report — the deficit simply has not been cleared:
+                getView().say(new StringBuilder().append("  - The balance is still in deficit when the summary period " +
+                                "opens on ").
+                        append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" (").
+                        append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
+            } else if (dateOfFirstPeriodNegativeBalance != null) {
 
-            // The period opened in the black and went into deficit during it, so there is a genuine positive phase
-            // leading up to the deficit whether or not an older deficit was reported as history above:
-            Calendar preCrisisDate = copyCalendar(dateOfFirstPeriodNegativeBalance);
-            preCrisisDate.add(Calendar.DAY_OF_MONTH, -1);
-            getView().say(new StringBuilder().append("  - Positive balance phase: ").
-                    append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" through ").
-                    append(Utility.calendarDateToStringDate(preCrisisDate)).append(".").toString());
+                // The period opened in the black and went into deficit during it, so there is a genuine positive phase
+                // leading up to the deficit whether or not an older deficit was reported as history above.
+                //
+                // That phase runs from the period's first day up to the day before the deficit, which
+                // leaves no phase at all when the deficit falls on that first day:  the day before it
+                // lies outside the period.  Printing it regardless produced a range that ran
+                // backwards -- "Positive balance phase: 10-01-2026 through 09-30-2026" on 09-09-2026.
+                Calendar preCrisisDate = copyCalendar(dateOfFirstPeriodNegativeBalance);
+                preCrisisDate.add(Calendar.DAY_OF_MONTH, -1);
+                if (dateOnlyCompare(preCrisisDate, firstFirstOfMonth) >= 0) {
+                    getView().say(new StringBuilder().append("  - Positive balance phase: ").
+                            append(Utility.calendarDateToStringDate(firstFirstOfMonth)).append(" through ").
+                            append(Utility.calendarDateToStringDate(preCrisisDate)).append(".").toString());
+                }
 
-            getView().say(new StringBuilder().append("  - First deficit within the forecast summary period: ").
-                    append(Utility.calendarDateToStringDate(dateOfFirstPeriodNegativeBalance)).append(" (").
-                    append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
-        } else if (historicalDeficit) {
-            getView().say("  - All balances within the forecast summary period are non-negative.");
-        } else {
-            getView().say("  - All projected balances remain non-negative.");
-        }
+                getView().say(new StringBuilder().append("  - First deficit within the forecast summary period: ").
+                        append(Utility.calendarDateToStringDate(dateOfFirstPeriodNegativeBalance)).append(" (").
+                        append(Utility.formatRoundedDollarAmount(firstPeriodNegativeBalance)).append(").").toString());
+            } else if (historicalDeficit) {
+                getView().say("  - All balances within the forecast summary period are non-negative.");
+            } else {
+                getView().say("  - All projected balances remain non-negative.");
+            }
 
-        Optional<MonthlyCashFlow> firstMonthEndNegative = monthlyCashFlowMap.values().stream()
-                .filter(month -> month.endingBalance < 0)
-                .findFirst();
-        if (firstMonthEndNegative.isPresent()) {
-            getView().say(new StringBuilder().append("  - Persistent deficit period begins by month-end in ").
-                    append(firstMonthEndNegative.get().label).append(".").toString());
-        }
-        if (dateOfPeriodLowestBalance != null) {
-            getView().say(new StringBuilder().append("  - Lowest point occurs on ").
-                    append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(" at ").
-                    append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(".").toString());
+            Optional<MonthlyCashFlow> firstMonthEndNegative = monthlyCashFlowMap.values().stream()
+                    .filter(month -> month.endingBalance < 0)
+                    .findFirst();
+            if (firstMonthEndNegative.isPresent()) {
+                getView().say(new StringBuilder().append("  - Persistent deficit period begins by month-end in ").
+                        append(firstMonthEndNegative.get().label).append(".").toString());
+            }
+            if (dateOfPeriodLowestBalance != null) {
+                getView().say(new StringBuilder().append("  - Lowest point occurs on ").
+                        append(Utility.calendarDateToStringDate(dateOfPeriodLowestBalance)).append(" at ").
+                        append(Utility.formatRoundedDollarAmount(periodLowestBalance)).append(".").toString());
+            }
         }
 
         // Improvement 8: immediate actions checklist.
-        getView().say("\nImmediate Actions Required:");
-        Calendar actionDate1 = copyCalendar(firstFirstOfMonth);
-        actionDate1.add(Calendar.MONTH, 1);
-        Calendar actionDate2 = copyCalendar(firstFirstOfMonth);
-        actionDate2.add(Calendar.MONTH, 2);
-        // For dates derived from the (potentially historical) first-negative-balance date, clamp to
-        // at least the first month of the summary period so we never show past action deadlines.
-        Calendar crisisAnchor = (dateOfFirstNegativBalance != null
-                && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) >= 0)
-                ? dateOfFirstNegativBalance : firstFirstOfMonth;
-        Calendar troughAnchor = (dateOfPeriodLowestBalance != null
-                && dateOnlyCompare(dateOfPeriodLowestBalance, firstFirstOfMonth) >= 0)
-                ? dateOfPeriodLowestBalance
-                : (lastForecastTransaction != null ? lastForecastTransaction.getPlannedDate() : firstFirstOfMonth);
-        Calendar actionDate3 = copyCalendar(crisisAnchor);
-        Calendar actionDate4 = copyCalendar(troughAnchor);
-        if (actionDate3 != null) {
-            actionDate3.add(Calendar.DAY_OF_MONTH, -14);
-        }
-        if (actionDate4 != null) {
-            actionDate4.add(Calendar.MONTH, -2);
-        }
-        // Final clamp: never show a date in the past
-        Calendar clampFloor = copyCalendar(firstFirstOfMonth);
-        if (actionDate3 != null && dateOnlyCompare(actionDate3, clampFloor) < 0) actionDate3 = clampFloor;
-        if (actionDate4 != null && dateOnlyCompare(actionDate4, clampFloor) < 0) actionDate4 = clampFloor;
+        // Every line here is an instruction to fix something, so the section only belongs in a
+        // forecast that has something to fix.  It used to print unconditionally:  a balanced
+        // forecast with no deficit and no float requirement was told to "identify at least $0/month
+        // in spending cuts" and to "maintain minimum float target of $0", and to hold contingency
+        // float against a negative-balance risk it did not have.  Bill Pay Danni got all four on
+        // 09-09-2026 against a trough of +$515.
+        boolean hasMonthlyGapAction = monthlyGap > 0;
+        boolean hasFloatAction = !creditLine && requiredFloat > 0;
+        if (hasMonthlyGapAction || hasFloatAction) {
+            getView().say("\nImmediate Actions Required:");
+            Calendar actionDate1 = copyCalendar(firstFirstOfMonth);
+            actionDate1.add(Calendar.MONTH, 1);
+            Calendar actionDate2 = copyCalendar(firstFirstOfMonth);
+            actionDate2.add(Calendar.MONTH, 2);
+            // For dates derived from the (potentially historical) first-negative-balance date, clamp to
+            // at least the first month of the summary period so we never show past action deadlines.
+            Calendar crisisAnchor = (dateOfFirstNegativBalance != null
+                    && dateOnlyCompare(dateOfFirstNegativBalance, firstFirstOfMonth) >= 0)
+                    ? dateOfFirstNegativBalance : firstFirstOfMonth;
+            Calendar troughAnchor = (dateOfPeriodLowestBalance != null
+                    && dateOnlyCompare(dateOfPeriodLowestBalance, firstFirstOfMonth) >= 0)
+                    ? dateOfPeriodLowestBalance
+                    : (lastForecastTransaction != null ? lastForecastTransaction.getPlannedDate() : firstFirstOfMonth);
+            Calendar actionDate3 = copyCalendar(crisisAnchor);
+            Calendar actionDate4 = copyCalendar(troughAnchor);
+            if (actionDate3 != null) {
+                actionDate3.add(Calendar.DAY_OF_MONTH, -14);
+            }
+            if (actionDate4 != null) {
+                actionDate4.add(Calendar.MONTH, -2);
+            }
+            // Final clamp: never show a date in the past
+            Calendar clampFloor = copyCalendar(firstFirstOfMonth);
+            if (actionDate3 != null && dateOnlyCompare(actionDate3, clampFloor) < 0) actionDate3 = clampFloor;
+            if (actionDate4 != null && dateOnlyCompare(actionDate4, clampFloor) < 0) actionDate4 = clampFloor;
 
-        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate1)).
-                append(": identify at least ").append(Utility.formatRoundedDollarAmount(monthlyGap)).
-                append("/month in spending cuts, new income, or a combination.").toString());
-        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate2)).
-                append(": implement and verify the plan against actual account activity.").toString());
-        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate3)).
-                append(": have contingency float ready before projected negative-balance risk.").toString());
-        getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate4)).
-                append(": maintain minimum float target of ").append(Utility.formatRoundedDollarAmount(requiredFloat > 0 ? requiredFloat : 0)).
-                append(" to avoid trough-period shortfalls.").toString());
+            // The first two actions are about closing a monthly gap, so they only apply when there is
+            // one;  the second is the follow-through on the plan the first asks for, and says nothing on
+            // its own.
+            if (hasMonthlyGapAction) {
+                getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate1)).
+                        append(": identify at least ").append(Utility.formatRoundedDollarAmount(monthlyGap)).
+                        append("/month in spending cuts, new income, or a combination.").toString());
+                getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate2)).
+                        append(": implement and verify the plan against actual account activity.").toString());
+            }
+            // The last two are about float, which a credit line does not have -- on 09-04-2026 they asked
+            // the user to hold contingency float against a "negative-balance risk" that was just the
+            // card's balance, and to maintain a float target of $0.
+            if (hasFloatAction) {
+                getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate3)).
+                        append(": have contingency float ready before projected negative-balance risk.").toString());
+                getView().say(new StringBuilder().append("  [ ] By ").append(Utility.calendarDateToStringDate(actionDate4)).
+                        append(": maintain minimum float target of ").append(Utility.formatRoundedDollarAmount(requiredFloat)).
+                        append(" to avoid trough-period shortfalls.").toString());
+            }
+        }
 
         // Update the forecast's lastRenderedDate to track when we rendered the file.
         // Use the file's actual lastModified timestamp rather than the current time, so that

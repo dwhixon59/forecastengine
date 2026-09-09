@@ -496,6 +496,61 @@ public class BudgetController {
     }
 
     /**
+     * Record an association the user has already chosen between a budget item and a merchant.
+     *
+     * <p>Split out of {@link #assignBudgetItemsToMerchant}, which prompts for the budget item
+     * itself.  A caller that has <em>already</em> asked the user which budget item they want must
+     * not call that method:  it ignores the choice and starts a fresh search from nothing.  On
+     * 09-08-2026 a user picked "Danni's Work Expenses - Food for work" for merchant 7-Eleven and
+     * confirmed the permanent association, and was then asked to search for a budget item from
+     * scratch -- the redisplayed list did not contain the item they had just chosen, and they had to
+     * find and pick it a second time.
+     *
+     * @param merchant               the merchant to associate with
+     * @param selectedBudgetItem     the budget item the caller already obtained from the user
+     * @param budgetItemsForMerchant the in-memory list, kept in step with the database
+     * @return true when the association was added to the list, false when it was already there
+     */
+    public boolean associateBudgetItemWithMerchant(Merchant merchant, BudgetItem selectedBudgetItem,
+                                                   List<BudgetItemMerchant> budgetItemsForMerchant)
+            throws Exception {
+
+        if (selectedBudgetItem == null || budgetItemsForMerchant == null) {
+            return false;
+        }
+
+        // If the budget item is already associated with this merchant in memory, there is nothing to do:
+        if (isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
+            view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                    "associated with the merchant \"" + merchant.getName() + "\".");
+            return false;
+        }
+
+        // Check whether the association already exists in the database (it might not be in the in-memory list):
+        BudgetItemMerchant existingAssociation =
+                BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
+
+        if (existingAssociation == null) {
+
+            // The association doesn't exist in the database, so it is safe to create.  The user has already
+            // selected this budget item, so add it without asking again:
+            BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(merchant, selectedBudgetItem);
+            budgetItemMerchant.save();
+            budgetItemsForMerchant.add(budgetItemMerchant);
+
+        } else {
+
+            // The association already exists in the database, so use the existing one:
+            view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
+                    "associated with the merchant \"" + merchant.getName() + "\" in the database.");
+            existingAssociation.setBudgetItem(selectedBudgetItem);
+            budgetItemsForMerchant.add(existingAssociation);
+        }
+
+        return true;
+    }
+
+    /**
      * Assign budget items to an existing list of budget items for a merchant.  There does not need to be any budget
      * items in the list that is provided.
      *
@@ -517,53 +572,10 @@ public class BudgetController {
                 view.say("\nSelect a budget item to add to merchant '" + merchant.getName() + "'.");
             }
 
-            boolean firstTime = true;
-            boolean done = false;
-            int percentage = 0;
-            double amount = 0.0;
-            BudgetItem firstSelectedBudgetItem = null;
-            BudgetItem selectedBudgetItem = null;
-            while (!done) {
-
-                // Get a budget item that the user wants to associate with this merchant:
-                selectedBudgetItem = getBudgetItemByNameFullText(null);
-                BudgetItemMerchant budgetItemMerchant = new BudgetItemMerchant(merchant, selectedBudgetItem);
-
-                // then if the budget item isn't already associated with this merchant:
-                if (!isBudgetItemInList(selectedBudgetItem, budgetItemsForMerchant)) {
-
-                    // Check if the association already exists in the database (might not be in the in-memory list)
-                    BudgetItemMerchant existingAssociation = BudgetItemMerchant.getByItemAndMerchant(selectedBudgetItem, merchant);
-
-                    if (existingAssociation == null) {
-                        // Association doesn't exist in database - safe to create.
-                        // The user just searched for and selected this budget item, so add it automatically.
-                        firstTime = false;
-
-                        // Associate the budget item with the merchant in the database:
-                        budgetItemMerchant.save();
-
-                        // Add the budget item to the list of budget items passed in:
-                        budgetItemsForMerchant.add(budgetItemMerchant);
-                    } else {
-                        // Association already exists in database - use existing one
-                        view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
-                                "associated with the merchant \"" + merchant.getName() + "\" in the database.");
-
-                        // Add the existing association to the in-memory list
-                        existingAssociation.setBudgetItem(selectedBudgetItem);
-                        budgetItemsForMerchant.add(existingAssociation);
-                    }
-                } else {
-                    // Tell the user that this budget item is already associated with this merchant:
-                    view.say("The budget item you selected \"" + selectedBudgetItem.getPayee() + "\" is already " +
-                            "associated with the merchant \"" + merchant.getName() + "\".");
-                }
-
-                // User is done after selecting one budget item
-                done = true;
-
-            } // End while there are budget items to enter.
+            // Get a budget item that the user wants to associate with this merchant, then record it.
+            // The recording half is shared with callers that already know which budget item the user
+            // chose -- see associateBudgetItemWithMerchant:
+            associateBudgetItemWithMerchant(merchant, getBudgetItemByNameFullText(null), budgetItemsForMerchant);
 
         } catch (CancelException | QuitException | SkipException e) {
             throw e;
@@ -1878,6 +1890,43 @@ public class BudgetController {
      */
     public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
                                            double amount) throws Exception {
+        showBudgetItemsForMerchant(budgetItemMerchants, relevancyScores, amount, null, false);
+    }
+
+    /**
+     * Displays a list of budget items and amounts (if specified) for a given merchant, naming the
+     * transfer memo that put one of them where it is.
+     *
+     * <p>The memo's suggestion is right about five times in six.  What makes showing a
+     * one-in-six-wrong suggestion at the top of the list safe is not a threshold -- no threshold
+     * separates the good cases from the bad -- but saying out loud <em>why</em> it is at the top,
+     * so the user can weigh the evidence instead of trusting the ordering.
+     *
+     * @param budgetItemMerchants       the list of assigned budget items for the merchant
+     * @param relevancyScores           the relevancy score for each item, in the same order
+     * @param amount                    the amount of the transaction
+     * @param memoSuggestion            what the transfer memo suggests, or null if it says nothing
+     * @param suggestionIsUnassociated  true if the suggested item was added to the list by the memo
+     *                                  and is not yet one of this merchant's budget items
+     * @throws Exception if an error occurs during the display process
+     */
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
+                                           double amount, MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                           boolean suggestionIsUnassociated) throws Exception {
+        showBudgetItemsForMerchant(budgetItemMerchants, relevancyScores, amount, memoSuggestion,
+                suggestionIsUnassociated, null);
+    }
+
+    /**
+     * As above, with the transaction's date, so a periodic item whose occurrence has already been
+     * spent can say so.
+     *
+     * @param transactionDate the date of the transaction being assigned, or null to skip the check
+     */
+    public void showBudgetItemsForMerchant(List<BudgetItemMerchant> budgetItemMerchants, List<Double> relevancyScores,
+                                           double amount, MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                           boolean suggestionIsUnassociated, Calendar transactionDate)
+            throws Exception {
         view.say("The assigned budget items and amounts (if specified) for this merchant are:");
         int i = 1;
         for (BudgetItemMerchant budgetItemMerchant : budgetItemMerchants) {
@@ -1895,12 +1944,142 @@ public class BudgetController {
             // then there won't be a relevancy score for it, so we check if the index is valid:
             // Note: The relevancyScores list is expected to be one less than the budgetItemMerchants list
             if (relevancyScores != null && (i - 1) < relevancyScores.size() && relevancyScores.get(i - 1) != null) {
-                line += ", Relevancy Score: " + relevancyScores.get(i - 1);
+                // Rounded for display only:  the raw double carries a binary-fraction tail
+                // (68.57314285714287) that reads as false precision on a heuristic score.  The
+                // stored score is untouched -- only what the user sees is rounded.
+                line += String.format(", Relevancy Score: %.1f", relevancyScores.get(i - 1));
             }
+
+            line += memoAnnotation(budgetItemMerchant, memoSuggestion, suggestionIsUnassociated);
+            line += spentOccurrenceAnnotation(budgetItemMerchant, transactionDate);
 
             view.say(line);
             i++;
         }
+    }
+
+    /**
+     * How far either side of a transaction to look for the occurrence it belongs to.  The same window
+     * the matcher gathers candidates over, so the note explains the decision the matcher just made.
+     */
+    private static final int SPENT_OCCURRENCE_DAY_WINDOW = 14;
+
+    /**
+     * The trailing note saying that a periodic item's occurrence has already been spent.
+     *
+     * <p>Answers a question the ranked list otherwise leaves hanging.  A Walmart+ membership charge
+     * of $12.95 on 09-08-2026 was offered "Groceries ... $-13 Monthly ... Walmart+ Membership" at a
+     * relevancy of 79.4 and no explanation of why it had not simply been assigned there.  It had not
+     * because every occurrence of that item near the date was already at zero -- there was nothing
+     * to match against, and nothing said so.
+     *
+     * <p>Reporting is read-only and best-effort:  a failure here costs the note, never the prompt.
+     */
+    private String spentOccurrenceAnnotation(BudgetItemMerchant budgetItemMerchant, Calendar transactionDate) {
+        if (transactionDate == null || forecast == null) {
+            return "";
+        }
+        try {
+            BudgetItem budgetItem = budgetItemMerchant.getBudgetItem();
+            if (budgetItem == null || !reportsSpentOccurrences(budgetItem.getHowOccurs())) {
+                return "";
+            }
+
+            ForecastTransaction nearest = ForecastTransaction.findNearestOccurrenceForBudgetItem(
+                    budgetItem.getId(), forecast.getId(), transactionDate, SPENT_OCCURRENCE_DAY_WINDOW);
+            if (nearest == null) {
+                return "";
+            }
+
+            return spentOccurrenceNote(nearest.getPlannedDate(), nearest.getRemainingAmount(),
+                    nearest.isOverridden(), nearest.hasSplit());
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Which kinds of budget item this note applies to.
+     *
+     * <p>Only {@code PERIODIC}.  A {@code COLLECTION} item is expected to be drawn down across many
+     * charges and already says so in its own words when it runs out -- the overage prompt asks what
+     * to do about it.  An {@code UNPLANNED} item generates no occurrences at all, so there is never
+     * one to have been spent.  Saying it for either would be noise at best and wrong at worst.
+     *
+     * @param howOccurs the budget item's kind, or null
+     * @return true when a spent occurrence is worth reporting for this kind of item
+     */
+    static boolean reportsSpentOccurrences(Item.HowOccurs howOccurs) {
+        return howOccurs == Item.HowOccurs.PERIODIC;
+    }
+
+    /**
+     * The note itself, given what was found.
+     *
+     * <p>Separated from the lookup so the rule can be tested without a forecast or a database.
+     *
+     * <p>An occurrence with nothing left got there one of three ways, and they are worth telling
+     * apart because they call for different things from the reader:
+     *
+     * <ul>
+     *   <li><b>A split consumed it.</b>  The money really was spent against this item and the charge
+     *       in hand is a second one.</li>
+     *   <li><b>It was skipped.</b>  Zeroed and marked overridden together, which is what the "won't
+     *       do this occurrence" action does -- the period was deliberately passed over, so nothing
+     *       was spent and there is no earlier charge to go looking for.</li>
+     *   <li><b>Neither.</b>  Zero with no split and no override:  the spreadsheet-delete path zeroes
+     *       in bulk and an ignored overage zeroes on the spot, and neither records itself.  Saying
+     *       "already spent" there would be a guess, so it says only what is certain.</li>
+     * </ul>
+     *
+     * @param plannedDate     the nearest occurrence's planned date, or null when there is none
+     * @param remainingAmount what is left of it
+     * @param overridden      whether the occurrence was deliberately overridden
+     * @param hasSplit        whether any split is applied to it
+     * @return the note to append, including its leading separator, or an empty string
+     */
+    static String spentOccurrenceNote(Calendar plannedDate, double remainingAmount,
+                                      boolean overridden, boolean hasSplit) {
+        if (plannedDate == null || !Utility.isEqualCurrency(remainingAmount, 0.0)) {
+            return "";
+        }
+        String date = Utility.calendarDateToStringDate(plannedDate);
+
+        if (hasSplit) {
+            return "  <- its " + date + " occurrence is already fully spent";
+        }
+        if (overridden) {
+            return "  <- you skipped its " + date + " occurrence";
+        }
+        return "  <- its " + date + " occurrence has nothing left";
+    }
+
+    /**
+     * The trailing note naming the memo that put an item where it is, for the one item the memo
+     * names.
+     *
+     * @param budgetItemMerchant       the item being displayed
+     * @param memoSuggestion           what the transfer memo suggests, or null
+     * @param suggestionIsUnassociated true if the suggested item is in the list only because the
+     *                                 memo put it there
+     * @return the note to append, or an empty string for every item the memo says nothing about
+     */
+    static String memoAnnotation(BudgetItemMerchant budgetItemMerchant,
+                                 MemoBudgetItemHistory.Suggestion memoSuggestion,
+                                 boolean suggestionIsUnassociated) {
+
+        if (budgetItemMerchant == null || memoSuggestion == null || memoSuggestion.budgetItem() == null) {
+            return "";
+        }
+
+        UUID suggested = memoSuggestion.budgetItem().getId();
+        if (suggested == null || !suggested.equals(budgetItemMerchant.getIdBudgetItem())) {
+            return "";
+        }
+
+        return "  ← " + memoSuggestion.describe() +
+                (suggestionIsUnassociated ? ", not yet assigned to this merchant" : "");
     }
 
     /**

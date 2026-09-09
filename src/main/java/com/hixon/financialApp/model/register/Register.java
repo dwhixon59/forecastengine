@@ -13,6 +13,8 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -31,8 +33,14 @@ public class Register extends IndependentEntity {
     /*
      * Statics and constants:
      */
+    // The import file search used to narrate itself to the user on every import -- ten "DEBUG:"
+    // lines, including a count of every file in Downloads.  It is diagnostic, not conversation, so
+    // it belongs in the log; log4j2.properties turns it on for this class.
+    private static final Logger logger = LogManager.getLogger(Register.class);
+
     public static final String CHECKING = "Checking";
     public static final String SAVINGS = "Savings";
+    public static final String CREDIT_CARD = "Credit Card";
 
     /*
      * Fields in the Register class:
@@ -153,12 +161,44 @@ public class Register extends IndependentEntity {
     }
 
     /**
+     * Whether this register is a line of credit rather than an account holding money.
+     *
+     * <p>The distinction matters to anything that reads a negative balance as trouble.  On a
+     * checking account it is an overdraft;  on a credit card it is the ordinary state of the
+     * account, and the whole vocabulary of float, runway and "deposit this much to stay solvent"
+     * stops meaning anything.  The forecast summary asks this before printing any of it.
+     *
+     * @return true when the register is a credit line
+     */
+    public boolean isCreditLine() {
+        return CREDIT_CARD.equalsIgnoreCase(accountType);
+    }
+
+    /**
      * Clears the cached transaction import file path, forcing the next call to
      * getTrxImportFilePath() to perform a fresh file search.
      * This should be called when you expect a new file might be available.
      */
     public void clearTrxImportFilePathCache() {
         cachedTrxImportFilePath = null;
+    }
+
+    /**
+     * Point the next import at one specific file instead of the register's configured pattern.
+     *
+     * <p>For the one case where the user names the file:  the balance disagreed with the bank, and
+     * the difference is a charge that fell between two download windows -- posted late by the bank,
+     * so it is missing from the download that covered its date and older than the start of the next
+     * one.  Nothing the register knows can find it;  only a wider statement contains it.
+     *
+     * <p>The override is the path cache, so it lasts exactly as long as the cache does and
+     * {@link #clearTrxImportFilePathCache()} undoes it.  It does not touch the register's stored
+     * import filename or directory:  the next ordinary import looks where it always looks.
+     *
+     * @param filePath the full path of the file to import instead
+     */
+    public void overrideTrxImportFilePath(String filePath) {
+        cachedTrxImportFilePath = filePath;
     }
 
     /**
@@ -170,17 +210,17 @@ public class Register extends IndependentEntity {
      */
     private String findMostRecentMatchingFile(String directory, String pattern) {
         if (directory == null || pattern == null) {
-            System.err.println("DEBUG: findMostRecentMatchingFile called with null directory or pattern");
+            logger.debug("findMostRecentMatchingFile called with null directory or pattern");
             return null;
         }
 
         try {
             java.io.File dir = new java.io.File(directory);
-            System.out.println("DEBUG: Searching directory: " + directory);
-            System.out.println("DEBUG: Directory exists: " + dir.exists() + ", is directory: " + dir.isDirectory());
+            logger.debug("Searching directory: {}", directory);
+            logger.debug("Directory exists: {}, is directory: {}", dir.exists(), dir.isDirectory());
 
             if (!dir.exists() || !dir.isDirectory()) {
-                System.err.println("DEBUG: Directory does not exist or is not a directory");
+                logger.debug("Directory does not exist or is not a directory: {}", directory);
                 return null;
             }
 
@@ -193,17 +233,16 @@ public class Register extends IndependentEntity {
             java.util.regex.Pattern compiledPattern =
                 java.util.regex.Pattern.compile(regexPattern, java.util.regex.Pattern.CASE_INSENSITIVE);
 
-            System.out.println("DEBUG: Pattern: " + pattern);
-            System.out.println("DEBUG: Regex pattern: " + regexPattern + " (case-insensitive)");
+            logger.debug("Pattern: {}  ->  regex: {} (case-insensitive)", pattern, regexPattern);
 
             // List all files in directory for debugging
             java.io.File[] allFiles = dir.listFiles();
             if (allFiles != null) {
-                System.out.println("DEBUG: Total files in directory: " + allFiles.length);
+                logger.debug("Total files in directory: {}", allFiles.length);
                 for (java.io.File f : allFiles) {
                     if (f.getName().toLowerCase().endsWith(".qfx") && !isAlreadyProcessedFile(f.getName())) {
-                        System.out.println("DEBUG: Found QFX file: " + f.getName() +
-                            " (matches: " + compiledPattern.matcher(f.getName()).matches() + ")");
+                        logger.debug("Found QFX file: {} (matches: {})", f.getName(),
+                            compiledPattern.matcher(f.getName()).matches());
                     }
                 }
             }
@@ -213,18 +252,19 @@ public class Register extends IndependentEntity {
                 !isAlreadyProcessedFile(name) && compiledPattern.matcher(name).matches());
 
             if (matchingFiles == null || matchingFiles.length == 0) {
-                System.err.println("DEBUG: No files matched pattern " + regexPattern);
+                logger.debug("No files matched pattern {}", regexPattern);
                 return null;
             }
 
-            System.out.println("DEBUG: Found " + matchingFiles.length + " matching file(s)");
+            logger.debug("Found {} matching file(s)", matchingFiles.length);
 
             // Find the most recently modified file
             java.io.File mostRecent = null;
             long mostRecentTime = 0;
 
             for (java.io.File file : matchingFiles) {
-                System.out.println("DEBUG: Checking file: " + file.getName() + " (modified: " + new java.util.Date(file.lastModified()) + ")");
+                logger.debug("Checking file: {} (modified: {})", file.getName(),
+                        new java.util.Date(file.lastModified()));
                 if (file.lastModified() > mostRecentTime) {
                     mostRecentTime = file.lastModified();
                     mostRecent = file;
@@ -232,14 +272,13 @@ public class Register extends IndependentEntity {
             }
 
             if (mostRecent != null) {
-                System.out.println("DEBUG: Selected most recent file: " + mostRecent.getName());
+                logger.debug("Selected most recent file: {}", mostRecent.getName());
             }
 
             return mostRecent != null ? mostRecent.getName() : null;
 
         } catch (Exception e) {
-            System.err.println("Error finding matching file for pattern " + pattern + ": " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error finding matching file for pattern " + pattern, e);
             return null;
         }
     }

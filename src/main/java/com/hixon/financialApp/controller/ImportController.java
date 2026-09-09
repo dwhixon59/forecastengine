@@ -26,6 +26,9 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 
 import java.io.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -114,7 +117,26 @@ public class ImportController {
     /**
      * Logger for tracking import events and actions during the import process
      */
+    private static final Logger logger = LogManager.getLogger(ImportController.class);
+
+    /**
+     * How far back of the file's own earliest date to look when checking that every provisional
+     * transaction reached the register.  Wide enough that a charge posted a little earlier than the
+     * file claims is still found, narrow enough not to read the whole register.
+     */
+    private static final int PROVISIONAL_CHECK_LOOKBACK_DAYS = 30;
+
     private final ImportLog importLog = new ImportLog();
+
+    /**
+     * Set once the user answers "a" at the already-imported question:  every later charge in this
+     * file that matches one the register holds is treated as already imported without asking again.
+     *
+     * <p>Per import run, because the controller is built per run.  It is deliberately not persisted
+     * -- the answer means "for the rest of this file", not "forever":  a genuine second identical
+     * charge in a later statement must still be able to ask.
+     */
+    private boolean treatLookAlikesAsAlreadyHeld = false;
 
 
     // Fields:
@@ -210,6 +232,88 @@ public class ImportController {
      *                             Typically includes date, amount, and payee information.
      * @return The full import record ID with instance number appended
      */
+    /**
+     * Ask whether an incoming transaction is one the register already holds, when the bank's import
+     * record id failed to say so.
+     *
+     * <p>Reached only after {@link Transaction#getByImportRecordId(String, UUID)} has already missed,
+     * so for a bank with stable ids this never runs and nothing about the import changes.  It exists
+     * for the banks whose ids move:  see
+     * {@link Transaction#getByDateAmountAndPayee(UUID, java.util.Calendar, double, String)} for the
+     * Citi case that prompted it.
+     *
+     * <p>The question is asked rather than assumed, and defaults to importing.  Same date, same
+     * amount, same payee is a strong hint and not a proof -- two identical charges in one day are
+     * ordinary -- and the two mistakes are not equally bad:  a duplicate the user waves through is
+     * visible and fixable, while a real transaction silently dropped is money that never appears in
+     * the register, the forecast or any report.
+     *
+     * @param incoming the transaction just read from the import file
+     * @param register the register being imported into
+     * @return the transaction already held, if the user says it is the same charge; null to import
+     */
+    private Transaction confirmNotAlreadyImported(Transaction incoming, Register register) throws Exception {
+
+        Transaction alreadyHeld = Transaction.getByDateAmountAndPayee(register.getId(), incoming.getPostDate(),
+                incoming.getAmount(), incoming.getPayee());
+        if (alreadyHeld == null) {
+            return null;
+        }
+
+        // The user has already answered this for the rest of the file.
+        if (treatLookAlikesAsAlreadyHeld) {
+            return alreadyHeld;
+        }
+
+        view.say("This transaction has a different import id from anything in the register, but the register " +
+                "already holds one just like it:");
+        view.say("  " + calendarDateToStringDate(incoming.getPostDate()) + "  " +
+                formatDollarAmount(incoming.getAmount()) + "  " + incoming.getPayee());
+        view.say("  already held as import id " + alreadyHeld.getImportRecordId() +
+                ", incoming id " + incoming.getImportRecordId());
+
+        // Three answers, not two.  Re-importing a wider statement to recover one missing charge asks
+        // this question about every charge the register already holds, and for Citi that is every
+        // charge in the file:  its FITID is the position in that particular download, so a wider
+        // pull renames all of them and the id lookup misses on all of them.  The download that would
+        // recover the 09-04-2026 gap holds 115 transactions of which 114 are already in the
+        // register, so without "all" the user answers this 114 times to reach one charge.
+        //
+        // "All" is scoped to look-alikes:  the charge that is actually missing has nothing in the
+        // register matching its date, amount and payee, so it never reaches this question and is
+        // still imported and still asked about normally.
+        boolean done = false;
+        while (!done) {
+            done = true;
+            String answer = view.getResponseString(
+                    "Is this a separate charge that should be imported as well? " +
+                            "(y - yes, n - no it is already held, a - no, and treat every later " +
+                            "look-alike the same way)",
+                    "n", ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+            switch (answer == null ? "" : answer.trim().toLowerCase()) {
+                case "y":
+                    return null;
+
+                case "a":
+                    treatLookAlikesAsAlreadyHeld = true;
+                    view.say("Treating this and every later look-alike as already imported.");
+                    return alreadyHeld;
+
+                case "n":
+                    break;
+
+                default:
+                    view.say("Please enter y, n, or a.");
+                    done = false;
+            }
+        }
+
+        view.say("Treating it as already imported.");
+        return alreadyHeld;
+    }
+
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
         return constructImportRecordId(map, importRecordBaseName, importRecordBaseName);
     }
@@ -341,6 +445,16 @@ public class ImportController {
                 // Track whether this is a new transaction (not previously imported)
                 String importRecordId = currentTransaction.getImportRecordId();
                 Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
+
+                // The import record id is supposed to be the bank's stable identity for the charge,
+                // and for most banks it is.  Citi's is not:  its FITID is the date followed by the
+                // transaction's position in that particular download, so re-downloading from an
+                // earlier start date hands every charge a new id and the lookup above finds nothing.
+                // Fall back to asking whether this is the same charge already held.
+                if (existingTransaction == null) {
+                    existingTransaction = confirmNotAlreadyImported(currentTransaction, register);
+                }
+
                 boolean isNewTransaction = (existingTransaction == null);
 
                 // Get the merchant and splits for this transaction if it already exists:
@@ -426,13 +540,6 @@ public class ImportController {
                         // Let the financial institution reconcile the provisional with cleared transaction
                         reconciledWithProvisional = financialInstitution.reconcileProvisionalTransaction(
                                 currentTransaction, provisionalTransaction, register, splits);
-                    }
-
-                    // If no provisional transaction was found and this is a new transaction,
-                    // update the register balance
-                    if (!reconciledWithProvisional && isNewTransaction) {
-                        register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                        register.update();
                     }
 
                     /*
@@ -607,9 +714,12 @@ public class ImportController {
                                         currentTransaction.setMerchant(merchant);
                                         currentTransaction.setIdMerchant(merchant.getId());
                                     }
+                                    // Saved under the unknown merchant, so it is in the register and
+                                    // the money it moved counts.  This branch leaves the loop without
+                                    // reaching the save below, so it does its own balance update --
+                                    // the only one on this path.
                                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-                                    register.setBalance(register.getBalance() + currentTransaction.getAmount());
-                                    register.update();
+                                    creditToRegisterBalance(currentTransaction);
                                     continue;
 
                                 case QUIT:
@@ -645,6 +755,21 @@ public class ImportController {
 
                     // At this point the transaction is complete, so save it off:
                     currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+                    // ...and only now does the register balance move.  This used to happen up in
+                    // Phase 2, before the merchant and split questions, which put minutes of user
+                    // interaction between the balance change and the row that justifies it.  Anything
+                    // that ended the run in that window -- a kill, a quit, a cancelled merchant
+                    // assignment -- left the balance moved with no transaction saved, and the next
+                    // import counted the same charge again.  Observed on 09-02-2026:  an interrupted
+                    // run left Bill Pay Danni $150.00 light, exactly the transfer that was in flight.
+                    //
+                    // A transfer reconciled with a provisional transaction is exempt:  its money was
+                    // counted when the provisional was imported, and reconcileProvisionalTransaction
+                    // has already adjusted the balance by the difference if the amount changed.
+                    if (!reconciledWithProvisional && isNewTransaction) {
+                        creditToRegisterBalance(currentTransaction);
+                    }
 
                     // Tell the user what we just did — but skip if auto-matched, since the
                     // auto-match block already recorded the event and printed its own output.
@@ -739,6 +864,23 @@ public class ImportController {
                         // Only print if we didn't auto-match — the auto-match block already logged this
                         if (!autoMatched) {
                             view.say("Already assigned splits.");
+                        }
+
+                        // A transfer categorized while it was still pending was categorized without
+                        // its memo:  the pending feed truncates the bank's description, and the
+                        // truncation lands before the memo every time.  The cleared copy carries it,
+                        // so this is the one moment that late fact can still be acted on -- and only
+                        // when it disagrees with what is already assigned.  Silent otherwise.
+                        if (reconciledWithProvisional && new LateMemoController(sessionController)
+                                .confirmLateMemo(currentTransaction, splits)) {
+
+                            // The splits in hand were deleted and replaced, so the ones Phase 5 and
+                            // 5.5 go on to use have to be the new ones.
+                            List<TransactionSplit> recategorizedSplits =
+                                    TransactionSplit.getSplitsForTransaction(currentTransaction);
+                            if (recategorizedSplits != null && !recategorizedSplits.isEmpty()) {
+                                splits = recategorizedSplits;
+                            }
                         }
 
                         // If splits were modified during provisional reconciliation (e.g., tip adjustment),
@@ -844,6 +986,105 @@ public class ImportController {
                     register.getName() + " from file " + importFilePath + ".");
         }
         return forecast.getInSync();
+    }
+
+    /**
+     * Check that every provisional transaction read from the file is now in the register, and say so
+     * when one is not.
+     *
+     * <p>The merge that precedes this decides, row by row, whether a charge is new or already held.
+     * When it is wrong in the "already held" direction the charge is not inserted and nothing is
+     * raised -- the import reports success, the summary lists it as skipped, and the money is simply
+     * absent. The balance check further down the daily update is the only thing that notices, and it
+     * reports a number rather than a cause.
+     *
+     * <p>Matched on the same key the merge uses, payee and amount, because that is the claim being
+     * checked:  the merge said this row corresponds to something in the register, and this asks the
+     * register whether it does.
+     *
+     * @param provisionalTransactions the transactions read from the file, after the merge
+     */
+    private void reportProvisionalTransactionsNotInRegister(List<Transaction> provisionalTransactions) {
+
+        try {
+            // Deliberately not restricted to uncleared rows.  The cleared import runs before this one
+            // and reconciles provisional transactions as it goes, so a charge from this file may
+            // already have been cleared by the time the check runs -- and reporting that as missing
+            // would be a false alarm on a charge that is present and correct.  The question is
+            // whether the register holds it at all.
+            Calendar earliest = null;
+            for (Transaction fromFile : provisionalTransactions) {
+                if (fromFile.getDate() != null && (earliest == null || fromFile.getDate().before(earliest))) {
+                    earliest = fromFile.getDate();
+                }
+            }
+            if (earliest == null) {
+                return;
+            }
+            Calendar from = (Calendar) earliest.clone();
+            from.add(Calendar.DATE, -PROVISIONAL_CHECK_LOOKBACK_DAYS);
+
+            List<Transaction> held = new ArrayList<>();
+            ResultSet rs = EntityInt.getRS(Transaction.getSelectQuery() +
+                            " where tr.Register_idRegister = uuid_to_bin('" + register.getId() + "')" +
+                            " and tr.postDate >= " + calendarDateToSqlDateString(from),
+                    "attempting to re-read the register to check the provisional import.");
+            while (rs != null && rs.next()) {
+                held.add(new Transaction(rs));
+            }
+
+            List<Transaction> missing = new ArrayList<>();
+            for (Transaction fromFile : provisionalTransactions) {
+                boolean found = false;
+                for (Transaction inRegister : held) {
+                    if (Objects.equals(fromFile.getPayee(), inRegister.getPayee())
+                            && isEqualCurrency(fromFile.getAmount(), inRegister.getAmount())) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    missing.add(fromFile);
+                }
+            }
+
+            if (missing.isEmpty()) {
+                return;
+            }
+
+            double total = 0.0;
+            view.say("\nWARNING:  these transactions were in the file but are not in the register:");
+            for (Transaction transaction : missing) {
+                total += transaction.getAmount();
+                view.say("   " + calendarDateToStringDate(transaction.getDate()) + "  " +
+                        formatDollarAmount(transaction.getAmount()) + "  " + transaction.getPayee());
+            }
+            view.say("They total " + formatDollarAmount(total) +
+                    ", which is how far the register balance will be out because of them.");
+            view.say("Nothing has been changed.  Re-import the file to pick them up.");
+
+        } catch (Exception e) {
+            // A check that fails must not fail the import it was checking.
+            logger.debug("Could not verify that every provisional transaction reached the register", e);
+        }
+    }
+
+    /**
+     * Add a newly imported transaction's amount to the register balance.
+     *
+     * <p><b>Call this only after the transaction has been saved.</b>  The balance is an accumulated
+     * figure, not a derived one -- nothing recomputes it from the transactions -- so a credit made
+     * for a row that never lands is permanent, and the same charge is counted again the next time
+     * the statement is imported.  Keeping the credit next to the save is what bounds that window to
+     * the two statements rather than to however long the user takes to answer the import's
+     * questions.
+     *
+     * @param transaction the transaction that was just saved
+     * @throws Exception if the register cannot be updated
+     */
+    private void creditToRegisterBalance(Transaction transaction) throws Exception {
+        register.setBalance(register.getBalance() + transaction.getAmount());
+        register.update();
     }
 
     /**
@@ -1123,6 +1364,13 @@ public class ImportController {
                 while (provTrxIndex < provisionalTransactions.size() || regTrxIndex < registerTransactions.size()) {
 
 
+                    // Whether the transaction about to be processed is one the register already
+                    // holds, being reprocessed because its splits or its forecast reconciliation did
+                    // not complete last time.  Its money was credited to the balance when it was
+                    // first imported, and crediting it again would count the same pending charge
+                    // twice -- the row is an upsert, so nothing else about it duplicates.
+                    boolean alreadyInTheRegister = false;
+
                     // Compare the current provisional transaction to the current register transaction:
                     int comparison;
                     if (provTrxIndex < provisionalTransactions.size() && regTrxIndex < registerTransactions.size()) {
@@ -1156,6 +1404,7 @@ public class ImportController {
                         // don't try to insert the provisional transaction into the database:
                         if (comparison == -1) {
                             provisionalTransactions.set(provTrxIndex, registerTransactions.get(regTrxIndex));
+                            alreadyInTheRegister = true;
                         }
                     }
 
@@ -1293,15 +1542,15 @@ public class ImportController {
                                         }
                                     }
 
-                                    // Update the balance in the register and save it:
-                                    register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
-                                    register.update();
-
                                     // Log the import event
                                     importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
-                                    // Save the provisional transaction with merchant info
+                                    // Save the provisional transaction with merchant info, and only
+                                    // then credit the money it moved -- see creditToRegisterBalance.
                                     provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
+                                    if (!alreadyInTheRegister) {
+                                        creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                                    }
 
                                     // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                                     // branch kept the original primary-key UUID.  Sync the in-memory object (and any
@@ -1542,12 +1791,12 @@ public class ImportController {
                         // Log the import event now that merchant is determined
                         importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
-                        // Update the balance in the register and save it:
-                        register.setBalance(register.getBalance() + provisionalTransactions.get(provTrxIndex).getAmount());
-                        register.update();
-
-                        // Save the provisional transaction:
+                        // Save the provisional transaction, and only then credit the money it moved
+                        // -- see creditToRegisterBalance.
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
+                        if (!alreadyInTheRegister) {
+                            creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                        }
 
                         // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
                         // branch kept the original primary-key UUID.  Sync the in-memory object (and any
@@ -1587,6 +1836,21 @@ public class ImportController {
                         // Move to the next provisional transaction:
                         provTrxIndex++;
 
+                        // And past the register row too, when this was a re-process rather than a new
+                        // transaction.  The comparison arrived here as 0 -- the register already holds
+                        // this charge -- and was downgraded to -1 only because its splits or its
+                        // forecast reconciliation did not finish last time.  The row was consumed:  it
+                        // was copied into the provisional slot a few lines above and has just been
+                        // processed.  Leaving the index on it desynchronises the merge, and both lists
+                        // are sorted on the same key, so from that point every remaining provisional is
+                        // compared against a register row that is already behind it.  What follows is a
+                        // run of comparisons greater than zero, which is the "this provisional has
+                        // fallen off the bank's list" branch -- and that branch offers to delete the
+                        // register transaction and reverses its amount out of the balance.
+                        if (alreadyInTheRegister) {
+                            regTrxIndex++;
+                        }
+
                     } else if (comparison == 0) {  // else, if the transaction was previously imported:
 
                         // Log the import event
@@ -1594,7 +1858,7 @@ public class ImportController {
                         importLog.logImportEvent(provisionalTransactions.get(provTrxIndex), ImportLog.ImportRecord.Status.ALREADY_IMPORTED);
 
                         // Tell the user what we did:
-                        view.say("Transaction wws previously imported.");
+                        view.say("Transaction was previously imported.");
                         List<TransactionSplit> txSplits = TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex));
                         if (txSplits != null) {
                             logSplitsAndReconciliation(forecast, txSplits);
@@ -1636,19 +1900,22 @@ public class ImportController {
                                     }
                                 }
 
-                                // Add back the amount previously deducted from the register and save it:
-                                register.setBalance(register.getBalance() - fallenOff.getAmount());
-                                register.update();
-
                                 // If this was a transfer that had recorded the expected other side in
                                 // another register's forecast, that expectation goes with it -- the
                                 // transfer is not going to arrive there either.
                                 new TransferCounterpartController(sessionController)
                                         .deleteCounterpartsFor(fallenOff);
 
-                                // And delete the transaction that has fallen off (this also removes its splits and
+                                // Delete the transaction that has fallen off (this also removes its splits and
                                 // forecast_transaction_split links):
                                 fallenOff.delete();
+
+                                // ...and only then take its money back out of the balance.  Same rule
+                                // as creditToRegisterBalance, in the other direction:  reversing first
+                                // and failing to delete leaves a transaction in the register whose
+                                // amount has already been removed from the balance.
+                                register.setBalance(register.getBalance() - fallenOff.getAmount());
+                                register.update();
 
                                 // Remove any unplanned forecast transaction that is now left with no linked split:
                                 for (ForecastTransaction ft : candidateForecastTransactions) {
@@ -1665,6 +1932,22 @@ public class ImportController {
                         regTrxIndex++;
                     } // End else the key to the imported transaction is greater than the key to existing transaction.
                 } // End while there are provisional or register transactions left to process.
+
+                // Every row in the file has to end up in the register, one way or another:  inserted
+                // as new, or matched to a row already there.  This checks that it did.
+                //
+                // It exists because on 09-08-2026 four charges did not.  Klarna $199.05, HelloFresh
+                // $39.96, Google $5.99 and Starbucks $10.91 were each announced as "already imported",
+                // each shown a split belonging to a different transaction, and none of them existed in
+                // the database afterwards -- not in that register, not in any register, at any date.
+                // $255.91 of real spending, gone without an error, and the run reported the register
+                // as off by exactly $255.91 a few lines later without connecting the two.
+                //
+                // Reporting only.  Re-importing here would mean deciding what went wrong, and this
+                // cannot know;  what it can do is make sure the next one is noticed rather than
+                // reconciled away by hand months later.
+                reportProvisionalTransactionsNotInRegister(provisionalTransactions);
+
             } // End if there were any transactions in the provisional transactions file.
 
             // Save off the pending transactions file:

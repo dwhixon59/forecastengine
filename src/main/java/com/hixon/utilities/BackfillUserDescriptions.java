@@ -1,31 +1,46 @@
 package com.hixon.utilities;
 
+import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
+import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.utility.DatabaseConnectionManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
+/**
+ * Rebuilds {@code transaction.user_description} for every historical row.
+ *
+ * <p>The column is written at import time now, so this tool only has to catch up the rows that were
+ * imported before that happened -- and to re-extract the rows whose values came from an older,
+ * buggier version of the extraction.  It clears the column and rebuilds it from the payee, so it is
+ * safe to run more than once and always leaves the column consistent with the current extraction.
+ *
+ * <p>Extraction is delegated to {@link WellsFargoBank#extractMemoFromPayee(String)}.  This class used
+ * to keep its own copy of that logic, so fixes to the real extraction never reached the historical
+ * rows; do not reintroduce a second copy here.
+ */
 public class BackfillUserDescriptions {
     public static void main(String[] args) throws Exception {
         // Credentials come from db.properties (excluded from version control) — never hardcode them.
         DatabaseConnectionManager mgr = DatabaseConnectionManager.fromProperties();
 
+        int scanned = 0, filled = 0, tooLong = 0;
+
         try (Connection conn = mgr.getConnection()) {
 
-            // Clear out the existing user_description field:
+            // Clear out the existing user_description field, so values left by an older extraction
+            // do not survive the rebuild:
             String clearSql = "UPDATE transaction SET user_description = NULL WHERE user_description IS NOT NULL";
             try (PreparedStatement clearStmt = conn.prepareStatement(clearSql)) {
-                clearStmt.executeUpdate();
+                int cleared = clearStmt.executeUpdate();
+                System.out.println("Cleared " + cleared + " existing user descriptions.");
             }
 
             // 1. Select rows that need backfilling
-            String selectSql = "SELECT bin_to_uuid(idTransaction) as idTransaction, payee FROM transaction WHERE user_description IS NULL";
+            String selectSql = "SELECT bin_to_uuid(idTransaction) as idTransaction, payee FROM transaction "
+                    + "WHERE user_description IS NULL";
             try (PreparedStatement selectStmt = conn.prepareStatement(selectSql);
                  ResultSet rs = selectStmt.executeQuery()) {
 
@@ -33,100 +48,35 @@ public class BackfillUserDescriptions {
                 String updateSql = "UPDATE transaction SET user_description = ? WHERE idTransaction = uuid_to_bin(?)";
                 try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
                     while (rs.next()) {
+                        scanned++;
                         UUID id = UUID.fromString(rs.getString("idTransaction"));
                         String rawText = rs.getString("payee");
 
-                        // 3. Extract description (customize this logic)
-                        String description = extractUserDescription(rawText);
+                        // 3. Extract the memo exactly the way an import does.
+                        String description = WellsFargoBank.extractMemoFromPayee(rawText);
 
-                        // 4. Update row
-                        if (description == null) {
-                            System.out.println("No description found for transaction payee: " + rawText);
+                        // 4. Update the row, if the user typed a memo at all.  Most rows are
+                        //    transfers without one, or are not transfers, and are simply skipped.
+                        if (description == null || description.isBlank()) {
                             continue;
                         }
-                        if (description.isBlank()) {
-                            System.out.println("Empty description found for transaction payee: " + rawText);
-                            continue;
-                        }
-                        if (description.length() > 64) {
-                            System.out.println("Description too long for transaction payee: " + rawText);
-                            continue;
-                        }
-                        if (description.equals("null")) {
-                            System.out.println("Description is 'null' for transaction payee: " + rawText);
-                            continue;
-                        }
-                        if (description.equals(" ")) {
-                            System.out.println("Description is blank for transaction payee: " + rawText);
-                            continue;
-                        }
-                        if (description.equals("0")) {
-                            System.out.println("Description is '0' for transaction payee: " + rawText);
-                            continue;
-                        }
-                        if (description.equals("0.0")) {
-                            System.out.println("Description is '0.0' for transaction payee: " + rawText);
-                            continue;
+                        if (description.length() > Transaction.USER_DESCRIPTION_MAX_LENGTH) {
+                            // Truncate rather than skip, matching Transaction.setUserDescription.
+                            description = description
+                                    .substring(0, Transaction.USER_DESCRIPTION_MAX_LENGTH).trim();
+                            tooLong++;
                         }
                         updateStmt.setString(1, description);
                         updateStmt.setObject(2, id.toString());
                         updateStmt.executeUpdate();
+                        filled++;
                     }
                 }
             }
         }
-    }
 
-    private static final Set<String> STOPWORDS = Set.of(
-            "RECURRING", "TRANSFER", "TO", "FROM", "REF", "#",
-            "EVERYDAY", "CHECKING", "SAVINGS", "WAY2SAVE",
-            "ACCOUNT", "JOINT", "BANKING", "BA", "ONLINE"
-    );
-
-    private static final Pattern maskedAccountPattern = Pattern.compile("X{4,}\\d{2,}");
-    private static final Pattern refPrefixPattern = Pattern.compile("^#?[A-Z0-9]{10,}(\\s+ON\\s+\\d{2}/\\d{2}/\\d{2,4})?", Pattern.CASE_INSENSITIVE);
-    private static final Pattern dateOnlyPattern = Pattern.compile("^ON\\s+\\d{2}/\\d{2}/\\d{2,4}$", Pattern.CASE_INSENSITIVE);
-
-    private static String extractUserDescription(String rawText) {
-        if (rawText == null || rawText.isBlank()) return null;
-
-        rawText = rawText.trim();
-
-        // Step 1: Remove leading #REFCODE and optional date
-        rawText = refPrefixPattern.matcher(rawText).replaceFirst("").trim();
-
-        // Step 2: Look for the last occurrence of "REF #" and take everything after it
-        int refIndex = rawText.toUpperCase().lastIndexOf("REF #");
-        if (refIndex == -1) return null;
-
-        String afterRef = rawText.substring(refIndex + 5).trim();
-        String[] words = afterRef.split("\\s+");
-
-        List<String> cleaned = new ArrayList<>();
-        for (String word : words) {
-            String upper = word.toUpperCase();
-
-            if (STOPWORDS.contains(upper) || maskedAccountPattern.matcher(upper).matches()) {
-                continue;
-            }
-
-            if (word.matches("^[A-Z]{2}\\d[A-Z0-9]{7,}$")) {
-                continue; // Skip duplicate reference codes
-            }
-
-            cleaned.add(word);
-        }
-
-        if (cleaned.isEmpty()) return null;
-
-        String result = String.join(" ", cleaned);
-
-        // Step 3: Reject if the remaining description is just a date
-        if (dateOnlyPattern.matcher(result.toUpperCase()).matches()) {
-            return null;
-        }
-
-        return result;
+        System.out.println("Scanned " + scanned + " transactions; wrote " + filled
+                + " user descriptions (" + tooLong + " truncated to "
+                + Transaction.USER_DESCRIPTION_MAX_LENGTH + " characters).");
     }
 }
-

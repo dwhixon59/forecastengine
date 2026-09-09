@@ -2,12 +2,17 @@ package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityInt;
+import com.hixon.financialApp.model.forecast.ForecastItem;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Transaction;
+
+import java.util.Calendar;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -281,11 +286,28 @@ public class ImportSummaryController {
 
     /**
      * Returns the matched budget item occurrence date as " [due MM-DD-YYYY]", or an empty string
-     * when no forecast occurrence is associated with this split.
+     * when there is no occurrence date worth showing.
      *
      * <p>The date is read directly from the {@link ForecastTransaction} that this split was actually
      * matched to (via its {@link ForecastTransactionSplit} link in the most recent forecast), so it
-     * reflects the true occurrence the transaction was assigned to rather than a re-derived guess.</p>
+     * reflects the true occurrence the transaction was assigned to rather than a re-derived guess.
+     *
+     * <p>Two cases where showing that date plainly would mislead, both seen in the run of
+     * 09-07-2026:
+     *
+     * <p><b>An unplanned occurrence has no due date.</b>  On-demand items generate no occurrences,
+     * so the one a split is linked to was created <em>for that split</em> and dated from the
+     * transaction.  The summary printed
+     * {@code Bill Pay Danni  +$261.00  Other [due 09-03-2026]} for a transaction dated 09-03 --
+     * the same date already in the Date column, restated as though it meant something.  Nothing is
+     * shown for these:  the date is informative only when the item actually planned it.
+     *
+     * <p><b>A rolled split did not come out of the occurrence it is linked to.</b>  The link records
+     * the period the spend belongs to;  {@code ROLL_FORWARD} says the money was taken from later
+     * ones.  The summary said {@code [due 09-02-2026]} for a split the run had just reported as
+     * {@code deducted from ... Planned date = 09-09}.  The roll is annotated rather than resolved:
+     * a roll can spread across several later occurrences and none of them is recorded, so naming
+     * one would be the re-derived guess this method exists to avoid.
      */
     private String buildOccurrenceDate(TransactionSplit split, BudgetItem budgetItem) {
         if (budgetItem == null) {
@@ -297,13 +319,48 @@ public class ImportSummaryController {
             if (fts != null) {
                 ForecastTransaction forecastTransaction = fts.getForecastTransaction();
                 if (forecastTransaction != null && forecastTransaction.getPlannedDate() != null) {
-                    return " [due " + calendarDateToStringDate(forecastTransaction.getPlannedDate()) + "]";
+                    return occurrenceSuffix(forecastTransaction.getPlannedDate(),
+                            isUnplannedOccurrence(forecastTransaction),
+                            fts.getDisposition());
                 }
             }
         } catch (Exception e) {
             logger.debug("Could not resolve budget item occurrence date for summary: {}", e.getMessage());
         }
         return "";
+    }
+
+    /**
+     * The "[due ...]" segment for one split, given everything the decision depends on.
+     *
+     * <p>Separated from the lookup so the rule can be tested without a forecast or a database.  The
+     * two cases it exists for are described on {@link #buildOccurrenceDate}.
+     *
+     * @param plannedDate the linked occurrence's planned date
+     * @param unplanned   whether that occurrence was created to record a spend rather than plan one
+     * @param disposition how the split was applied, or null if not recorded
+     * @return the segment to append, including its leading space, or an empty string
+     */
+    static String occurrenceSuffix(Calendar plannedDate, boolean unplanned, SplitDisposition disposition) {
+        if (plannedDate == null || unplanned) {
+            return "";
+        }
+        String rolled = disposition == SplitDisposition.ROLL_FORWARD ? ", rolled forward" : "";
+        return " [due " + calendarDateToStringDate(plannedDate) + rolled + "]";
+    }
+
+    /**
+     * Whether this occurrence was created to record a spend rather than to plan one.
+     *
+     * <p>The same rule the orphan check uses:  an item is unplanned when its howOccurs says so, or
+     * when it has no budget period at all.  Kept to that rule deliberately -- two places deciding
+     * "unplanned" differently would be worse than either answer.
+     */
+    private boolean isUnplannedOccurrence(ForecastTransaction forecastTransaction) throws Exception {
+        ForecastItem item = forecastTransaction.getForecastItem();
+        return item != null
+                && (item.getHowOccurs() == Item.HowOccurs.UNPLANNED
+                    || item.getPeriod() == Item.PeriodType.ON_DEMAND);
     }
 
     /** Returns "MM-DD" from the transaction's auth date or post date. */

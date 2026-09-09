@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.utility.Utility;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -633,6 +634,10 @@ public class TransactionUtilities {
      * @throws Exception If a database or query error occurs.
      */
     public static List<Transaction> getByUserDescriptionFullText(String userDescription) throws Exception {
+        // The relevance column has to score against the term actually being searched for.  It used
+        // to score against the literal 'ALIMONY', so ORDER BY relevance ranked every search by
+        // similarity to that one word.
+        String searchTerm = Utility.escapeSqlString(userDescription);
         String query =
                 "WITH ranked_transactions AS ( " +
                         "SELECT " +
@@ -646,7 +651,7 @@ public class TransactionUtilities {
                         "SUBSTRING(tr.payee, LOCATE(' ', tr.payee, LOCATE('#', tr.payee)) + 1) " +
                         ") " +
                         ") AS normalized_payee, " +
-                        "MATCH (user_description) AGAINST ('ALIMONY' IN NATURAL LANGUAGE MODE) AS relevance, " +
+                        "MATCH (user_description) AGAINST ('" + searchTerm + "' IN NATURAL LANGUAGE MODE) AS relevance, " +
                         "ROW_NUMBER() OVER ( " +
                         "PARTITION BY " +
                         "TRIM( " +
@@ -661,7 +666,7 @@ public class TransactionUtilities {
                         "tr.postDate DESC " +
                         ") AS rn " +
                         "FROM transaction tr " +
-                        "WHERE MATCH (user_description) AGAINST ('" + userDescription + "' IN NATURAL LANGUAGE MODE) " +
+                        "WHERE MATCH (user_description) AGAINST ('" + searchTerm + "' IN NATURAL LANGUAGE MODE) " +
                         ") " +
                         "SELECT " +
                         "uuidTransaction AS 'tr.idTransaction', " +

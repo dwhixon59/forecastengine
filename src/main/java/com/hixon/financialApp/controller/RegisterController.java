@@ -17,6 +17,7 @@ import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.BankReferenceNumber;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.UserResponse;
@@ -24,6 +25,7 @@ import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -36,6 +38,14 @@ import static com.hixon.financialApp.utility.ForecastTransactionMatcher.findMatc
 
 public class RegisterController {
     private static final Logger logger = LogManager.getLogger(RegisterController.class);
+
+    /**
+     * How far back to look for a transaction that explains a balance difference.  Long enough to
+     * cover the statement the import just read, short enough that a coincidence from an old period
+     * is not offered as evidence.
+     */
+    private static final int BALANCE_DIFFERENCE_LOOKBACK_MONTHS = 6;
+
 
     /*
      * Fields for RegisterController:
@@ -307,62 +317,101 @@ public class RegisterController {
                     dbRegister.getBalance()) + ".  You should update it.");
         }
 
-        // Get the balance from QFX file if available
+        // Get the balance from QFX file if available, and the date the bank said it was true on
         Double qfxBalance = sessionController.getFinancialInstitution().getImportedLedgerBalance();
-
-        view.sayH4("Current balance of " + register.getName() + ": " +
-                Utility.formatDollarAmount(register.getBalance()));
+        Calendar qfxBalanceAsOf = sessionController.getFinancialInstitution().getImportedLedgerBalanceAsOf();
 
         if (qfxBalance != null) {
-            view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
-            // Check if balances differ
-            if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
-                view.say("\nThe balances differ!");
+            // The question can be asked more than once:  option 4 imports another file, which
+            // changes both the register balance and the downloaded balance, so both are printed
+            // inside the loop and the choice is offered against whatever the re-import produced.
+            boolean settled = false;
+            while (!settled) {
+                settled = true;
 
-                // Offer user three choices
-                String[] choices = {
-                    "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
-                    "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
-                    "3 - Enter a different balance"
-                };
+                view.sayH4("Current balance of " + register.getName() + ": " +
+                        Utility.formatDollarAmount(register.getBalance()));
+                view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
 
-                view.say("\nWhat would you like to do?");
-                for (String choice : choices) {
-                    view.say("  " + choice);
+                // Check if balances differ
+                if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
+                    view.say("\nThe balances differ!");
+                    explainBalanceDifference(register, qfxBalance);
+
+                    // Offer user four choices
+                    String[] choices = {
+                        "1 - Use balance from QFX file (" + Utility.formatDollarAmount(qfxBalance) + ")",
+                        "2 - Keep database balance (" + Utility.formatDollarAmount(register.getBalance()) + ")",
+                        "3 - Enter a different balance",
+                        "4 - Import a wider statement file to find what is missing"
+                    };
+
+                    view.say("\nWhat would you like to do?");
+                    for (String choice : choices) {
+                        view.say("  " + choice);
+                    }
+
+                    String response = view.getResponseString("Enter your choice (1-4)", null,
+                        ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                        ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+
+                    Double newBalance = null;
+                    switch (response) {
+                        case "1":
+                            newBalance = qfxBalance;
+                            break;
+                        case "2":
+                            // Keep current balance - do nothing
+                            break;
+                        case "3":
+                            newBalance = view.getResponseCurrency("Enter new balance",
+                                    register.getBalance(), true, true, false, false, false, null);
+                            break;
+                        case "4":
+                            if (importWiderStatement(register)) {
+                                Double reimported =
+                                        sessionController.getFinancialInstitution().getImportedLedgerBalance();
+                                Calendar reimportedAsOf =
+                                        sessionController.getFinancialInstitution().getImportedLedgerBalanceAsOf();
+
+                                // A wider statement is not necessarily a newer one.  Keep whichever
+                                // balance the bank dated later;  see keepLaterLedgerBalance.
+                                Double kept = keepLaterLedgerBalance(qfxBalance, qfxBalanceAsOf,
+                                        reimported, reimportedAsOf);
+                                if (reimported != null && !Objects.equals(kept, reimported)) {
+                                    view.say("That statement's balance of " +
+                                            Utility.formatDollarAmount(reimported) + " is dated " +
+                                            Utility.calendarDateToStringDate(reimportedAsOf) +
+                                            ", older than the one already downloaded.  Keeping the " +
+                                            "newer figure to compare against.");
+                                }
+                                qfxBalance = kept;
+                                if (isLater(reimportedAsOf, qfxBalanceAsOf)) {
+                                    qfxBalanceAsOf = reimportedAsOf;
+                                }
+                                // Ask again against the balances the re-import produced.
+                                settled = false;
+                            }
+                            break;
+                        default:
+                            view.say("Invalid choice. Keeping current balance.");
+                            break;
+                    }
+
+                    if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
+                        register.setBalance(newBalance);
+                        register.update();
+                        wasCorrect = false;
+                    }
+                } else {
+                    view.say("Balance matches QFX file. No update needed.");
                 }
-
-                String response = view.getResponseString("Enter your choice (1-3)", null,
-                    ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
-                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
-
-                Double newBalance = null;
-                switch (response) {
-                    case "1":
-                        newBalance = qfxBalance;
-                        break;
-                    case "2":
-                        // Keep current balance - do nothing
-                        break;
-                    case "3":
-                        newBalance = view.getResponseCurrency("Enter new balance",
-                                register.getBalance(), true, true, false, false, false, null);
-                        break;
-                    default:
-                        view.say("Invalid choice. Keeping current balance.");
-                        break;
-                }
-
-                if (newBalance != null && !Utility.isEqualCurrency(newBalance, register.getBalance())) {
-                    register.setBalance(newBalance);
-                    register.update();
-                    wasCorrect = false;
-                }
-            } else {
-                view.say("Balance matches QFX file. No update needed.");
             }
         } else {
             // QFX balance not available (CSV file or other format)
+            view.sayH4("Current balance of " + register.getName() + ": " +
+                    Utility.formatDollarAmount(register.getBalance()));
             Double newBalance = view.getResponseCurrency("Enter new balance (or press Enter to keep current balance)",
                     register.getBalance(), true, true, false, false, false, null);
 
@@ -374,6 +423,240 @@ public class RegisterController {
         }
 
         return wasCorrect;
+    }
+
+    /**
+     * Choose between the balance already in hand and the one a re-import just produced, keeping
+     * whichever the bank dated later.
+     *
+     * <p>A statement pulled over a wider date range is not necessarily a newer statement, and the
+     * feature that fetches one exists precisely to reach further back.  The wider Citi download that
+     * would recover the 09-04-2026 gap carries <b>DTASOF 20260901, -11,886.30</b> -- three days older
+     * than the -11,986.25 already imported, and $99.95 short of it, because it predates the Echst
+     * charge.  Taking it as "the downloaded balance" would offer to move the register backwards, and
+     * the user has no way to see that from the number alone.
+     *
+     * <p>Undated balances lose to dated ones, and when neither is dated the newly imported one wins:
+     * that is the existing behaviour, and there is nothing to justify overriding it.
+     *
+     * @param current       the balance the question has been working with, or null
+     * @param currentAsOf   when the bank said {@code current} was true, or null if unknown
+     * @param reimported    the balance the re-import produced, or null
+     * @param reimportedAsOf when the bank said {@code reimported} was true, or null if unknown
+     * @return whichever balance is the more recent statement of the account
+     */
+    static Double keepLaterLedgerBalance(Double current, Calendar currentAsOf,
+                                         Double reimported, Calendar reimportedAsOf) {
+        if (reimported == null) {
+            return current;
+        }
+        if (current == null) {
+            return reimported;
+        }
+        // Only a date can demote the newly imported balance;  without one there is nothing to say it
+        // is stale, and the file the user just chose is the better guess.
+        if (currentAsOf != null && reimportedAsOf != null && reimportedAsOf.before(currentAsOf)) {
+            return current;
+        }
+        return reimported;
+    }
+
+    /**
+     * Whether {@code candidate} is a later date than {@code existing}, treating an unknown date as
+     * never later -- an undated balance must not displace a dated one.
+     */
+    static boolean isLater(Calendar candidate, Calendar existing) {
+        if (candidate == null) {
+            return false;
+        }
+        return existing == null || candidate.after(existing);
+    }
+
+    /**
+     * Import a file the user names, to recover a charge that fell between two download windows.
+     *
+     * <p>The gap this exists for:  the bank posts a charge late, so it is absent from the download
+     * that covered its date and older than the start of the next one.  It is then in no file the
+     * app will ever be handed, and the register is permanently short by it.  Observed on
+     * 09-04-2026:  a $323.99 Manatee County Utilities charge dated 08-27 is in neither
+     * qdl20260828.QFX (which covers 08-27 and has that day's other two charges) nor
+     * qdl20260904.QFX (which starts 08-28), and exists nowhere in the database.
+     *
+     * <p>Re-importing an overlapping statement is safe.  The import already has two lines of
+     * defence against re-inserting a charge it holds:  the bank's import record id, and behind it
+     * a date/amount/payee question for the banks whose ids move -- Citi's FITID is its position in
+     * that particular download, so a wider pull renames every charge.  The user is asked once per
+     * apparent duplicate rather than having the answer assumed.
+     *
+     * @param register the register being verified
+     * @return true if a file was imported, so the caller should re-read the balances and ask again
+     */
+    private boolean importWiderStatement(Register register) throws QuitException, CancelException {
+
+        view.say("A charge the bank posted late can be missing from every file downloaded so far:  " +
+                "too late for the download covering its date, too old for the next one.");
+        view.say("Download a statement covering a wider date range, then name it here.  Charges " +
+                "already in the register are recognised, and you will be asked about any that " +
+                "cannot be told apart.");
+        view.say("Note that the file is renamed with an '_old' suffix once imported, as every " +
+                "import file is.");
+
+        String filePath;
+        try {
+            filePath = view.getResponseString("Full path of the statement file to import", null,
+                    ViewInt.ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+        } catch (SkipException e) {
+            return false;
+        }
+
+        if (filePath == null || filePath.isBlank()) {
+            view.say("No file named.  Leaving the balance question as it was.");
+            return false;
+        }
+
+        filePath = filePath.trim().replace("\"", "");
+        if (!new File(filePath).isFile()) {
+            view.say("There is no file at " + filePath + ".");
+            return false;
+        }
+
+        // The override lives in the register's path cache, so it applies to this import and no
+        // other;  the register's configured filename and directory are untouched.
+        register.overrideTrxImportFilePath(filePath);
+        try {
+            new ImportController(sessionController).importRegisterTransactionFile();
+            return true;
+
+        } catch (QuitException e) {
+            throw e;
+
+        } catch (Exception e) {
+            // A failed re-import must not cost the user the balance question they were already in
+            // the middle of;  report it and let them choose one of the other three options.
+            view.say("The statement could not be imported:  " + e.getMessage());
+            logger.debug("Wider statement import failed for " + filePath, e);
+            return false;
+
+        } finally {
+            register.clearTrxImportFilePathCache();
+        }
+    }
+
+    /**
+     * How many days either side of a transfer to look for its other side.
+     *
+     * <p>Both sides of an internal transfer normally post the same day;  a few days covers a weekend
+     * and a bank that posts the two legs separately.  It is deliberately small -- the reference is
+     * doing the identifying, and a wide window only adds chances for an unrelated row to carry a
+     * repeated reference.
+     */
+    private static final int TRANSFER_REFERENCE_DAY_WINDOW = 5;
+
+    /**
+     * Identify the register a transfer came from by the bank's own reference number.
+     *
+     * <p>Wells Fargo writes the same reference into both sides, so where one is present and one row
+     * matches it, that row <em>is</em> the other side.  Both legs of the 09-07-2026 transfer are in
+     * the database carrying {@code REF #IB0338WKXT}, for $261.00 and -$261.00 on the same day, in
+     * Bill Pay Dave and Bill Pay Danni -- and the import still guessed the wrong register and asked.
+     *
+     * <p>Ambiguity is not resolved here.  If the matching rows span more than one register the
+     * reference has not identified anything, and inventing an answer would be worse than the
+     * question:  it falls through and the user is asked, as before.
+     *
+     * @return the register the transfer came from, or null when the reference is absent, matches
+     *         nothing, or matches more than one register
+     */
+    private Register resolveByBankReference(Calendar date, double amount, String payee) {
+
+        String reference = BankReferenceNumber.extract(payee);
+        if (reference == null) {
+            logger.debug("  No bank reference in payee; falling through to the register filters");
+            return null;
+        }
+
+        try {
+            List<Transaction> matches = Transaction.findByBankReference(
+                    reference, register.getId(), date, amount, TRANSFER_REFERENCE_DAY_WINDOW);
+
+            Set<UUID> registerIds = new HashSet<>();
+            for (Transaction match : matches) {
+                registerIds.add(match.getIdRegister());
+            }
+
+            if (registerIds.size() != 1) {
+                logger.debug("  Bank reference {} matched {} register(s); falling through",
+                        reference, registerIds.size());
+                return null;
+            }
+
+            Register resolved = Register.getById(registerIds.iterator().next());
+            if (resolved == null) {
+                return null;
+            }
+
+            view.say("\u25b8 Identified by the bank reference " + reference + ": " + resolved.getName() + ".");
+            logger.debug("  Bank reference {} identified register '{}'", reference, resolved.getName());
+            return resolved;
+
+        } catch (Exception e) {
+            // An accelerator that fails must cost nothing but its own benefit.  The filters and the
+            // question below are exactly what would have run had there been no reference at all.
+            logger.debug("Bank reference lookup failed; falling through to the register filters", e);
+            return null;
+        }
+    }
+
+    /**
+     * Say what the balance difference amounts to, and name any transaction of exactly that amount.
+     *
+     * <p>The choices offered above overwrite the balance;  none of them explains it, so the user was
+     * picking between two numbers blind.  A register balance is accumulated rather than derived, so
+     * a discrepancy is rarely drift:  it is usually one charge counted twice, or one never counted.
+     *
+     * <p>A named transaction is the good case, not the only one.  The $323.99 that prompted this on
+     * 09-04-2026 turned out to have no row at all -- the bank posted it after the download window
+     * that covered its date, so it reached no import file and nothing in the database -- and this
+     * lookup finds nothing for a gap of that shape.  Saying the difference out loud is still worth
+     * doing:  it is what distinguishes a missing charge from a double count, and option 4 exists for
+     * the case this method comes up empty on.
+     *
+     * <p>Read-only:  this reports, it never repairs.  Nothing here changes a balance.
+     *
+     * @param register   the register being verified
+     * @param qfxBalance the balance the bank sent down
+     */
+    private void explainBalanceDifference(Register register, double qfxBalance) {
+        double difference = qfxBalance - register.getBalance();
+
+        view.say("The register is off by " + Utility.formatDollarAmount(difference) +
+                " against the downloaded balance.");
+
+        try {
+            Calendar since = Calendar.getInstance();
+            since.add(Calendar.MONTH, -BALANCE_DIFFERENCE_LOOKBACK_MONTHS);
+
+            List<Transaction> matches =
+                    Transaction.findByExactAmountInRegister(register.getId(), difference, since);
+
+            if (matches.isEmpty()) {
+                return;
+            }
+
+            view.say("The difference is exactly the amount of " +
+                    (matches.size() == 1 ? "this transaction:" : "each of these transactions:"));
+            for (Transaction transaction : matches) {
+                view.say("   " + Utility.calendarDateToStringDate(transaction.getPostDate()) + "  " +
+                        Utility.formatDollarAmount(transaction.getAmount()) + "  " + transaction.getPayee());
+            }
+            view.say("Check whether it was counted twice or not counted at all before choosing.");
+
+        } catch (EntityException | SQLException e) {
+            // Reporting is a courtesy;  failing to report must never stop the user correcting the
+            // balance, which is what they came here to do.
+            logger.debug("Could not look for a transaction matching the balance difference", e);
+        }
     }
 
     /**
@@ -429,6 +712,19 @@ public class RegisterController {
 
         view.say("\nThere is no account number in the following transaction: " +
                 Utility.calendarDateToStringSlashDate(date) + " " + payee + " " + Utility.formatDollarAmount(amount));
+
+        // The bank's own reference for this transfer, when it issued one.  This is the strongest
+        // evidence available and it is checked before anything else, because everything below is a
+        // guess by comparison:  the filters narrow on account type and user, and when they cannot
+        // settle it the user is asked.  On 09-07-2026 that chain guessed Dave's Spending Account for
+        // a transfer whose reference named Bill Pay Danni outright, and the user had to correct it.
+        //
+        // The reference confirms;  it never gates.  No reference, or nothing matching it, and this
+        // returns null so the transfer reaches exactly the questions it reaches today.
+        Register byReference = resolveByBankReference(date, amount, payee);
+        if (byReference != null) {
+            return byReference;
+        }
 
         // if this is a recurring transfer:
         if (recurring) {

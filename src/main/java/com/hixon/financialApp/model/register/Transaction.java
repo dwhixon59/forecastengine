@@ -34,6 +34,8 @@ public class Transaction extends IndependentEntity {
     public static final String CLEARED_TRANSACTIONS_FILE = "cleared transactions";
     /** File name for provisional transactions. */
     public static final String PROVISIONAL_TRANSACTIONS_FILE = "provisional transactions";
+    /** Width of the transaction.user_description column, which extracted memos are truncated to. */
+    public static final int USER_DESCRIPTION_MAX_LENGTH = 64;
 
     /*
      * Fields of the Transaction class:
@@ -48,6 +50,13 @@ public class Transaction extends IndependentEntity {
     private int checkNumber = 0;
     /** The payee for the transaction. */
     private String payee = null;
+    /**
+     * The user-provided memo extracted from the payee, or null if the user did not type one.
+     * Wells Fargo appends the memo to the transfer description; see
+     * {@code FinancialInstitutionInt.extractUserDescription}.  Limited to the 64 characters the
+     * {@code transaction.user_description} column holds.
+     */
+    private String userDescription = null;
     /** The amount of the transaction. */
     private double amount = 0;
     /** The balance after the transaction. */
@@ -78,6 +87,7 @@ public class Transaction extends IndependentEntity {
     private static final String selectColumns = "bin_to_uuid(tr.idTransaction) as 'tr.idTransaction', " +
             "tr.postDate as 'tr.postDate', tr.authorizationDate as 'tr.authorizationDate', tr.amount as 'tr.amount', " +
             "tr.cleared as 'tr.cleared', tr.checkNumber as 'tr.checkNumber', tr.payee as 'tr.payee', " +
+            "tr.user_description as 'tr.user_description', " +
             "tr.balance as 'tr.balance', tr.isImproper as 'tr.isImproper', tr.isNew as 'tr.isNew', " +
             "tr.importRecordId as 'tr.importRecordId', bin_to_uuid(tr.Register_idRegister) as 'tr.idRegister', " +
             "bin_to_uuid(tr.Merchant_idMerchant) as 'tr.idMerchant'";
@@ -111,8 +121,18 @@ public class Transaction extends IndependentEntity {
     }
 
     private static final String insertQuery = "insert into transaction (idTransaction, " +
-            "postDate, authorizationDate, amount, cleared, checkNumber, payee, balance, isImproper, isNew, " +
-            "importRecordId, Register_idRegister, Merchant_idMerchant) values(";
+            "postDate, authorizationDate, amount, cleared, checkNumber, payee, user_description, balance, " +
+            "isImproper, isNew, importRecordId, Register_idRegister, Merchant_idMerchant) values(";
+
+    /**
+     * Returns the user description as a SQL literal, or NULL when the user typed no memo.
+     * Most transactions have no memo, so the column must hold a real NULL rather than the
+     * string "null".
+     * @return SQL literal for the user description
+     */
+    private String getUserDescriptionSqlValue() {
+        return (userDescription == null) ? "NULL" : "'" + Utility.escapeSqlString(userDescription) + "'";
+    }
 
     /**
      * Returns the SQL insert query for this transaction.
@@ -123,7 +143,8 @@ public class Transaction extends IndependentEntity {
         String merchantIdValue = (getIdMerchant() == null) ? "NULL" : "uuid_to_bin('" + getIdMerchant() + "')";
         return insertQuery + "uuid_to_bin('" + id + "'), " + Utility.calendarDateToSqlDateString(postDate) + ", " +
                 Utility.calendarDateToSqlDateString(authorizationDate) + ", " + amount + ", " + cleared + ", " +
-                checkNumber + ", \"" + payee + "\", " + balance + ", " + isImproper + ", " + isNew + ", \"" +
+                checkNumber + ", \"" + payee + "\", " + getUserDescriptionSqlValue() + ", " + balance + ", " +
+                isImproper + ", " + isNew + ", \"" +
                 importRecordId + "\", uuid_to_bin('" + getIdRegister() + "'), " + merchantIdValue + ")";
     }
 
@@ -138,7 +159,8 @@ public class Transaction extends IndependentEntity {
         String merchantUpdateClause = (getIdMerchant() == null) ? "" : ", Merchant_idMerchant = " + merchantIdValue;
         return getInsertQuery() + " on duplicate key update postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 ", authorizationDate = " + Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount
-                + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\", balance = "
+                + ", cleared = " + cleared + ", checkNumber = " + checkNumber + ", payee = \"" + payee + "\""
+                + ", user_description = " + getUserDescriptionSqlValue() + ", balance = "
                 + balance + ", isImproper = " + isImproper + ", isNew = " + isNew +
                 ", importRecordId = \"" + importRecordId + "\", Register_idRegister = uuid_to_bin('" + getIdRegister() + "')" +
                 merchantUpdateClause;
@@ -170,7 +192,8 @@ public class Transaction extends IndependentEntity {
     public String getUpdateByIdQuery() {
         return updateQuery + "postdate = " + Utility.calendarDateToSqlDateString(postDate) + ", authorizationDate = " +
                 Utility.calendarDateToSqlDateString(authorizationDate) + ", amount = " + amount + ", cleared = " +
-                cleared + ", checkNumber = " + checkNumber + ", payee = '" + payee + "', balance = " + balance +
+                cleared + ", checkNumber = " + checkNumber + ", payee = '" + payee + "'" +
+                ", user_description = " + getUserDescriptionSqlValue() + ", balance = " + balance +
                 ", isImproper = " + isImproper + ", isNew = " + isNew + ", importRecordId = '" + importRecordId +
                 "', Register_idRegister = uuid_to_bin('" + idRegister + "'), Merchant_idMerchant = uuid_to_bin('" +
                 idMerchant + "') " +
@@ -507,6 +530,32 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * Gets the user-provided memo extracted from the payee.
+     * @return the user description, or null if the user typed no memo
+     */
+    public String getUserDescription() {
+        return userDescription;
+    }
+
+    /**
+     * Sets the user-provided memo extracted from the payee.  A blank memo is stored as null, and a
+     * long one is truncated to the 64 characters the column holds.
+     * @param userDescription the user description, or null if there is none
+     */
+    public void setUserDescription(String userDescription) {
+        if (userDescription != null) {
+            userDescription = userDescription.trim();
+            if (userDescription.isEmpty()) {
+                userDescription = null;
+            } else if (userDescription.length() > USER_DESCRIPTION_MAX_LENGTH) {
+                userDescription = userDescription.substring(0, USER_DESCRIPTION_MAX_LENGTH).trim();
+            }
+        }
+        this.userDescription = userDescription;
+        setDirty(true);
+    }
+
+    /**
      * Gets the import record ID.
      * @return import record ID
      */
@@ -663,6 +712,53 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * Find a transaction already in this register that looks like the same charge:  same date, same
+     * amount, same payee.
+     *
+     * <p>The second line of defence behind {@link #getByImportRecordId(String, UUID)}, for banks
+     * whose import record id is not the stable identity it is supposed to be.  Citi's OFX
+     * {@code FITID} is {@code YYYYMMDD} followed by the transaction's <em>position in that
+     * download</em>, restarting at {@code 0001} in every file -- so a statement pulled from a
+     * different start date re-issues fresh ids for charges already imported, the id lookup finds
+     * nothing, and the same charge is inserted again.  Eighteen such duplicates accumulated in one
+     * year, and three of them in a single import were the whole of a $615.31 balance discrepancy.
+     *
+     * <p>This is deliberately <b>not</b> treated as proof.  Two identical charges on one day are
+     * ordinary -- two $1.00 test transfers, two coffees at the same shop -- so the caller asks
+     * before skipping.  A duplicate the user waves through is untidy; a real transaction silently
+     * dropped is money that never appears anywhere.
+     *
+     * @param idRegister the register being imported into
+     * @param postDate   the transaction's post date
+     * @param amount     the transaction's amount, compared to the cent
+     * @param payee      the raw payee text, compared exactly
+     * @return the transaction already held, or null if this charge is new
+     */
+    public static Transaction getByDateAmountAndPayee(UUID idRegister, Calendar postDate, double amount,
+                                                      String payee) throws EntityException, SQLException {
+
+        if (idRegister == null || postDate == null || payee == null) {
+            return null;
+        }
+
+        String query = getSelectQuery() +
+                " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
+                " and tr.postDate = " + Utility.calendarDateToSqlDateString(postDate) +
+                " and abs(tr.amount - " + amount + ") < 0.005" +
+                " and tr.payee = '" + Utility.escapeSqlString(payee) + "'" +
+
+                // Cleared rows only.  A provisional row matching an incoming cleared one is not a
+                // duplicate at all -- it is the same charge before it posted, and the import already
+                // has a phase that merges the two.  Matching it here would hand the caller the
+                // pending row, which has splits, and that skips the reconciliation entirely.
+                " and tr.cleared = 1";
+
+        ResultSet rs = getRS(query, "Database error encountered looking for an already-imported copy of a " +
+                "transaction in register " + idRegister + ".");
+        return (rs != null && rs.next()) ? new Transaction(rs) : null;
+    }
+
+    /**
      * Find the transactions in another register that could be the other side of this movement of
      * money:  the opposite amount, within a few days.
      *
@@ -710,6 +806,121 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * The query behind {@link #findByBankReference}, extracted so it can be asserted without a
+     * database.
+     *
+     * <p>The reference is matched as a substring of the payee because there is no column for it --
+     * the bank writes it into the description and nothing parses it on the way in.  That is loose on
+     * its own, so two further conditions carry the weight:  the amount must be this transaction's
+     * exact negation, and the date must be close.  A reference is 10 alphanumerics; a row that
+     * carries the same one, for the opposite amount, within days, in another register, is the other
+     * side of this movement and not a coincidence.
+     *
+     * @param reference        the bank reference, already extracted from the payee
+     * @param excludeRegister  the register being imported, whose own side must not match itself
+     * @param from             earliest post date to consider
+     * @param to               latest post date to consider
+     * @param amount           this side's amount; the search is for its negation
+     */
+    static String bankReferenceQuery(String reference, UUID excludeRegister, Calendar from, Calendar to,
+                                     double amount) {
+        return getSelectQuery() +
+                " where tr.Register_idRegister <> uuid_to_bin('" + excludeRegister + "')" +
+                " and tr.payee like '%" + Utility.escapeSqlString(reference) + "%'" +
+                " and abs(tr.amount - " + (-amount) + ") < 0.005" +
+                " and tr.postDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to);
+    }
+
+    /**
+     * Find the other side of a transfer by the bank's own reference number.
+     *
+     * <p>Wells Fargo writes the same reference into both sides of a transfer, so where one exists it
+     * is an identity rather than a guess.  About 79% of the transfer payees in this database carry
+     * one -- measured as payees containing "TRANSFER", 2,504 of 3,170 -- which makes it the most
+     * reliable signal available for the question "which register did this come from".
+     *
+     * <p><b>The reference confirms a match.  It never gates one.</b>  A transfer without one, or with
+     * one nothing matches, must reach exactly the questions it reaches today:  this returns an empty
+     * list and the caller carries on.  See {@link BankReferenceNumber} for the rule.
+     *
+     * @param reference       the bank reference, or null when the payee carries none
+     * @param excludeRegister the register being imported
+     * @param date            this transaction's date
+     * @param amount          this transaction's amount; the search is for its negation
+     * @param dayWindow       how many days either side of {@code date} to consider
+     * @return the matching transactions, possibly empty; never null
+     */
+    public static List<Transaction> findByBankReference(String reference, UUID excludeRegister, Calendar date,
+                                                        double amount, int dayWindow)
+            throws EntityException, SQLException {
+
+        List<Transaction> matches = new ArrayList<>();
+        if (reference == null || reference.isBlank() || excludeRegister == null || date == null) {
+            return matches;
+        }
+
+        Calendar from = (Calendar) date.clone();
+        from.add(Calendar.DATE, -dayWindow);
+        Calendar to = (Calendar) date.clone();
+        to.add(Calendar.DATE, dayWindow);
+
+        ResultSet rs = getRS(bankReferenceQuery(reference, excludeRegister, from, to, amount),
+                "Database error encountered looking for the other side of a transfer by bank reference " +
+                        reference + ".");
+        while (rs != null && rs.next()) {
+            matches.add(new Transaction(rs));
+        }
+        return matches;
+    }
+
+    /**
+     * Find transactions in a register whose amount is exactly some figure -- used to put a name to a
+     * balance discrepancy.
+     *
+     * <p>A register balance is accumulated, not derived, so when it disagrees with the bank the
+     * difference is usually not drift but one specific charge that moved the balance twice or not at
+     * all.  The user was being asked to choose between two numbers with nothing to go on;  a
+     * transaction of exactly the difference is the evidence they were missing.
+     *
+     * <p>Finding nothing is an answer too, and a useful one:  it rules out a double count and points
+     * at a charge that never reached the register at all, which is what the $323.99 on 09-04-2026
+     * turned out to be.
+     *
+     * <p>Exact to the cent deliberately.  A near-match is not evidence of anything, and offering one
+     * would send the user looking at an innocent transaction.
+     *
+     * @param idRegister the register whose balance is in question
+     * @param amount     the difference to look for; matched on absolute value, since whether the
+     *                   balance is over or under does not say which sign the charge had
+     * @param since      only consider transactions on or after this date, or null for no limit
+     * @return the matching transactions, most recent first, possibly empty
+     */
+    public static List<Transaction> findByExactAmountInRegister(UUID idRegister, double amount, Calendar since)
+            throws EntityException, SQLException {
+
+        List<Transaction> matches = new ArrayList<>();
+        if (idRegister == null) {
+            return matches;
+        }
+
+        String query = getSelectQuery() +
+                " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
+                " and abs(abs(tr.amount) - " + Math.abs(amount) + ") < 0.005";
+        if (since != null) {
+            query += " and tr.postDate >= " + Utility.calendarDateToSqlDateString(since);
+        }
+        query += " order by tr.postDate desc";
+
+        ResultSet rs = getRS(query, "Database error encountered looking for a transaction matching a " +
+                "balance difference in register " + idRegister + ".");
+        while (rs != null && rs.next()) {
+            matches.add(new Transaction(rs));
+        }
+        return matches;
+    }
+
+    /**
      * Loads transaction data from a ResultSet.
      * @param rs the ResultSet
      * @throws SQLException if a SQL error occurs
@@ -721,6 +932,7 @@ public class Transaction extends IndependentEntity {
         cleared = rs.getBoolean("tr.cleared");
         checkNumber = rs.getInt("tr.checkNumber");
         payee = rs.getString("tr.payee");
+        userDescription = rs.getString("tr.user_description");
         amount = rs.getDouble("tr.amount");
         balance = rs.getDouble("tr.balance");
         isImproper = rs.getBoolean("tr.isImproper");

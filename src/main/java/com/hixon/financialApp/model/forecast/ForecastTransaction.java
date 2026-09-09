@@ -534,6 +534,112 @@ public class ForecastTransaction extends IndependentEntity {
         return forecastTransactions;
     }
 
+    /**
+     * The occurrence of a budget item nearest a date, whether or not anything is left of it.
+     *
+     * <p>Deliberately not filtered on {@code remainingAmount}, unlike almost every other lookup here
+     * -- a spent occurrence is precisely what this is for.  When an import cannot match a charge, the
+     * reason is often that the occurrence it belongs to has already been consumed, and the user is
+     * shown a ranked list of budget items with nothing to say why the obvious one did not take it.
+     *
+     * @param idBudgetItem the budget item whose occurrences to search
+     * @param idForecast   the forecast to search within
+     * @param date         the transaction date to measure from
+     * @param dayWindow    how many days either side to consider;  matching the window the matcher
+     *                     gathers candidates over keeps the answer relevant to why it failed
+     * @return the nearest occurrence, or null when the item has none in that window
+     */
+    public static ForecastTransaction findNearestOccurrenceForBudgetItem(UUID idBudgetItem, UUID idForecast,
+                                                                         Calendar date, int dayWindow)
+            throws EntityException, SQLException {
+        if (idBudgetItem == null || idForecast == null || date == null) {
+            return null;
+        }
+
+        Calendar from = (Calendar) date.clone();
+        from.add(Calendar.DATE, -dayWindow);
+        Calendar to = (Calendar) date.clone();
+        to.add(Calendar.DATE, dayWindow);
+
+        String query = getSelectQuery() +
+                " inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem" +
+                " where fi.BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "')" +
+                " and fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "')" +
+                " and ft.plannedDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(to) +
+                " order by abs(datediff(ft.plannedDate, " + Utility.calendarDateToSqlDateString(date) +
+                ")) asc, ft.plannedDate asc";
+
+        ResultSet rs = EntityInt.getRS(query, "Database error encountered looking for the nearest occurrence of " +
+                "budget item " + idBudgetItem + ".");
+        if (rs != null && rs.next()) {
+            return new ForecastTransaction(rs);
+        }
+        return null;
+    }
+
+    /**
+     * The occurrences a roll-forward may move an overage into:  everything with something left,
+     * except the occurrence being overdrawn and everything before it.
+     *
+     * <p>{@link #getNonZeroForecastTransactionsForBudgetItem} is deliberately not used here.  It
+     * filters on {@code remainingAmount <> 0} and orders from the start of the forecast, so when an
+     * occurrence is only <em>partly</em> overdrawn -- the split is larger than what is left, but
+     * something is still left -- that occurrence is itself the first row it returns.  Rolling then
+     * deducts the overage from the very occurrence it is rolling out of, double-counting the split
+     * against one period.  On 09-08-2026 a $-4.99 charge against an occurrence holding $-3.18
+     * offered "Roll would use" and named that same 09-04 occurrence.
+     *
+     * <p>The date floor matters as much as the exclusion:  matching by id alone would still admit
+     * <em>earlier</em> occurrences, moving an overage backwards into a period that has already been
+     * reported and closed.  Same-day siblings are allowed through, being neither the overdrawn
+     * occurrence nor in the past.
+     *
+     * @param idBudgetItem the budget item whose occurrences to roll into
+     * @param idForecast   the forecast to search within
+     * @param overdrawn    the occurrence being overdrawn, excluded along with everything before it
+     * @return the occurrences a roll-forward may use, earliest first;  possibly empty
+     */
+    public static ForecastTransactionIterator getRollForwardTargets(UUID idBudgetItem, UUID idForecast,
+                                                                    ForecastTransaction overdrawn)
+            throws EntityException {
+
+        if (overdrawn == null) {
+            return getNonZeroForecastTransactionsForBudgetItem(idBudgetItem, idForecast);
+        }
+
+        ResultSet rs = EntityInt.getRS(rollForwardTargetQuery(idBudgetItem, idForecast, overdrawn),
+                "Database error occurred attempting to " +
+                        "get the roll-forward targets for budget item " + idBudgetItem + ".");
+
+        return new ForecastTransactionDatabaseIterator(rs);
+    }
+
+    /**
+     * The SQL behind {@link #getRollForwardTargets}, extracted so the two clauses that make it
+     * different from an ordinary non-zero lookup can be asserted without a database.
+     *
+     * <p>Both clauses are load-bearing.  Without the id exclusion a partly-overdrawn occurrence
+     * matches {@code remainingAmount <> 0} and comes back as its own roll-forward target;  without
+     * the date floor the query would happily return an earlier occurrence and move the overage
+     * backwards into a period that has already been reported.
+     *
+     * @param idBudgetItem the budget item whose occurrences to roll into
+     * @param idForecast   the forecast to search within
+     * @param overdrawn    the occurrence being overdrawn
+     * @return the SQL
+     */
+    static String rollForwardTargetQuery(UUID idBudgetItem, UUID idForecast, ForecastTransaction overdrawn) {
+        return getSelectQuery() + " " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "where ft.remainingAmount <> 0 and " +
+                "fi.BudgetItem_idBudgetItem = uuid_to_bin('" + idBudgetItem + "') and " +
+                "fi.Forecast_idForecast = uuid_to_bin('" + idForecast + "') and " +
+                "ft.plannedDate >= " + Utility.calendarDateToSqlDateString(overdrawn.getPlannedDate()) + " and " +
+                "ft.idForecastTransaction <> uuid_to_bin('" + overdrawn.getId() + "') " +
+                "order by ft.plannedDate asc ";
+    }
+
     public static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 
@@ -859,7 +965,10 @@ public class ForecastTransaction extends IndependentEntity {
                 // If we can't get split amount, just don't show it
             }
 
-            s = "Forecast Transaction (" + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
+            // The leading date is the version, not the planned date.  Unlabelled it read as a
+            // second, contradictory planned date -- "Forecast Transaction (08-29):  Planned Date =
+            // 09-30-2026" -- so it says which one it is.
+            s = "Forecast Transaction (version " + Utility.calendarDateToMonthDayStringDate(getVersion()) + "):  Planned Date = "
                     + calendarDateToStringDate(this.getPlannedDate()) + ", Category = " +
                     this.getForecastItem().getCategory() + ", Payee = " + this.getForecastItem().getPayee() + memoString +
                     ", Budgeted Amount = " + formatDollarAmount(forecastItem.getAmount()) + ", Remaining Amount = " +
@@ -868,6 +977,29 @@ public class ForecastTransaction extends IndependentEntity {
             s = "\nUnable to print out the forecast transaction.";
         }
         return s;
+    }
+
+    /**
+     * Whether any split has been applied to this occurrence.
+     *
+     * <p>Asks existence rather than a total, because a total cannot answer it:  splits can net to
+     * zero, and {@link #getTotalSplitAmount()} returns 0.0 both for "no splits" and for "splits that
+     * cancel out".  The distinction matters where this is used -- an occurrence with nothing left
+     * was either consumed by a split or deliberately skipped, and those are different things to tell
+     * a user.
+     *
+     * @return true when at least one split is linked to this occurrence
+     */
+    public boolean hasSplit() {
+        try {
+            String query = "select count(*) from forecast_transaction_split " +
+                    "where ForecastTransaction_idForecastTransaction = uuid_to_bin('" + this.getId() + "')";
+            ResultSet rs = EntityInt.getRS(query, "checking whether a forecast transaction has splits");
+            return rs != null && rs.next() && rs.getInt(1) > 0;
+        } catch (Exception e) {
+            // Used only to choose the wording of a note;  not knowing is not worth an exception.
+            return false;
+        }
     }
 
     /**

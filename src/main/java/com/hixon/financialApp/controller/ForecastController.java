@@ -295,25 +295,47 @@ public class ForecastController {
      *
      * @param split               the transaction split being reconciled
      * @param forecastTransaction the candidate forecast transaction whose amount differs
+     * @param budgetedAmount      the budget item's planned amount for that occurrence, passed in
+     *                            because the caller has already read it
      * @return the user's chosen disposition (ASSIGN, IGNORE, or DISPUTE)
      * @throws EntityException
      * @throws SQLException
      */
     public UserResponse confirmForecastTransactionAmountMatch(TransactionSplit split,
-            ForecastTransaction forecastTransaction) throws EntityException, SQLException {
+            ForecastTransaction forecastTransaction, double budgetedAmount)
+            throws EntityException, SQLException {
         UserResponse response = new UserResponse();
 
+        // Name both amounts.  The check is now against either of them, so quoting only one left the
+        // user comparing their transaction to a number it was never measured against -- and calling
+        // the remaining amount "the planned amount" made that worse when the two had drifted apart.
         view.say("The transaction amount (" + Utility.formatDollarAmount(Math.abs(split.getAmount())) +
                 ") differs significantly from the planned amount (" +
+                Utility.formatDollarAmount(Math.abs(budgetedAmount)) +
+                ") and from the remaining amount (" +
                 Utility.formatDollarAmount(Math.abs(forecastTransaction.getRemainingAmount())) + ") for " +
                 forecastTransaction.toStringConcise() + ".");
-        view.ask("What would you like to do (s-assign anyway, i-do not assign, d-dispute)? ");
+        view.ask("What would you like to do (a-adjust, s-assign anyway, i-do not assign, d-dispute)? ");
 
         boolean done = false;
         while (!done) {
             done = true;
             String line = view.getResponseString();
             switch (line) {
+                case "a":
+                    // The amount differing is not always a mistake -- a subscription price goes up
+                    // and every future occurrence is wrong until the budget item is told.  Without
+                    // this the user had nowhere to say so:  the overage prompt that offers "adjust"
+                    // is reached only for COLLECTION items, and this question is asked only for the
+                    // items that are not COLLECTION, so the two never meet.
+                    //
+                    // Adjusts to the amount that actually arrived rather than asking for one, which
+                    // is both what the COLLECTION prompt does and the only way to be sure of the
+                    // sign:  a user typing "22.56" at a prompt would budget a positive amount for an
+                    // expense.
+                    response.setDisposition(ADJUST);
+                    break;
+
                 case "s":
                     response.setDisposition(ASSIGN);
                     break;
@@ -327,11 +349,39 @@ public class ForecastController {
                     break;
 
                 default:
-                    view.say("Please enter s, i, or d.");
+                    view.say("Please enter a, s, i, or d.");
                     done = false;
             }
         }
         return response;
+    }
+
+    /**
+     * Re-budget an item to the amount that actually came through, and bring the forecast transaction
+     * being reconciled with it.
+     *
+     * <p>Shared by the two questions that can end in "adjust", so that answering it means the same
+     * thing whichever one asked:  the budget item carries the new amount from here on, the forecast
+     * is marked out of sync so the next regeneration picks the change up, and the occurrence being
+     * reconciled right now is set to the new amount so that the split about to be deducted from it
+     * settles to zero rather than leaving a phantom remainder.
+     *
+     * @param split               the split whose amount prompted the question
+     * @param forecastTransaction the occurrence being reconciled
+     * @param newAmount           the amount to budget from now on
+     */
+    public void adjustBudgetItemAmount(TransactionSplit split, ForecastTransaction forecastTransaction,
+            double newAmount) throws Exception {
+
+        Forecast forecast = forecastTransaction.getForecastItem().getForecast();
+
+        split.getBudgetItem().setAmount(newAmount);
+        split.getBudgetItem().save(INSERT_ON_DUPLICATE_UPDATE);
+
+        forecast.setInSync(false);
+        forecast.save(UPDATE);
+
+        forecastTransaction.setRemainingAmount(newAmount);
     }
 
     /**
@@ -482,6 +532,18 @@ public class ForecastController {
                     view.say("Created a new forecast transaction for this split as there was no applicable " +
                             "forecast transaction in the forecast.");
 
+                    // Say what was actually recorded before printing the occurrence.  toStringConcise
+                    // reports the forecast item's amount as the "Budgeted Amount", and that item is
+                    // shared by every occurrence -- so a $99.95 charge against an on-demand item
+                    // budgeting $25 printed "Budgeted Amount = $-25.00", which reads as though the
+                    // forecast had recorded $25 for this charge.  It has not:  the occurrence carries
+                    // a remaining amount of zero and contributes nothing to any forecast total, which
+                    // is right, because the money has already left the account and the register holds
+                    // it.  Only the label was misleading.
+                    view.say("It records the split amount of " + Utility.formatDollarAmount(split.getAmount()) +
+                            " as already spent; the budgeted amount shown below belongs to the budget " +
+                            "item and is what it plans for each occurrence.");
+
                     // Let the user know about the new forecast transaction we created for the split:
                     view.say("New " + forecastTransaction.toStringConcise());
 
@@ -619,11 +681,26 @@ public class ForecastController {
                     view.say("You exceeded the remaining amount for this budget item by " +
                             Utility.formatDollarAmount(
                                     calculateOverage(isIncome, remainingInPeriod, split.getAmount())) + ".  ");
-                    ForecastTransactionIterator it = ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(
-                            split.getIdBudgetItem(), forecast.getId());
+                    // Roll-forward targets only:  the occurrence being overdrawn, and everything
+                    // before it, are excluded.  A partly-overdrawn occurrence still has a non-zero
+                    // remainder, so the unfiltered lookup used to return that same occurrence as the
+                    // thing to roll into -- see getRollForwardTargets.
+                    ForecastTransactionIterator it = ForecastTransaction.getRollForwardTargets(
+                            split.getIdBudgetItem(), forecast.getId(), forecastTransaction);
                     ForecastTransaction nextNonZeroForecastTransaction = it.getNext();
+
+                    // Both occurrences, each labelled with the answer it belongs to.  Only "roll"
+                    // uses the next one;  adjust, dispute and ignore all act on the occurrence being
+                    // overdrawn.  Naming only the next one -- which is what this did -- described the
+                    // one occurrence three of the four answers do not touch.  On 09-08-2026 it
+                    // offered the 09-11 occurrence, "i" was chosen, and the run then reported acting
+                    // on 09-04:  the question and the answer named different dates.
+                    view.say("Overdrawn:      " + forecastTransaction.toStringConcise());
                     if (nextNonZeroForecastTransaction != null) {
-                        view.say("Next non-zero " + nextNonZeroForecastTransaction.toStringConcise());
+                        view.say("Roll would use: " + nextNonZeroForecastTransaction.toStringConcise());
+                    } else {
+                        view.say("There is no later occurrence with anything left, so there is nothing " +
+                                "to roll this forward into.");
                     }
                     split.setDisposition(assignOverageAmount(""));
 
@@ -631,11 +708,7 @@ public class ForecastController {
                     switch (split.getDisposition()) {
 
                         case ADJUST:  // The user would like to increase the budgeted amount to cover the overage:
-                            split.getBudgetItem().setAmount(split.getAmount());
-                            split.getBudgetItem().save(INSERT_ON_DUPLICATE_UPDATE);
-                            forecast.setInSync(false);
-                            forecast.save(UPDATE);
-                            forecastTransaction.setRemainingAmount(split.getAmount());
+                            adjustBudgetItemAmount(split, forecastTransaction, split.getAmount());
                             break;
 
                         case DISPUTE:  // The user believes that the register transaction is in error and would like to

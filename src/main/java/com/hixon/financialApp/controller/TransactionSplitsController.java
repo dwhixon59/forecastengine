@@ -13,11 +13,51 @@ import com.hixon.financialApp.view.base.ViewInt;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
 
 import static com.hixon.financialApp.controller.TerminationCondition.*;
 import static com.hixon.financialApp.view.base.ViewInt.*;
 
 public class TransactionSplitsController {
+
+    /**
+     * Points added to a budget item's relevancy score when the transfer memo has named it before.
+     *
+     * <p>Applied <em>after</em> the 0-100 clamp so that it cannot be swallowed by an item already
+     * scoring near the ceiling, which raises the effective maximum to 130.
+     *
+     * <p>Measured, not guessed.  {@code com.hixon.utilities.MemoRankingBacktest} replays the 1,044
+     * single-split memo-bearing transfers since 2024 and reports where the item the user actually
+     * chose ended up.  Essentially the same transfers benefit at every setting (223-224, ~21.5%) --
+     * the constant only decides how far each one moves -- and the curve has no knee:
+     *
+     * <pre>
+     *   bonus   reached top of list   buried the right answer
+     *      20            80  (7.7%)              44  (4.2%)
+     *      30           104 (10.0%)              54  (5.2%)
+     *      45          153 (14.7%)               58  (5.6%)
+     *      60          186 (17.8%)               65  (6.2%)
+     *      80          211 (20.2%)               78  (7.5%)
+     * </pre>
+     *
+     * <p>Measured with the 18-month history window of
+     * {@link com.hixon.financialApp.model.budget.MemoBudgetItemHistory#HISTORY_WINDOW_MONTHS} in
+     * place; every row of it improved when that window landed.
+     *
+     * <p>So the data does not pick a value; it prices one.  30 is the design's calibration, and the
+     * reason not to simply take the top of that table is the rule the whole feature obeys:  amount
+     * similarity is worth 0-60, the largest single input, and a memo worth as much as the strongest
+     * factual signal has stopped preferring an item and started choosing it.  Raising this toward
+     * 45 buys roughly ten more top-of-list placements per five points at a cost of two more
+     * burials; going past 60 gives up the rule.
+     */
+    public static final double MEMO_BONUS = 30.0;
+
+    /**
+     * The bonus for a memo seen exactly once.  Half weight, so that one keystroke of evidence
+     * cannot displace an item that already matches the transaction on amount.
+     */
+    public static final double MEMO_BONUS_SINGLE_PRIOR = 15.0;
 
     /*
      * Fields for SplitsController:
@@ -88,6 +128,19 @@ public class TransactionSplitsController {
             return;
         }
 
+        // ── Transfer memo ranking ──────────────────────────────────────────────
+        // The memo is the one place the user says why they moved the money.  It is consulted only
+        // after the shortcut above, because that reads a decision the user recorded in advance and
+        // a memo is a guess -- deliberately, it prefers a budget item and never selects one.
+        MemoBudgetItemHistory.Suggestion memoSuggestion = lookUpMemoSuggestion(transaction, budget);
+        final BudgetItemMerchant memoExtraRow =
+                appendMemoSuggestedItem(budgetItemsForMerchant, merchant, memoSuggestion);
+        if (memoSuggestion != null) {
+            relevancyScores = calculateRelevancyScores(budgetItemsForMerchant, transaction);
+            applyMemoBonus(budgetItemsForMerchant, relevancyScores, memoSuggestion);
+            sortByRelevancyScore(budgetItemsForMerchant, relevancyScores);
+        }
+
         // Attempt to get a balanced set of splits, or terminate as a "skip" or "inquire".  Repeat as necessary:
         boolean done = false;
         BudgetController budgetController = new BudgetController(sessionController);
@@ -96,16 +149,22 @@ public class TransactionSplitsController {
             // Assume we will get this done in one iteration:
             done = true;
 
-            // Show the assigned budget items to the user:
-            budgetController.showBudgetItemsForMerchant(budgetItemsForMerchant, relevancyScores, transaction.getAmount());
+            // Show the assigned budget items to the user.  The date goes with them so a periodic item
+            // whose occurrence is already spent can say so -- which is usually why the list is being
+            // shown at all rather than the charge having been matched.
+            budgetController.showBudgetItemsForMerchant(budgetItemsForMerchant, relevancyScores,
+                    transaction.getAmount(), memoSuggestion, memoExtraRow != null, transaction.getDate());
 
             /*
              * Figure out the amounts of the splits, e.g. how much of the transaction amount to allocate to each of the
              * budget items:
              */
-            // Determine if all the amounts or percentages are pre-established in the budget item:
-            boolean allFixed = budgetItemsForMerchant.stream().allMatch(
-                    item -> item.getAmount() > 0 || item.getPercentage() > 0);
+            // Determine if all the amounts or percentages are pre-established in the budget item.
+            // A memo-suggested row is not one of the merchant's own associations and carries no
+            // configured amount, so it must not turn a pre-established merchant into a manual one:
+            boolean allFixed = budgetItemsForMerchant.stream()
+                    .filter(item -> item != memoExtraRow)
+                    .allMatch(item -> item.getAmount() > 0 || item.getPercentage() > 0);
 
             // ── Single-item shortcut ───────────────────────────────────────────────
             // When there is exactly one budget item and the merchant still prompts
@@ -416,8 +475,12 @@ public class TransactionSplitsController {
                                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 
                         if (associate.equalsIgnoreCase("y")) {
-                            // Add to merchant permanently and re-display updated budget items
-                            budgetController.assignBudgetItemsToMerchant(merchant, budgetItemsForMerchant);
+                            // Record the item the user just picked, then re-display the updated list.
+                            // Deliberately not assignBudgetItemsToMerchant:  that prompts for a budget
+                            // item of its own and never looks at selectedBudgetItem, so confirming the
+                            // association used to throw the choice away and start the search again.
+                            budgetController.associateBudgetItemWithMerchant(merchant, selectedBudgetItem,
+                                    budgetItemsForMerchant);
                             done = false;  // Re-loop to show updated list and ask for amounts
                         } else {
                             // One-time use: create a transient BudgetItemMerchant (unsaved) and add split
@@ -502,6 +565,11 @@ public class TransactionSplitsController {
                 }
             }
         }
+
+        // A memo-suggested row was offered without being one of this merchant's associations.  If
+        // the user took it, keep the association so that next time the item is in the list on its
+        // own merit; if they did not, take the row back out of the caller's list.
+        settleMemoSuggestedItem(splits, merchant, budgetItemsForMerchant, memoExtraRow);
 
         // Enhancement 5: After successful split assignment, offer to lock this merchant
         // into auto-assign mode when merchant has askAlways=true and exactly one budget item.
@@ -623,6 +691,167 @@ public class TransactionSplitsController {
         return true;
     }
 
+    /*
+     * Transfer memo ranking:
+     */
+    /**
+     * Ask the history what this transaction's memo has meant before.
+     *
+     * <p>A failure here must never cost the user an import.  The memo is a ranking hint; every
+     * question the import asks works exactly as it did without one, so a broken lookup degrades to
+     * the behaviour that shipped before this feature rather than to an abandoned transaction.
+     *
+     * @param transaction the transaction being categorized
+     * @param budget      the budget its splits will be assigned within
+     * @return the suggestion, or null if there is no memo, no history, or the lookup failed
+     */
+    private MemoBudgetItemHistory.Suggestion lookUpMemoSuggestion(Transaction transaction, Budget budget) {
+        try {
+            return new MemoBudgetItemHistory().lookup(transaction, budget);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Put the memo's budget item in the list when the merchant has never been associated with it.
+     *
+     * <p>budgetItemsForMerchant holds only items already associated with this merchant, so the item
+     * the memo names is frequently not in it at all.  Dropping the suggestion in that case would
+     * throw away the case that matters most -- the one that turns a five-prompt interaction into a
+     * single keystroke -- so the item is appended as an ordinary, selectable row instead.  The
+     * association it lacks is offered afterwards, in {@link #settleMemoSuggestedItem}.
+     *
+     * @param budgetItemsForMerchant the list shown to the user, appended to in place
+     * @param merchant               the merchant the transaction belongs to
+     * @param suggestion             what the memo history suggests, or null
+     * @return the appended row, or null if nothing was appended
+     */
+    public static BudgetItemMerchant appendMemoSuggestedItem(List<BudgetItemMerchant> budgetItemsForMerchant,
+            Merchant merchant, MemoBudgetItemHistory.Suggestion suggestion) {
+
+        if (suggestion == null || suggestion.budgetItem() == null || merchant == null) {
+            return null;
+        }
+
+        UUID suggested = suggestion.budgetItem().getId();
+        if (suggested == null) {
+            return null;
+        }
+
+        for (BudgetItemMerchant association : budgetItemsForMerchant) {
+            if (suggested.equals(association.getIdBudgetItem())) {
+                return null;
+            }
+        }
+
+        // Unsaved, exactly like the one-time-use row the budget item search already creates.  It
+        // becomes a real association only if the user picks it and says so.
+        BudgetItemMerchant extraRow = new BudgetItemMerchant(merchant, suggestion.budgetItem());
+        budgetItemsForMerchant.add(extraRow);
+        return extraRow;
+    }
+
+    /**
+     * Add the memo bonus to the scores of the items the memo names.
+     *
+     * <p>Applied after calculateRelevancyScores has clamped to 0-100, deliberately:  clamping first
+     * would swallow the bonus for exactly the items that are already plausible.
+     *
+     * @param budgetItemsForMerchant the items being scored
+     * @param scores                 their scores, adjusted in place
+     * @param suggestion             what the memo history suggests, or null for no adjustment
+     */
+    public static void applyMemoBonus(List<BudgetItemMerchant> budgetItemsForMerchant, List<Double> scores,
+            MemoBudgetItemHistory.Suggestion suggestion) {
+
+        for (int i = 0; i < budgetItemsForMerchant.size() && i < scores.size(); i++) {
+            double bonus = memoBonus(budgetItemsForMerchant.get(i), suggestion);
+            if (bonus > 0) {
+                scores.set(i, scores.get(i) + bonus);
+            }
+        }
+    }
+
+    /**
+     * The memo bonus for one budget item.
+     *
+     * @param association the item being scored
+     * @param suggestion  what the memo history suggests, or null
+     * @return the points to add, or 0 when the memo says nothing about this item
+     */
+    static double memoBonus(BudgetItemMerchant association, MemoBudgetItemHistory.Suggestion suggestion) {
+
+        if (association == null || suggestion == null || suggestion.budgetItem() == null) {
+            return 0.0;
+        }
+
+        UUID suggested = suggestion.budgetItem().getId();
+        if (suggested == null || !suggested.equals(association.getIdBudgetItem())) {
+            return 0.0;
+        }
+
+        return suggestion.isSinglePrior() ? MEMO_BONUS_SINGLE_PRIOR : MEMO_BONUS;
+    }
+
+    /**
+     * Deal with a memo-suggested row once the user has answered.
+     *
+     * <p>If they assigned anything to it, the merchant has now been seen with that budget item and
+     * the association is worth keeping -- next time it is in the list without the memo having to
+     * put it there.  If they ignored it, it leaves the caller's list the way it found it.
+     *
+     * @param splits                 the splits the user entered
+     * @param merchant               the merchant the transaction belongs to
+     * @param budgetItemsForMerchant the list the row was appended to
+     * @param memoExtraRow           the appended row, or null if none was appended
+     * @throws QuitException if the user quits at the prompt -- an answer about the session rather
+     *                       than about this question, and the caller has to see it
+     */
+    void settleMemoSuggestedItem(List<TransactionSplit> splits, Merchant merchant,
+            List<BudgetItemMerchant> budgetItemsForMerchant, BudgetItemMerchant memoExtraRow)
+            throws QuitException {
+
+        if (memoExtraRow == null) {
+            return;
+        }
+
+        boolean used = splits.stream().anyMatch(
+                split -> memoExtraRow.getIdBudgetItem().equals(split.getIdBudgetItem()));
+        if (!used) {
+            budgetItemsForMerchant.remove(memoExtraRow);
+            return;
+        }
+
+        try {
+            String itemLabel = memoExtraRow.getBudgetItem().getDisplayString();
+            String associate = view.getResponseString(
+                    "Permanently associate '" + itemLabel + "' with merchant '" + merchant.getName() +
+                            "'? (y/n)",
+                    "y", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+
+            if (associate != null && associate.equalsIgnoreCase("y")) {
+                memoExtraRow.save();
+                view.say("✓ '" + itemLabel + "' is now assigned to '" + merchant.getName() + "'.");
+            } else {
+                budgetItemsForMerchant.remove(memoExtraRow);
+            }
+        } catch (QuitException qe) {
+            // Quit is not an answer to this question, it is the user ending the session, and this
+            // file's convention -- and MainController's database cleanup -- depend on it reaching
+            // the top.  Take the unsaved row back out on the way past, so the caller's list is left
+            // the way it was found either way.
+            budgetItemsForMerchant.remove(memoExtraRow);
+            throw qe;
+
+        } catch (Exception e) {
+            // The splits the user just entered are the valuable part.  Failing to record the
+            // association -- or the user cancelling out of the question -- must not lose them.
+            budgetItemsForMerchant.remove(memoExtraRow);
+        }
+    }
+
     /**
      * Calculate relevancy scores for budget items based on how well they match the transaction.
      * Scores are based on:
@@ -635,7 +864,7 @@ public class TransactionSplitsController {
      * @param transaction The transaction to match against
      * @return List of relevancy scores (0.0 to 100.0) corresponding to each budget item
      */
-    private List<Double> calculateRelevancyScores(List<BudgetItemMerchant> budgetItemsForMerchant,
+    public static List<Double> calculateRelevancyScores(List<BudgetItemMerchant> budgetItemsForMerchant,
                                                     Transaction transaction) {
         List<Double> scores = new ArrayList<>();
         double transactionAmount = Math.abs(transaction.getAmount());
@@ -749,7 +978,7 @@ public class TransactionSplitsController {
      * @param budgetItemsForMerchant List of budget items to sort
      * @param scores List of relevancy scores corresponding to the budget items
      */
-    private void sortByRelevancyScore(List<BudgetItemMerchant> budgetItemsForMerchant, List<Double> scores) {
+    public static void sortByRelevancyScore(List<BudgetItemMerchant> budgetItemsForMerchant, List<Double> scores) {
         // Create a list of indices for sorting
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < scores.size(); i++) {
