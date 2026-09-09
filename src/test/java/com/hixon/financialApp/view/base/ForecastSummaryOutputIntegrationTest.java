@@ -265,6 +265,140 @@ class ForecastSummaryOutputIntegrationTest {
     }
 
     /**
+     * A forecast that covers its own outgoings has no monthly shortfall, so nothing may be said about
+     * correcting one.
+     *
+     * <p>The float block used to run its correction pass unconditionally whenever the trough was
+     * negative.  That pass exists to answer "what would the low point be if the monthly shortfall
+     * were fixed", and it applies the fix by subtracting {@code outOfBalanceMonthlyAmount} from each
+     * month -- which is a POSITIVE number when the forecast is in balance, so it subtracted a surplus
+     * and made the projection worse, then reported the result as the corrected case.
+     *
+     * <p>Bill Pay Dave on 09-09-2026 was balanced by $1,234 over the period with a real trough of
+     * $-434, and was told "Once the monthly shortfall is corrected the low point moves to 05-12-2027,
+     * and the float needed to cover it is $1,075", then asked to deposit $1,021.
+     */
+    @Test
+    @DisplayName("A balanced forecast with a dip is not told to correct a shortfall it does not have")
+    void balancedForecastWithADipIsNotToldToCorrectAShortfall() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500.  A large bill on the first of the month takes the account to $-200
+        // before the salary arrives and lifts it to $700, so the period ends $200 ahead of where it
+        // opened:  balanced overall, but negative in between.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, -700.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, 10), 900.0, "Income", "Salary")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("The forecast is balanced.  No action is required."),
+                "the period ends ahead of where it opened, so the forecast is in balance");
+        assertFalse(output.contains("Once the monthly shortfall is corrected"),
+                "there is no monthly shortfall to correct in a balanced forecast");
+        assertTrue(output.contains("timing gap rather than a shortfall"),
+                "the dip should be described as what it is");
+
+        // The account falls from $500 to $-200, so $200 is what has to be deposited to keep it out of
+        // the red -- not a figure derived from subtracting the surplus month by month.
+        assertTrue(output.contains("you need to deposit $200 to the Bill Pay Dave account"),
+                "the deposit should cover the real trough");
+    }
+
+    /**
+     * There is no positive phase when the deficit falls on the first day of the summary period.
+     *
+     * <p>The phase was reported as running from the period's first day to the day before the deficit.
+     * When the deficit is on that first day, the day before it lies outside the period, and the line
+     * printed a range that ran backwards -- "Positive balance phase: 10-01-2026 through 09-30-2026"
+     * on 09-09-2026.
+     */
+    @Test
+    @DisplayName("No positive balance phase is claimed when the deficit falls on the period's first day")
+    void noPositivePhaseWhenTheDeficitFallsOnTheFirstDay() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500, and the very first occurrence of the period takes it negative, so the
+        // period opens in the black but has no day in it that ends positive before the deficit.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, -700.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, 10), 900.0, "Income", "Salary")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("First deficit within the forecast summary period:"),
+                "the deficit inside the period should still be reported");
+        assertFalse(output.contains("Positive balance phase:"),
+                "a phase ending the day before the period starts is not a phase");
+    }
+
+    /**
+     * The immediate actions checklist is a list of things to fix, so a forecast with nothing to fix
+     * gets no checklist.
+     *
+     * <p>It used to print unconditionally.  Bill Pay Danni on 09-09-2026 was in balance, never went
+     * negative, and had a trough of $515, and was still told to "identify at least $0/month in
+     * spending cuts", to "have contingency float ready before projected negative-balance risk", and
+     * to "maintain minimum float target of $0".
+     */
+    @Test
+    @DisplayName("A forecast with nothing to fix gets no immediate actions checklist")
+    void healthyForecastGetsNoImmediateActionsChecklist() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500, income before outgoings, and never near zero.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, 1000.0, "Income", "Salary"),
+                mockTransaction(addDays(firstOfMonth, 10), -400.0, "Household", "HOA Fees")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("The forecast is already in balance"),
+                "the recommendations section should still say the forecast is sound");
+        assertFalse(output.contains("Immediate Actions Required:"),
+                "there is nothing to act on, so the checklist should not be printed at all");
+        assertFalse(output.contains("identify at least $0/month"),
+                "a $0 spending cut is not an action");
+        assertFalse(output.contains("maintain minimum float target of $0"),
+                "a $0 float target is not an action");
+    }
+
+    /**
+     * A forecast that is out of balance but never goes negative needs the spending actions and not
+     * the float ones:  there is no trough to hold float against.
+     */
+    @Test
+    @DisplayName("An out-of-balance forecast that stays positive gets the gap actions but not the float ones")
+    void outOfBalanceButPositiveForecastGetsOnlyTheGapActions() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500, drawn down to 100 over the period.  It is spending more than it takes
+        // in, but it never goes into the red.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, -300.0, "Household", "HOA Fees"),
+                mockTransaction(addDays(firstOfMonth, 10), -100.0, "Pets", "Concierge Vet Service")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("Immediate Actions Required:"),
+                "a forecast that is out of balance has something to act on");
+        assertTrue(output.contains("/month in spending cuts, new income, or a combination."),
+                "the monthly gap should be reported as an action");
+        assertFalse(output.contains("maintain minimum float target of"),
+                "no balance goes negative, so there is no float target to maintain");
+        assertFalse(output.contains("have contingency float ready"),
+                "there is no projected negative-balance risk to hold float against");
+    }
+
+    /**
      * Render a forecast over the supplied transactions and return everything the view was asked to say.
      *
      * @param transactions  The transactions for the main rendering pass.
