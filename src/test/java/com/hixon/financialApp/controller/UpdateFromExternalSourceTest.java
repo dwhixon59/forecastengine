@@ -59,6 +59,7 @@ public class UpdateFromExternalSourceTest {
     // Tracking flags for verifying calls to protected methods:
     private boolean setAllFoundCalled = false;
     private boolean setAllFoundValue = true;
+    private final List<UUID> foundIds = new ArrayList<>();
     private final List<ForecastTransaction> updatedTransactions = new ArrayList<>();
     private final List<ForecastTransaction> insertedTransactions = new ArrayList<>();
     private final List<ForecastItem> insertedForecastItems = new ArrayList<>();
@@ -134,6 +135,11 @@ public class UpdateFromExternalSourceTest {
         }
 
         @Override
+        protected void setFoundForIds(Forecast forecast, java.util.Collection<UUID> ids, boolean found) {
+            foundIds.addAll(ids);
+        }
+
+        @Override
         protected void updateForecastTransaction(ForecastTransaction ft) {
             updatedTransactions.add(ft);
         }
@@ -171,6 +177,7 @@ public class UpdateFromExternalSourceTest {
         // Reset tracking state:
         setAllFoundCalled = false;
         setAllFoundValue = true;
+        foundIds.clear();
         updatedTransactions.clear();
         insertedTransactions.clear();
         insertedForecastItems.clear();
@@ -220,6 +227,12 @@ public class UpdateFromExternalSourceTest {
         ft.setVersion(version);
         ft.setFound(false);
         ft.setOverridden(false);
+
+        // Built with setters, so it would arrive dirty;  the rows this stands in for are loaded from
+        // the database, which assigns the fields directly and leaves the flag clear.  The import
+        // reads that flag to decide whether the spreadsheet changed a row, so a stand-in that starts
+        // dirty would report every row as changed.
+        ft.setDirty(false);
         return ft;
     }
 
@@ -321,11 +334,74 @@ public class UpdateFromExternalSourceTest {
             forecastController.updateFromExternalSource();
 
             assertTrue(dbTransaction.isFound(), "DB transaction should be marked as found");
-            assertEquals(1, updatedTransactions.size(), "Should have saved exactly one transaction");
-            assertSame(dbTransaction, updatedTransactions.get(0));
+
+            // The spreadsheet changed nothing about this row, so there is nothing to write.  Every
+            // row in the file used to be rewritten regardless -- 543 of them on 09-09-2026 to record
+            // three edits -- which moved every updatedTimeStamp and left nothing in the table to show
+            // which rows the user had actually touched.
+            assertTrue(updatedTransactions.isEmpty(),
+                    "an unchanged row should not be written");
+
+            // The found flag still has to be recorded, but it travels in the one bulk statement
+            // rather than a full row update apiece.
+            assertEquals(List.of(transactionId), foundIds,
+                    "the row should still be marked as found in the spreadsheet");
+
             verify(mockView).say(contains("Successfully processed 1 forecast transaction"));
             verify(mockView, never()).selectFromMenu(anyString(), anyList(), anyBoolean(),
                     anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean());
+        }
+
+        /**
+         * The shape of a real import:  a few edits among many rows the user never touched.
+         *
+         * <p>Bill Pay Danni on 09-09-2026 imported a spreadsheet of 543 occurrences carrying three
+         * edits, and every one of the 543 was rewritten.  That moved 543 updatedTimeStamps -- the one
+         * column that records when an occurrence last changed -- so afterwards nothing in the table
+         * separated the three rows the user had edited from the 540 the import had merely read.
+         */
+        @Test
+        @DisplayName("Only the rows the spreadsheet changed are written")
+        void testOnlyChangedRowsAreWritten() throws Exception {
+            Calendar date = makeDate(2026, Calendar.MARCH, 15);
+            Calendar version = makeVersion(2026, Calendar.MARCH, 1, 10);
+
+            UUID untouchedId = UUID.randomUUID();
+            UUID amountEditId = UUID.randomUUID();
+            UUID dateEditId = UUID.randomUUID();
+
+            // Three rows in the file.  One is identical to the database, one has had its amount
+            // changed in Excel, one has been dragged to another date.
+            ForecastTransaction untouchedDb = buildForecastTransaction(
+                    untouchedId, forecastItem, (Calendar) date.clone(), -150.0, (Calendar) version.clone());
+            ForecastTransaction amountDb = buildForecastTransaction(
+                    amountEditId, forecastItem, (Calendar) date.clone(), -200.0, (Calendar) version.clone());
+            ForecastTransaction dateDb = buildForecastTransaction(
+                    dateEditId, forecastItem, (Calendar) date.clone(), -75.0, (Calendar) version.clone());
+            dbTransactionMap.put(untouchedId, untouchedDb);
+            dbTransactionMap.put(amountEditId, amountDb);
+            dbTransactionMap.put(dateEditId, dateDb);
+
+            setupExternalSource(List.of(
+                    buildForecastTransaction(untouchedId, forecastItem, (Calendar) date.clone(), -150.0, version),
+                    buildForecastTransaction(amountEditId, forecastItem, (Calendar) date.clone(), -150.0, version),
+                    buildForecastTransaction(dateEditId, forecastItem,
+                            makeDate(2026, Calendar.MARCH, 22), -75.0, version)));
+
+            forecastController.updateFromExternalSource();
+
+            // Two edits, two writes.  The untouched row is not among them.
+            assertEquals(2, updatedTransactions.size(), "only the two edited rows should be written");
+            assertTrue(updatedTransactions.contains(amountDb), "the amount edit should be written");
+            assertTrue(updatedTransactions.contains(dateDb), "the date edit should be written");
+            assertFalse(updatedTransactions.contains(untouchedDb),
+                    "the row the spreadsheet did not change should not be written");
+
+            // All three are still recorded as present in the spreadsheet, so zeroNotFound does not
+            // mistake the untouched one for a deletion.
+            assertEquals(3, foundIds.size(), "every row read from the file should be marked found");
+            assertTrue(foundIds.containsAll(List.of(untouchedId, amountEditId, dateEditId)));
+            assertTrue(untouchedDb.isFound(), "the untouched row is still found, it is just not rewritten");
         }
 
         @Test

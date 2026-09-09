@@ -187,6 +187,52 @@ public class ForecastTransaction extends IndependentEntity {
                 "to " + foundString + " for forecast " + forecast.getId() + ".");
     }
 
+    /**
+     * Set the found flag on a named set of occurrences in one statement.
+     *
+     * <p>The external-source import marks every row it read from the spreadsheet as found, so that
+     * {@code zeroNotFound} can tell those rows from the ones the user deleted.  Marking them one at a
+     * time meant a full row UPDATE for every occurrence in the file whether or not anything about it
+     * had changed:  the Bill Pay Danni import of 09-09-2026 rewrote all 543 rows to record three
+     * edits, moving 543 updatedTimeStamps and making it impossible to see from the table which rows
+     * the import had actually touched.
+     *
+     * <p>Pairs with {@link #setAllFound(Forecast, boolean)}, which clears the flag across the
+     * forecast before the file is read.  Between them the flag costs two statements instead of one
+     * per row, and the per-row write is left to carry real changes only.
+     *
+     * @param forecast the forecast whose occurrences to mark, so no other forecast is touched
+     * @param ids      the occurrences read from the spreadsheet;  nothing is written when empty
+     * @param found    the value to set
+     */
+    public static void setFoundForIds(Forecast forecast, Collection<UUID> ids, boolean found)
+            throws EntityException, RegisterException {
+
+        if (forecast == null || ids == null || ids.isEmpty()) {
+            return;
+        }
+
+        StringBuilder idList = new StringBuilder();
+        for (UUID id : ids) {
+            if (idList.length() > 0) {
+                idList.append(", ");
+            }
+            idList.append("uuid_to_bin('").append(id).append("')");
+        }
+
+        // Scoped to the forecast as well as the ids.  The ids come from a spreadsheet the user may
+        // have edited, and an id that belongs to another forecast must not be reachable from here --
+        // the same reason setAllFound(Forecast, boolean) replaced its no-argument form.
+        String query = "update forecast_transaction ft " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "set ft.found = " + (found ? "true" : "false") + " " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "and ft.idForecastTransaction in (" + idList + ")";
+
+        executeUpdate(query, "attempting to set the found flag on " + ids.size() +
+                " Forecast Transactions in forecast " + forecast.getId() + ".");
+    }
+
     public double getRunningBalance() {
         return runningBalance;
     }
