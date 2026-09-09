@@ -806,32 +806,6 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
-     * The total of a register's provisional transactions -- those it holds that the bank has not
-     * settled yet.
-     *
-     * <p>Needed to compare a register balance against a downloaded one at all.  The register counts
-     * a provisional transaction the moment it is saved;  the bank's downloaded balance is a balance
-     * over settled transactions and does not include it.  So the two are measuring different sets,
-     * and while anything is pending they differ by exactly this figure -- correctly, not as an error.
-     *
-     * @param idRegister the register to total
-     * @return the sum of the amounts still pending, negative for net spending; 0.0 when none are
-     */
-    public static double pendingTotalForRegister(UUID idRegister) throws EntityException, SQLException {
-        if (idRegister == null) {
-            return 0.0;
-        }
-        ResultSet rs = getRS("select coalesce(sum(tr.amount), 0) as pendingTotal from transaction tr" +
-                        " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
-                        " and tr.cleared = false",
-                "Database error encountered totalling the pending transactions for register " + idRegister + ".");
-        if (rs != null && rs.next()) {
-            return rs.getDouble("pendingTotal");
-        }
-        return 0.0;
-    }
-
-    /**
      * The query behind {@link #findByBankReference}, extracted so it can be asserted without a
      * database.
      *
