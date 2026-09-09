@@ -381,6 +381,26 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
     private static final int NAME_FIELD_WIDTH = 32;
 
     /**
+     * Repair whatever this institution's exporter does to a text field on its way into a QFX file.
+     *
+     * <p>The default is to leave the text exactly as the OFX parser produced it, which is right for
+     * any bank that writes a conforming file.  {@code WellsFargoBank} overrides it;  see there for
+     * what Wells Fargo does and how it was diagnosed.
+     *
+     * <p>This is deliberately a hook on the institution rather than a step in the parser.  The
+     * parser is shared by every bank and is already correct -- ofx4j resolves XML entities on both
+     * the OFX 1.x SGML and OFX 2.x XML paths -- so a repair applied there would be applied to banks
+     * that do not need it.  Citibank and Barclays files from the same period escape correctly, and
+     * every corrupted row in the database came from a Wells Fargo register.
+     *
+     * @param text a NAME or MEMO field as the OFX parser produced it;  may be null
+     * @return the text to use, unchanged by default
+     */
+    protected String normalizeImportedText(String text) {
+        return text;
+    }
+
+    /**
      * Converts a QfxTransaction to a Transaction domain object.
      * Subclasses can override this if they need custom conversion logic.
      *
@@ -403,8 +423,11 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
 
         // Get payee from QFX transaction.  A transfer's description does not fit one OFX field, so
         // the bank splits it across NAME and MEMO and this puts it back together -- see
-        // joinNameAndMemo, which is where the two shapes it uses are documented.
-        String payee = joinNameAndMemo(qfxTxn.getName(), qfxTxn.getMemo());
+        // joinNameAndMemo, which is where the two shapes it uses are documented.  Both halves go
+        // through normalizeImportedText first, which is where an institution repairs whatever its
+        // own exporter does to the text.
+        String payee = joinNameAndMemo(normalizeImportedText(qfxTxn.getName()),
+                normalizeImportedText(qfxTxn.getMemo()));
 
         // QFX transactions are always cleared
         boolean cleared = true;

@@ -16,6 +16,7 @@ import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.TransactionHistory;
 import com.hixon.financialApp.view.base.ViewInt;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -314,6 +315,55 @@ public class WellsFargoBank extends FinancialInstitution {
         boolean directional = payeeTokens[0].equalsIgnoreCase("TO")
                 || payeeTokens[0].equalsIgnoreCase("FROM");
         return directional && MASKED_ACCOUNT_TOKEN.matcher(payeeTokens[1]).matches();
+    }
+
+    /**
+     * Undo Wells Fargo's double-escaping of XML entities in NAME and MEMO.
+     *
+     * <p>Wells Fargo escapes these fields twice.  A purchase at "D&amp;G Svc Plan DGAppC" is written to
+     * the QFX file as:
+     *
+     * <pre>
+     * &lt;NAME&gt;D&amp;amp;amp;G Svc Plan DGAppC
+     * </pre>
+     *
+     * <p>ofx4j resolves one level, as a conforming reader should, and hands back
+     * {@code D&amp;amp;G Svc Plan DGAppC}.  That is what used to be stored:  on 09-08-2026 the import
+     * reported "No merchant found for payee: D&amp;amp;G Svc Plan DGAppC" and offered to create a
+     * merchant called "D&amp;g Svc Plan Dgappc".  Twelve rows in the transaction table and two merchant
+     * payee associations carried the residue, every one of them from a Wells Fargo register.
+     *
+     * <p>This is a Wells Fargo defect and not a parser one, which is why the repair lives here.
+     * Citibank sends {@code FIORELLI WINERY &amp;amp; VINE} -- correctly escaped once -- and Barclays files
+     * from the same period contain no entities at all;  both come out clean without any help.
+     *
+     * <p>Unescaping a second time is safe in both directions.  Text that is already clean has no
+     * entity left to resolve, so this is a no-op on it, and it would stay a no-op if Wells Fargo ever
+     * fixed their exporter.  The only string it could damage is a merchant name whose real text
+     * contains a literal entity reference, which a bank descriptor -- upper-case ASCII, truncated to
+     * a couple of dozen characters -- does not.
+     *
+     * <p>Note that the double-escaping also costs descriptor width:  Wells Fargo truncates after
+     * escaping, so {@code &amp;amp;amp;} spends nine characters to carry one ampersand.  That is why
+     * "FIORELLI WINERY &amp;" has nothing after the ampersand.  Unescaping recovers the character;  it
+     * cannot recover the merchant name the truncation already discarded.
+     *
+     * @param text a NAME or MEMO field as ofx4j produced it;  may be null
+     * @return the text with one further level of XML entities resolved
+     */
+    @Override
+    protected String normalizeImportedText(String text) {
+
+        // No ampersand, no entity, nothing to do -- which is the overwhelming majority of rows.
+        if (text == null || text.indexOf('&') < 0) {
+            return text;
+        }
+
+        // Deliberately unescapeXml and not unescapeHtml4:  bank descriptors are full of bare
+        // ampersands and stray punctuation, and the HTML entity table would resolve sequences that
+        // were never meant as entities.  This resolves the five XML entities and numeric references,
+        // which is exactly the set Wells Fargo escapes.
+        return StringEscapeUtils.unescapeXml(text);
     }
 
     @Override
