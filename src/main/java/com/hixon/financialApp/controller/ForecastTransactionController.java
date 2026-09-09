@@ -946,6 +946,32 @@ public class ForecastTransactionController {
     }
 
     /**
+     * The clause restricting rows to one side of the moment the spreadsheet was rendered.
+     *
+     * <p>Extracted so the rule that decides whether a missing row is a deletion can be asserted
+     * without a database.  Both sides of it are load-bearing:  {@code <=} selects the rows the render
+     * saw and the user then removed from the file, and {@code >} selects the rows that changed after
+     * the file was produced, which the file cannot speak for.  Getting the boundary wrong in either
+     * direction either destroys a change or ignores a deletion.
+     *
+     * <p>The prefix exists because the two statements that use this are shaped differently:  the
+     * listing selects {@code from forecast_transaction ft} and so must qualify the column, while the
+     * bulk {@code update forecast_transaction set} has no alias and must not.
+     *
+     * @param lastRenderedDate when the spreadsheet being imported was produced;  null if never
+     * @param columnPrefix     "ft." where the statement aliases the table, "" where it does not
+     * @param comparison       "<=" for rows the render saw, ">" for rows written after it
+     * @return the clause, or "" when there is no render to compare against
+     */
+    static String renderCutoffClause(Calendar lastRenderedDate, String columnPrefix, String comparison) {
+        if (lastRenderedDate == null) {
+            return "";
+        }
+        return "and " + columnPrefix + "updatedTimeStamp " + comparison + " " +
+                Utility.calendarToSqlDateTimeString(lastRenderedDate) + " ";
+    }
+
+    /**
      * Zeros out the remaining amount of forecast transactions marked as not found in a specific forecast.
      * This is used during import to zero out transactions that were deleted from the external source.
      * @param forecast The forecast whose not-found transactions should be zeroed
@@ -957,11 +983,45 @@ public class ForecastTransactionController {
     public void zeroNotFound(Forecast forecast)
             throws EntityException, RegisterException, SQLException, BudgetException {
 
+        // Absence from the spreadsheet is not by itself a deletion.
+        //
+        // The spreadsheet is a SNAPSHOT of the occurrences that had something left at the moment it
+        // was rendered -- ForecastTransactionAndItemDatabaseIterator selects on
+        // "remainingAmount > 0" and "remainingAmount < 0", so a fully spent occurrence is not
+        // written to the file at all.  An occurrence that is zero at render time and non-zero by
+        // import time was therefore never in the file to be deleted from, and zeroing it destroys a
+        // change the user made after rendering rather than honouring one they made in Excel.
+        //
+        // On 09-09-2026 the Bill Pay Danni forecast was rendered at 05:30:12 with six of Danni's
+        // Spending Money occurrences at zero, so none of them appeared in the workbook.  Something
+        // set all six back to $-150.00 between 10:10 and 10:12.  The 10:16 import found them missing
+        // from the file and zeroed all six -- $900 of planned spending -- alongside the two rows the
+        // user really had deleted, and reported all eight the same way.
+        //
+        // lastRenderedDate is when the file the user edited was produced, so it is the line between
+        // the two cases:  an occurrence last written at or before it is one the render saw and the
+        // user removed;  one written after it is a change the file predates and cannot speak for.
+        Calendar lastRenderedDate = forecast.getLastRenderedDate();
+
+        // A forecast that has never been rendered has no cutoff to compare against.  Refusing to
+        // zero anything would break deletion outright, so the original behaviour stands and the
+        // absence of the safeguard is said out loud rather than assumed.
+        if (lastRenderedDate == null) {
+            getView().say("\nThis forecast has no record of when it was last rendered, so a row that " +
+                    "changed after the spreadsheet was produced cannot be told apart from one you " +
+                    "deleted.  Every row missing from the spreadsheet will be zeroed.");
+        }
+
+        String notInSpreadsheet = "where found = false and remainingAmount <> 0 ";
+        String deletedByUser = renderCutoffClause(lastRenderedDate, "ft.", "<=");
+        String changedAfterRender = lastRenderedDate == null
+                ? null : renderCutoffClause(lastRenderedDate, "ft.", ">");
+
         // List the forecast transactions that are about to be zeroed out for the user:
         ResultSet rs = EntityInt.getRS(ForecastTransaction.getSelectQuery() + " " +
                         "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
                         "fi.idForecastItem " +
-                        "where found = false and remainingAmount <> 0 " +
+                        notInSpreadsheet + deletedByUser +
                         "and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
                         "order by ft.plannedDate desc, fi.category asc, fi.payee asc",
                 "Forecast Transactions that are marked not found."
@@ -977,15 +1037,63 @@ public class ForecastTransactionController {
             getView().say(forecastTransaction.toStringConcise() + " .");
         }
 
-        // Zero out the forecast transactions that were deleted from the spreadsheet (only for this forecast):
+        // Zero out the forecast transactions that were deleted from the spreadsheet (only for this
+        // forecast).  updatedTimeStamp is set here as well;  this is a bulk update rather than a
+        // save() of each row, so without it the rows it zeroes keep the timestamp they had before,
+        // and the one column that says when an occurrence last changed silently skips the change
+        // that emptied it.
         executeUpdate(ForecastTransaction.getUpdateQuery() +
-                "remainingAmount = 0 " +
-                "where found = false and remainingAmount <> 0 " +
+                "remainingAmount = 0, updatedTimeStamp = current_timestamp() " +
+                notInSpreadsheet + renderCutoffClause(lastRenderedDate, "", "<=") +
                 "and ForecastItem_idForecastItem in (" +
                     "select idForecastItem from forecast_item " +
                     "where Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
                 ")",
                 "to zero the Forecast Transactions that are marked not found in forecast " + forecast.getId() + ".");
+
+        // Report what was deliberately left alone.  These are the rows the old code destroyed
+        // without saying which ones it was destroying, so they are named individually.
+        if (changedAfterRender != null) {
+            reportChangedSinceRender(forecast, notInSpreadsheet + changedAfterRender);
+        }
+    }
+
+    /**
+     * Name the occurrences that are missing from the spreadsheet only because they changed after it
+     * was rendered, and which {@link #zeroNotFound} therefore left alone.
+     *
+     * <p>Kept out of the zeroing itself so that what was skipped is reported from the database after
+     * the update rather than from a list assembled before it.
+     *
+     * @param forecast   the forecast being imported into
+     * @param whereClause the clause selecting rows missing from the file but written after the render
+     */
+    private void reportChangedSinceRender(Forecast forecast, String whereClause)
+            throws EntityException, SQLException {
+
+        ResultSet rs = EntityInt.getRS(ForecastTransaction.getSelectQuery() + " " +
+                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = " +
+                        "fi.idForecastItem " +
+                        whereClause +
+                        "and fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                        "order by ft.plannedDate asc, fi.category asc, fi.payee asc",
+                "Forecast Transactions that changed after the spreadsheet was rendered."
+        );
+
+        boolean firstTime = true;
+        while (rs.next()) {
+            if (firstTime) {
+                getView().say("\nThese transactions are not in the spreadsheet, but they changed after it " +
+                        "was rendered on " + Utility.calendarDateToStringDate(forecast.getLastRenderedDate()) +
+                        ", so the spreadsheet never held them and they have been left as they are:  ");
+                firstTime = false;
+            }
+            getView().say(new ForecastTransaction(rs).toStringConcise() + " .");
+        }
+        if (!firstTime) {
+            getView().say("Render the forecast again to bring them into the spreadsheet, then delete " +
+                    "them there if you do want them zeroed.");
+        }
     }
 
     /**
