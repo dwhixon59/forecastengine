@@ -684,8 +684,19 @@ public class ForecastController {
                     ForecastTransactionIterator it = ForecastTransaction.getNonZeroForecastTransactionsForBudgetItem(
                             split.getIdBudgetItem(), forecast.getId());
                     ForecastTransaction nextNonZeroForecastTransaction = it.getNext();
+
+                    // Both occurrences, each labelled with the answer it belongs to.  Only "roll"
+                    // uses the next one;  adjust, dispute and ignore all act on the occurrence being
+                    // overdrawn.  Naming only the next one -- which is what this did -- described the
+                    // one occurrence three of the four answers do not touch.  On 09-08-2026 it
+                    // offered the 09-11 occurrence, "i" was chosen, and the run then reported acting
+                    // on 09-04:  the question and the answer named different dates.
+                    view.say("Overdrawn:      " + forecastTransaction.toStringConcise());
                     if (nextNonZeroForecastTransaction != null) {
-                        view.say("Next non-zero " + nextNonZeroForecastTransaction.toStringConcise());
+                        view.say("Roll would use: " + nextNonZeroForecastTransaction.toStringConcise());
+                    } else {
+                        view.say("There is no later occurrence with anything left, so there is nothing " +
+                                "to roll this forward into.");
                     }
                     split.setDisposition(assignOverageAmount(""));
 
