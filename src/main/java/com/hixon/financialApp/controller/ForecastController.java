@@ -18,7 +18,9 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -89,8 +91,7 @@ public class ForecastController {
         // Calculate and save running balance for each transaction
         while (forecastTransaction != null) {
             runningBalance += forecastTransaction.getRemainingAmount();
-            forecastTransaction.setRunningBalance(runningBalance);
-            forecastTransaction.save(UPDATE);
+            forecastTransaction.saveRunningBalance(runningBalance);
             forecastTransaction = forecastTransactions.getNext();
         }
     }
@@ -541,8 +542,8 @@ public class ForecastController {
                     // is right, because the money has already left the account and the register holds
                     // it.  Only the label was misleading.
                     view.say("It records the split amount of " + Utility.formatDollarAmount(split.getAmount()) +
-                            " as already spent; the budgeted amount shown below belongs to the budget " +
-                            "item and is what it plans for each occurrence.");
+                            " as already " + alreadyRecordedAs(split.getAmount()) + "; the budgeted amount " +
+                            "shown below belongs to the budget item and is what it plans for each occurrence.");
 
                     // Let the user know about the new forecast transaction we created for the split:
                     view.say("New " + forecastTransaction.toStringConcise());
@@ -630,6 +631,27 @@ public class ForecastController {
      */
     public static boolean exceedsRemainingAmount(boolean isIncome, double remainingAmount, double splitAmount) {
         return calculateOverage(isIncome, remainingAmount, splitAmount) > CURRENCY_COMPARISON_THRESHOLD;
+    }
+
+    /**
+     * What an ignored overage did.  Ignoring it still uses up what was left in the occurrence -- the remaining amount
+     * is zeroed -- and only the excess goes unrecorded.  The message used to say the whole split was "assigned to,
+     * but not deducted from" the occurrence, printed beside that occurrence showing its last $4.92 gone:  a $132.87
+     * HelloFresh charge against Bill Pay Danni's Groceries on 09-11-2026.
+     */
+    static String ignoredOverageMessage(double splitAmount, double remainingInPeriod, double overage,
+                                        String occurrence) {
+        return Utility.formatDollarAmount(splitAmount) + " assigned to " + occurrence + ".  It used up the " +
+                Utility.formatDollarAmount(Math.abs(remainingInPeriod)) + " left in this occurrence;  the " +
+                Utility.formatDollarAmount(Math.abs(overage)) + " over that is ignored.";
+    }
+
+    /**
+     * How an occurrence created for an unmatched split holds it:  money in was received, not spent.  "Records the
+     * split amount of $20.00 as already spent" was said of a $20 transfer into Bill Pay Danni on 09-11-2026.
+     */
+    static String alreadyRecordedAs(double splitAmount) {
+        return splitAmount > 0 ? "received" : "spent";
     }
 
 
@@ -723,9 +745,9 @@ public class ForecastController {
                             // out the remaining amount for this budget item in the current period:
                             forecastTransaction.setRemainingAmount(0);
                             forecastTransaction.save(UPDATE);
-                            view.say(Utility.formatDollarAmount(split.getAmount()) + " assigned to, but not " +
-                                    ((split.getAmount() < 0) ? "deducted from " : " added to ") +
-                                    forecastTransaction.toStringVeryConcise());
+                            view.say(ignoredOverageMessage(split.getAmount(), remainingInPeriod,
+                                    calculateOverage(isIncome, remainingInPeriod, split.getAmount()),
+                                    forecastTransaction.toStringVeryConcise()));
                             break;
 
                         case ROLL_FORWARD:
@@ -953,6 +975,11 @@ public class ForecastController {
                 // Mark all the forecast transactions in THIS forecast as not found:
                 setAllFound(forecast, false);
 
+                // The occurrences the spreadsheet turned out to hold.  The flag is written for all of
+                // them in one statement once the file has been read, rather than a row at a time
+                // below -- see setFoundForIds.
+                List<UUID> foundIds = new ArrayList<>();
+
                 // For each forecast transaction from the external source:
                 for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
 
@@ -969,8 +996,10 @@ public class ForecastController {
                         // and if a matching forecast transaction was found in the database:
                         if (dbForecastTransaction != null) {
 
-                            // then mark the transaction as found:
-                            dbForecastTransaction.setFound(true);
+                            // then record that the spreadsheet held it.  The flag is set on the
+                            // in-memory copy further down, once the comparisons below have had their
+                            // say on whether this row changed at all:
+                            foundIds.add(dbForecastTransaction.getId());
 
                             // and since the spreadsheet does not contain the budgeted amount we can add that now:
                             ssForecastTransaction.getForecastItem().setAmount(
@@ -1055,8 +1084,25 @@ public class ForecastController {
                                 }
                             }
 
-                            // and save the updated forecast transaction to the database:
-                            updateForecastTransaction(dbForecastTransaction);
+                            // and save the forecast transaction only if one of the comparisons above
+                            // actually changed it.  Every occurrence in the file used to be written
+                            // whether or not it had changed -- the Bill Pay Danni import of
+                            // 09-09-2026 rewrote all 543 rows to record three edits.  That is a lot
+                            // of write for nothing, and it moved 543 updatedTimeStamps, which is the
+                            // column that says when an occurrence last changed:  afterwards nothing
+                            // in the table distinguished the three rows the user had edited from the
+                            // 540 the import merely read.
+                            //
+                            // setPlannedDate and setRemainingAmount are the only setters reached
+                            // above, and each is called only inside the branch that established the
+                            // value differs, so the dirty flag is exactly "the spreadsheet changed
+                            // this row".  The found flag is deliberately not set until after this
+                            // check, since it changes on every row and would make all of them dirty.
+                            boolean changedBySpreadsheet = dbForecastTransaction.isDirty();
+                            dbForecastTransaction.setFound(true);
+                            if (changedBySpreadsheet) {
+                                updateForecastTransaction(dbForecastTransaction);
+                            }
 
                         } else {
                             // No matching transaction was found in the database.
@@ -1120,6 +1166,11 @@ public class ForecastController {
 
                     } // End if forecast transaction ID is null (new creation)
                 } // End for each forecast transaction in the external source.
+
+                // Record which occurrences the spreadsheet held, in one statement.  This has to
+                // happen before zeroNotFound, which reads the flag back out of the database to decide
+                // what the user deleted.
+                setFoundForIds(forecast, foundIds, true);
 
                 // Set all the forecast transactions deleted from the spreadsheet to zero because the user zeroed them
                 // out in the spreadsheet:
@@ -1190,6 +1241,12 @@ public class ForecastController {
     /** Mark all forecast transactions in the given forecast as found or not found. */
     protected void setAllFound(Forecast forecast, boolean found) throws EntityException, RegisterException {
         ForecastTransaction.setAllFound(forecast, found);
+    }
+
+    /** Set the found flag on the occurrences the external source held, in one statement. */
+    protected void setFoundForIds(Forecast forecast, Collection<UUID> ids, boolean found)
+            throws EntityException, RegisterException {
+        ForecastTransaction.setFoundForIds(forecast, ids, found);
     }
 
     /** Look up a ForecastItem by name (category + payee) in the given forecast. */

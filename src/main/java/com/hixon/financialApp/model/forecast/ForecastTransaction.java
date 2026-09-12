@@ -187,6 +187,52 @@ public class ForecastTransaction extends IndependentEntity {
                 "to " + foundString + " for forecast " + forecast.getId() + ".");
     }
 
+    /**
+     * Set the found flag on a named set of occurrences in one statement.
+     *
+     * <p>The external-source import marks every row it read from the spreadsheet as found, so that
+     * {@code zeroNotFound} can tell those rows from the ones the user deleted.  Marking them one at a
+     * time meant a full row UPDATE for every occurrence in the file whether or not anything about it
+     * had changed:  the Bill Pay Danni import of 09-09-2026 rewrote all 543 rows to record three
+     * edits, moving 543 updatedTimeStamps and making it impossible to see from the table which rows
+     * the import had actually touched.
+     *
+     * <p>Pairs with {@link #setAllFound(Forecast, boolean)}, which clears the flag across the
+     * forecast before the file is read.  Between them the flag costs two statements instead of one
+     * per row, and the per-row write is left to carry real changes only.
+     *
+     * @param forecast the forecast whose occurrences to mark, so no other forecast is touched
+     * @param ids      the occurrences read from the spreadsheet;  nothing is written when empty
+     * @param found    the value to set
+     */
+    public static void setFoundForIds(Forecast forecast, Collection<UUID> ids, boolean found)
+            throws EntityException, RegisterException {
+
+        if (forecast == null || ids == null || ids.isEmpty()) {
+            return;
+        }
+
+        StringBuilder idList = new StringBuilder();
+        for (UUID id : ids) {
+            if (idList.length() > 0) {
+                idList.append(", ");
+            }
+            idList.append("uuid_to_bin('").append(id).append("')");
+        }
+
+        // Scoped to the forecast as well as the ids.  The ids come from a spreadsheet the user may
+        // have edited, and an id that belongs to another forecast must not be reachable from here --
+        // the same reason setAllFound(Forecast, boolean) replaced its no-argument form.
+        String query = "update forecast_transaction ft " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "set ft.found = " + (found ? "true" : "false") + " " +
+                "where fi.Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "') " +
+                "and ft.idForecastTransaction in (" + idList + ")";
+
+        executeUpdate(query, "attempting to set the found flag on " + ids.size() +
+                " Forecast Transactions in forecast " + forecast.getId() + ".");
+    }
+
     public double getRunningBalance() {
         return runningBalance;
     }
@@ -462,6 +508,42 @@ public class ForecastTransaction extends IndependentEntity {
     @Override
     public String getUpdateByIdQuery() {
         return getUpdateQuery() + getUpdateClause();
+    }
+
+    /**
+     * The update that records a running balance and nothing else.  It leaves updatedTimeStamp alone, because the
+     * timestamp is the occurrence's version, and the spreadsheet round trip compares versions to tell an edit made
+     * against a stale copy from one made against the current one.
+     */
+    String getUpdateRunningBalanceQuery() {
+        return getUpdateQuery() + "runningBalance = " + runningBalance +
+                " where idForecastTransaction = uuid_to_bin('" + id + "')";
+    }
+
+    /**
+     * Save a running balance computed by a rendering.
+     *
+     * <p>A running balance is arithmetic over the occurrences, not a change to one, so it must not move the
+     * version.  It used to go through the full update, which stamps updatedTimeStamp with the current time, while the
+     * rendering wrote the version it had read before that save into the spreadsheet.  Every row the user then edited
+     * came back looking older than the database, and each edit was queried as a conflict:  all four edits made in
+     * the Bill Pay Danni and Bill Pay Dave daily updates of 09-11-2026 were.
+     *
+     * <p>An occurrence carrying unsaved changes of its own is saved in full, since those are real changes, and its
+     * version is brought up to date so that whatever is rendered from it carries the version the database now holds.
+     *
+     * @param runningBalance the balance after this occurrence
+     */
+    public void saveRunningBalance(double runningBalance) throws EntityException, SQLException {
+        if (isDirty()) {
+            setRunningBalance(runningBalance);
+            save(UPDATE);
+            version = Calendar.getInstance();
+        } else {
+            this.runningBalance = runningBalance;
+            executeUpdate(getUpdateRunningBalanceQuery(), "Trying to update the running balance of a " +
+                    "Forecast Transaction.");
+        }
     }
 
     // The delete query:

@@ -368,6 +368,24 @@ public class ImportSummaryControllerTest {
         }
     }
 
+    @Test
+    @DisplayName("A single transaction is counted in the singular in the header")
+    void header_singularForOneTransaction() throws Exception {
+        addNewRecord(buildMockTransaction(true, -14.66));
+
+        try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
+            ts.when(() -> TransactionSplit.getSplitsForTransaction(any()))
+                    .thenReturn(Collections.emptyList());
+            when(mockView.getResponseStringMenuSelection(anyString(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean()))
+                    .thenReturn("");
+
+            summaryController.showSummaryAndRecategorize();
+
+            verify(mockView).say(contains("(1 transaction: 1 newly imported)"));
+        }
+    }
+
     @Nested
     @DisplayName("Occurrence due date")
     class OccurrenceDueDate {
