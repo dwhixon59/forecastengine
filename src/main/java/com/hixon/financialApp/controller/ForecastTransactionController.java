@@ -1229,6 +1229,34 @@ public class ForecastTransactionController {
         return howOccurs == Item.HowOccurs.COLLECTION && timing == ForecastTransaction.Timing.PRIOR_TO;
     }
 
+    /**
+     * Whether a PERIODIC charge belongs to an earlier period than the occurrence it scored best against:  it falls
+     * on or before that occurrence's previous date, so it is that earlier occurrence's charge, not an early payment
+     * of this one.  A charge a few days early for its own occurrence falls after the previous date and is unaffected.
+     *
+     * @param howOccurs                    how the budget item occurs
+     * @param chargeDate                   the date of the transaction
+     * @param candidatesPreviousOccurrence the date of the occurrence before the candidate, or null if there is none
+     */
+    static boolean belongsToAnEarlierPeriod(Item.HowOccurs howOccurs, Calendar chargeDate,
+                                            Calendar candidatesPreviousOccurrence) {
+        return (howOccurs == Item.HowOccurs.PERIODIC || howOccurs == Item.HowOccurs.VARIABLE_PERIODIC)
+                && chargeDate != null && candidatesPreviousOccurrence != null
+                && Utility.dateOnlyCompare(chargeDate, candidatesPreviousOccurrence) <= 0;
+    }
+
+    /**
+     * What an ADJUST did.  It re-budgets the item;  the forecast's occurrences keep the amount they were generated
+     * with until the forecast is regenerated, so the line printed straight after still shows the old budgeted amount.
+     * Said without that, "changed to $-264.18" directly above "Budgeted amount = $-237.23" read as a contradiction
+     * on 09-11-2026.
+     */
+    static String adjustedBudgetMessage(String payee, double newAmount, double forecastAmount) {
+        return "Budgeted amount for " + payee + " changed to " + Utility.formatDollarAmount(newAmount) +
+                ".  The forecast keeps planning " + Utility.formatDollarAmount(forecastAmount) +
+                " for its other occurrences until it is regenerated.";
+    }
+
     public ForecastTransaction getApplicableForecastTransaction(Forecast forecast, TransactionSplit split)
             throws EntityException, Exception, BudgetException, RegisterException {
 
@@ -1311,8 +1339,8 @@ public class ForecastTransactionController {
 
                     case ADJUST: // The planned amount was simply out of date -- re-budget and assign.
                         forecastController.adjustBudgetItemAmount(split, bestMatch, split.getAmount());
-                        view.say("Budgeted amount for " + split.getBudgetItem().getPayee() + " changed to " +
-                                Utility.formatDollarAmount(split.getAmount()) + ".");
+                        view.say(adjustedBudgetMessage(split.getBudgetItem().getPayee(), split.getAmount(),
+                                budgetedAmount));
 
                         // From here it is an ordinary assignment:  the item now budgets the amount
                         // that actually arrived, so nothing about this split is exceptional any more.
@@ -1350,6 +1378,19 @@ public class ForecastTransactionController {
                     // month's groceries.  Defer to the sequential logic below, which resolves this
                     // case explicitly via getApplicableZeroOccurrence.
                     if (mustDeferToPeriodForCollection(split.getBudgetItem().getHowOccurs(), timing)) {
+                        break;
+                    }
+
+                    // A PERIODIC charge that falls on or before the candidate's previous occurrence belongs
+                    // to an earlier period than the candidate, however well merchant and amount agree.  A
+                    // strong score used to auto-assign it regardless of the date:  only non-zero occurrences
+                    // are scored, so once one period's occurrence was spent the next charge took the one
+                    // after, and the drift compounded -- by 09-11-2026 the Citi card's ADT charges of 04-13
+                    // to 07-13 sat on the 09-13 to 12-13 occurrences, and those months had dropped out of
+                    // the forecast.  Defer to the sequential logic below, which asks when the date is off.
+                    if (timing == ForecastTransaction.Timing.PRIOR_TO && belongsToAnEarlierPeriod(
+                            split.getBudgetItem().getHowOccurs(), split.getTransaction().getDate(),
+                            bestMatch.getForecastItem().getPreviousDateOfOccurrence(bestMatch.getPlannedDate()))) {
                         break;
                     }
 

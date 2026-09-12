@@ -155,6 +155,11 @@ public class ImportSummaryController {
         }
     }
 
+    /** "1 transaction", "2 transactions":  the header read "(1 transactions: ...)" for a single import. */
+    static String transactionCount(int count) {
+        return count + (count == 1 ? " transaction" : " transactions");
+    }
+
     private void printSummary(List<ImportLog.ImportRecord> records) throws Exception {
         long cleared     = records.stream().filter(r -> r.getTransaction().isCleared()).count();
         long provisional = records.stream().filter(r -> !r.getTransaction().isCleared()).count();
@@ -179,11 +184,11 @@ public class ImportSummaryController {
         String header;
         if (provisional > 0) {
             header = "IMPORT SUMMARY — " + sessionController.getRegister().getName() +
-                    "  (" + records.size() + " transactions: " + cleared + " cleared + " +
+                    "  (" + transactionCount(records.size()) + ": " + cleared + " cleared + " +
                     provisional + " provisional; " + statusBreakdown + ")";
         } else {
             header = "IMPORT SUMMARY — " + sessionController.getRegister().getName() +
-                    "  (" + records.size() + " transactions: " + statusBreakdown + ")";
+                    "  (" + transactionCount(records.size()) + ": " + statusBreakdown + ")";
         }
 
         String divider = "─".repeat(80);

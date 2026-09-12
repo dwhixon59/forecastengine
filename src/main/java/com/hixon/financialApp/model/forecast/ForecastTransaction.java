@@ -510,6 +510,42 @@ public class ForecastTransaction extends IndependentEntity {
         return getUpdateQuery() + getUpdateClause();
     }
 
+    /**
+     * The update that records a running balance and nothing else.  It leaves updatedTimeStamp alone, because the
+     * timestamp is the occurrence's version, and the spreadsheet round trip compares versions to tell an edit made
+     * against a stale copy from one made against the current one.
+     */
+    String getUpdateRunningBalanceQuery() {
+        return getUpdateQuery() + "runningBalance = " + runningBalance +
+                " where idForecastTransaction = uuid_to_bin('" + id + "')";
+    }
+
+    /**
+     * Save a running balance computed by a rendering.
+     *
+     * <p>A running balance is arithmetic over the occurrences, not a change to one, so it must not move the
+     * version.  It used to go through the full update, which stamps updatedTimeStamp with the current time, while the
+     * rendering wrote the version it had read before that save into the spreadsheet.  Every row the user then edited
+     * came back looking older than the database, and each edit was queried as a conflict:  all four edits made in
+     * the Bill Pay Danni and Bill Pay Dave daily updates of 09-11-2026 were.
+     *
+     * <p>An occurrence carrying unsaved changes of its own is saved in full, since those are real changes, and its
+     * version is brought up to date so that whatever is rendered from it carries the version the database now holds.
+     *
+     * @param runningBalance the balance after this occurrence
+     */
+    public void saveRunningBalance(double runningBalance) throws EntityException, SQLException {
+        if (isDirty()) {
+            setRunningBalance(runningBalance);
+            save(UPDATE);
+            version = Calendar.getInstance();
+        } else {
+            this.runningBalance = runningBalance;
+            executeUpdate(getUpdateRunningBalanceQuery(), "Trying to update the running balance of a " +
+                    "Forecast Transaction.");
+        }
+    }
+
     // The delete query:
     public static final String deleteQuery = "delete from forecast_transaction ";
 

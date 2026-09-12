@@ -21,7 +21,8 @@ class MatchQueryTokenizedSearchTest {
         String sql = merchantQuery().getQuery("ADT SECURITY");
 
         // Each word is matched independently (OR semantics) so a partial match is found.
-        assertTrue(sql.contains("m.name LIKE '%ADT%'"), "should match on the word ADT: " + sql);
+        // ADT is short enough to match only at the start of a word -- which is where it is in "ADT Safe Haven".
+        assertTrue(sql.contains("m.name LIKE 'ADT%'"), "should match names starting with the word ADT: " + sql);
         assertTrue(sql.contains("m.name LIKE '%SECURITY%'"), "should match on the word SECURITY: " + sql);
         assertTrue(sql.contains(" OR "), "words should be OR'd together: " + sql);
 
@@ -49,6 +50,18 @@ class MatchQueryTokenizedSearchTest {
         assertTrue(sql.contains("m.name LIKE '%DEPOT%'"), "should match DEPOT: " + sql);
         assertFalse(sql.contains("LIKE '%THE%'"), "stopword THE should be dropped: " + sql);
         assertTrue(sql.contains("ORDER BY ("), "two meaningful words should rank: " + sql);
+    }
+
+    @Test
+    void shortWordsMatchOnlyAtTheStartOfAWord() {
+        // As a bare substring, "PUR" found "Spurriers Gridiron Grille" for the payee "INTEREST CHARGED TO PUR PR-".
+        String sql = merchantQuery().getQuery("INTEREST CHARGED TO PUR PR-");
+
+        assertTrue(sql.contains("m.name LIKE 'PUR%'"), "PUR should match a name starting with it: " + sql);
+        assertTrue(sql.contains("m.name LIKE '% PUR%'"), "PUR should match a word starting with it: " + sql);
+        assertFalse(sql.contains("LIKE '%PUR%'"), "PUR must not match inside a word: " + sql);
+        assertFalse(sql.contains("PR-"), "trailing punctuation is not part of a word: " + sql);
+        assertTrue(sql.contains("m.name LIKE '%INTEREST%'"), "longer words still match anywhere: " + sql);
     }
 
     @Test

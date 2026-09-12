@@ -59,6 +59,90 @@ class AbstractForecastViewSummaryHelperTest {
     }
 
     @Test
+    void runwayUnderAMonthIsSaidInWords() {
+        // $54 against a $3,962 monthly shortfall was printed "runway drops to about 0 months".
+        assertEquals("under a month", AbstractForecastView.runwayLength(0.01));
+        assertEquals("under a month", AbstractForecastView.runwayLength(0.99));
+        assertEquals("about 1 month", AbstractForecastView.runwayLength(1.2));
+        assertEquals("about 2 months", AbstractForecastView.runwayLength(1.8));
+    }
+
+    @Test
+    void theFloatIsSaidBesideTheBalanceThePeriodOpensWith() {
+        assertEquals(" (the period opens with $354)", AbstractForecastView.periodOpensWith(354.17));
+    }
+
+    @Test
+    void latestOfPicksTheLaterDateAndToleratesNull() {
+        Calendar today = new GregorianCalendar(2026, Calendar.SEPTEMBER, 11);
+        Calendar overdue = new GregorianCalendar(2026, Calendar.SEPTEMBER, 9);
+        Calendar later = new GregorianCalendar(2026, Calendar.OCTOBER, 14);
+
+        assertEquals(0, today.compareTo(AbstractForecastView.latestOf(today, overdue)),
+                "an overdue deficit is due today, not in the past");
+        assertEquals(0, later.compareTo(AbstractForecastView.latestOf(today, later)));
+        assertEquals(0, today.compareTo(AbstractForecastView.latestOf(today, null)));
+        assertNull(AbstractForecastView.latestOf(null, null));
+    }
+
+    @Test
+    void negativeBalanceTimingDistinguishesNowOverdueBeforeAndInThePeriod() {
+        Calendar today = new GregorianCalendar(2026, Calendar.SEPTEMBER, 11);
+        Calendar periodStart = new GregorianCalendar(2026, Calendar.OCTOBER, 1);
+
+        assertEquals(AbstractForecastView.NegativeBalanceTiming.NOW,
+                AbstractForecastView.negativeBalanceTiming(true, today, today, periodStart));
+        assertEquals(AbstractForecastView.NegativeBalanceTiming.OVERDUE, AbstractForecastView.negativeBalanceTiming(
+                false, new GregorianCalendar(2026, Calendar.SEPTEMBER, 9), today, periodStart));
+        assertEquals(AbstractForecastView.NegativeBalanceTiming.BEFORE_PERIOD, AbstractForecastView.negativeBalanceTiming(
+                false, today, today, periodStart), "a deficit today, from occurrences due today, is still to come");
+        assertEquals(AbstractForecastView.NegativeBalanceTiming.IN_PERIOD, AbstractForecastView.negativeBalanceTiming(
+                false, new GregorianCalendar(2026, Calendar.OCTOBER, 6), today, periodStart));
+    }
+
+    @Test
+    void anOverdueDeficitIsNotReportedAsHistory() {
+        Calendar overdue = new GregorianCalendar(2026, Calendar.SEPTEMBER, 9);
+        AbstractForecastView.NegativeBalanceTiming timing = AbstractForecastView.NegativeBalanceTiming.OVERDUE;
+
+        String summary = AbstractForecastView.firstNegativeSummaryLine(timing, -40.99, overdue);
+        String risk = AbstractForecastView.firstNegativeRiskLine(timing, -40.99, overdue);
+        String timeline = AbstractForecastView.firstNegativeTimelineLine(timing, -40.99, overdue);
+
+        for (String line : new String[]{summary, risk, timeline}) {
+            assertTrue(line.contains("overdue") || line.contains("Overdue"), line);
+            assertTrue(line.contains("09-09-2026"), line);
+            assertTrue(line.contains("$-41"), line);
+            assertFalse(line.contains("in the past") || line.contains("already occurred")
+                    || line.contains("Historical"), line);
+        }
+    }
+
+    @Test
+    void anOverdrawnRegisterIsReportedAsOverdrawnNow() {
+        Calendar today = new GregorianCalendar(2026, Calendar.SEPTEMBER, 11);
+        AbstractForecastView.NegativeBalanceTiming timing = AbstractForecastView.NegativeBalanceTiming.NOW;
+
+        assertEquals("The balance is already negative:  $-193 in the register today.",
+                AbstractForecastView.firstNegativeSummaryLine(timing, -193.43, today));
+        assertEquals("  - Critical: The account is already overdrawn at $-193.",
+                AbstractForecastView.firstNegativeRiskLine(timing, -193.43, today));
+        assertTrue(AbstractForecastView.firstNegativeTimelineLine(timing, -193.43, today)
+                .contains("already overdrawn ($-193)"));
+    }
+
+    @Test
+    void aFutureDeficitKeepsItsDate() {
+        Calendar date = new GregorianCalendar(2026, Calendar.OCTOBER, 6);
+        AbstractForecastView.NegativeBalanceTiming timing = AbstractForecastView.NegativeBalanceTiming.IN_PERIOD;
+
+        assertEquals("The first negative balance is: $-2 on 10-06-2026.",
+                AbstractForecastView.firstNegativeSummaryLine(timing, -2.25, date));
+        assertEquals("  - Critical: The account first goes negative on 10-06-2026 at $-2.",
+                AbstractForecastView.firstNegativeRiskLine(timing, -2.25, date));
+    }
+
+    @Test
     void copyCalendarCreatesDefensiveClone() {
         Calendar original = new GregorianCalendar(2026, Calendar.JUNE, 1);
         Calendar copy = AbstractForecastView.copyCalendar(original);

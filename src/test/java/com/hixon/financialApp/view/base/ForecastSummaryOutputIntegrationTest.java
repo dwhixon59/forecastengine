@@ -185,14 +185,28 @@ class ForecastSummaryOutputIntegrationTest {
 
         String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
 
-        assertTrue(output.contains("Historical deficit occurred on"),
-                "the deficit that predates the summary period should still be reported as history");
+        assertTrue(output.contains("before the summary period opens"),
+                "the deficit that predates the summary period should still be reported");
+        assertFalse(output.contains("Historical deficit"),
+                "a deficit still to come this month is not history");
         assertTrue(output.contains("The balance is still in deficit when the summary period opens on"),
                 "a period that opens in the red should say so");
         assertFalse(output.contains("All balances within the forecast summary period are non-negative"),
                 "the balance carried into the period is negative, so the period is not all non-negative");
         assertFalse(output.contains("Positive balance phase:"),
                 "there is no positive phase when the period opens in deficit");
+
+        // The deficit IS the balance carried in, so there is no drawdown to cover and nothing separate to
+        // report before the period.  Bill Pay Danni was told "the float needed to cover it is $0" directly
+        // above "you need to deposit $248" on 09-12-2026, with that same $-248 printed three times.
+        assertFalse(output.contains("float needed to cover it is $0"),
+                "a low point that is the opening balance has no drawdown to cover:\n" + output);
+        assertFalse(output.contains("Before the summary period opens"),
+                "the carry-in is already reported as the period's low point:\n" + output);
+        assertFalse(output.contains("Lowest balance before the summary period opens"),
+                "same balance, previous day's date -- it reads as a second trough:\n" + output);
+        assertTrue(output.contains("you need to deposit $1,500"),
+                "the deposit still has to clear the opening deficit:\n" + output);
     }
 
     /**
@@ -219,8 +233,8 @@ class ForecastSummaryOutputIntegrationTest {
 
         String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
 
-        assertTrue(output.contains("Historical deficit occurred on"),
-                "the deficit that predates the summary period should be reported as history");
+        assertTrue(output.contains("before the summary period opens"),
+                "the deficit that predates the summary period should be reported");
         assertTrue(output.contains("All balances within the forecast summary period are non-negative"),
                 "the period really is non-negative, so it should be reported as such");
         assertFalse(output.contains("The balance is still in deficit when the summary period opens on"),
@@ -254,8 +268,8 @@ class ForecastSummaryOutputIntegrationTest {
 
         String output = renderAndCaptureOutput(beforeAndDuring, duringOnly, addDays(firstOfMonth, -10));
 
-        assertTrue(output.contains("Historical deficit occurred on"),
-                "the older deficit should still be reported as history");
+        assertTrue(output.contains("before the summary period opens"),
+                "the older deficit should still be reported");
         assertTrue(output.contains("Positive balance phase:"),
                 "the period opened in the black, so its positive phase should be reported");
         assertTrue(output.contains("First deficit within the forecast summary period:"),
@@ -294,8 +308,10 @@ class ForecastSummaryOutputIntegrationTest {
 
         String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
 
-        assertTrue(output.contains("The forecast is balanced.  No action is required."),
-                "the period ends ahead of where it opened, so the forecast is in balance");
+        // Balanced, but not "no action is required":  the next lines ask for a deposit.  Bill Pay Dave was told
+        // both on 09-11-2026.
+        assertFalse(output.contains("No action is required"),
+                "a forecast that needs a deposit cannot also need no action");
         assertFalse(output.contains("Once the monthly shortfall is corrected"),
                 "there is no monthly shortfall to correct in a balanced forecast");
         assertTrue(output.contains("timing gap rather than a shortfall"),
@@ -399,6 +415,113 @@ class ForecastSummaryOutputIntegrationTest {
     }
 
     /**
+     * The highest balance is one a day closes on.  Bill Pay Dave's paychecks land before the mortgage on the 1st, and
+     * the moment between them was reported as the highest balance -- $6,375 on 09-01-2027, a day that closed at $907.
+     */
+    @Test
+    @DisplayName("The highest balance is a day-end balance, not a moment between credits and debits")
+    void highestBalanceIsADayEndBalance() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // Starting balance 500.  The 1st touches $5,500 between the paycheck and the mortgage and closes at $700.
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, 5000.0, "Income", "David's net pay 1"),
+                mockTransaction(firstOfMonth, -4800.0, "Household", "Mortgage payment (PITI)"),
+                mockTransaction(addDays(firstOfMonth, 10), -100.0, "Online Services", "Nixplay")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("The highest balance is: $700 on"), output);
+        assertFalse(output.contains("$5,500"), "the account never closed a day at $5,500:\n" + output);
+    }
+
+    /**
+     * A day that dips below zero and recovers before it closes has no negative balance in it.  Which comes first
+     * within a day is only the order the occurrences are read in.
+     */
+    @Test
+    @DisplayName("A dip that recovers within the same day is not a deficit")
+    void aDipThatRecoversWithinTheDayIsNotADeficit() throws Exception {
+
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        List<ForecastTransaction> transactions = List.of(
+                mockTransaction(firstOfMonth, -650.0, "Household", "HOA Fees"),
+                mockTransaction(firstOfMonth, 900.0, "Income", "Salary"),
+                mockTransaction(addDays(firstOfMonth, 10), -100.0, "Online Services", "Nixplay")
+        );
+
+        String output = renderAndCaptureOutput(transactions, transactions, firstOfMonth);
+
+        assertTrue(output.contains("No negative balances are forecast in this period."), output);
+        assertFalse(output.contains("First deficit within the forecast summary period:"), output);
+        assertTrue(output.contains("The forecast is balanced.  No action is required."), output);
+    }
+
+    /**
+     * A register that is already overdrawn has its first negative balance now, and a deficit before the summary
+     * period opens still needs covering.  Bill Pay Danni stood at $-193.43 on 09-11-2026, and the report called the
+     * forecast balanced with no action required, and named 09-11-2026 as the day it would first go negative.
+     */
+    @Test
+    @DisplayName("An overdrawn register is reported as overdrawn now, and the deficit is covered")
+    void anOverdrawnRegisterIsReportedAndCovered() throws Exception {
+
+        Calendar today = Calendar.getInstance();
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        // $-193.43 in the register, $70 more going out today, then a paycheck before the period opens and a sound
+        // period after it.
+        List<ForecastTransaction> beforeAndDuring = List.of(
+                mockTransaction(today, -70.0, "Work", "Danni's Work Expenses"),
+                mockTransaction(addDays(firstOfMonth, -1), 1000.0, "Income", "Danni's net pay"),
+                mockTransaction(firstOfMonth, 100.0, "Income", "Room rental"),
+                mockTransaction(addDays(firstOfMonth, 5), -50.0, "Groceries", "Publix")
+        );
+
+        String output = renderAndCaptureOutput(beforeAndDuring, beforeAndDuring, today, -193.43);
+
+        assertTrue(output.contains("The balance is already negative:  $-193 in the register today."), output);
+        assertTrue(output.contains("Critical: The account is already overdrawn at $-193."), output);
+        assertTrue(output.contains("The account is already overdrawn ($-193) before the summary period opens."),
+                output);
+        assertFalse(output.contains("No action is required"), "an overdrawn account needs action:\n" + output);
+        assertTrue(output.contains("you need to deposit $"), output);
+        assertTrue(output.contains("Immediate Actions Required:"), output);
+        assertTrue(output.contains(": deposit $"), "the deposit should be on the checklist:\n" + output);
+    }
+
+    /**
+     * An occurrence dated before today has not happened:  it is overdue, still to clear.  Bill Pay Dave had $1.66 in
+     * the bank on 09-11-2026 and $42.65 of work expenses dated 09-09 outstanding, and was told the account "went
+     * negative on 09-09-2026 -- this is in the past".
+     */
+    @Test
+    @DisplayName("A deficit from an overdue occurrence is not reported as history")
+    void anOverdueDeficitIsNotReportedAsHistory() throws Exception {
+
+        Calendar overdue = addDays(Calendar.getInstance(), -2);
+        Calendar firstOfMonth = Utility.getNextFirstOfMonth(Calendar.getInstance());
+
+        List<ForecastTransaction> beforeAndDuring = List.of(
+                mockTransaction(overdue, -42.65, "Spending Money", "Dave's work expenses"),
+                mockTransaction(addDays(firstOfMonth, -1), 100.0, "Income", "Life insurance - David"),
+                mockTransaction(firstOfMonth, 500.0, "Income", "David's net pay 1"),
+                mockTransaction(addDays(firstOfMonth, 5), -100.0, "Household", "HOA Fees")
+        );
+
+        String output = renderAndCaptureOutput(beforeAndDuring, beforeAndDuring, overdue, 1.66);
+
+        assertTrue(output.contains("once the overdue occurrences dated"), output);
+        assertTrue(output.contains("Overdue occurrences dated"), output);
+        assertFalse(output.contains("in the past"), output);
+        assertFalse(output.contains("already occurred"), output);
+        assertFalse(output.contains("Historical deficit"), output);
+    }
+
+    /**
      * Render a forecast over the supplied transactions and return everything the view was asked to say.
      *
      * @param transactions  The transactions for the main rendering pass.
@@ -409,6 +532,13 @@ class ForecastSummaryOutputIntegrationTest {
     private static String renderAndCaptureOutput(List<ForecastTransaction> transactions,
                                                  List<ForecastTransaction> floatPassTransactions,
                                                  Calendar renderStartDate) throws Exception {
+        return renderAndCaptureOutput(transactions, floatPassTransactions, renderStartDate, 500.0);
+    }
+
+    /** As above, with the register holding {@code registerBalance}. */
+    private static String renderAndCaptureOutput(List<ForecastTransaction> transactions,
+                                                 List<ForecastTransaction> floatPassTransactions,
+                                                 Calendar renderStartDate, double registerBalance) throws Exception {
         ViewInt originalView = Utility.getView();
         ViewInt mockView = mock(ViewInt.class);
         Utility.setView(mockView);
@@ -422,7 +552,7 @@ class ForecastSummaryOutputIntegrationTest {
         // register rather than from an arbitrary one of however many share the budget.
         when(forecast.getRegister()).thenReturn(register);
         when(register.getReportType()).thenReturn("csv");
-        when(register.getBalance()).thenReturn(500.0);
+        when(register.getBalance()).thenReturn(registerBalance);
         when(register.getName()).thenReturn("Bill Pay Dave");
 
         TestForecastView forecastView = new TestForecastView(forecast);

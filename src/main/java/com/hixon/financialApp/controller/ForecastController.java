@@ -91,8 +91,7 @@ public class ForecastController {
         // Calculate and save running balance for each transaction
         while (forecastTransaction != null) {
             runningBalance += forecastTransaction.getRemainingAmount();
-            forecastTransaction.setRunningBalance(runningBalance);
-            forecastTransaction.save(UPDATE);
+            forecastTransaction.saveRunningBalance(runningBalance);
             forecastTransaction = forecastTransactions.getNext();
         }
     }
@@ -543,8 +542,8 @@ public class ForecastController {
                     // is right, because the money has already left the account and the register holds
                     // it.  Only the label was misleading.
                     view.say("It records the split amount of " + Utility.formatDollarAmount(split.getAmount()) +
-                            " as already spent; the budgeted amount shown below belongs to the budget " +
-                            "item and is what it plans for each occurrence.");
+                            " as already " + alreadyRecordedAs(split.getAmount()) + "; the budgeted amount " +
+                            "shown below belongs to the budget item and is what it plans for each occurrence.");
 
                     // Let the user know about the new forecast transaction we created for the split:
                     view.say("New " + forecastTransaction.toStringConcise());
@@ -632,6 +631,27 @@ public class ForecastController {
      */
     public static boolean exceedsRemainingAmount(boolean isIncome, double remainingAmount, double splitAmount) {
         return calculateOverage(isIncome, remainingAmount, splitAmount) > CURRENCY_COMPARISON_THRESHOLD;
+    }
+
+    /**
+     * What an ignored overage did.  Ignoring it still uses up what was left in the occurrence -- the remaining amount
+     * is zeroed -- and only the excess goes unrecorded.  The message used to say the whole split was "assigned to,
+     * but not deducted from" the occurrence, printed beside that occurrence showing its last $4.92 gone:  a $132.87
+     * HelloFresh charge against Bill Pay Danni's Groceries on 09-11-2026.
+     */
+    static String ignoredOverageMessage(double splitAmount, double remainingInPeriod, double overage,
+                                        String occurrence) {
+        return Utility.formatDollarAmount(splitAmount) + " assigned to " + occurrence + ".  It used up the " +
+                Utility.formatDollarAmount(Math.abs(remainingInPeriod)) + " left in this occurrence;  the " +
+                Utility.formatDollarAmount(Math.abs(overage)) + " over that is ignored.";
+    }
+
+    /**
+     * How an occurrence created for an unmatched split holds it:  money in was received, not spent.  "Records the
+     * split amount of $20.00 as already spent" was said of a $20 transfer into Bill Pay Danni on 09-11-2026.
+     */
+    static String alreadyRecordedAs(double splitAmount) {
+        return splitAmount > 0 ? "received" : "spent";
     }
 
 
@@ -725,9 +745,9 @@ public class ForecastController {
                             // out the remaining amount for this budget item in the current period:
                             forecastTransaction.setRemainingAmount(0);
                             forecastTransaction.save(UPDATE);
-                            view.say(Utility.formatDollarAmount(split.getAmount()) + " assigned to, but not " +
-                                    ((split.getAmount() < 0) ? "deducted from " : " added to ") +
-                                    forecastTransaction.toStringVeryConcise());
+                            view.say(ignoredOverageMessage(split.getAmount(), remainingInPeriod,
+                                    calculateOverage(isIncome, remainingInPeriod, split.getAmount()),
+                                    forecastTransaction.toStringVeryConcise()));
                             break;
 
                         case ROLL_FORWARD:

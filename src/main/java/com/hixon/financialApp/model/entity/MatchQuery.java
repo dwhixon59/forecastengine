@@ -245,7 +245,9 @@ public class MatchQuery {
         String[] rawWords = searchString.trim().split("\\s+");
         java.util.List<String> words = new java.util.ArrayList<>();
         for (String rawWord : rawWords) {
-            String cleaned = rawWord.replace("%", "").replace("*", "").trim();
+            // Punctuation at either end is not part of the word:  the "PR-" in "INTEREST CHARGED TO PUR PR-" is "PR".
+            String cleaned = rawWord.replace("%", "").replace("*", "").trim()
+                    .replaceAll("^[^\\p{Alnum}]+|[^\\p{Alnum}]+$", "");
             if (cleaned.length() >= 3 && !SEARCH_STOPWORDS.contains(cleaned.toUpperCase())
                     && !PAYMENT_PROCESSOR_NOISE.contains(cleaned.toUpperCase())) {
                 words.add(cleaned);
@@ -264,12 +266,11 @@ public class MatchQuery {
         query.append("(");
         boolean first = true;
         for (String word : words) {
-            String escaped = Utility.escapeSqlString(word);
             for (String column : columns) {
                 if (!first) {
                     query.append(" OR ");
                 }
-                query.append(column.trim()).append(" LIKE '%").append(escaped).append("%'");
+                query.append(wordMatch(column.trim(), word));
                 first = false;
             }
         }
@@ -287,15 +288,14 @@ public class MatchQuery {
             if (!first) {
                 query.append(" + ");
             }
-            query.append("(").append(column.trim()).append(" LIKE '%").append(firstWordEscaped).append("%') * 10");
+            query.append("(").append(wordMatch(column.trim(), words.get(0))).append(") * 10");
             first = false;
         }
         // Then add matching on other words (lower priority)
         for (int i = 1; i < words.size(); i++) {
-            String escaped = Utility.escapeSqlString(words.get(i));
             for (String column : columns) {
                 query.append(" + ");
-                query.append("(").append(column.trim()).append(" LIKE '%").append(escaped).append("%')");
+                query.append("(").append(wordMatch(column.trim(), words.get(i))).append(")");
             }
         }
         query.append(") DESC, ");
@@ -313,6 +313,20 @@ public class MatchQuery {
         query.append("LENGTH(").append(columns[0].trim()).append(") ASC");
 
         return query.toString();
+    }
+
+    /**
+     * The predicate for one word of a tokenized search.  A word of three letters or fewer matches only at the start
+     * of a word in the name:  as a bare substring it turns up inside unrelated words, and on 09-11-2026 the payee
+     * "INTEREST CHARGED TO PUR PR-" was offered "Spurriers Gridiron Grille" -- the one merchant containing "pur".
+     * The prefix still finds what a short word is there for:  "ADT" in "ADT Safe Haven", "WIN" in "Fiorelli Winery".
+     */
+    private static String wordMatch(String column, String word) {
+        String escaped = Utility.escapeSqlString(word);
+        if (word.length() <= 3) {
+            return "(" + column + " LIKE '" + escaped + "%' OR " + column + " LIKE '% " + escaped + "%')";
+        }
+        return column + " LIKE '%" + escaped + "%'";
     }
 
     /**
