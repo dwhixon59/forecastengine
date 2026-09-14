@@ -78,6 +78,16 @@ public class TransactionSplitsController {
         return terminationCondition;
     }
 
+    /**
+     * The memo for a split the user selects without typing one, or null for none.  Set when
+     * recategorizing so that the memo the transaction already had is kept.
+     */
+    private String defaultSplitMemo;
+
+    public void setDefaultSplitMemo(String defaultSplitMemo) {
+        this.defaultSplitMemo = (defaultSplitMemo == null || defaultSplitMemo.isBlank()) ? null : defaultSplitMemo;
+    }
+
 
     /**
      * Constructor for TransactionSplitsController with SessionController.
@@ -177,7 +187,7 @@ public class TransactionSplitsController {
             // already optimal in that path.
             if (budgetItemsForMerchant.size() == 1 && merchant.isAskAlways() && !allFixed) {
                 BudgetItemMerchant sole = budgetItemsForMerchant.get(0);
-                String defaultMemo = getBudgetItemMemo(sole);
+                String defaultMemo = defaultSplitMemo != null ? defaultSplitMemo : getBudgetItemMemo(sole);
                 String itemLabel;
                 try {
                     itemLabel = sole.getBudgetItem().getPayee();
@@ -185,8 +195,9 @@ public class TransactionSplitsController {
                     itemLabel = "item 1";
                 }
                 view.say("▸ Auto-selected: " + itemLabel);
+                // No trailing colon:  the view adds one, and "... to skip)::" is what it printed.
                 String memoInput = view.getResponseString(
-                        "Memo (or 'a' to add a budget item, 's' to skip):",
+                        "Memo (or 'a' to add a budget item, 's' to skip)",
                         defaultMemo, ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                         ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 
@@ -223,7 +234,7 @@ public class TransactionSplitsController {
             // ── End single-item shortcut ───────────────────────────────────────────
 
             String[] amounts;
-            String prompt = "Enter the split amounts (or a - add, d - delete, i - inquire, s - skip)";
+            String prompt = "Enter the split amounts or '<number> <memo>' (or a - add, d - delete, i - inquire, s - skip)";
 
             // If all the amounts are pre-established:
             if (allFixed) {
@@ -470,7 +481,7 @@ public class TransactionSplitsController {
                         // or use it just once for this transaction.
                         String associate = view.getResponseString(
                                 "Permanently associate '" + selectedBudgetItem.getDisplayString() +
-                                        "' with merchant '" + merchant.getName() + "'? (y/n) [n]:",
+                                        "' with merchant '" + merchant.getName() + "'? (y/n)",
                                 "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                                 ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
 
@@ -512,7 +523,7 @@ public class TransactionSplitsController {
                 int itemNumber = Integer.parseInt(amounts[0]);
                 if (itemNumber <= budgetItemsForMerchant.size()) {
                     splits.add(new TransactionSplit(transaction.getAmount(), budgetItemsForMerchant.get(itemNumber - 1),
-                            transaction, null));
+                            transaction, defaultSplitMemo));
                 }
             } else if (!amounts[0].matches("^-?[0-9]+(\\.[0-9]+)?$")) {
                 // Invalid input - not a valid command or number
@@ -576,7 +587,7 @@ public class TransactionSplitsController {
         if (!splits.isEmpty() && merchant.isAskAlways() && budgetItemsForMerchant.size() == 1) {
             try {
                 String setDefault = view.getResponseString(
-                        "Always auto-assign '" + merchant.getName() + "' to this budget item? (y/n):",
+                        "Always auto-assign '" + merchant.getName() + "' to this budget item? (y/n)",
                         "n", ALLOW_NONE, DO_NOT_SHOW_CANCEL_QUIT_SKIP,
                         ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
                 if (setDefault.equalsIgnoreCase("y")) {

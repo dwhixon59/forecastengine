@@ -352,6 +352,52 @@ public class ImportController {
         return importRecordId;
     }
 
+    /** Whether an import record id is already in use.  May consult the database. */
+    @FunctionalInterface
+    interface ImportRecordIdCheck {
+        boolean isTaken(String importRecordId) throws Exception;
+    }
+
+    /** "P" + yyyyMMdd:  the part of a provisional import record id that comes before its counter. */
+    static final int PROVISIONAL_ID_PREFIX_LENGTH = 9;
+
+    /**
+     * The import record id to save a new provisional transaction under:  the one it was given if that is
+     * free, otherwise the next free id with the same "P" + post date prefix.
+     *
+     * <p>{@link #constructImportRecordId} numbers rows by their position in the file being read, so an id
+     * is only unique within that file.  A later file can hand an earlier charge's id to a different
+     * charge, and saving under it overwrites the earlier one.
+     *
+     * @param importRecordId the id the transaction was given
+     * @param taken          says whether an id is already in use
+     * @return a free id;  the one passed in when it is free, or null when null was passed
+     */
+    static String firstFreeImportRecordId(String importRecordId, ImportRecordIdCheck taken) throws Exception {
+        if (importRecordId == null || !taken.isTaken(importRecordId)) {
+            return importRecordId;
+        }
+
+        String base;
+        int counter;
+        String suffix = importRecordId.length() > PROVISIONAL_ID_PREFIX_LENGTH
+                ? importRecordId.substring(PROVISIONAL_ID_PREFIX_LENGTH) : "";
+        if (suffix.matches("\\d{1,9}")) {
+            base = importRecordId.substring(0, PROVISIONAL_ID_PREFIX_LENGTH);
+            counter = Integer.parseInt(suffix);
+        } else {
+            base = importRecordId + "-";
+            counter = 1;
+        }
+
+        String candidate;
+        do {
+            counter++;
+            candidate = base + counter;
+        } while (taken.isTaken(candidate));
+        return candidate;
+    }
+
     /**
      * Logs transaction splits and their associated forecast transactions to the view.
      *
@@ -1785,6 +1831,27 @@ public class ImportController {
                                                     budgetController.getTerminationCondition() + " during transaction import");
                                     }
                                 }
+                            }
+                        }
+
+                        // A new provisional's import record id is its post date plus its position in
+                        // today's file, so it does not identify the charge:  an earlier file can have
+                        // given the same id to a different one.  The save below is an upsert on that id,
+                        // and an upsert that lands on another charge's row overwrites it in place.  On
+                        // 09-14-2026 Amazon Prime $5.48 was given P202609141, the id the 09-12 McConnaughhay
+                        // payroll deposit of $3,456.51 already held, and replaced it:  the deposit was
+                        // gone without a delete, and the register stayed $3,456.51 above the bank.
+                        if (!alreadyInTheRegister) {
+                            final Transaction incoming = provisionalTransactions.get(provTrxIndex);
+                            final List<Transaction> fromFile = provisionalTransactions;
+                            String freeId = firstFreeImportRecordId(incoming.getImportRecordId(),
+                                    id -> Transaction.getByImportRecordId(id, register.getId()) != null ||
+                                            fromFile.stream().anyMatch(t -> t != incoming &&
+                                                    id.equals(t.getImportRecordId())));
+                            if (freeId != null && !freeId.equals(incoming.getImportRecordId())) {
+                                logger.debug("Import record id {} is already taken; saving {} as {} instead.",
+                                        incoming.getImportRecordId(), incoming.getPayee(), freeId);
+                                incoming.setImportRecordId(freeId);
                             }
                         }
 

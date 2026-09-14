@@ -1,6 +1,7 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.Budget;
+import com.hixon.financialApp.model.budget.BudgetItemUtilities;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
@@ -10,6 +11,7 @@ import com.hixon.financialApp.view.base.ViewInt;
 
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 
 
 public class DailyUpdateController {
@@ -55,6 +57,22 @@ public class DailyUpdateController {
      *  Helper methods:
      */
 
+    /**
+     * The session budget's items as they stand now, for {@link ForecastChangeReasons}.
+     *
+     * @return the snapshot, or null if the budget could not be read -- a missing snapshot must not make
+     *         every item look added or removed
+     */
+    private Map<String, ForecastChangeReasons.ItemState> snapshotBudget() {
+        try {
+            Budget sessionBudget = sessionController.getBudget();
+            return sessionBudget == null ? null
+                    : ForecastChangeReasons.snapshot(BudgetItemUtilities.getAllBudgetItemsForBudget(sessionBudget));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
 
     /*
      * Main methods:
@@ -75,6 +93,12 @@ public class DailyUpdateController {
             RegisterController registerController = new RegisterController(sessionController);
             ForecastController forecastController = new ForecastController(sessionController);
             boolean inSync = true;
+
+            // Remember how the budget and forecast stood before anything ran, so that the offer to update
+            // the forecast can say what made it necessary:
+            boolean forecastStaleAtStart = forecast != null && !forecast.getInSync();
+            Map<String, ForecastChangeReasons.ItemState> budgetBefore = snapshotBudget();
+            boolean recategorized = false;
 
 
             // Check if user has modified the external forecast file since last render:
@@ -203,6 +227,7 @@ public class DailyUpdateController {
                 ImportSummaryController importSummaryController =
                         new ImportSummaryController(sessionController, importController.getImportLog());
                 boolean recatChanged = importSummaryController.showSummaryAndRecategorize();
+                recategorized = recatChanged;
                 if (recatChanged && inSync) {
                     inSync = false;
                 }
@@ -232,8 +257,14 @@ public class DailyUpdateController {
             if (!inSync) {
                view.sayH2("UPDATE THE FORECAST");
 
-                // Ask the user if they want to update the forecast:
-                if (view.getYesOrNo("Budget items were changed.  Do you want to update the forecast?")) {
+                // Say why the forecast is out of date, then ask the user if they want to update it:
+                List<String> reasons = ForecastChangeReasons.describe(budgetBefore, snapshotBudget(),
+                        recategorized, forecastStaleAtStart);
+                view.say(reasons.isEmpty() ? "The forecast is out of date." : "The forecast is out of date because:");
+                for (String reason : reasons) {
+                    view.say("  - " + reason);
+                }
+                if (view.getYesOrNo("Do you want to update the forecast?")) {
                     try {
                         forecastController.updateForecast();
                        view.sayH4("The long term forecast was successfully updated.");

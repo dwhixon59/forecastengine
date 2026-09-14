@@ -3,10 +3,14 @@ package com.hixon.financialApp.controller;
 import com.hixon.financialApp.model.budget.Budget;
 import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.model.budget.BudgetItemMerchant;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.model.budget.TransactionSplit;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.forecast.ForecastItem;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
+import com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
@@ -801,6 +805,14 @@ public class TransactionController {
             view.say();
         }
 
+        // Keep the memo the transaction already had.  Picking a different budget item used to drop it
+        // silently:  recategorizing the $40.00 transfer into Bill Pay Danni on 09-14-2026 lost
+        // "White water rafting" with nothing on screen to say it had gone.
+        String previousMemo = sharedMemo(currentSplits);
+        if (previousMemo != null) {
+            view.say("The memo \"" + previousMemo + "\" is kept unless you enter '<number> <memo>'.");
+        }
+
         // Start a database transaction to ensure atomicity
         java.sql.Connection conn = Utility.getDbConnection();
         boolean originalAutoCommit = conn.getAutoCommit();
@@ -809,17 +821,15 @@ public class TransactionController {
             // Disable auto-commit to start transaction
             conn.setAutoCommit(false);
 
-            // Delete existing splits using SQL (TransactionSplit.delete() returns null query)
+            // Delete existing splits, undoing what reconciling them did to the forecast
             if (!currentSplits.isEmpty()) {
-                String deleteQuery = "DELETE FROM transaction_split WHERE Transaction_idTransaction = uuid_to_bin('" +
-                        transaction.getId() + "')";
-                EntityInt.executeUpdate(deleteQuery, "deleting transaction splits for recategorization");
+                deleteSplitsAndReleaseForecast(transaction, currentSplits);
                 view.say("Existing splits deleted.");
             }
 
             // Process the transaction to create new splits, forcing manual selection
             // so the user can choose different budget items than the previous categorization
-            reconcileTransaction(transaction, true);
+            reconcileTransaction(transaction, true, previousMemo);
 
             // If we got here without exception, commit the transaction
             conn.commit();
@@ -869,6 +879,18 @@ public class TransactionController {
      * @throws SkipException if the user skips the reconciliation
      */
     public void reconcileTransaction(Transaction transaction, boolean forceManualSplits) throws Exception, SkipException {
+        reconcileTransaction(transaction, forceManualSplits, null);
+    }
+
+    /**
+     * Reconciles a single transaction, giving a split the user selects without typing a memo the memo
+     * supplied.
+     *
+     * @param defaultMemo the memo to keep, or null for none
+     * @see #reconcileTransaction(Transaction, boolean)
+     */
+    public void reconcileTransaction(Transaction transaction, boolean forceManualSplits, String defaultMemo)
+            throws Exception, SkipException {
         BudgetController budgetController = new BudgetController(sessionController);
 
         Merchant merchant = transaction.getMerchant();
@@ -903,7 +925,7 @@ public class TransactionController {
         }
         if (splits == null || splits.isEmpty()) {
             splits = budgetController.assignAmountsToBudgetItems(transaction, merchant, budget,
-                    budgetItemsForMerchant, forceManualSplits);
+                    budgetItemsForMerchant, forceManualSplits, defaultMemo);
         }
 
         // Mark the transaction as new so it appears in the new transaction report
@@ -942,6 +964,146 @@ public class TransactionController {
                 }
             } else {
                 view.say("Transaction categorized (forecast reconciliation skipped).");
+            }
+        }
+    }
+
+    /**
+     * The memo every split of a transaction agrees on, ignoring blank ones.
+     *
+     * @return that memo, or null when there is none or the splits disagree
+     */
+    static String sharedMemo(List<TransactionSplit> splits) {
+        String memo = null;
+        for (TransactionSplit split : splits) {
+            String splitMemo = split.getMemo();
+            if (splitMemo == null || splitMemo.isBlank()) {
+                continue;
+            }
+            if (memo != null && !memo.equals(splitMemo.trim())) {
+                return null;
+            }
+            memo = splitMemo.trim();
+        }
+        return memo;
+    }
+
+    /** What undoing a split's reconciliation does to the occurrence it was reconciled against. */
+    enum ForecastRelease {
+        /** The occurrence was created to hold the split;  remove it once nothing else is linked to it. */
+        DELETE_OCCURRENCE,
+        /** A collection occurrence the split was deducted from;  add the split amount back. */
+        ADD_BACK_SPLIT,
+        /** A once-a-period occurrence the split used up;  put its budgeted amount back. */
+        RESTORE_BUDGETED,
+        /** Reconciling did something that cannot be read back reliably;  tell the user instead. */
+        REPORT_ONLY
+    }
+
+    /**
+     * How to undo a split's reconciliation, mirroring what {@link ForecastController#deductSplitAmount} did.
+     *
+     * <p>Only the plain cases are undone.  An overage the user adjusted, ignored, disputed or rolled
+     * forward changed amounts that are not recorded against the split, and a credit to an expense may have
+     * been declined, so those are reported rather than guessed at.
+     *
+     * @param howOccurs                  the forecast item's howOccurs
+     * @param period                     the forecast item's period
+     * @param disposition                how the split was applied, or null for a plain deduction
+     * @param linkedSplits               how many splits are linked to the occurrence, this one included
+     * @param creditMayHaveBeenDeclined  true for money in to an expense item, where the user is asked
+     *                                   whether to credit it
+     */
+    static ForecastRelease releaseActionFor(Item.HowOccurs howOccurs, Item.PeriodType period,
+                                            SplitDisposition disposition, int linkedSplits,
+                                            boolean creditMayHaveBeenDeclined) {
+        // The same rule the orphan check and the import summary use for "created to record a spend":
+        if (howOccurs == Item.HowOccurs.UNPLANNED || period == Item.PeriodType.ON_DEMAND) {
+            return ForecastRelease.DELETE_OCCURRENCE;
+        }
+        boolean plainDeduction = disposition == null || disposition == SplitDisposition.ASSIGN;
+        if (!plainDeduction || howOccurs == null) {
+            return ForecastRelease.REPORT_ONLY;
+        }
+        switch (howOccurs) {
+            case COLLECTION:
+                return creditMayHaveBeenDeclined ? ForecastRelease.REPORT_ONLY : ForecastRelease.ADD_BACK_SPLIT;
+            case PERIODIC:
+            case VARIABLE_PERIODIC:
+                return linkedSplits <= 1 ? ForecastRelease.RESTORE_BUDGETED : ForecastRelease.REPORT_ONLY;
+            default:
+                return ForecastRelease.REPORT_ONLY;
+        }
+    }
+
+    /**
+     * Deletes a transaction's splits and undoes what reconciling them did to the forecast.
+     *
+     * <p>Deleting a split cascades to its forecast_transaction_split link and to nothing else, so the
+     * occurrence it was reconciled against kept what reconciling had done to it:  one created just to hold
+     * the split stayed behind with nothing linked to it, and a planned one stayed spent.  Recategorizing
+     * the $40.00 transfer into Bill Pay Danni on 09-14-2026 left such a Reimbursement occurrence, and the
+     * orphan check reported it at the end of the same run.
+     *
+     * @param transaction the transaction whose splits are being replaced
+     * @param splits      its current splits
+     */
+    public void deleteSplitsAndReleaseForecast(Transaction transaction, List<TransactionSplit> splits)
+            throws Exception {
+        Forecast linkedForecast = sessionController.getForecast();
+        List<ForecastTransaction> createdForSplits = new ArrayList<>();
+
+        if (linkedForecast != null) {
+            for (TransactionSplit split : splits) {
+                ForecastTransactionSplit link = ForecastTransactionSplit.getForecastTransactionSplit(linkedForecast, split);
+                if (link == null) {
+                    continue;
+                }
+                ForecastTransaction occurrence = link.getForecastTransaction();
+                ForecastItem item = occurrence != null ? occurrence.getForecastItem() : null;
+                if (item == null) {
+                    continue;
+                }
+
+                int linkedSplits = ForecastTransactionSplit.countSplitsForForecastTransaction(occurrence.getId());
+                boolean creditMayHaveBeenDeclined =
+                        split.getAmount() > Utility.CURRENCY_COMPARISON_THRESHOLD && !item.isIncome();
+
+                switch (releaseActionFor(item.getHowOccurs(), item.getPeriod(), link.getDisposition(),
+                        linkedSplits, creditMayHaveBeenDeclined)) {
+                    case DELETE_OCCURRENCE:
+                        createdForSplits.add(occurrence);
+                        break;
+                    case ADD_BACK_SPLIT:
+                        occurrence.setRemainingAmount(occurrence.getRemainingAmount() + split.getAmount());
+                        occurrence.save(EntityInt.SaveMethod.UPDATE);
+                        view.say(formatDollarAmount(split.getAmount()) + " given back to " +
+                                occurrence.toStringVeryConcise());
+                        break;
+                    case RESTORE_BUDGETED:
+                        occurrence.setRemainingAmount(item.getAmount());
+                        occurrence.save(EntityInt.SaveMethod.UPDATE);
+                        view.say("Budgeted amount of " + formatDollarAmount(item.getAmount()) + " restored to " +
+                                occurrence.toStringVeryConcise());
+                        break;
+                    case REPORT_ONLY:
+                        view.say("Check " + occurrence.toStringConcise() + ":  the old categorization was " +
+                                "reconciled against it, and that has not been undone.");
+                        break;
+                }
+            }
+        }
+
+        // TransactionSplit.delete() has no query, so delete with SQL:
+        EntityInt.executeUpdate("DELETE FROM transaction_split WHERE Transaction_idTransaction = uuid_to_bin('" +
+                transaction.getId() + "')", "deleting transaction splits for recategorization");
+
+        // Only once the links are gone can an occurrence be seen to hold nothing else:
+        for (ForecastTransaction occurrence : createdForSplits) {
+            if (ForecastTransactionSplit.countSplitsForForecastTransaction(occurrence.getId()) == 0) {
+                occurrence.delete();
+                view.say("Removed the forecast transaction created for the old categorization:  " +
+                        occurrence.toStringVeryConcise());
             }
         }
     }

@@ -455,10 +455,10 @@ public class ImportSummaryController {
                 if (bi != null) biName = "'" + bi.getDisplayString() + "'";
             } catch (Exception ignored) {}
             prompt = "Row(s) " + rowDesc + " also from '" + sourceMerchantName +
-                    "'. Apply " + biName + " to all? (y/n) [n]:";
+                    "'. Apply " + biName + " to all? (y/n)";
         } else {
             prompt = "Row(s) " + rowDesc + " also from '" + sourceMerchantName +
-                    "'. Recategorize each individually? (y/n) [n]:";
+                    "'. Recategorize each individually? (y/n)";
         }
 
         try {
@@ -488,10 +488,10 @@ public class ImportSummaryController {
     private void applyGroupSplit(ImportLog.ImportRecord record, TransactionSplit sourceSplit) throws Exception {
         Transaction txn = record.getTransaction();
 
-        // Delete existing splits for this transaction
-        String deleteQuery = "DELETE FROM transaction_split WHERE Transaction_idTransaction = uuid_to_bin('"
-                + txn.getId() + "')";
-        EntityInt.executeUpdate(deleteQuery, "deleting splits for group recategorization");
+        // Delete existing splits for this transaction, undoing what reconciling them did to the forecast
+        List<TransactionSplit> existingSplits = TransactionSplit.getSplitsForTransaction(txn);
+        createTransactionController().deleteSplitsAndReleaseForecast(txn,
+                existingSplits != null ? existingSplits : new ArrayList<>());
 
         // Resolve a BudgetItemMerchant for the target transaction's merchant + source budget item
         BudgetItem bi = sourceSplit.getBudgetItem();

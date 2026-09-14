@@ -623,6 +623,20 @@ public class BudgetController {
     public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget
             budget, List<BudgetItemMerchant> budgetItemMerchants, boolean forceManualSplits)
             throws Exception {
+        return assignAmountsToBudgetItems(transaction, merchant, budget, budgetItemMerchants, forceManualSplits, null);
+    }
+
+    /**
+     * Assigns transaction amounts to budget items for a merchant, keeping a memo when the user does not
+     * type one.
+     *
+     * @param defaultMemo the memo to give a split the user selects without typing a memo, or null.  Used
+     *                    when recategorizing, so the memo the transaction already had is not dropped.
+     * @see #assignAmountsToBudgetItems(Transaction, Merchant, Budget, List, boolean)
+     */
+    public List<TransactionSplit> assignAmountsToBudgetItems(Transaction transaction, Merchant merchant, Budget
+            budget, List<BudgetItemMerchant> budgetItemMerchants, boolean forceManualSplits, String defaultMemo)
+            throws Exception {
 
         // If there are no budget items assigned to this merchant, we need to ask the user to assign one first:
         if (budgetItemMerchants.isEmpty()) {
@@ -654,6 +668,7 @@ public class BudgetController {
         ) {
             // then ask the user to enter the splits:
             TransactionSplitsController transactionSplitsController = new TransactionSplitsController(sessionController);
+            transactionSplitsController.setDefaultSplitMemo(defaultMemo);
             transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
             // Capture the termination condition so ImportController can check it
             terminationCondition = transactionSplitsController.getTerminationCondition();
@@ -694,6 +709,7 @@ public class BudgetController {
                 view.say("Automatic splits don't add up to the transaction amount, please enter them manually.");
                 TransactionSplit.deleteSplitsForTransaction(transaction.getId());
                 TransactionSplitsController transactionSplitsController = new TransactionSplitsController(sessionController);
+                transactionSplitsController.setDefaultSplitMemo(defaultMemo);
                 transactionSplitsController.getSplits(transaction, splits, merchant, budget, budgetItemMerchants, true, true);
                 // Capture the termination condition so ImportController can check it
                 terminationCondition = transactionSplitsController.getTerminationCondition();
