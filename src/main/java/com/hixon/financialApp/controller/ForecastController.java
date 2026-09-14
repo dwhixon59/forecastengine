@@ -21,7 +21,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.hixon.financialApp.model.budget.Item.ItemType.INCOME;
@@ -980,6 +984,12 @@ public class ForecastController {
                 // below -- see setFoundForIds.
                 List<UUID> foundIds = new ArrayList<>();
 
+                // The occurrences the spreadsheet held, as edited by it, and the ones it moved to a new
+                // date.  A move can land on a date the same item already has an occurrence on;  those are
+                // merged once every row has been read -- see mergeMovedOccurrences.
+                Map<UUID, ForecastTransaction> heldOccurrences = new HashMap<>();
+                List<ForecastTransaction> movedOccurrences = new ArrayList<>();
+
                 // For each forecast transaction from the external source:
                 for (ForecastTransaction ssForecastTransaction : forecastTransactions) {
 
@@ -1000,6 +1010,7 @@ public class ForecastController {
                             // in-memory copy further down, once the comparisons below have had their
                             // say on whether this row changed at all:
                             foundIds.add(dbForecastTransaction.getId());
+                            heldOccurrences.put(dbForecastTransaction.getId(), dbForecastTransaction);
 
                             // and since the spreadsheet does not contain the budgeted amount we can add that now:
                             ssForecastTransaction.getForecastItem().setAmount(
@@ -1042,6 +1053,7 @@ public class ForecastController {
                                     // Set the "override" flag on the forecast transaction to prevent it from
                                     // being deleted during the forecast update process:
                                     dbForecastTransaction.setOverridden(true);
+                                    movedOccurrences.add(dbForecastTransaction);
                                 }
                             }
 
@@ -1167,6 +1179,11 @@ public class ForecastController {
                     } // End if forecast transaction ID is null (new creation)
                 } // End for each forecast transaction in the external source.
 
+                // Merge any occurrence moved onto a date its item already had one on.  Done now, with
+                // every row read, so a target edited further down the file merges with its edit; and
+                // before the found flags are written, so a merged-away occurrence is not among them.
+                mergeMovedOccurrences(movedOccurrences, heldOccurrences, foundIds);
+
                 // Record which occurrences the spreadsheet held, in one statement.  This has to
                 // happen before zeroNotFound, which reads the flag back out of the database to decide
                 // what the user deleted.
@@ -1200,6 +1217,66 @@ public class ForecastController {
         }
 
     } // End updateFromExternalSource(Connection dbConnection).
+
+    /**
+     * Merges each occurrence the spreadsheet moved onto a date its forecast item already had an occurrence on.
+     *
+     * <p>Moving an occurrence used to change its date and nothing else, so a move onto an existing occurrence left
+     * two for one date.  On 09-11-2026 Dave's Spending Money's 09-01 occurrence, with $100 left, was moved to
+     * 09-15, which had its own $150;  the forecast then carried both, and once both were zeroed on 09-14 the
+     * duplicate check reported them.  The two are now combined into the one that was already there:  it takes the
+     * moved occurrence's remaining amount and any splits linked to it, and the moved occurrence is removed.
+     *
+     * <p>Only an occurrence the spreadsheet also held is merged into.  One missing from the spreadsheet was deleted
+     * there, the move replaces it, and zeroNotFound zeroes it as before.  Transfer counterparts are left alone on
+     * either side, since transfer matching looks them up individually.
+     *
+     * @param movedOccurrences the occurrences whose date the spreadsheet changed, as saved
+     * @param heldOccurrences  every occurrence the spreadsheet held, by id, with its edits applied
+     * @param foundIds         the ids to be marked found;  merged-away ids are removed from it
+     */
+    void mergeMovedOccurrences(List<ForecastTransaction> movedOccurrences,
+                               Map<UUID, ForecastTransaction> heldOccurrences, List<UUID> foundIds)
+            throws Exception {
+
+        Set<UUID> removed = new HashSet<>();
+        for (ForecastTransaction moved : movedOccurrences) {
+            if (removed.contains(moved.getId()) || isTransferCounterpart(moved)) {
+                continue;
+            }
+
+            // The first other occurrence on the new date that the spreadsheet still holds:
+            ForecastTransaction target = null;
+            for (ForecastTransaction candidate : lookupOtherOccurrencesOnDate(moved)) {
+                ForecastTransaction held = heldOccurrences.get(candidate.getId());
+                if (held != null && !removed.contains(held.getId()) && !isTransferCounterpart(held)) {
+                    target = held;
+                    break;
+                }
+            }
+            if (target == null) {
+                continue;
+            }
+
+            view.say("\nMerged " + moved.toStringConcise() + "\n  into " + target.toStringConcise() +
+                    ", which was already on that date.");
+            target.setRemainingAmount(target.getRemainingAmount() + moved.getRemainingAmount());
+            target.setOverridden(true);
+            updateForecastTransaction(target);
+            relinkForecastTransactionSplits(moved.getId(), target.getId());
+            deleteForecastTransaction(moved);
+            view.say("New remaining amount is:  " + formatDollarAmount(target.getRemainingAmount()));
+
+            removed.add(moved.getId());
+            foundIds.remove(moved.getId());
+        }
+    }
+
+    /** A counterpart recorded for the other side of a transfer, which transfer matching finds by its source. */
+    private static boolean isTransferCounterpart(ForecastTransaction occurrence) {
+        return occurrence.getIdSourceTransaction() != null ||
+                (occurrence.getSourceReference() != null && !occurrence.getSourceReference().isBlank());
+    }
 
     /*
      * Protected factory/lookup methods used by updateFromExternalSource.
@@ -1264,6 +1341,35 @@ public class ForecastController {
     protected void updateForecastTransaction(ForecastTransaction ft)
             throws EntityException, BudgetException, SQLException, RegisterException {
         ft.update();
+    }
+
+    /** The other occurrences of an occurrence's forecast item on its planned date, oldest-written first. */
+    protected List<ForecastTransaction> lookupOtherOccurrencesOnDate(ForecastTransaction occurrence)
+            throws Exception {
+        List<ForecastTransaction> others = new ArrayList<>();
+        ResultSet rs = getRS(ForecastTransaction.getSelectQuery() +
+                        " where ft.ForecastItem_idForecastItem = uuid_to_bin('" + occurrence.getIdForecastItem() + "')" +
+                        " and ft.plannedDate = " + calendarDateToSqlDateString(occurrence.getPlannedDate()) +
+                        " and ft.idForecastTransaction <> uuid_to_bin('" + occurrence.getId() + "')" +
+                        " order by ft.updatedTimeStamp",
+                "looking for other occurrences of a forecast item on the same date.");
+        while (rs.next()) {
+            others.add(new ForecastTransaction(rs));
+        }
+        return others;
+    }
+
+    /** Point every split linked to one forecast transaction at another. */
+    protected void relinkForecastTransactionSplits(UUID fromId, UUID toId) throws EntityException {
+        executeUpdate("update forecast_transaction_split set ForecastTransaction_idForecastTransaction = " +
+                        "uuid_to_bin('" + toId + "') where ForecastTransaction_idForecastTransaction = " +
+                        "uuid_to_bin('" + fromId + "')",
+                "moving the splits of a merged forecast transaction.");
+    }
+
+    /** Delete a forecast transaction from the database. */
+    protected void deleteForecastTransaction(ForecastTransaction ft) throws Exception {
+        ft.delete();
     }
 
     /** Persist a new forecast transaction to the database. */

@@ -153,7 +153,37 @@ public class UpdateFromExternalSourceTest {
         protected void insertForecastItem(ForecastItem fi) {
             insertedForecastItems.add(fi);
         }
+
+        @Override
+        protected List<ForecastTransaction> lookupOtherOccurrencesOnDate(ForecastTransaction occurrence)
+                throws Exception {
+            List<ForecastTransaction> others = new ArrayList<>();
+            for (ForecastTransaction candidate : dbTransactionMap.values()) {
+                if (!candidate.getId().equals(occurrence.getId())
+                        && candidate.getForecastItem().getId().equals(occurrence.getForecastItem().getId())
+                        && com.hixon.financialApp.utility.Utility.dateOnlyCompare(
+                                candidate.getPlannedDate(), occurrence.getPlannedDate()) == 0) {
+                    others.add(candidate);
+                }
+            }
+            return others;
+        }
+
+        @Override
+        protected void relinkForecastTransactionSplits(UUID fromId, UUID toId) {
+            relinks.add(fromId + "->" + toId);
+        }
+
+        @Override
+        protected void deleteForecastTransaction(ForecastTransaction ft) {
+            deletedTransactions.add(ft);
+            dbTransactionMap.remove(ft.getId());
+        }
     }
+
+    // Merges recorded by the overrides above:
+    private final List<ForecastTransaction> deletedTransactions = new ArrayList<>();
+    private final List<String> relinks = new ArrayList<>();
 
 
     @BeforeEach
@@ -184,6 +214,8 @@ public class UpdateFromExternalSourceTest {
         dbTransactionMap.clear();
         forecastItemByNameMap.clear();
         budgetItemsByPayeeMap.clear();
+        deletedTransactions.clear();
+        relinks.clear();
         existingFileExtension = ".xlsx";
     }
 
@@ -1121,6 +1153,120 @@ public class UpdateFromExternalSourceTest {
 
             assertSame(itemB, ssTransaction.getForecastItem(),
                     "Should match by category+payee combination");
+        }
+    }
+
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Tests: A date move onto an occurrence the item already has
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * On 09-11-2026 the 09-01 Dave's Spending Money occurrence, with $100 left, was moved in the spreadsheet to
+     * 09-15, which already had its own $150 occurrence.  The import moved it and left two occurrences on one date;
+     * once both were zeroed on 09-14 the duplicate check reported them.
+     */
+    @Nested
+    @DisplayName("When a date move lands on an existing occurrence")
+    class MergeMovedOccurrences {
+
+        private ForecastItem item;
+        private Calendar version;
+        private UUID movedId;
+        private UUID targetId;
+
+        @BeforeEach
+        void setUp() {
+            item = buildForecastItem("Spending Money", "Dave's Spending Money", -150.0);
+            version = makeVersion(2026, Calendar.SEPTEMBER, 1, 10);
+            movedId = UUID.randomUUID();
+            targetId = UUID.randomUUID();
+        }
+
+        private ForecastTransaction db(UUID id, int day, double remaining) {
+            ForecastTransaction ft = buildForecastTransaction(id, item, makeDate(2026, Calendar.SEPTEMBER, day),
+                    remaining, (Calendar) version.clone());
+            dbTransactionMap.put(id, ft);
+            return ft;
+        }
+
+        private ForecastTransaction ss(UUID id, int day, double remaining) {
+            return buildForecastTransaction(id, item, makeDate(2026, Calendar.SEPTEMBER, day), remaining,
+                    (Calendar) version.clone());
+        }
+
+        @Test
+        @DisplayName("The 09-11-2026 move:  $100 moved onto a $150 occurrence becomes one $250 occurrence")
+        void movedOntoHeldOccurrence_isMerged() throws Exception {
+            ForecastTransaction moved = db(movedId, 1, -100.0);
+            ForecastTransaction target = db(targetId, 15, -150.0);
+            setupExternalSource(List.of(ss(movedId, 15, -100.0), ss(targetId, 15, -150.0)));
+
+            forecastController.updateFromExternalSource();
+
+            assertEquals(-250.0, target.getRemainingAmount(), 0.001, "the amounts should be combined");
+            assertTrue(target.isOverridden(), "the combined occurrence should be protected from regeneration");
+            assertTrue(updatedTransactions.contains(target), "the combined occurrence should be written");
+            assertEquals(List.of(moved), deletedTransactions, "the moved occurrence should be removed");
+            assertEquals(List.of(movedId + "->" + targetId), relinks,
+                    "any splits linked to the moved occurrence should follow it");
+            assertFalse(foundIds.contains(movedId), "a removed occurrence should not be marked found");
+            assertTrue(foundIds.contains(targetId));
+            verify(mockView).say(contains("Merged"));
+        }
+
+        @Test
+        @DisplayName("An amount edit to the target in the same file is kept in the merge")
+        void targetEditedInSameFile_isCombinedWithItsEdit() throws Exception {
+            db(movedId, 1, -100.0);
+            ForecastTransaction target = db(targetId, 15, -150.0);
+            setupExternalSource(List.of(ss(movedId, 15, -100.0), ss(targetId, 15, -200.0)));
+
+            forecastController.updateFromExternalSource();
+
+            assertEquals(-300.0, target.getRemainingAmount(), 0.001);
+        }
+
+        @Test
+        @DisplayName("A move to a date with no other occurrence is left as a move")
+        void moveToEmptyDate_isNotMerged() throws Exception {
+            ForecastTransaction moved = db(movedId, 1, -100.0);
+            db(targetId, 15, -150.0);
+            setupExternalSource(List.of(ss(movedId, 22, -100.0), ss(targetId, 15, -150.0)));
+
+            forecastController.updateFromExternalSource();
+
+            assertTrue(deletedTransactions.isEmpty());
+            assertEquals(22, moved.getPlannedDate().get(Calendar.DAY_OF_MONTH));
+            verify(mockView, never()).say(contains("Merged"));
+        }
+
+        @Test
+        @DisplayName("A target deleted from the spreadsheet is not merged into")
+        void targetDeletedFromSpreadsheet_isNotMerged() throws Exception {
+            db(movedId, 1, -100.0);
+            ForecastTransaction target = db(targetId, 15, -150.0);
+            setupExternalSource(List.of(ss(movedId, 15, -100.0)));
+
+            forecastController.updateFromExternalSource();
+
+            assertTrue(deletedTransactions.isEmpty(), "the moved occurrence replaces the deleted one");
+            assertEquals(-150.0, target.getRemainingAmount(), 0.001, "zeroNotFound deals with the deleted one");
+        }
+
+        @Test
+        @DisplayName("A transfer counterpart is not merged, so transfer matching still finds it")
+        void transferCounterpart_isNotMerged() throws Exception {
+            ForecastTransaction moved = db(movedId, 1, -100.0);
+            moved.setSourceReference("IB0372FXQL");
+            moved.setDirty(false);
+            ForecastTransaction target = db(targetId, 15, -150.0);
+            setupExternalSource(List.of(ss(movedId, 15, -100.0), ss(targetId, 15, -150.0)));
+
+            forecastController.updateFromExternalSource();
+
+            assertTrue(deletedTransactions.isEmpty());
+            assertEquals(-150.0, target.getRemainingAmount(), 0.001);
         }
     }
 }
