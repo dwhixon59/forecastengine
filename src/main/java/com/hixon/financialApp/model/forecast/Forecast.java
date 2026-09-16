@@ -1526,7 +1526,18 @@ public class Forecast extends IndependentEntity {
         return dailyBalances;
     }
 
-    private void loadOverriddenTransactionKeys() {
+    /**
+     * Loads the (forecast item, date) keys of every overridden occurrence in this forecast.
+     *
+     * <p>A database error is thrown rather than swallowed.  This used to catch {@link SQLException} and fall back to
+     * an empty set, which is the most dangerous answer it could give:  an empty set means "nothing is overridden",
+     * so generation would re-add an occurrence beside every one the user had deliberately overridden.  Worse, the
+     * empty set was assigned to the field, and the early return above means it was then reused for the life of this
+     * object -- one transient error removed the protection for every later check, not just the failing one.
+     *
+     * @throws SQLException if the keys cannot be read, so that generation stops instead of running unprotected
+     */
+    private void loadOverriddenTransactionKeys() throws SQLException {
         if (overriddenTransactionKeys != null) {
             return; // already loaded
         }
@@ -1550,11 +1561,10 @@ public class Forecast extends IndependentEntity {
                     result.add(new OverrideKey(itemId, date));
                 }
             }
-        } catch (SQLException e) {
-            // log as needed
-            result = Collections.emptySet();
         }
 
+        // Assigned only once the read has completed.  Leaving the field null when it fails means the next call
+        // tries again rather than inheriting a half-built or empty set:
         this.overriddenTransactionKeys = result;
     }
 
@@ -1564,8 +1574,11 @@ public class Forecast extends IndependentEntity {
      * @param forecastItem the forecast item
      * @param date the planned date
      * @return true if an overridden transaction exists for this forecast item and date in this forecast, false otherwise
+     * @throws SQLException if the overridden occurrences cannot be read.  Generation must not continue on a guess:
+     *                      a false answer here means an occurrence is added beside one that already exists.
      */
-    public boolean hasOverriddenForecastTransactionOnDate(ForecastItem forecastItem, Calendar date) {
+    public boolean hasOverriddenForecastTransactionOnDate(ForecastItem forecastItem, Calendar date)
+            throws SQLException {
         if (forecastItem == null || date == null) {
             return false;
         }
@@ -1588,8 +1601,13 @@ public class Forecast extends IndependentEntity {
      * @param forecastItem the forecast item
      * @param date the planned date
      * @return true if a reconciled transaction exists for this forecast item and date in this forecast, false otherwise
+     * @throws SQLException if the check cannot be run.  It used to be caught here and answered false "to avoid
+     *                      blocking forecast generation", but false is not a safe default:  it means "nothing is
+     *                      reconciled on this date", so generation adds a second occurrence beside the reconciled
+     *                      one and the charge's history is split across two rows.  Stopping is the safe outcome.
      */
-    public boolean hasReconciledForecastTransactionOnDate(ForecastItem forecastItem, Calendar date) {
+    public boolean hasReconciledForecastTransactionOnDate(ForecastItem forecastItem, Calendar date)
+            throws SQLException {
         if (forecastItem == null || date == null) {
             return false;
         }
@@ -1620,11 +1638,9 @@ public class Forecast extends IndependentEntity {
                     return rs.getInt("count") > 0;
                 }
             }
-        } catch (SQLException e) {
-            // Log as needed, default to false to avoid blocking forecast generation
-            System.err.println("Error checking for reconciled forecast transaction: " + e.getMessage());
         }
 
+        // Only reached when the count query returns no row at all, which a COUNT(*) does not do:
         return false;
     }
 
