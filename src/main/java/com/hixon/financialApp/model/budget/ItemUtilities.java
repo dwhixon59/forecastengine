@@ -23,8 +23,9 @@ public class ItemUtilities {
         if (item == null || instant == null) {
             throw new IllegalArgumentException("Item and instant must not be null");
         }
-        // If the budget item isn't active, then there is no closest occurrence:
-        if (item.getEndDate() != null && item.getEndDate().before(instant)) {
+        // If the budget item isn't active, then there is no closest occurrence.  Date to date:  an item whose end date
+        // is the date asked about is still active that day -- see Item.isExpired:
+        if (item.getEndDate() != null && Utility.dateOnlyCompare(item.getEndDate(), instant) < 0) {
             return null;
         }
 
@@ -185,6 +186,18 @@ public class ItemUtilities {
                     firstOccurrenceAfter.add(Calendar.YEAR, 1);
                 } else {
                     lastOccurrenceBefore.add(Calendar.YEAR, -1);
+                }
+                break;
+
+            case SEMESTERS:
+                // Monthly on the start date's day, but only in the semesters' months:  the nearest payment on or after
+                // the date, and the one before it, which is never earlier than the start date.
+                int payDay = startDate.get(Calendar.DATE);
+                int schedule = item.getPeriodDays();
+                firstOccurrenceAfter = Item.semesterPaymentOnOrAfter(instant, payDay, schedule);
+                lastOccurrenceBefore = Item.semesterPaymentBefore(firstOccurrenceAfter, payDay, schedule);
+                if (lastOccurrenceBefore.before(startDate)) {
+                    lastOccurrenceBefore = (Calendar) startDate.clone();
                 }
                 break;
 

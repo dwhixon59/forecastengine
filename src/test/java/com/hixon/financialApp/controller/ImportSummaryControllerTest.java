@@ -18,6 +18,7 @@ import com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDispo
 
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -250,15 +251,51 @@ public class ImportSummaryControllerTest {
     @DisplayName("Recategorization")
     class Recategorization {
 
+        /** A split on a budget item with the given period and howOccurs. */
+        private TransactionSplit splitOn(com.hixon.financialApp.model.budget.Item.PeriodType period,
+                                         com.hixon.financialApp.model.budget.Item.HowOccurs howOccurs) throws Exception {
+            com.hixon.financialApp.model.budget.BudgetItem budgetItem =
+                    mock(com.hixon.financialApp.model.budget.BudgetItem.class);
+            when(budgetItem.getPeriod()).thenReturn(period);
+            when(budgetItem.getHowOccurs()).thenReturn(howOccurs);
+            TransactionSplit split = mock(TransactionSplit.class);
+            when(split.getBudgetItem()).thenReturn(budgetItem);
+            return split;
+        }
+
+        @Test
+        @DisplayName("Recategorizing only between on-demand items does not mark the forecast changed")
+        void recategorizeBetweenOnDemandItems_returnsFalse() throws Exception {
+            Transaction txn = buildMockTransaction(false, -9.50);
+            ImportLog.ImportRecord record = addNewRecord(txn);
+            TransactionSplit onDemand = splitOn(com.hixon.financialApp.model.budget.Item.PeriodType.ON_DEMAND,
+                    com.hixon.financialApp.model.budget.Item.HowOccurs.UNPLANNED);
+
+            try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
+                ts.when(() -> TransactionSplit.getSplitsForTransaction(any())).thenReturn(List.of(onDemand));
+                doNothing().when(mockTransactionController).recategorizeTransaction(any(Transaction.class));
+                when(mockView.getResponseStringMenuSelection(anyString(), anyBoolean(),
+                        anyBoolean(), anyBoolean(), anyBoolean()))
+                        .thenReturn("1", "");
+
+                boolean result = summaryController.showSummaryAndRecategorize();
+
+                assertFalse(result, "Dog Food to Dog treats (09-15-2026) changes nothing the forecast generates");
+                assertTrue(record.isRecategorizedThisSession(), "the record is still marked recategorized");
+            }
+        }
+
         @Test
         @DisplayName("Successful recategorization returns true and marks record")
         void successfulRecategorize_returnsTrueAndMarksRecord() throws Exception {
             Transaction txn = buildMockTransaction(true, -25.00);
             ImportLog.ImportRecord record = addNewRecord(txn);
+            TransactionSplit planned = splitOn(com.hixon.financialApp.model.budget.Item.PeriodType.MONTHLY,
+                    com.hixon.financialApp.model.budget.Item.HowOccurs.PERIODIC);
 
             try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
                 ts.when(() -> TransactionSplit.getSplitsForTransaction(any()))
-                        .thenReturn(Collections.emptyList());
+                        .thenReturn(List.of(planned));
                 doNothing().when(mockTransactionController)
                         .recategorizeTransaction(any(Transaction.class));
 

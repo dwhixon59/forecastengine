@@ -239,14 +239,19 @@ public class ImportController {
      * <p>Reached only after {@link Transaction#getByImportRecordId(String, UUID)} has already missed,
      * so for a bank with stable ids this never runs and nothing about the import changes.  It exists
      * for the banks whose ids move:  see
-     * {@link Transaction#getByDateAmountAndPayee(UUID, java.util.Calendar, double, String)} for the
-     * Citi case that prompted it.
+     * {@link Transaction#getByDateAndAmount(UUID, java.util.Calendar, double)} for the Citi case that
+     * prompted it.
      *
-     * <p>The question is asked rather than assumed, and defaults to importing.  Same date, same
-     * amount, same payee is a strong hint and not a proof -- two identical charges in one day are
-     * ordinary -- and the two mistakes are not equally bad:  a duplicate the user waves through is
-     * visible and fixable, while a real transaction silently dropped is money that never appears in
-     * the register, the forecast or any report.
+     * <p>The question is asked rather than assumed, and defaults to importing.  Same date and same
+     * amount is a strong hint and not a proof -- two identical charges in one day are ordinary -- and
+     * the two mistakes are not equally bad:  a duplicate the user waves through is visible and
+     * fixable, while a real transaction silently dropped is money that never appears in the register,
+     * the forecast or any report.
+     *
+     * <p>The bank's description is shown for both when they differ, because that is the case most
+     * likely to be a genuine second charge -- and the case where a duplicate hid before, when one
+     * $750.00 Citi payment arrived as {@code PAYMENT THANK YOU} and then as
+     * {@code ONLINE PAYMENT, THANK YOU}.
      *
      * @param incoming the transaction just read from the import file
      * @param register the register being imported into
@@ -254,8 +259,8 @@ public class ImportController {
      */
     private Transaction confirmNotAlreadyImported(Transaction incoming, Register register) throws Exception {
 
-        Transaction alreadyHeld = Transaction.getByDateAmountAndPayee(register.getId(), incoming.getPostDate(),
-                incoming.getAmount(), incoming.getPayee());
+        Transaction alreadyHeld = Transaction.getByDateAndAmount(register.getId(), incoming.getPostDate(),
+                incoming.getAmount());
         if (alreadyHeld == null) {
             return null;
         }
@@ -269,6 +274,9 @@ public class ImportController {
                 "already holds one just like it:");
         view.say("  " + calendarDateToStringDate(incoming.getPostDate()) + "  " +
                 formatDollarAmount(incoming.getAmount()) + "  " + incoming.getPayee());
+        if (!Objects.equals(incoming.getPayee(), alreadyHeld.getPayee())) {
+            view.say("  the one already held reads:  " + alreadyHeld.getPayee());
+        }
         view.say("  already held as import id " + alreadyHeld.getImportRecordId() +
                 ", incoming id " + incoming.getImportRecordId());
 
@@ -352,6 +360,34 @@ public class ImportController {
         return importRecordId;
     }
 
+    /**
+     * Whether a new cleared transaction already has its pending version in the register, found by date and amount,
+     * with a merchant assigned.
+     *
+     * <p>When it does, the payee does not need parsing:  Phase 2 merges the pending row into this one and takes its
+     * merchant and splits.  Parsing a transfer's payee asks which register the money came from, and on 09-15-2026
+     * Bill Pay Danni asked that for a $40.00 transfer from Christian's Checking whose pending row was already there,
+     * categorized, and then used anyway.
+     *
+     * <p>The raw payee stands in for the parsed one while looking:  the matcher uses it only to break ties between
+     * exact amounts and to recognise a transfer.  If there is no such pending row, the placeholder is replaced by the
+     * parse as before.
+     *
+     * @param clearedTransaction the new cleared transaction
+     * @return true if a pending version with a known merchant was found
+     */
+    private boolean hasKnownPendingTwin(Transaction clearedTransaction) {
+        try {
+            clearedTransaction.setMerchantPayee(clearedTransaction.getPayee());
+            Transaction twin = financialInstitution.getMatchingProvisionalTransaction(clearedTransaction);
+            return twin != null && twin.getMerchant() != null
+                    && !Merchant.UNKNOWN.equalsIgnoreCase(twin.getMerchant().getName());
+        } catch (Exception e) {
+            logger.debug("Could not look for a pending version before parsing the payee: {}", e.getMessage());
+            return false;
+        }
+    }
+
     /** Whether an import record id is already in use.  May consult the database. */
     @FunctionalInterface
     interface ImportRecordIdCheck {
@@ -396,6 +432,35 @@ public class ImportController {
             candidate = base + counter;
         } while (taken.isTaken(candidate));
         return candidate;
+    }
+
+    /**
+     * Moves a new provisional transaction to a free import record id, just before it is first saved.
+     *
+     * <p>A provisional import record id is the post date plus the row's position in today's file, so it does not
+     * identify the charge, and the save is an upsert on that id:  one that lands on another charge's row
+     * overwrites it in place.  That happened twice:
+     * <ul>
+     *   <li>09-14-2026, Bill Pay Danni:  Amazon Prime $5.48 took P202609141 from the 09-12 McConnaughhay payroll
+     *       deposit of $3,456.51.</li>
+     *   <li>09-15-2026, Bill Pay Dave:  the $1,625.00 support transfer took P202609151 from the 09-14 JPMorgan
+     *       payroll deposit of $4,053.63.  The transfer was auto-matched to the forecast, a path that saves on its
+     *       own and was not covered when this check was first added.</li>
+     * </ul>
+     * Every path that saves a new provisional transaction must call this first.
+     *
+     * @param incoming the new provisional transaction about to be saved
+     * @param fromFile every transaction read from today's file, whose ids are reserved too
+     */
+    private void claimFreeImportRecordId(Transaction incoming, List<Transaction> fromFile) throws Exception {
+        String freeId = firstFreeImportRecordId(incoming.getImportRecordId(),
+                id -> Transaction.getByImportRecordId(id, register.getId()) != null ||
+                        fromFile.stream().anyMatch(t -> t != incoming && id.equals(t.getImportRecordId())));
+        if (freeId != null && !freeId.equals(incoming.getImportRecordId())) {
+            logger.debug("Import record id {} is already taken; saving {} as {} instead.",
+                    incoming.getImportRecordId(), incoming.getPayee(), freeId);
+            incoming.setImportRecordId(freeId);
+        }
     }
 
     /**
@@ -521,7 +586,7 @@ public class ImportController {
                         new TransferCounterpartController(sessionController)
                                 .retireCounterpartAlreadyArrived(currentTransaction, splits);
                     }
-                } else {
+                } else if (!hasKnownPendingTwin(currentTransaction)) {
                     // Parse the merchant payee for this NEW transaction (deferred from the financial
                     // institution's file conversion). Parsing can ask the user which register a
                     // transfer came from, so doing it before the lookup above re-asks that question
@@ -1588,6 +1653,14 @@ public class ImportController {
                                         }
                                     }
 
+                                    // Never save over another charge's row -- see claimFreeImportRecordId.
+                                    // This path saves on its own, which is how the 09-15 support transfer
+                                    // overwrote Bill Pay Dave's pending JPMorgan payroll deposit.
+                                    if (!alreadyInTheRegister) {
+                                        claimFreeImportRecordId(provisionalTransactions.get(provTrxIndex),
+                                                provisionalTransactions);
+                                    }
+
                                     // Log the import event
                                     importLog.logImportEvent(provisionalTransactions.get(provTrxIndex));
 
@@ -1834,25 +1907,9 @@ public class ImportController {
                             }
                         }
 
-                        // A new provisional's import record id is its post date plus its position in
-                        // today's file, so it does not identify the charge:  an earlier file can have
-                        // given the same id to a different one.  The save below is an upsert on that id,
-                        // and an upsert that lands on another charge's row overwrites it in place.  On
-                        // 09-14-2026 Amazon Prime $5.48 was given P202609141, the id the 09-12 McConnaughhay
-                        // payroll deposit of $3,456.51 already held, and replaced it:  the deposit was
-                        // gone without a delete, and the register stayed $3,456.51 above the bank.
+                        // Never save over another charge's row -- see claimFreeImportRecordId.
                         if (!alreadyInTheRegister) {
-                            final Transaction incoming = provisionalTransactions.get(provTrxIndex);
-                            final List<Transaction> fromFile = provisionalTransactions;
-                            String freeId = firstFreeImportRecordId(incoming.getImportRecordId(),
-                                    id -> Transaction.getByImportRecordId(id, register.getId()) != null ||
-                                            fromFile.stream().anyMatch(t -> t != incoming &&
-                                                    id.equals(t.getImportRecordId())));
-                            if (freeId != null && !freeId.equals(incoming.getImportRecordId())) {
-                                logger.debug("Import record id {} is already taken; saving {} as {} instead.",
-                                        incoming.getImportRecordId(), incoming.getPayee(), freeId);
-                                incoming.setImportRecordId(freeId);
-                            }
+                            claimFreeImportRecordId(provisionalTransactions.get(provTrxIndex), provisionalTransactions);
                         }
 
                         // Log the import event now that merchant is determined

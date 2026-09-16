@@ -713,7 +713,7 @@ public class Transaction extends IndependentEntity {
 
     /**
      * Find a transaction already in this register that looks like the same charge:  same date, same
-     * amount, same payee.
+     * amount.
      *
      * <p>The second line of defence behind {@link #getByImportRecordId(String, UUID)}, for banks
      * whose import record id is not the stable identity it is supposed to be.  Citi's OFX
@@ -723,21 +723,26 @@ public class Transaction extends IndependentEntity {
      * nothing, and the same charge is inserted again.  Eighteen such duplicates accumulated in one
      * year, and three of them in a single import were the whole of a $615.31 balance discrepancy.
      *
-     * <p>This is deliberately <b>not</b> treated as proof.  Two identical charges on one day are
-     * ordinary -- two $1.00 test transfers, two coffees at the same shop -- so the caller asks
-     * before skipping.  A duplicate the user waves through is untidy; a real transaction silently
-     * dropped is money that never appears anywhere.
+     * <p>The payee is deliberately <b>not</b> compared.  A bank does not always describe the same
+     * charge the same way twice:  Citi reported one $750.00 payment on 09-12-2026 as
+     * {@code PAYMENT THANK YOU} in one download and {@code ONLINE PAYMENT, THANK YOU} in a wider one,
+     * and comparing the text let the second copy in as a new payment.  It was the whole of that
+     * register's $662.40 discrepancy, and taking the bank's balance hid it.
+     *
+     * <p>None of this is treated as proof.  Two identical charges on one day are ordinary -- two
+     * $1.00 test transfers, two coffees at the same shop -- so the caller asks before skipping, and
+     * shows both descriptions when they differ.  A duplicate the user waves through is untidy;  a
+     * real transaction silently dropped is money that never appears anywhere.
      *
      * @param idRegister the register being imported into
      * @param postDate   the transaction's post date
      * @param amount     the transaction's amount, compared to the cent
-     * @param payee      the raw payee text, compared exactly
      * @return the transaction already held, or null if this charge is new
      */
-    public static Transaction getByDateAmountAndPayee(UUID idRegister, Calendar postDate, double amount,
-                                                      String payee) throws EntityException, SQLException {
+    public static Transaction getByDateAndAmount(UUID idRegister, Calendar postDate, double amount)
+            throws EntityException, SQLException {
 
-        if (idRegister == null || postDate == null || payee == null) {
+        if (idRegister == null || postDate == null) {
             return null;
         }
 
@@ -745,7 +750,6 @@ public class Transaction extends IndependentEntity {
                 " where tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
                 " and tr.postDate = " + Utility.calendarDateToSqlDateString(postDate) +
                 " and abs(tr.amount - " + amount + ") < 0.005" +
-                " and tr.payee = '" + Utility.escapeSqlString(payee) + "'" +
 
                 // Cleared rows only.  A provisional row matching an incoming cleared one is not a
                 // duplicate at all -- it is the same charge before it posted, and the import already

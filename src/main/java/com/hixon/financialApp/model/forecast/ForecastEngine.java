@@ -123,7 +123,9 @@ public class ForecastEngine {
                 Calendar forecastItemEndDateDb = Utility.localDateToCalendarDate(rs.getObject("fi.endDate",
                         LocalDate.class));
                 if (forecastItemEndDateDb != null) {
-                    if (forecastItemEndDateDb.compareTo(startDate) < 0) {
+                    // Date to date:  an item whose last day is the forecast's first day still belongs in it, and the
+                    // two carry different times of day.  See Item.isExpired.
+                    if (Utility.dateOnlyCompare(forecastItemEndDateDb, startDate) < 0) {
                         continue;
                     }
                 }

@@ -1240,9 +1240,45 @@ public class ForecastTransactionController {
      */
     static boolean belongsToAnEarlierPeriod(Item.HowOccurs howOccurs, Calendar chargeDate,
                                             Calendar candidatesPreviousOccurrence) {
-        return (howOccurs == Item.HowOccurs.PERIODIC || howOccurs == Item.HowOccurs.VARIABLE_PERIODIC)
-                && chargeDate != null && candidatesPreviousOccurrence != null
-                && Utility.dateOnlyCompare(chargeDate, candidatesPreviousOccurrence) <= 0;
+        return belongsToAnEarlierPeriod(howOccurs, chargeDate, candidatesPreviousOccurrence, true);
+    }
+
+    /**
+     * As {@link #belongsToAnEarlierPeriod(Item.HowOccurs, Calendar, Calendar)}, but also rejecting a charge that is
+     * simply too early to be this occurrence's at all.
+     *
+     * <p>The previous-occurrence test alone only catches a charge that has already drifted a whole period or more.  It
+     * misses the slip that starts the drift:  a PERIODIC window runs from the planned date to the day before the next
+     * one, so a charge is always {@code PRIOR_TO} its own occurrence when paid early, and it sits inside the previous
+     * occurrence's window.  Once that previous occurrence has been spent it is no longer scored, the charge scores
+     * against the occurrence after it, and a merchant match alone is enough to auto-assign it there.  Deeper.com's
+     * 09-12-2026 charge was assigned to the 10-04 occurrence that way -- 22 days early for a monthly subscription --
+     * because September's occurrence had already been consumed by a charge that had drifted into it.
+     *
+     * <p>So an early charge counts as this occurrence's only when it is early by an amount that is normal for the item
+     * ({@link Item#isWithinNormalDateVariance(int)}, four days for a monthly one).  Anything earlier belongs to a
+     * period of its own, and is deferred to the sequential logic, which resolves that period's occurrence even when it
+     * is exhausted and asks about it rather than assigning silently.
+     *
+     * @param withinNormalDateVariance whether the charge is early by an amount that is normal for this item
+     */
+    static boolean belongsToAnEarlierPeriod(Item.HowOccurs howOccurs, Calendar chargeDate,
+                                            Calendar candidatesPreviousOccurrence,
+                                            boolean withinNormalDateVariance) {
+
+        if ((howOccurs != Item.HowOccurs.PERIODIC && howOccurs != Item.HowOccurs.VARIABLE_PERIODIC)
+                || chargeDate == null) {
+            return false;
+        }
+
+        // A charge on or before the candidate's previous occurrence has drifted at least a full period:
+        if (candidatesPreviousOccurrence != null
+                && Utility.dateOnlyCompare(chargeDate, candidatesPreviousOccurrence) <= 0) {
+            return true;
+        }
+
+        // and one early by more than this item's normal variance belongs to the period it fell in, not to this one:
+        return !withinNormalDateVariance;
     }
 
     /**
@@ -1381,22 +1417,26 @@ public class ForecastTransactionController {
                         break;
                     }
 
-                    // A PERIODIC charge that falls on or before the candidate's previous occurrence belongs
-                    // to an earlier period than the candidate, however well merchant and amount agree.  A
-                    // strong score used to auto-assign it regardless of the date:  only non-zero occurrences
-                    // are scored, so once one period's occurrence was spent the next charge took the one
-                    // after, and the drift compounded -- by 09-11-2026 the Citi card's ADT charges of 04-13
-                    // to 07-13 sat on the 09-13 to 12-13 occurrences, and those months had dropped out of
-                    // the forecast.  Defer to the sequential logic below, which asks when the date is off.
+                    int variance = Math.abs(Utility.daysBetween(bestMatch.getPlannedDate(),
+                            split.getTransaction().getDate()));
+
+                    // A PERIODIC charge that belongs to an earlier period than the candidate must not be
+                    // assigned to it, however well merchant and amount agree.  A strong score used to
+                    // auto-assign it regardless of the date -- the score test below is an OR, and a merchant
+                    // match alone reaches 100 -- and only non-zero occurrences are scored, so once one
+                    // period's occurrence was spent the next charge took the one after and the drift
+                    // compounded:  by 09-11-2026 the Citi card's ADT charges of 04-13 to 07-13 sat on the
+                    // 09-13 to 12-13 occurrences, and those months had dropped out of the forecast.  Deeper.com
+                    // repeated it on 09-16-2026, an April charge having walked forward to August a month at a
+                    // time.  Defer to the sequential logic below, which asks when the date is off.
                     if (timing == ForecastTransaction.Timing.PRIOR_TO && belongsToAnEarlierPeriod(
                             split.getBudgetItem().getHowOccurs(), split.getTransaction().getDate(),
-                            bestMatch.getForecastItem().getPreviousDateOfOccurrence(bestMatch.getPlannedDate()))) {
+                            bestMatch.getForecastItem().getPreviousDateOfOccurrence(bestMatch.getPlannedDate()),
+                            split.getBudgetItem().isWithinNormalDateVariance(variance))) {
                         break;
                     }
 
                     // Only ask user if score is marginal or variance is extreme
-                    int variance = Math.abs(Utility.daysBetween(bestMatch.getPlannedDate(),
-                            split.getTransaction().getDate()));
 
                     if (bestScore >= 100 || split.getBudgetItem().isWithinNormalDateVariance(variance)) {
                         // High confidence match or within normal variance - auto-assign
@@ -1450,6 +1490,18 @@ public class ForecastTransactionController {
 
                         case PERIODIC: // The transaction was paid early?
                         case VARIABLE_PERIODIC:
+
+                            // The occurrence in hand is the earliest one with money left, which is a later period than
+                            // the charge -- that is what PRIOR_TO means here.  The charge's own period may well have an
+                            // occurrence already spent by a charge that drifted into it, and being exhausted it is not
+                            // in the list at all.  Ask about that occurrence rather than about a later month, exactly
+                            // as the COLLECTION case above does;  assigning to the later one is what walked Deeper.com's
+                            // April charge forward to August one month at a time:
+                            ForecastTransaction ownPeriodsOccurrence = ForecastTransaction.getApplicableZeroOccurrence(
+                                    forecast, split.getIdBudgetItem(), split.getTransaction().getDate());
+                            if (ownPeriodsOccurrence != null) {
+                                forecastTransaction = ownPeriodsOccurrence;
+                            }
 
                             // Determine if the actual date a forecast transaction occurred is "on or about" the planned date:
                             int variance = Utility.daysBetween(forecastTransaction.getPlannedDate(),

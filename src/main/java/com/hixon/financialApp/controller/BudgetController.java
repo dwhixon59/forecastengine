@@ -219,14 +219,20 @@ public class BudgetController {
                                         break;
 
                                     case "u":  // update this item
+                                        UUID budgetBeforeUpdate = selectedItem.getIdBudget();
                                         updateBudgetItem(selectedItem);
                                         // Reload the item to show updated values
                                         selectedItem = BudgetItem.getById(selectedItem.getId());
 
-                                        // Ask if user wants to update associated forecasts
-                                        if (view.getYesOrNo("Do you want to update associated forecasts?")) {
-                                            updateAssociatedForecasts(selectedBudget);
-                                        }
+                                        // Offer to update the forecasts.  updateAssociatedForecasts asks, so there is
+                                        // no question here:  the two together asked the same thing twice.  If the
+                                        // update moved the item to another budget, the forecasts to offer are the new
+                                        // budget's:  on 09-15-2026 an item moved out of Bill Pay Dave was offered only
+                                        // Bill Pay Dave's forecast, which no longer holds it.
+                                        boolean moved = selectedItem != null && selectedItem.getIdBudget() != null
+                                                && !selectedItem.getIdBudget().equals(budgetBeforeUpdate);
+                                        updateAssociatedForecasts(moved
+                                                ? Budget.getById(selectedItem.getIdBudget()) : selectedBudget);
                                         // Don't set actionComplete - stay in the action menu to allow more updates
                                         break;
 
@@ -795,6 +801,11 @@ public class BudgetController {
     protected int askPeriodDays(Item.PeriodType period, int defaultDays)
             throws CancelException, QuitException, SkipException {
 
+        // A semesters item carries its schedule in the same field, so ask for that instead:
+        if (period == Item.PeriodType.SEMESTERS) {
+            return askSemesterSchedule(defaultDays);
+        }
+
         if (period != Item.PeriodType.FIXED_DAYS) {
             return 0;
         }
@@ -811,6 +822,59 @@ public class BudgetController {
         return view.getResponseIntBetween("Number of days between occurrences (" + Item.MINIMUM_PERIOD_DAYS + "-" +
                         Item.MAXIMUM_PERIOD_DAYS + current + ")",
                 Item.MINIMUM_PERIOD_DAYS, Item.MAXIMUM_PERIOD_DAYS, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+    }
+
+    /**
+     * Ask for the schedule of a {@link Item.PeriodType#SEMESTERS} item:  the first month of fall payments, the first
+     * month of spring payments, and how many monthly payments each semester has.  Payments fall on the item's start
+     * date's day of the month.
+     *
+     * <p>The defaults are the item's current schedule, or Justin's UF meal plan (August and January, four payments
+     * each) when there is none.  An overlapping schedule is explained and asked for again.</p>
+     *
+     * @param defaultSchedule the current packed schedule, or zero if there is none
+     * @return the packed schedule, as {@link Item#packSemesterSchedule} builds it
+     */
+    protected int askSemesterSchedule(int defaultSchedule) throws CancelException, QuitException, SkipException {
+        boolean hasSchedule = defaultSchedule != 0 && Item.semesterScheduleProblem(defaultSchedule) == null;
+        int fall = hasSchedule ? Item.fallStartMonthOf(defaultSchedule) : Calendar.AUGUST + 1;
+        int spring = hasSchedule ? Item.springStartMonthOf(defaultSchedule) : Calendar.JANUARY + 1;
+        int payments = hasSchedule ? Item.paymentsPerSemesterOf(defaultSchedule) : 4;
+
+        view.say("A semesters item is paid once a month, on its start date's day of the month, but only during the " +
+                "fall and spring semesters.  For example a meal plan billed on the 15th of August through November " +
+                "and January through April.");
+
+        while (true) {
+            fall = askMonth("First month of fall payments", fall);
+            spring = askMonth("First month of spring payments", spring);
+
+            // As for the day count above, the current value is shown rather than offered as a default:
+            payments = view.getResponseIntBetween("Payments per semester (1-" + Item.MAXIMUM_PAYMENTS_PER_SEMESTER +
+                            ", currently " + payments + ")",
+                    1, Item.MAXIMUM_PAYMENTS_PER_SEMESTER, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+            int schedule = Item.packSemesterSchedule(fall, spring, payments);
+            String problem = Item.semesterScheduleProblem(schedule);
+            if (problem == null) {
+                view.say("Paid in " + Item.describeSemesterSchedule(schedule) + ".");
+                return schedule;
+            }
+            view.say(problem + "  Please enter the schedule again.");
+        }
+    }
+
+    /** Ask for a month, accepting a number, an abbreviation or a name, with a default. */
+    private int askMonth(String prompt, int defaultMonth) throws CancelException, QuitException, SkipException {
+        while (true) {
+            String answer = view.getResponseString(prompt, Item.monthAbbreviation(defaultMonth), ALLOW_NONE,
+                    DO_NOT_SHOW_CANCEL_QUIT_SKIP, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP, null);
+            int month = Item.parseMonth(answer);
+            if (month != 0) {
+                return month;
+            }
+            view.say("'" + answer + "' is not a month.  Enter a month such as Aug, August or 8.");
+        }
     }
 
     public BudgetItem getBudgetItemFromUser() throws BudgetException, SQLException, EntityException, ParseException,
@@ -1563,6 +1627,18 @@ public class BudgetController {
             return;
         }
 
+        // A budget item belongs to one budget, and that budget almost always has one forecast, so there is nothing to
+        // choose:  one question, and the answer is the forecast.  Updating an item used to ask three (09-16-2026) --
+        // whether to update associated forecasts, whether to update any forecast of this budget, and then which one of
+        // the one on offer.
+        if (forecasts.size() == 1) {
+            Forecast onlyForecast = forecasts.getFirst();
+            if (view.getYesOrNo("\nDo you want to update the forecast '" + onlyForecast.getDescription() + "'?")) {
+                updateForecasts(List.of(onlyForecast));
+            }
+            return;
+        }
+
         // Ask if the user wants to update any forecasts
         if (!view.getYesOrNo("\nDo you want to update any forecasts associated with budget '" +
                 budget.getName() + "'?")) {
@@ -1642,16 +1718,33 @@ public class BudgetController {
             return;
         }
 
-        view.say("\nUpdating " + selectedIndices.size() + " forecast(s)...");
+        List<Forecast> selectedForecasts = new ArrayList<>();
+        for (int index : selectedIndices) {
+            selectedForecasts.add(forecasts.get(index));
+        }
+        updateForecasts(selectedForecasts);
+    }
+
+    /**
+     * Regenerate forecasts from the first of next month.
+     *
+     * <p>The running commentary is kept for a selection of several;  updating one forecast says so once and leaves it
+     * at that.
+     *
+     * @param forecastsToUpdate the forecasts to regenerate
+     */
+    private void updateForecasts(List<Forecast> forecastsToUpdate) {
+        if (forecastsToUpdate.size() > 1) {
+            view.say("\nUpdating " + forecastsToUpdate.size() + " forecast(s)...");
+        }
 
         // Calculate the first of next month as the default start date
         Calendar firstOfNextMonth = Calendar.getInstance();
         firstOfNextMonth.add(Calendar.MONTH, 1);
         firstOfNextMonth.set(Calendar.DATE, 1);
 
-        for (int index : selectedIndices) {
+        for (Forecast forecastToUpdate : forecastsToUpdate) {
             try {
-                Forecast forecastToUpdate = forecasts.get(index);
                 // Set the forecast and its budget in the session controller before creating the ForecastController
                 sessionController.setForecast(forecastToUpdate);
                 sessionController.setBudget(forecastToUpdate.getBudget());
@@ -1664,7 +1757,9 @@ public class BudgetController {
             }
         }
 
-        view.say("\nAll selected forecasts have been updated.");
+        if (forecastsToUpdate.size() > 1) {
+            view.say("\nAll selected forecasts have been updated.");
+        }
     }
 
     /**

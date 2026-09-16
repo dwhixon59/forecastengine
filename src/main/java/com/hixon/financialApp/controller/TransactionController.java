@@ -938,32 +938,26 @@ public class TransactionController {
                 split.save();
             }
 
-            // Ask the user if they want to reconcile with a forecast
-            if (view.getYesOrNo("Do you want to reconcile this transaction with a forecast?")) {
-                Forecast forecastToUse = forecast;
+            // Always reconcile with the forecast (decided 09-15-2026).  This used to be a question, and a
+            // transaction left unreconciled is by definition a skipped one:  the $40.00 transfer recategorized
+            // on 09-14 without reconciling came back at the next daily update as a skipped transaction, and
+            // unplanned budget items are reconciled the same way as planned ones.  A forecast is chosen only
+            // when none is loaded, as from Manage Data.
+            Forecast forecastToUse = forecast != null ? forecast : sessionController.getForecast();
+            if (forecastToUse == null) {
+                forecastToUse = Forecast.selectForecast(register);
+            }
 
-                // If no forecast in context, or user wants to choose a different one, let them select
-                if (forecastToUse == null) {
-                    // Let user select a forecast belonging to this register
-                    forecastToUse = Forecast.selectForecast(register);
-                } else if (view.getYesOrNo("Current forecast: " + forecastToUse.getName() +
-                        ". Do you want to select a different forecast?")) {
-                    // Let user select a different forecast belonging to this register
-                    forecastToUse = Forecast.selectForecast(register);
-                }
+            if (forecastToUse != null) {
+                // Update the SessionController with the forecast used
+                sessionController.setForecast(forecastToUse);
 
-                if (forecastToUse != null) {
-                    // Update the SessionController with the selected forecast
-                    sessionController.setForecast(forecastToUse);
-
-                    ForecastController forecastController = new ForecastController(sessionController);
-                    forecastController.reconcile(transaction, splits);
-                    view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");
-                } else {
-                    view.say("Transaction categorized (no forecast selected for reconciliation).");
-                }
+                ForecastController forecastController = new ForecastController(sessionController);
+                forecastController.reconcile(transaction, splits);
+                view.say("Transaction categorized and reconciled with forecast '" + forecastToUse.getName() + "'.");
             } else {
-                view.say("Transaction categorized (forecast reconciliation skipped).");
+                view.say("Transaction categorized, but no forecast was selected, so it is not reconciled and " +
+                        "will come back as a skipped transaction in the next daily update.");
             }
         }
     }

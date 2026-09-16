@@ -257,14 +257,20 @@ public class DailyUpdateController {
             if (!inSync) {
                view.sayH2("UPDATE THE FORECAST");
 
-                // Say why the forecast is out of date, then ask the user if they want to update it:
+                // Say why the forecast is out of date, then ask the user if they want to update it.  Changes
+                // to on-demand and unplanned items are not reasons -- they generate no occurrences -- so when
+                // nothing else changed there is nothing to update and nothing to ask.
                 List<String> reasons = ForecastChangeReasons.describe(budgetBefore, snapshotBudget(),
                         recategorized, forecastStaleAtStart);
-                view.say(reasons.isEmpty() ? "The forecast is out of date." : "The forecast is out of date because:");
-                for (String reason : reasons) {
-                    view.say("  - " + reason);
+                if (reasons.isEmpty()) {
+                    view.say("Nothing that changed affects the forecast, so it does not need updating.");
+                } else {
+                    view.say("The forecast is out of date because:");
+                    for (String reason : reasons) {
+                        view.say("  - " + reason);
+                    }
                 }
-                if (view.getYesOrNo("Do you want to update the forecast?")) {
+                if (!reasons.isEmpty() && view.getYesOrNo("Do you want to update the forecast?")) {
                     try {
                         forecastController.updateForecast();
                        view.sayH4("The long term forecast was successfully updated.");
@@ -276,7 +282,7 @@ public class DailyUpdateController {
                             throw e;
                         }
                     }
-                } else {
+                } else if (!reasons.isEmpty()) {
                    view.say("The forecast was not updated.");
                 }
             }

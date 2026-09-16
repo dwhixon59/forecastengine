@@ -1364,7 +1364,10 @@ public class Forecast extends IndependentEntity {
         boolean decision = false;
 
         if (date != null) {
-            decision = date.compareTo(startDate) >= 0 && date.compareTo(endDate) <= 0;
+            // Date to date:  the window's dates are stored at midnight while a generated occurrence carries the time of
+            // day it was generated, so comparing them as instants put an occurrence on the window's last day outside it.
+            // See Item.isExpired, where the same comparison dropped Justin's meal plan's final payment.
+            decision = Utility.dateOnlyCompare(date, startDate) >= 0 && Utility.dateOnlyCompare(date, endDate) <= 0;
         }
 
         return decision;

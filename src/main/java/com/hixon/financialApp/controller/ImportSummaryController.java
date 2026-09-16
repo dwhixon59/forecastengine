@@ -143,16 +143,56 @@ public class ImportSummaryController {
 
     private void recategorize(ImportLog.ImportRecord record) throws Exception {
         TransactionController transactionController = createTransactionController();
+        List<TransactionSplit> splitsBefore = splitsOrNull(record);
         try {
             transactionController.recategorizeTransaction(record.getTransaction());
             record.refreshSplits();
             record.setRecategorizedThisSession(true);
-            forecastWasChanged = true;
+
+            // Only a forecast-generating item on either side makes the forecast stale.  Moving a transaction
+            // between on-demand items (Dog Food to Dog treats, 09-15-2026) changes no occurrence a forecast
+            // regeneration would produce, and offering one afterwards made no sense.
+            if (involvesForecastItem(splitsBefore) || involvesForecastItem(splitsOrNull(record))) {
+                forecastWasChanged = true;
+            }
         } catch (CancelException | SkipException e) {
             // User cancelled — nothing changed; record stays as-is
             logger.debug("Recategorization cancelled for transaction: {}",
                     record.getTransaction().getImportRecordId());
         }
+    }
+
+    /** The record's splits, or null if they could not be read -- which {@link #involvesForecastItem} treats as yes. */
+    private List<TransactionSplit> splitsOrNull(ImportLog.ImportRecord record) {
+        try {
+            return record.getSplits();
+        } catch (Exception e) {
+            logger.debug("Could not read splits to check for forecast-generating items: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Whether any split is on a budget item that generates forecast occurrences.  When that cannot be told --
+     * splits or a budget item that could not be read -- the answer is yes, so an update is offered rather than
+     * silently skipped.
+     */
+    static boolean involvesForecastItem(List<TransactionSplit> splits) {
+        if (splits == null) {
+            return true;
+        }
+        for (TransactionSplit split : splits) {
+            try {
+                BudgetItem budgetItem = split.getBudgetItem();
+                if (budgetItem == null
+                        || ForecastChangeReasons.affectsForecast(budgetItem.getPeriod(), budgetItem.getHowOccurs())) {
+                    return true;
+                }
+            } catch (Exception e) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** "1 transaction", "2 transactions":  the header read "(1 transactions: ...)" for a single import. */

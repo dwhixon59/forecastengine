@@ -71,6 +71,51 @@ class ForecastChangeReasonsTest {
     }
 
     @Test
+    @DisplayName("The 09-15-2026 run:  an on-demand item added is not a reason to update the forecast")
+    void onDemandItemAdded_isNotAReason() {
+        ItemState dogFood = new ItemState("Dog Food (Pets, $-144 On-Demand)", "d1", false);
+
+        assertTrue(ForecastChangeReasons.describe(budget(), budget(dogFood), false, false).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Changing or removing an on-demand item is not a reason either")
+    void onDemandItemChangedOrRemoved_isNotAReason() {
+        Map<String, ItemState> before = new LinkedHashMap<>();
+        before.put("1", new ItemState("Dog treats", "t1", false));
+        before.put("2", new ItemState("Airfare", "a1", false));
+        Map<String, ItemState> after = new LinkedHashMap<>();
+        after.put("1", new ItemState("Dog treats", "t2", false));
+
+        assertTrue(ForecastChangeReasons.describe(before, after, false, false).isEmpty());
+    }
+
+    @Test
+    @DisplayName("An item that stops generating occurrences is still a change")
+    void plannedItemBecomingOnDemand_isAReason() {
+        Map<String, ItemState> before = new LinkedHashMap<>();
+        before.put("1", new ItemState("Gym", "g1", true));
+        Map<String, ItemState> after = new LinkedHashMap<>();
+        after.put("1", new ItemState("Gym", "g2", false));
+
+        assertEquals(List.of("Budget item changed:  Gym"), ForecastChangeReasons.describe(before, after, false, false));
+    }
+
+    @Test
+    @DisplayName("Only periodic items generate occurrences")
+    void affectsForecast_rule() {
+        assertFalse(ForecastChangeReasons.affectsForecast(
+                com.hixon.financialApp.model.budget.Item.PeriodType.ON_DEMAND,
+                com.hixon.financialApp.model.budget.Item.HowOccurs.UNPLANNED));
+        assertFalse(ForecastChangeReasons.affectsForecast(
+                com.hixon.financialApp.model.budget.Item.PeriodType.MONTHLY,
+                com.hixon.financialApp.model.budget.Item.HowOccurs.UNPLANNED));
+        assertTrue(ForecastChangeReasons.affectsForecast(
+                com.hixon.financialApp.model.budget.Item.PeriodType.MONTHLY,
+                com.hixon.financialApp.model.budget.Item.HowOccurs.PERIODIC));
+    }
+
+    @Test
     @DisplayName("A snapshot that could not be read does not make every item look added")
     void missingSnapshot_skipsBudgetComparison() {
         Map<String, ItemState> after = budget(item("Rent", "r1"), item("Gym", "g1"));

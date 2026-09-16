@@ -1,6 +1,7 @@
 package com.hixon.financialApp.controller;
 
 import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.Item;
 import com.hixon.financialApp.utility.Utility;
 
 import java.util.ArrayList;
@@ -17,6 +18,11 @@ import java.util.Map;
  * knowingly:  picking Airfare from a search had copied it from the Bill Pay Dave budget into Bill Pay
  * Danni's, and a transaction had been recategorized.  Nothing on screen connected either one to the
  * question.  This compares the budget before and after the run and names what it finds.
+ *
+ * <p>Only changes a forecast regeneration would act on are named.  On-demand and unplanned items generate
+ * no occurrences:  on 09-15-2026 the reasons offered were "Budget item added: Dog Food (Pets, $-144
+ * On-Demand)" and a recategorization from Dog Food to Dog treats, both on-demand, and updating the forecast
+ * for either would have changed nothing.
  */
 public final class ForecastChangeReasons {
 
@@ -24,10 +30,24 @@ public final class ForecastChangeReasons {
     }
 
     /**
-     * One budget item as the user would recognise it, and the values that make the forecast stale when
-     * they change.
+     * One budget item as the user would recognise it, the values that make the forecast stale when they
+     * change, and whether the item generates forecast occurrences at all.
      */
-    record ItemState(String displayString, String signature) {
+    record ItemState(String displayString, String signature, boolean affectsForecast) {
+
+        /** An item that generates forecast occurrences. */
+        ItemState(String displayString, String signature) {
+            this(displayString, signature, true);
+        }
+    }
+
+    /**
+     * Whether a budget item generates forecast occurrences.  On-demand and unplanned items do not:  their
+     * occurrences are created one at a time to hold a transaction that has already happened.  The same rule
+     * the orphan check and the import summary use.
+     */
+    public static boolean affectsForecast(Item.PeriodType period, Item.HowOccurs howOccurs) {
+        return period != Item.PeriodType.ON_DEMAND && howOccurs != Item.HowOccurs.UNPLANNED;
     }
 
     /**
@@ -45,7 +65,8 @@ public final class ForecastChangeReasons {
             String display = item.getDisplayString();
             String signature = display + "|" + item.getAmount() + "|" + item.getPeriod() + "|" +
                     item.getHowOccurs() + "|" + date(item.getStartDate()) + "|" + date(item.getEndDate());
-            snapshot.put(item.getId().toString(), new ItemState(display, signature));
+            snapshot.put(item.getId().toString(),
+                    new ItemState(display, signature, affectsForecast(item.getPeriod(), item.getHowOccurs())));
         }
         return snapshot;
     }
@@ -55,24 +76,29 @@ public final class ForecastChangeReasons {
      *
      * @param before         the budget when the update started, or null if it could not be read
      * @param after          the budget now, or null if it could not be read
-     * @param recategorized  whether a transaction was recategorized during the review
+     * @param recategorized  whether a transaction involving a forecast-generating item was recategorized
      * @param staleAtStart   whether the forecast was already out of date when the update started
-     * @return one line per reason;  empty when none could be identified
+     * @return one line per reason;  empty when nothing that affects the forecast changed
      */
     static List<String> describe(Map<String, ItemState> before, Map<String, ItemState> after,
                                  boolean recategorized, boolean staleAtStart) {
         List<String> reasons = new ArrayList<>();
         if (before != null && after != null) {
             for (Map.Entry<String, ItemState> entry : after.entrySet()) {
+                ItemState now = entry.getValue();
                 ItemState was = before.get(entry.getKey());
                 if (was == null) {
-                    reasons.add("Budget item added:  " + entry.getValue().displayString());
-                } else if (!was.signature().equals(entry.getValue().signature())) {
-                    reasons.add("Budget item changed:  " + entry.getValue().displayString());
+                    if (now.affectsForecast()) {
+                        reasons.add("Budget item added:  " + now.displayString());
+                    }
+                } else if (!was.signature().equals(now.signature())
+                        && (was.affectsForecast() || now.affectsForecast())) {
+                    // Either side counts:  an item that stops generating occurrences changes the forecast too.
+                    reasons.add("Budget item changed:  " + now.displayString());
                 }
             }
             for (Map.Entry<String, ItemState> entry : before.entrySet()) {
-                if (!after.containsKey(entry.getKey())) {
+                if (!after.containsKey(entry.getKey()) && entry.getValue().affectsForecast()) {
                     reasons.add("Budget item removed:  " + entry.getValue().displayString());
                 }
             }

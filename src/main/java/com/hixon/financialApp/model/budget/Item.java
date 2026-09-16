@@ -96,7 +96,12 @@ public abstract class Item extends IndependentEntity {
 
         // Recurs every {@link #getPeriodDays()} days, for items whose cycle is not any of the calendar periods above.
         // For example a medication that comes in a bottle of 25 pills is taken every 25 days:
-        FIXED_DAYS;
+        FIXED_DAYS,
+
+        // Recurs once a month on its start date's day of the month, but only during its fall and spring semesters.  For
+        // example Justin's college meal plan is billed on the 15th of August through November and January through
+        // April.  The schedule is carried in {@link #getPeriodDays()} -- see packSemesterSchedule:
+        SEMESTERS;
     }
 
     // The smallest and largest number of days a FIXED_DAYS item may recur on.  A single day is DAILY and anything past
@@ -111,8 +116,189 @@ public abstract class Item extends IndependentEntity {
     private static final String FIXED_DAYS_SUFFIX = "-Days";
     private static final Pattern FIXED_DAYS_PATTERN = Pattern.compile("^Every-(\\d{1,3})-Days$");
 
+    // A SEMESTERS period is stored as "Semesters-<first fall month>-<first spring month>-<payments per semester>", e.g.
+    // "Semesters-Aug-Jan-4" for a plan billed Aug-Nov and Jan-Apr.  Like the fixed-day count, the schedule lives in the
+    // period string so it reaches forecast_item through the raw SQL that copies bi.period into fi.period.  In memory it
+    // is packed into periodDays (see packSemesterSchedule), so it also travels through every place that already copies
+    // periodDays between budget items, forecast items and the database, without a field of its own:
+    private static final String SEMESTERS_PREFIX = "Semesters-";
+    private static final Pattern SEMESTERS_PATTERN = Pattern.compile("^Semesters-([A-Za-z]{3})-([A-Za-z]{3})-(\\d)$");
+    public static final int MAXIMUM_PAYMENTS_PER_SEMESTER = 6;
+    private static final String[] MONTH_ABBREVIATIONS =
+            {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+    /**
+     * Pack a semester schedule into the single number a {@link PeriodType#SEMESTERS} item keeps in periodDays.
+     *
+     * @param fallStartMonth      the first month of fall payments, 1-12
+     * @param springStartMonth    the first month of spring payments, 1-12
+     * @param paymentsPerSemester the number of monthly payments in each semester
+     * @return fallStartMonth * 10000 + springStartMonth * 100 + paymentsPerSemester
+     */
+    public static int packSemesterSchedule(int fallStartMonth, int springStartMonth, int paymentsPerSemester) {
+        return fallStartMonth * 10000 + springStartMonth * 100 + paymentsPerSemester;
+    }
+
+    /** The first month of fall payments, 1-12, from a packed semester schedule. */
+    public static int fallStartMonthOf(int schedule) {
+        return schedule / 10000;
+    }
+
+    /** The first month of spring payments, 1-12, from a packed semester schedule. */
+    public static int springStartMonthOf(int schedule) {
+        return (schedule / 100) % 100;
+    }
+
+    /** The number of monthly payments in each semester, from a packed semester schedule. */
+    public static int paymentsPerSemesterOf(int schedule) {
+        return schedule % 100;
+    }
+
+    /**
+     * What is wrong with a packed semester schedule.
+     *
+     * @return a sentence describing the problem, or null if the schedule is valid
+     */
+    public static String semesterScheduleProblem(int schedule) {
+        int fall = fallStartMonthOf(schedule);
+        int spring = springStartMonthOf(schedule);
+        int payments = paymentsPerSemesterOf(schedule);
+        if (fall < 1 || fall > 12 || spring < 1 || spring > 12) {
+            return "The first month of each semester must be a month of the year.";
+        }
+        if (payments < 1 || payments > MAXIMUM_PAYMENTS_PER_SEMESTER) {
+            return "A semester must have between 1 and " + MAXIMUM_PAYMENTS_PER_SEMESTER + " payments, not " +
+                    payments + ".";
+        }
+        for (int calendarMonth = 0; calendarMonth < 12; calendarMonth++) {
+            if (isInSemester(fall, payments, calendarMonth) && isInSemester(spring, payments, calendarMonth)) {
+                return "The fall and spring semesters overlap in " + MONTH_ABBREVIATIONS[calendarMonth] + ".";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether a month is one of a semester schedule's payment months.
+     *
+     * @param schedule      a packed semester schedule
+     * @param calendarMonth the month as {@link Calendar#MONTH} numbers it, 0-11
+     */
+    public static boolean isSemesterPaymentMonth(int schedule, int calendarMonth) {
+        int payments = paymentsPerSemesterOf(schedule);
+        return isInSemester(fallStartMonthOf(schedule), payments, calendarMonth)
+                || isInSemester(springStartMonthOf(schedule), payments, calendarMonth);
+    }
+
+    private static boolean isInSemester(int firstMonth, int payments, int calendarMonth) {
+        return (calendarMonth - (firstMonth - 1) + 12) % 12 < payments;
+    }
+
+    /** The three-letter abbreviation of a month numbered 1-12, e.g. "Aug" for 8. */
+    public static String monthAbbreviation(int month) {
+        return (month >= 1 && month <= 12) ? MONTH_ABBREVIATIONS[month - 1] : "";
+    }
+
+    /**
+     * Read a month typed as a number (8), an abbreviation (Aug) or a name (August), in any case.
+     *
+     * @return the month, 1-12, or 0 if the text is not a month
+     */
+    public static int parseMonth(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        String trimmed = text.trim();
+        if (trimmed.matches("\\d{1,2}")) {
+            int month = Integer.parseInt(trimmed);
+            return (month >= 1 && month <= 12) ? month : 0;
+        }
+        if (trimmed.length() >= 3) {
+            for (int i = 0; i < 12; i++) {
+                String name = new java.text.DateFormatSymbols(Locale.ENGLISH).getMonths()[i];
+                if (name.toLowerCase(Locale.ENGLISH).startsWith(trimmed.toLowerCase(Locale.ENGLISH))) {
+                    return i + 1;
+                }
+            }
+        }
+        return 0;
+    }
+
+    /** A semester schedule as a person would say it, e.g. "Aug-Nov & Jan-Apr". */
+    public static String describeSemesterSchedule(int schedule) {
+        int payments = paymentsPerSemesterOf(schedule);
+        return semesterMonths(fallStartMonthOf(schedule), payments) + " & " +
+                semesterMonths(springStartMonthOf(schedule), payments);
+    }
+
+    private static String semesterMonths(int firstMonth, int payments) {
+        String first = monthAbbreviation(firstMonth);
+        if (payments <= 1) {
+            return first;
+        }
+        return first + "-" + monthAbbreviation((firstMonth - 1 + payments - 1) % 12 + 1);
+    }
+
+    /**
+     * The first semester payment on or after a date.
+     *
+     * @param onOrAfter the earliest date the payment may fall on
+     * @param payDay    the day of the month payments fall on;  clamped to the length of shorter months
+     * @param schedule  a valid packed semester schedule
+     */
+    static Calendar semesterPaymentOnOrAfter(Calendar onOrAfter, int payDay, int schedule) {
+        Calendar candidate = (Calendar) onOrAfter.clone();
+        setPayDay(candidate, payDay);
+        if (candidate.get(Calendar.DATE) < onOrAfter.get(Calendar.DATE)) {
+            addMonthsKeepingPayDay(candidate, 1, payDay);
+        }
+        for (int i = 0; i < 12 && !isSemesterPaymentMonth(schedule, candidate.get(Calendar.MONTH)); i++) {
+            addMonthsKeepingPayDay(candidate, 1, payDay);
+        }
+        return candidate;
+    }
+
+    /** The next semester payment after a payment date.  See {@link #semesterPaymentOnOrAfter}. */
+    static Calendar semesterPaymentAfter(Calendar previous, int payDay, int schedule) {
+        Calendar candidate = (Calendar) previous.clone();
+        addMonthsKeepingPayDay(candidate, 1, payDay);
+        for (int i = 0; i < 12 && !isSemesterPaymentMonth(schedule, candidate.get(Calendar.MONTH)); i++) {
+            addMonthsKeepingPayDay(candidate, 1, payDay);
+        }
+        return candidate;
+    }
+
+    /** The semester payment before a payment date.  See {@link #semesterPaymentOnOrAfter}. */
+    static Calendar semesterPaymentBefore(Calendar next, int payDay, int schedule) {
+        Calendar candidate = (Calendar) next.clone();
+        addMonthsKeepingPayDay(candidate, -1, payDay);
+        for (int i = 0; i < 12 && !isSemesterPaymentMonth(schedule, candidate.get(Calendar.MONTH)); i++) {
+            addMonthsKeepingPayDay(candidate, -1, payDay);
+        }
+        return candidate;
+    }
+
+    private static void setPayDay(Calendar calendar, int payDay) {
+        calendar.set(Calendar.DATE, Math.min(payDay, calendar.getActualMaximum(Calendar.DATE)));
+    }
+
+    private static void addMonthsKeepingPayDay(Calendar calendar, int months, int payDay) {
+        calendar.set(Calendar.DATE, 1);
+        calendar.add(Calendar.MONTH, months);
+        setPayDay(calendar, payDay);
+    }
+
+    /**
+     * Whether this item has stopped by the given date.  The end date is the last date the item may occur on, so an
+     * occurrence that falls on it is still due.
+     *
+     * <p>Compared date to date.  An end date is stored at midnight while an occurrence date carries the time of day the
+     * forecast was generated (Utility.copyDate sets only the year, month and day), so comparing the two as instants made
+     * an item look expired for the whole of its final day and dropped that occurrence:  Justin's meal plan, ending
+     * 04-15-2027, was generated through 03-15-2027 and the April payment never appeared (09-16-2026).
+     */
     public boolean isExpired(Calendar nextDate) {
-        return (getEndDate() == null) ? false : getEndDate().compareTo(nextDate) < 0;
+        return getEndDate() != null && Utility.dateOnlyCompare(getEndDate(), nextDate) < 0;
     }
 
     // Type of expense:
@@ -238,7 +424,17 @@ public abstract class Item extends IndependentEntity {
                 "(Item: %s, Category: %s)",
                 MINIMUM_PERIOD_DAYS, MAXIMUM_PERIOD_DAYS, periodDays, payee, category));
         }
-        if (period != FIXED_DAYS && periodDays != 0) {
+        // Rule 5: A semesters period carries its schedule in periodDays, and it must be a valid one
+        if (period == SEMESTERS) {
+            String problem = semesterScheduleProblem(periodDays);
+            if (problem != null) {
+                throw new BudgetException(String.format(
+                    "Invalid combination: Period = SEMESTERS requires a valid semester schedule.  %s " +
+                    "(Item: %s, Category: %s)",
+                    problem, payee, category));
+            }
+        }
+        if (period != FIXED_DAYS && period != SEMESTERS && periodDays != 0) {
             throw new BudgetException(String.format(
                 "Invalid combination: Period = %s takes its spacing from the calendar, so it cannot also recur " +
                 "every %d days (Item: %s, Category: %s)",
@@ -534,6 +730,10 @@ public abstract class Item extends IndependentEntity {
             case FIXED_DAYS:
                 monthlyAmount = (periodDays == 0) ? 0.0 : amount / (double) periodDays * 365.0;
                 break;
+            case SEMESTERS:
+                // Two semesters a year, each with its own run of monthly payments:
+                monthlyAmount = amount * 2.0 * paymentsPerSemesterOf(periodDays);
+                break;
             case BIMONTHLY:
                 monthlyAmount = amount * 6.0;
                 break;
@@ -619,6 +819,12 @@ public abstract class Item extends IndependentEntity {
                     period = FIXED_DAYS;
                     break;
                 }
+
+                // A semesters period carries its schedule in the string the same way, e.g. "Semesters-Aug-Jan-4":
+                if (SEMESTERS_PATTERN.matcher(dbPeriod).matches()) {
+                    period = SEMESTERS;
+                    break;
+                }
                 throw new BudgetException("Invalid budget item period type:  " + dbPeriod + ".");
         }
         return period;
@@ -635,6 +841,20 @@ public abstract class Item extends IndependentEntity {
         if (dbPeriod == null) {
             return 0;
         }
+
+        // A semesters period's schedule is packed into the same number:
+        Matcher semesters = SEMESTERS_PATTERN.matcher(dbPeriod);
+        if (semesters.matches()) {
+            int schedule = packSemesterSchedule(parseMonth(semesters.group(1)), parseMonth(semesters.group(2)),
+                    Integer.parseInt(semesters.group(3)));
+            String problem = semesterScheduleProblem(schedule);
+            if (problem != null) {
+                throw new BudgetException("Invalid semester schedule in budget item period:  " + dbPeriod + ".  " +
+                        problem);
+            }
+            return schedule;
+        }
+
         Matcher matcher = FIXED_DAYS_PATTERN.matcher(dbPeriod);
         if (!matcher.matches()) {
             return 0;
@@ -678,6 +898,15 @@ public abstract class Item extends IndependentEntity {
                         MAXIMUM_PERIOD_DAYS + " days, not " + periodDays + ".");
             }
             return FIXED_DAYS_PREFIX + periodDays + FIXED_DAYS_SUFFIX;
+        }
+        if (period == SEMESTERS) {
+            // For a semesters period, periodDays is the packed schedule:
+            String problem = semesterScheduleProblem(periodDays);
+            if (problem != null) {
+                throw new BudgetException("A semesters period needs a valid schedule.  " + problem);
+            }
+            return SEMESTERS_PREFIX + monthAbbreviation(fallStartMonthOf(periodDays)) + "-" +
+                    monthAbbreviation(springStartMonthOf(periodDays)) + "-" + paymentsPerSemesterOf(periodDays);
         }
         String dbPeriodType;
         switch (period) {
@@ -1100,6 +1329,7 @@ public abstract class Item extends IndependentEntity {
                 case THREE_WEEKS:
                 case FOUR_WEEKS:
                 case MONTHLY:
+                case SEMESTERS:
                 case SIX_WEEKS:
                     isOk = variance > -4 && variance < 4;
                     break;
@@ -1321,6 +1551,17 @@ public abstract class Item extends IndependentEntity {
                 if (daysTillNextOccurrence != 28) {
                     nextDate.add(Calendar.DATE, daysTillNextOccurrence);
                 }
+                break;
+
+            case SEMESTERS:
+                // Monthly on the start date's day, but only in the semesters' months.  onOrAfterDate has already been
+                // moved up to the start date if the item starts later:
+                String firstDateScheduleProblem = semesterScheduleProblem(periodDays);
+                if (firstDateScheduleProblem != null) {
+                    throw new ForecastException("The item '" + payee + "' has an invalid semester schedule.  " +
+                            firstDateScheduleProblem);
+                }
+                nextDate = semesterPaymentOnOrAfter(onOrAfterDate, startDate.get(Calendar.DATE), periodDays);
                 break;
 
             case FIXED_DAYS:
@@ -1562,6 +1803,16 @@ public abstract class Item extends IndependentEntity {
                     nextDate.add(Calendar.DATE, requirePeriodDays());
                     break;
 
+                case SEMESTERS:
+                    // The next month on the start date's day that falls in a semester:
+                    String nextDateScheduleProblem = semesterScheduleProblem(periodDays);
+                    if (nextDateScheduleProblem != null) {
+                        throw new ForecastException("The item '" + payee + "' has an invalid semester schedule.  " +
+                                nextDateScheduleProblem);
+                    }
+                    nextDate = semesterPaymentAfter(nextDate, startDate.get(Calendar.DATE), periodDays);
+                    break;
+
                 case BIMONTHLY:
                     // Increment the date by three months:
                     nextDate.add(Calendar.MONTH, 2);
@@ -1610,8 +1861,10 @@ public abstract class Item extends IndependentEntity {
                 throw new ForecastException("Next date is the same as, or prior to, the previous date.");
             }
 
-            // If the next date is after the end date of this budget item, then return no next date:
-            if (endDate != null && nextDate.compareTo(endDate) > 0) nextDate = null;
+            // If the next date is after the end date of this budget item, then return no next date.  Date to date:  the
+            // end date is stored at midnight and this one carries a time of day, so comparing them as instants dropped
+            // the occurrence that falls on the end date -- see isExpired:
+            if (endDate != null && Utility.dateOnlyCompare(nextDate, endDate) > 0) nextDate = null;
         }
 
         // TODO:  Make into a logging statement:
@@ -1696,6 +1949,17 @@ public abstract class Item extends IndependentEntity {
                 case FIXED_DAYS:
                     // Decrement the date by this item's own number of days:
                     previousDateOfItemOccurrence.add(Calendar.DATE, -requirePeriodDays());
+                    break;
+
+                case SEMESTERS:
+                    // The previous month on the start date's day that falls in a semester:
+                    String previousDateScheduleProblem = semesterScheduleProblem(periodDays);
+                    if (previousDateScheduleProblem != null) {
+                        throw new ForecastException("The item '" + payee + "' has an invalid semester schedule.  " +
+                                previousDateScheduleProblem);
+                    }
+                    previousDateOfItemOccurrence = semesterPaymentBefore(previousDateOfItemOccurrence,
+                            startDate.get(Calendar.DATE), periodDays);
                     break;
 
                 case BIMONTHLY:

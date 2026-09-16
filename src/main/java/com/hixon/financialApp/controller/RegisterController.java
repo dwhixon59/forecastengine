@@ -18,6 +18,7 @@ import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.BankReferenceNumber;
+import com.hixon.financialApp.model.budget.BudgetItem;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.EntityOrStringResult;
 import com.hixon.financialApp.view.base.UserResponse;
@@ -726,6 +727,18 @@ public class RegisterController {
             return byReference;
         }
 
+        // The other side of the transfer, if it has already been imported:  a transaction in another register on the
+        // same date for exactly the opposite amount.  When exactly one register holds one, that is the answer and
+        // nothing needs asking (decided 09-15-2026, after Bill Pay Danni asked which register a $40.00 transfer from
+        // Christian's Checking came from).  When several do, the questions below are limited to those registers.
+        Set<Register> otherSideRegisters = registersHoldingOtherSide(date, amount);
+        if (otherSideRegisters.size() == 1) {
+            Register otherSide = otherSideRegisters.iterator().next();
+            view.say("▸ Matched the other side of this transfer in " + otherSide.getName() +
+                    " (same date, opposite amount).");
+            return otherSide;
+        }
+
         // if this is a recurring transfer:
         if (recurring) {
 
@@ -756,6 +769,13 @@ public class RegisterController {
         // Narrow the list of possible registers by removing the register that we are currently working with:
         possibleRegisters.remove(register);
         logger.debug("After removing current register: {} possible registers", possibleRegisters.size());
+
+        // If several registers hold a transaction that could be the other side, the answer is one of them:
+        if (otherSideRegisters.size() > 1) {
+            possibleRegisters.retainAll(otherSideRegisters);
+            logger.debug("After keeping only registers holding the other side: {} possible registers",
+                    possibleRegisters.size());
+        }
         try {
             return evaluateRegisterSet(possibleRegisters);
         } catch (ContinueFilteringException e) {
@@ -1069,6 +1089,34 @@ public class RegisterController {
     private String makeTransferCacheKey(String payee, double amount) {
         String normalized = (payee == null) ? "" : payee.trim().toUpperCase().replaceAll("\\s+", " ");
         return normalized + "|" + amount;
+    }
+
+    /**
+     * The registers, other than the one being imported, that hold a transaction on the same post date for exactly the
+     * opposite amount:  where the other side of a transfer would be once it has been imported.
+     *
+     * <p>A lookup failure is treated as no match, so the transfer reaches the same questions it always did.
+     *
+     * @param date   the transfer's date
+     * @param amount the transfer's amount in this register;  the other side is its negation
+     * @return the registers holding a candidate, possibly empty
+     */
+    Set<Register> registersHoldingOtherSide(Calendar date, double amount) {
+        Set<Register> holders = new HashSet<>();
+        try {
+            for (Register candidate : Register.getListOf()) {
+                if (register != null && candidate.getId().equals(register.getId())) {
+                    continue;
+                }
+                if (!Transaction.findOppositeSideInRegister(candidate.getId(), amount, date, 0).isEmpty()) {
+                    holders.add(candidate);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not look for the other side of a transfer in the other registers", e);
+            holders.clear();
+        }
+        return holders;
     }
 
     private Register evaluateRegisterSet(Set<Register> possibleRegisters) throws ContinueFilteringException {
@@ -1423,9 +1471,23 @@ public class RegisterController {
                 }
 
 
-                // Get the splits for the transaction.  Create them if they don't already exist:
+                // Get the splits for the transaction.  If it already has some, let the user keep them or choose
+                // again:  reprocessing used to reconcile them as they stood, so a transaction with the wrong budget
+                // item could not be corrected here (09-15-2026:  a $40.00 transfer left on Room rental).
                 List<TransactionSplit> splits = TransactionSplit.getSplitsForTransaction(transaction);
-                if (splits == null) {
+                if (splits != null && !splits.isEmpty()) {
+                    view.say("Current categorization:");
+                    for (TransactionSplit split : splits) {
+                        BudgetItem splitItem = split.getBudgetItem();
+                        view.say("  • " + Utility.formatDollarAmount(split.getAmount()) + " → " +
+                                (splitItem != null ? splitItem.getDisplayString() : "Unknown budget item"));
+                    }
+                    if (!view.getYesOrNo("Keep this categorization?")) {
+                        new TransactionController(sessionController).deleteSplitsAndReleaseForecast(transaction, splits);
+                        splits = null;
+                    }
+                }
+                if (splits == null || splits.isEmpty()) {
                     splits = budgetController.assignAmountsToBudgetItems(transaction, merchant, budget, budgetItemsForMerchant);
                 }
 
