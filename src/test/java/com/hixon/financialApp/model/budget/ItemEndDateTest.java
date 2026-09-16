@@ -88,6 +88,55 @@ class ItemEndDateTest {
         assertNull(mealPlan().getNextDateOfOccurrence(generatedDate(2027, Calendar.APRIL, 15)));
     }
 
+    /*
+     * Walking off the end of an item.  Both walks return null when they run out -- getNextDateOfOccurrence past the
+     * end date, getPreviousDateOfOccurrence before the start date -- so a caller that feeds one walk's result into
+     * the other hands it a null sooner or later.  That has to say what went wrong.
+     */
+
+    @Test
+    @DisplayName("walking on from no date says so, rather than throwing NullPointerException")
+    void nextFromNullIsReported() {
+
+        // The clone used to happen one line before the null check, so this threw NullPointerException out of
+        // Calendar.clone() and the ForecastException written for exactly this case was unreachable.  The NPE
+        // surfaced several frames from the caller that actually passed the null:
+        ForecastException thrown = assertThrows(ForecastException.class,
+                () -> mealPlan().getNextDateOfOccurrence(null));
+        assertTrue(thrown.getMessage().contains("next date"), thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("walking back from no date says so, rather than throwing NullPointerException")
+    void previousFromNullIsReported() {
+        assertThrows(ForecastException.class, () -> mealPlan().getPreviousDateOfOccurrence(null));
+    }
+
+    @Test
+    @DisplayName("an on-demand item still has no next occurrence, and does not throw")
+    void onDemandStillReturnsNull() throws ForecastException {
+
+        // The guard tests the argument, not the computed date.  An ON_DEMAND item sets the next date to null on
+        // purpose -- it has no predictable occurrence -- so guarding on the computed date instead would send it
+        // into the "can't get the next date" branch and turn a legitimate null into an exception:
+        BudgetItem item = mealPlan();
+        item.setPeriod(Item.PeriodType.ON_DEMAND);
+
+        assertNull(item.getNextDateOfOccurrence(generatedDate(2026, Calendar.OCTOBER, 15)));
+    }
+
+    @Test
+    @DisplayName("the end of a run is reported, not thrown, when it is fed back in")
+    void walkingPastTheEndAndOnAgain() throws ForecastException {
+        BudgetItem item = mealPlan();
+
+        // The last payment is April;  walking on from it returns null, and feeding that null back in is the shape
+        // that produced the NullPointerException:
+        Calendar pastTheEnd = item.getNextDateOfOccurrence(generatedDate(2027, Calendar.APRIL, 15));
+        assertNull(pastTheEnd);
+        assertThrows(ForecastException.class, () -> item.getNextDateOfOccurrence(pastTheEnd));
+    }
+
     /**
      * The whole run, the way the forecast engine walks it:  from the first occurrence on or after a date, to the next,
      * while the item has not expired.

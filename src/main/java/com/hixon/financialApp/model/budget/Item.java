@@ -1796,8 +1796,13 @@ public abstract class Item extends IndependentEntity {
     // Get the date of the next occurrence of this forecast item:
     public Calendar getNextDateOfOccurrence(Calendar previousDate) throws ForecastException {
 
-        Calendar nextDate = (Calendar) previousDate.clone();
-        if (nextDate != null) {
+        // Guarded on the argument, and cloned inside the guard.  This used to clone one line before testing for
+        // null, so a null date threw NullPointerException out of the clone and the ForecastException below was
+        // unreachable.  The test is on previousDate rather than on nextDate because nextDate is legitimately null
+        // further down -- an ON_DEMAND item has no predictable next occurrence and says so by returning null.
+        Calendar nextDate = null;
+        if (previousDate != null) {
+            nextDate = (Calendar) previousDate.clone();
             switch (period) {
 
                 case DAILY:
@@ -1946,8 +1951,15 @@ public abstract class Item extends IndependentEntity {
 
     // Calculate the previous date of occurrence of this forecast item given the date of occurrence of this item:
     public Calendar getPreviousDateOfOccurrence(Calendar dateOfItemOccurrence) throws ForecastException {
-        Calendar previousDateOfItemOccurrence = (Calendar) dateOfItemOccurrence.clone();
+
+        // Cloned inside the guard rather than above it.  The null check below used to dereference the argument one
+        // line before testing it, so a null date threw NullPointerException out of the clone and the ForecastException
+        // the guard exists to raise was unreachable.  A null reaches here whenever the caller passes on the result of
+        // another walk that ran out of occurrences -- getPreviousDateOfOccurrence itself returns null once the
+        // previous date would fall before the item's start date.
+        Calendar previousDateOfItemOccurrence = null;
         if (dateOfItemOccurrence != null) {
+            previousDateOfItemOccurrence = (Calendar) dateOfItemOccurrence.clone();
             switch (period) {
 
                 case DAILY:
