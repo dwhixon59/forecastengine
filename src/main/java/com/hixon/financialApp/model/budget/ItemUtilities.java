@@ -89,14 +89,23 @@ public class ItemUtilities {
                     firstOccurrenceAfter.set(Calendar.DAY_OF_MONTH, 1);
                     firstOccurrenceAfter.add(Calendar.MONTH, 1);
                 }
-                // Adjust for the school year:
-                if (lastOccurrenceBefore.get(Calendar.MONTH) < Calendar.AUGUST) {
-                    lastOccurrenceBefore.set(Calendar.MONTH, Calendar.AUGUST);
+                // Clamp the two candidates into the school year, which runs August through May.  Only June and
+                // July are out of session, and a date in either one has its previous occurrence at the May 15
+                // just gone and its next at the August 1 to come.
+                //
+                // The previous version tested the wrong way round and fired on dates that needed no adjustment
+                // at all:  a January instant has its last occurrence in January, which is "before August", so it
+                // was moved forward to August 15 -- seven months after the date being asked about -- and a
+                // December instant had its next occurrence dragged back to May 15, before the date entirely.
+                // Both broke the meaning of the two variables for every in-session month, not just at the edges:
+                if (Item.isOutOfSchoolYear(lastOccurrenceBefore)) {
+                    lastOccurrenceBefore.set(Calendar.MONTH, Calendar.MAY);
                     lastOccurrenceBefore.set(Calendar.DATE, 15);
                 }
-                if (firstOccurrenceAfter.get(Calendar.MONTH) > Calendar.MAY) {
-                    firstOccurrenceAfter.set(Calendar.MONTH, Calendar.MAY);
-                    firstOccurrenceAfter.set(Calendar.DATE, 15);                }
+                if (Item.isOutOfSchoolYear(firstOccurrenceAfter)) {
+                    firstOccurrenceAfter.set(Calendar.MONTH, Calendar.AUGUST);
+                    firstOccurrenceAfter.set(Calendar.DATE, 1);
+                }
                 break;
 
             case THREE_WEEKS:

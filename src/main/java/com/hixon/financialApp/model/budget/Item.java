@@ -240,6 +240,65 @@ public abstract class Item extends IndependentEntity {
     }
 
     /**
+     * The first month of the school year, for {@link PeriodType#SCHOOL_YEAR_SEMIMONTHLY}.  August:  the school year
+     * runs August through May, and only June and July are out of session.
+     *
+     * <p>This is the high-school shape, taken from what is actually charged -- Justin's school lunches appear in
+     * every month from August to May and never in June or July.  The college meal plan is not this period at all;
+     * it is {@link PeriodType#SEMESTERS}, which carries its own months in the period text.
+     */
+    static final int SCHOOL_YEAR_FIRST_MONTH = Calendar.AUGUST;
+
+    /** The last month of the school year.  See {@link #SCHOOL_YEAR_FIRST_MONTH}. */
+    static final int SCHOOL_YEAR_LAST_MONTH = Calendar.MAY;
+
+    /**
+     * Whether a date falls in the summer, outside the school year:  June or July, and nothing else.
+     *
+     * <p>One place decides this, because four places used to decide it separately and drifted apart -- the forward
+     * walk treated June as in session and August as out of it, the backward walk skipped August as well, and
+     * {@code ItemUtilities.getClosestOccurrence} used a third boundary again.
+     */
+    static boolean isOutOfSchoolYear(Calendar date) {
+        int month = date.get(Calendar.MONTH);
+        return month > SCHOOL_YEAR_LAST_MONTH && month < SCHOOL_YEAR_FIRST_MONTH;
+    }
+
+    /**
+     * A summer date moved forward to the start of the school year;  any date in session is returned unchanged.
+     *
+     * <p>The year is deliberately left alone.  June and July sit in the middle of a calendar year, so the August
+     * that follows them is always in the same year -- it is only the December-to-January step that rolls the year,
+     * and that step never reaches here.
+     *
+     * @return a new Calendar;  the argument is not modified
+     */
+    static Calendar advanceOutOfSummer(Calendar date) {
+        Calendar moved = (Calendar) date.clone();
+        if (isOutOfSchoolYear(moved)) {
+            moved.set(Calendar.MONTH, SCHOOL_YEAR_FIRST_MONTH);
+            moved.set(Calendar.DATE, 1);
+        }
+        return moved;
+    }
+
+    /**
+     * A summer date moved back to the end of the school year;  any date in session is returned unchanged.
+     * The mirror of {@link #advanceOutOfSummer}, so that stepping over the summer and back again returns to where
+     * it started.
+     *
+     * @return a new Calendar;  the argument is not modified
+     */
+    static Calendar retreatOutOfSummer(Calendar date) {
+        Calendar moved = (Calendar) date.clone();
+        if (isOutOfSchoolYear(moved)) {
+            moved.set(Calendar.MONTH, SCHOOL_YEAR_LAST_MONTH);
+            moved.set(Calendar.DATE, 15);
+        }
+        return moved;
+    }
+
+    /**
      * The first semester payment on or after a date.
      *
      * @param onOrAfter the earliest date the payment may fall on
@@ -713,7 +772,11 @@ public abstract class Item extends IndependentEntity {
                 monthlyAmount = amount * 24.0;
                 break;
             case SCHOOL_YEAR_SEMIMONTHLY:
-                monthlyAmount = amount * 9.0;
+                // Twice a month, for the ten months of the school year (August through May):  twenty payments.
+                // June and July are the only months out of session -- Justin's school lunches were charged in
+                // every other month, August included.  This had been nine, which counted months rather than
+                // payments and budgeted every school-year item at half of what it really costs:
+                monthlyAmount = amount * 20.0;
                 break;
             case THREE_WEEKS:
                 monthlyAmount = amount / 21.0 * 365.0;
@@ -1523,10 +1586,9 @@ public abstract class Item extends IndependentEntity {
                         nextDate.set(onOrAfterDate.get(Calendar.YEAR), onOrAfterDate.get(Calendar.MONTH) + 1, 1);
                     }
                 }
-                int month = nextDate.get(Calendar.MONTH);
-                if (month >= 6 && month <= 8) {
-                    nextDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
-                }
+                // The school year runs August through May, so a date in the summer belongs to the August that
+                // follows it.  See SCHOOL_YEAR_FIRST_MONTH:
+                nextDate = advanceOutOfSummer(nextDate);
                 break;
 
             case THREE_WEEKS:
@@ -1771,10 +1833,11 @@ public abstract class Item extends IndependentEntity {
                         nextDate.add(Calendar.MONTH, 1);
                         nextDate.set(Calendar.DATE, 1);
                     }
-                    int month = nextDate.get(Calendar.MONTH);
-                    if (month >= 6 && month <= 8) {
-                        nextDate.set(Calendar.MONTH, Calendar.SEPTEMBER);
-                    }
+                    // Step over the summer:  the occurrence after May 15 is August 1.  This used to send July and
+                    // August to September while leaving June alone, so the forecast planned June occurrences for a
+                    // school item -- months in which nothing is ever charged -- and skipped August, which is the
+                    // busiest month of the school year after the new term starts:
+                    nextDate = advanceOutOfSummer(nextDate);
                     break;
 
                 case THREE_WEEKS:
@@ -1920,10 +1983,10 @@ public abstract class Item extends IndependentEntity {
                     } else {
                         previousDateOfItemOccurrence.set(Calendar.DATE, 1);
                     }
-                    int month = previousDateOfItemOccurrence.get(Calendar.MONTH);
-                    if (month >= 6 && month <= 8) {
-                        previousDateOfItemOccurrence.set(Calendar.MONTH, Calendar.MAY);
-                    }
+                    // Step back over the summer:  the occurrence before August 1 is May 15.  This used to send
+                    // September back to May, skipping August altogether, which disagreed with the forward
+                    // direction -- the two walked different school years:
+                    previousDateOfItemOccurrence = retreatOutOfSummer(previousDateOfItemOccurrence);
                     break;
 
                 case THREE_WEEKS:
