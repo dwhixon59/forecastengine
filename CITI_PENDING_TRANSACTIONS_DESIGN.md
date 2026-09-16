@@ -4,6 +4,23 @@
 > sample (pending, posted and payment rows), a check of the QFX download, and the decision to
 > attribute charges to the cardholder. Not implemented.
 >
+> **Reviewed against the code on 2026-09-16**, the day after it was written, against the import and
+> forecast fixes that landed on `dev` that morning (`4644629`, `fe2c47a`, `82ca37e`, `2af73f2`). Most
+> of what this document says about the current code is still true; the corrections are marked
+> **[2026-09-16]** and are:
+> - `hasKnownPendingTwin` now calls `getMatchingProvisionalTransaction` *before* the payee is parsed,
+>   which changes when §3.5 starts running (§2, §3.5).
+> - §3.5's claim that the provisional import "sees it as cleared rather than re-adding it" is wrong.
+>   Nothing in the merge looks at cleared rows (§3.5).
+> - `reportProvisionalTransactionsNotInRegister` will report every posted Citi charge as missing
+>   (new §3.10).
+> - §3.7 understated its own scope: the verify-balance step has a four-option remediation loop
+>   (§3.7).
+>
+> One earlier review note was **withdrawn**: that the merge should use the normalized merchant payee.
+> The merge compares the file's pending rows against the register's *uncleared* rows, and both carry
+> the same raw portal text, so the raw `payee` is the right key. §3.4 never claimed otherwise.
+>
 > **Goal:** Give the Citi AAdvantage Mastercard register the same pending-transaction import that
 > Wells Fargo registers already have. A charge then appears in the register and forecast when it is
 > authorized, instead of days later when Citi's QFX download includes it. Each charge is attributed to
@@ -132,6 +149,21 @@ $11,522.52 + $87.60 = $11,610.12, so the pending $80.23 is not in it.
    On a match, `FinancialInstitution.reconcileProvisionalTransaction` moves the pending row's id,
    merchant and splits onto the cleared row, and adjusts the balance and first split by any tip.
 
+   **[2026-09-16] What "moves the id" means, because the rest of this design depends on it.**
+   `reconcileProvisionalTransaction` does `clearedTransaction.setId(provisionalTransaction.getId())`
+   (`FinancialInstitution.java:138`), so the cleared row *takes over the pending row's UUID* and the
+   upsert overwrites it in place. Afterwards there is **one** row: the old pending row's id, now
+   `cleared = 1`, carrying the **posted** payee. The pending text is gone from the register. It also
+   copies `idMerchant`, `merchant`, `merchantPayee` and `isImproper`, which is where §3.9's
+   cardholder carry-over belongs.
+
+6. **[2026-09-16] Before any of that, `hasKnownPendingTwin` runs.** `ImportController.hasKnownPendingTwin`
+   (line 379) calls `getMatchingProvisionalTransaction` *before* `parseMerchantPayee`, to avoid asking
+   which register a transfer came from when the pending row already answered that. It sets the
+   **raw** payee as the merchant-payee placeholder first:
+   `clearedTransaction.setMerchantPayee(clearedTransaction.getPayee())`. For Citi this is inert today
+   because the method returns `null` — §3.5 is what makes it live. See §3.5.
+
 ### Citi (what is missing)
 
 | Piece | Today |
@@ -257,6 +289,11 @@ Extend `CitiBank.normalizeCitiPayee` with one rule, applied **before** the state
 Pending and posted rows then resolve to the same merchant payee. That matters for the payee→merchant
 mapping and for the fuzzy tie-break when a pending row is matched to its posted row.
 
+**[2026-09-16] It does not change the merge.** The merge sorts both lists on the raw `payee` plus the
+amount (`ImportController.java:1445-1449`) and compares the file's pending rows against the register's
+*uncleared* rows. Both sides hold the same raw portal text, so the raw payee is the correct key there
+and this rule is not needed for it. Normalization is for the merchant mapping and for §3.5.
+
 ### 3.5 Pending → posted
 
 `CitiBank.getMatchingProvisionalTransaction` does what Wells Fargo does: it delegates to
@@ -269,9 +306,28 @@ mapping and for the fuzzy tie-break when a pending row is matched to its posted 
   goes to the balance and the first split, as for Wells Fargo.
 - **A hold that never posts** (hotel, gas pump, car rental) disappears from the portal. The fallen-off
   branch offers it for deletion, limited as in §3.6.
-- **Order of steps.** The daily update imports cleared transactions before provisional ones. A charge
-  that posted overnight is merged into its pending row first, and the provisional import then sees it
-  as cleared rather than re-adding it.
+- **[2026-09-16] The raw payee reaches the matcher first.** `hasKnownPendingTwin` (§2 step 6) calls
+  this method before the payee is parsed, passing the raw descriptor as the merchant payee. So the
+  fuzzy tie-break sees `LA FITNESS IRVINE CA`, not the `LA FITNESS` that §3.4 produces. The tie-break
+  only separates candidates that already match on exact amount within ±5 days, so a single pending
+  charge still matches on amount alone — but the tie-break is weaker than §3.4 implies whenever two
+  pending rows share an amount. Implementing §3.5 must either normalize inside
+  `CitiBank.getMatchingProvisionalTransaction` before delegating, or accept the raw form knowingly.
+  A test should pin whichever is chosen.
+- **[2026-09-16] Order of steps — the earlier claim here was wrong.** It said the provisional import
+  "sees it as cleared rather than re-adding it". Nothing in the merge looks at cleared rows: it reads
+  `where tr.cleared = false` (`ImportController.java:1456-1457`), and reconcile has by then turned the
+  pending row into the cleared one (§2 step 5). A charge that posted between the paste and the import
+  is therefore **absent from the comparison list and is re-added as a second pending row**.
+
+  What actually prevents this is that the portal's *Pending* section is refreshed when the user
+  copies it, so a charge that has already posted is not in the paste. The exposure is the gap between
+  copying and importing. Wells Fargo has the same exposure today.
+
+  **Proposed:** before adding a row the merge considers new, check for a cleared register row with the
+  same amount within ±5 days — `Transaction.getByDateAndAmount` already does date-and-amount without
+  comparing payees, which is what this needs. Treat a hit as "already posted" and skip it. This is a
+  shared-merge change and helps both banks.
 
 ### 3.6 Only treat a row as "fallen off" within the dates the paste covers
 
@@ -300,8 +356,16 @@ as a discrepancy. Wells Fargo already shows the same effect: on 09-14-2026 Bill 
 **Proposed:** compare the downloaded balance against *register balance minus the total of uncleared
 rows*, and say so ("excluding $80.23 pending"). This helps both banks.
 
+**[2026-09-16] This is more work than one comparison.** `RegisterController.verifyRegisterBalance`
+(line 310) compares `register.getBalance()` to the QFX ledger balance directly (line 339), and when
+they differ it calls `explainBalanceDifference` and enters a loop offering four choices — use the
+downloaded balance, keep the database balance, enter one by hand, or import a wider statement and
+re-compare. Excluding uncleared rows means changing the comparison, the explanation, and the wording
+of the choices, all of which name the two balances. The loop re-runs after choice 4, so the adjusted
+figure has to be recomputed inside it rather than once at the top.
+
 **To confirm during implementation:**
-- Read the verify-balance code.
+- ~~Read the verify-balance code.~~ Done on 2026-09-16; see the paragraph above.
 - Check that Citi's QFX `LEDGERBAL` equals the portal's posted-only *Current Balance*. The register
   matched it at −$11,522.52 after the 09-14 import.
 
@@ -348,6 +412,11 @@ empty. Attribution has its own method so the two uses do not share one ambiguous
     `Cardholder_idUser` on cleared register rows with the same date and amount and a matching
     normalized payee, without importing anything.
 
+**[2026-09-16] Carry-over has a natural home.** `reconcileProvisionalTransaction` already copies
+`idMerchant`, `merchant`, `merchantPayee` and `isImproper` from the pending row to the cleared one
+(`FinancialInstitution.java:139-142`). `idCardholder` goes beside them, so the carry-over is one line
+in code that every institution inherits.
+
 **Where it shows:**
 - **Import summary.** In REVIEW IMPORTED TRANSACTIONS, the merchant column gains the first name:
   `LA FITNESS (David)`.
@@ -366,6 +435,23 @@ ALTER TABLE transaction
 
 `Transaction`'s select, insert, update and upsert queries gain the column. Existing rows stay `NULL`.
 
+### 3.10 [2026-09-16] The "not in the register" check will report every posted Citi charge
+
+`ImportController.reportProvisionalTransactionsNotInRegister` (line 1118) runs after the merge and
+asks whether each row read from the file reached the register. It matches on **payee + amount**, and
+deliberately searches cleared rows as well as uncleared ones — its comment says restricting it to
+uncleared rows "would be a false alarm on a charge that is present and correct".
+
+Matching on the payee defeats that as soon as the pending and posted text differ. Once a Citi charge
+posts, reconcile leaves the **posted** payee on the row (§2 step 5), so the file's
+`LA FITNESS IRVINE USA` finds no row, and the charge is reported missing although it is present and
+correct. For Citi the two texts always differ — that is the whole reason §3.4 exists.
+
+**Proposed:** match this check on **date and amount** rather than payee, within the same lookback
+window. It is asking "does the register hold this charge at all", which does not need the payee. The
+same change removes a latent false alarm for Wells Fargo, whose pending and posted descriptions are
+similar but not identical.
+
 ---
 
 ## 4. Changes by file
@@ -377,7 +463,8 @@ ALTER TABLE transaction
 | `CitiPendingActivityParser` (new) | the pure block parser (§3.3) |
 | `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query |
 | `add_transaction_cardholder_column.sql` (new) | the migration in §3.9, plus a rollback script |
-| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6) |
+| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6); skip a file row whose charge has already posted (§3.5); match `reportProvisionalTransactionsNotInRegister` on date and amount (§3.10) |
+| `RegisterController` | exclude uncleared rows from the balance comparison, the explanation and all four choice labels, recomputed inside the loop (§3.7) |
 | `ImportSummaryController`, `NewTransactionSummaryReport` | show the cardholder's first name |
 | Verify-balance step | exclude uncleared rows from the comparison (§3.7) |
 | `TRANSACTION_IMPORT_ALGORITHM.md` | document the record hook, the covered-range rule and cardholder carry-over |
@@ -407,6 +494,12 @@ ALTER TABLE transaction
   - Case and spacing do not matter.
 - **Cardholder carry-over:** `reconcileProvisionalTransaction` copies `idCardholder` to the cleared row.
 - **Fall-off range:** a register row outside the covered range is never a candidate; one inside it is.
+- **[2026-09-16] Already posted:** a file row whose charge cleared between the paste and the import is
+  skipped, not added as a second pending row (§3.5).
+- **[2026-09-16] Not-in-register check:** a charge whose pending text differs from its posted text is
+  not reported as missing once it has posted (§3.10).
+- **[2026-09-16] Pending-to-posted with the raw payee:** whichever of the two options in §3.5 is
+  taken, a test pins it — two pending rows sharing an amount are separated the way the choice implies.
 - **Wells Fargo regression:** the default hook produces the same transactions as today's per-line loop
   for `BillPayDave-ProvTrx_old.tsv`-shaped input.
 - **Balance verification:** the reported difference excludes uncleared rows.
