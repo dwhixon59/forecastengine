@@ -1505,6 +1505,16 @@ public class ForecastController {
      * @throws Exception if an error occurs during the update
      */
     public void updateForecast() throws Exception {
+        updateForecast((Set<UUID>) null);
+    }
+
+    /**
+     * {@link #updateForecast()}, regenerating only the occurrences of some budget items.
+     *
+     * @param onlyBudgetItems the budget items whose occurrences to regenerate, or null for all of them
+     * @throws Exception if an error occurs during the update
+     */
+    public void updateForecast(Set<UUID> onlyBudgetItems) throws Exception {
 
         // Get the starting date of the forecast to update.
         Calendar updateStartDate = null;
@@ -1522,7 +1532,7 @@ public class ForecastController {
         }
 
         // Call the non-interactive version with the user-selected start date
-        updateForecast(updateStartDate);
+        updateForecast(updateStartDate, onlyBudgetItems);
     }
 
     /**

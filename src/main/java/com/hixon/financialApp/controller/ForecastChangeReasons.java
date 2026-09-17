@@ -6,9 +6,12 @@ import com.hixon.financialApp.utility.Utility;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Says why the daily update is offering to update the forecast.
@@ -110,6 +113,57 @@ public final class ForecastChangeReasons {
             reasons.add("The forecast was already out of date when this update started.");
         }
         return reasons;
+    }
+
+    /**
+     * The budget items whose changes {@link #describe} would report, by id:  the ones a forecast update has
+     * to regenerate.
+     *
+     * @param before the budget when the update started, or null if it could not be read
+     * @param after  the budget now, or null if it could not be read
+     * @return their ids, or null when either snapshot is missing and so nothing can be ruled out
+     */
+    static Set<UUID> changedItemIds(Map<String, ItemState> before, Map<String, ItemState> after) {
+        if (before == null || after == null) {
+            return null;
+        }
+        Set<UUID> ids = new HashSet<>();
+        for (Map.Entry<String, ItemState> entry : after.entrySet()) {
+            ItemState now = entry.getValue();
+            ItemState was = before.get(entry.getKey());
+            if ((was == null && now.affectsForecast()) || (was != null && !was.signature().equals(now.signature())
+                    && (was.affectsForecast() || now.affectsForecast()))) {
+                ids.add(UUID.fromString(entry.getKey()));
+            }
+        }
+        for (Map.Entry<String, ItemState> entry : before.entrySet()) {
+            if (!after.containsKey(entry.getKey()) && entry.getValue().affectsForecast()) {
+                ids.add(UUID.fromString(entry.getKey()));
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Which budget items a daily update's forecast update should regenerate.
+     *
+     * @param staleAtStart        whether the forecast was already out of date when the update started;  what
+     *                            made it so is not known, so everything is regenerated
+     * @param changedItems        the budget items that changed during the run, or null if unknown
+     * @param recategorized       whether a recategorization changed the forecast
+     * @param recategorizedItems  the budget items those recategorizations touched, or null if unknown
+     * @return the budget items to regenerate, or null to regenerate the whole forecast
+     */
+    static Set<UUID> updateScope(boolean staleAtStart, Set<UUID> changedItems, boolean recategorized,
+                                 Set<UUID> recategorizedItems) {
+        if (staleAtStart || changedItems == null || (recategorized && recategorizedItems == null)) {
+            return null;
+        }
+        Set<UUID> scope = new HashSet<>(changedItems);
+        if (recategorized) {
+            scope.addAll(recategorizedItems);
+        }
+        return scope;
     }
 
     private static String date(Calendar date) {

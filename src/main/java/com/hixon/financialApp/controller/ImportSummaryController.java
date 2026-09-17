@@ -18,7 +18,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import static com.hixon.financialApp.utility.Utility.calendarDateToStringDate;
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
@@ -47,6 +50,12 @@ public class ImportSummaryController {
     private final ImportLog importLog;
     private final ViewInt view;
     private boolean forecastWasChanged = false;
+
+    /**
+     * The budget items on either side of every recategorization that changed the forecast, so that only
+     * their occurrences need regenerating;  null once any of them could not be read.
+     */
+    private Set<UUID> recategorizedBudgetItems = new HashSet<>();
 
     public ImportSummaryController(SessionController sessionController, ImportLog importLog) {
         this.sessionController = sessionController;
@@ -152,14 +161,51 @@ public class ImportSummaryController {
             // Only a forecast-generating item on either side makes the forecast stale.  Moving a transaction
             // between on-demand items (Dog Food to Dog treats, 09-15-2026) changes no occurrence a forecast
             // regeneration would produce, and offering one afterwards made no sense.
-            if (involvesForecastItem(splitsBefore) || involvesForecastItem(splitsOrNull(record))) {
+            List<TransactionSplit> splitsAfter = splitsOrNull(record);
+            if (involvesForecastItem(splitsBefore) || involvesForecastItem(splitsAfter)) {
                 forecastWasChanged = true;
+                recordRecategorizedBudgetItems(splitsBefore);
+                recordRecategorizedBudgetItems(splitsAfter);
             }
         } catch (CancelException | SkipException e) {
             // User cancelled — nothing changed; record stays as-is
             logger.debug("Recategorization cancelled for transaction: {}",
                     record.getTransaction().getImportRecordId());
         }
+    }
+
+    /**
+     * The budget items whose occurrences the recategorizations in this summary affected, or null when they
+     * could not all be told -- in which case the whole forecast should be regenerated.
+     */
+    public Set<UUID> getRecategorizedBudgetItems() {
+        return recategorizedBudgetItems == null ? null : new HashSet<>(recategorizedBudgetItems);
+    }
+
+    private void recordRecategorizedBudgetItems(List<TransactionSplit> splits) {
+        if (recategorizedBudgetItems != null && !addBudgetItemIds(recategorizedBudgetItems, splits)) {
+            recategorizedBudgetItems = null;
+        }
+    }
+
+    /**
+     * Adds the budget items of some splits to a set.
+     *
+     * @param ids    the set to add to
+     * @param splits the splits, or null if they could not be read
+     * @return false when the splits, or one of their budget items, could not be told
+     */
+    static boolean addBudgetItemIds(Set<UUID> ids, List<TransactionSplit> splits) {
+        if (splits == null) {
+            return false;
+        }
+        for (TransactionSplit split : splits) {
+            if (split == null || split.getIdBudgetItem() == null) {
+                return false;
+            }
+            ids.add(split.getIdBudgetItem());
+        }
+        return true;
     }
 
     /** The record's splits, or null if they could not be read -- which {@link #involvesForecastItem} treats as yes. */
@@ -528,6 +574,8 @@ public class ImportSummaryController {
 
         // Delete existing splits for this transaction, undoing what reconciling them did to the forecast
         List<TransactionSplit> existingSplits = TransactionSplit.getSplitsForTransaction(txn);
+        recordRecategorizedBudgetItems(existingSplits);
+        recordRecategorizedBudgetItems(List.of(sourceSplit));
         createTransactionController().deleteSplitsAndReleaseForecast(txn,
                 existingSplits != null ? existingSplits : new ArrayList<>());
 

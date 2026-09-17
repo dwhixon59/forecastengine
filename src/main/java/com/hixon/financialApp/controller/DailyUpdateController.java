@@ -12,6 +12,8 @@ import com.hixon.financialApp.view.base.ViewInt;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 
 public class DailyUpdateController {
@@ -99,6 +101,7 @@ public class DailyUpdateController {
             boolean forecastStaleAtStart = forecast != null && !forecast.getInSync();
             Map<String, ForecastChangeReasons.ItemState> budgetBefore = snapshotBudget();
             boolean recategorized = false;
+            Set<UUID> recategorizedItems = new java.util.HashSet<>();
 
 
             // Check if user has modified the external forecast file since last render:
@@ -144,7 +147,9 @@ public class DailyUpdateController {
                     view.say("There are skipped transactions in the register. Auto-reprocessing...");
                     inSync = registerController.processUnreconciledTransactions();
                     if (!inSync) {
-                        forecastController.updateForecast();
+                        // Only the budget items that changed:  see ForecastChangeReasons.updateScope.
+                        forecastController.updateForecast(ForecastChangeReasons.updateScope(forecastStaleAtStart,
+                                ForecastChangeReasons.changedItemIds(budgetBefore, snapshotBudget()), false, null));
                     }
                    view.sayH4("The skipped transactions were successfully updated.");
                 } else {
@@ -228,6 +233,7 @@ public class DailyUpdateController {
                         new ImportSummaryController(sessionController, importController.getImportLog());
                 boolean recatChanged = importSummaryController.showSummaryAndRecategorize();
                 recategorized = recatChanged;
+                recategorizedItems = importSummaryController.getRecategorizedBudgetItems();
                 if (recatChanged && inSync) {
                     inSync = false;
                 }
@@ -260,7 +266,8 @@ public class DailyUpdateController {
                 // Say why the forecast is out of date, then ask the user if they want to update it.  Changes
                 // to on-demand and unplanned items are not reasons -- they generate no occurrences -- so when
                 // nothing else changed there is nothing to update and nothing to ask.
-                List<String> reasons = ForecastChangeReasons.describe(budgetBefore, snapshotBudget(),
+                Map<String, ForecastChangeReasons.ItemState> budgetAfter = snapshotBudget();
+                List<String> reasons = ForecastChangeReasons.describe(budgetBefore, budgetAfter,
                         recategorized, forecastStaleAtStart);
                 if (reasons.isEmpty()) {
                     view.say("Nothing that changed affects the forecast, so it does not need updating.");
@@ -272,7 +279,11 @@ public class DailyUpdateController {
                 }
                 if (!reasons.isEmpty() && view.getYesOrNo("Do you want to update the forecast?")) {
                     try {
-                        forecastController.updateForecast();
+                        // Regenerate only what the reasons name, so a forecast spreadsheet rendered earlier
+                        // keeps working for everything else.
+                        forecastController.updateForecast(ForecastChangeReasons.updateScope(forecastStaleAtStart,
+                                ForecastChangeReasons.changedItemIds(budgetBefore, budgetAfter), recategorized,
+                                recategorizedItems));
                        view.sayH4("The long term forecast was successfully updated.");
                     } catch (QuitException qe) {
                         throw qe;

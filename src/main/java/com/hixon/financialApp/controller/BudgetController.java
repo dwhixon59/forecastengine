@@ -310,10 +310,17 @@ public class BudgetController {
 
                                                             for (UUID forecastId : affectedForecastIds) {
                                                                 try {
+                                                                    // Point the session at the affected forecast first:
+                                                                    // the controller works on the session's forecast, so
+                                                                    // without this every pass updated the same one.
                                                                     Forecast affectedForecast = Forecast.getById(forecastId);
+                                                                    sessionController.setForecast(affectedForecast);
+                                                                    sessionController.setBudget(affectedForecast.getBudget());
                                                                     ForecastController forecastController = new ForecastController(
                                                                             sessionController);
-                                                                    forecastController.updateForecast(firstOfNextMonth);
+                                                                    // Only the deleted item's occurrences change.
+                                                                    forecastController.updateForecast(firstOfNextMonth,
+                                                                            onlyTheseBudgetItems(selectedItem));
                                                                     view.say("Forecast '" + affectedForecast.getDescription() + "' regenerated successfully.");
                                                                 } catch (Exception e) {
                                                                     view.say("Error regenerating forecast: " + e.getMessage());
@@ -335,7 +342,7 @@ public class BudgetController {
 
                                                     // Ask if user wants to update other forecasts in this budget
                                                     // (in addition to any that were already regenerated above)
-                                                    updateAssociatedForecasts(selectedBudget);
+                                                    updateAssociatedForecasts(selectedBudget, selectedItem);
 
                                                     actionComplete = true;  // Go back to search/add menu
                                                 } catch (Exception e) {
