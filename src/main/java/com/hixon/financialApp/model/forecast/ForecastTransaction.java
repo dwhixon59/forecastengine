@@ -722,6 +722,45 @@ public class ForecastTransaction extends IndependentEntity {
                 "order by ft.plannedDate asc ";
     }
 
+    /**
+     * The other occurrences of an occurrence's forecast item, in the same calendar month, that still
+     * have something left.
+     *
+     * <p>For a once-a-month item there should be none.  When there is one, the month is planned twice:
+     * on 09-17-2026 Danni's $35 calling plan charge was assigned to its 09-15 occurrence while a
+     * leftover 09-25 occurrence from the item's old schedule still expected another $35.
+     *
+     * @param occurrence the occurrence a split was just assigned to
+     * @return the live same-month siblings, earliest first;  possibly empty
+     */
+    public static List<ForecastTransaction> getLiveSameMonthSiblings(ForecastTransaction occurrence)
+            throws EntityException, SQLException, ForecastException, BudgetException {
+        List<ForecastTransaction> siblings = new ArrayList<>();
+        if (occurrence == null || occurrence.getPlannedDate() == null || occurrence.getIdForecastItem() == null) {
+            return siblings;
+        }
+        ResultSet rs = EntityInt.getRS(liveSameMonthSiblingQuery(occurrence.getIdForecastItem(), occurrence.getId(),
+                        occurrence.getPlannedDate()),
+                "Database error occurred looking for other occurrences in the same month.");
+        while (rs != null && rs.next()) {
+            siblings.add(new ForecastTransaction(rs));
+        }
+        return siblings;
+    }
+
+    /** The SQL behind {@link #getLiveSameMonthSiblings}. */
+    static String liveSameMonthSiblingQuery(UUID idForecastItem, UUID idOccurrence, Calendar plannedDate) {
+        Calendar firstOfMonth = (Calendar) plannedDate.clone();
+        firstOfMonth.set(Calendar.DAY_OF_MONTH, 1);
+        return getSelectQuery() + " " +
+                "where ft.ForecastItem_idForecastItem = uuid_to_bin('" + idForecastItem + "') and " +
+                "ft.idForecastTransaction <> uuid_to_bin('" + idOccurrence + "') and " +
+                "ft.remainingAmount <> 0 and " +
+                "ft.plannedDate >= " + Utility.calendarDateToSqlDateString(firstOfMonth) + " and " +
+                "ft.plannedDate <= " + Utility.calendarDateToSqlDateString(Utility.getLastDayOfMonth(plannedDate)) +
+                " order by ft.plannedDate asc";
+    }
+
     public static ForecastTransactionIterator getNonZeroForecastTransactionsForBudgetItem(UUID idBudgetItem, UUID idForecast)
             throws EntityException {
 

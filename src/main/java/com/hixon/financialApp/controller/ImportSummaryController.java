@@ -408,12 +408,10 @@ public class ImportSummaryController {
                     || item.getPeriod() == Item.PeriodType.ON_DEMAND);
     }
 
-    /** Returns "MM-DD" from the transaction's auth date or post date. */
+    /** Returns "MM-DD" from the transaction's date as ImportLog.displayDate chooses it. */
     private String formatDate(Transaction txn) {
         try {
-            String full = (txn.getAuthorizationDate() != null)
-                    ? calendarDateToStringDate(txn.getAuthorizationDate())
-                    : calendarDateToStringDate(txn.getPostDate());
+            String full = calendarDateToStringDate(ImportLog.displayDate(txn));
             // full is MM-DD-YYYY; return MM-DD
             return full.length() >= 5 ? full.substring(0, 5) : full;
         } catch (Exception e) {

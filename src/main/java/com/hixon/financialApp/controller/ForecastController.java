@@ -526,7 +526,7 @@ public class ForecastController {
                     ForecastItem forecastItem = ForecastItem.getByBudgetItemId(forecast, split.getIdBudgetItem());
                     if (forecastItem == null) {
                         forecastItem = new ForecastItem(forecast, split.getBudgetItem());
-                        forecastItem.setAmount(split.getAmount());
+                        forecastItem.setAmount(newForecastItemAmount(forecastItem.getAmount(), split.getAmount()));
                         forecastItem.save(INSERT);
                     }
                     forecastTransaction = new ForecastTransaction(forecastItem, split.getTransaction().getDate(), true);
@@ -648,6 +648,110 @@ public class ForecastController {
         return Utility.formatDollarAmount(splitAmount) + " assigned to " + occurrence + ".  It used up the " +
                 Utility.formatDollarAmount(Math.abs(remainingInPeriod)) + " left in this occurrence;  the " +
                 Utility.formatDollarAmount(Math.abs(overage)) + " over that is ignored.";
+    }
+
+    /**
+     * The SQL deleting the occurrences a forecast update is about to regenerate:  those of the forecast on or
+     * after the start date, except overridden and reconciled ones, and -- when the update is limited to some
+     * budget items -- only theirs.
+     *
+     * @param idForecast      the forecast being updated
+     * @param updateStartDate the first day being regenerated
+     * @param onlyBudgetItems the budget items being regenerated, or null for all of them
+     * @return the SQL
+     */
+    static String regenerationDeleteQuery(UUID idForecast, Calendar updateStartDate, Collection<UUID> onlyBudgetItems) {
+        StringBuilder items = new StringBuilder();
+        if (onlyBudgetItems != null) {
+            items.append(" and BudgetItem_idBudgetItem in (");
+            String separator = "";
+            for (UUID id : onlyBudgetItems) {
+                items.append(separator).append("uuid_to_bin('").append(id).append("')");
+                separator = ", ";
+            }
+            if (onlyBudgetItems.isEmpty()) {
+                items.append("null");
+            }
+            items.append(")");
+        }
+        return ForecastTransaction.getDeleteQuery() +
+                "where " +
+                    "ForecastItem_idForecastItem in (" +
+                        "select " +
+                            "idForecastItem " +
+                        "from " +
+                            "forecast_item " +
+                        "where " +
+                            "Forecast_idForecast = uuid_to_bin('" + idForecast + "')" + items +
+                    ") " +
+                    "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
+                    "and not overridden " +
+                    "and not exists (" +
+                        "select 1 " +
+                        "from " +
+                            "forecast_transaction_split " +
+                        "where " +
+                            "forecast_transaction_split.ForecastTransaction_idForecastTransaction = " +
+                                "forecast_transaction.idForecastTransaction" +
+                    ")";
+    }
+
+    /**
+     * What assigning a split to a once-per-period occurrence did.
+     *
+     * <p>When the occurrence was already at zero nothing was deducted, and saying "$-35.00 deducted
+     * from ... Remaining amount = $0.00" -- as the Visible charge on 09-17-2026 did -- reads as though
+     * the $35 had been left in it and then taken out.
+     *
+     * @param splitAmount    the split assigned
+     * @param wasAlreadyZero whether the occurrence had nothing left before the split
+     * @param occurrence     the occurrence, described
+     * @return the message
+     */
+    static String periodicAssignmentMessage(double splitAmount, boolean wasAlreadyZero, String occurrence) {
+        if (wasAlreadyZero) {
+            return Utility.formatDollarAmount(splitAmount) + " assigned to " + occurrence +
+                    ", which already had nothing left, so nothing was deducted.";
+        }
+        return Utility.formatDollarAmount(splitAmount) + ((splitAmount < 0) ? " deducted from " : " added to ") +
+                occurrence;
+    }
+
+    /**
+     * After a split lands on an occurrence that had nothing left, offer to clear any other occurrence
+     * of the same item in the same month that still expects money:  the month is planned twice, and
+     * the charge just assigned is the one it was waiting for.
+     *
+     * <p>Asked, not assumed:  an item can legitimately occur twice in a month, and several occurrences
+     * that look like duplicates are not (see the duplicate-occurrence check).
+     */
+    private void retireLiveSameMonthSiblings(ForecastTransaction occurrence) throws Exception {
+        for (ForecastTransaction sibling : ForecastTransaction.getLiveSameMonthSiblings(occurrence)) {
+            view.say("This month also has " + sibling.toStringVeryConcise() + " still expecting money.");
+            if (resolver.getYesOrNo("Is the charge just assigned the one it was expecting, so it should be " +
+                    "cleared as well")) {
+                sibling.setRemainingAmount(0);
+                sibling.save(UPDATE);
+                view.say("Cleared " + sibling.toStringVeryConcise() + ".");
+            }
+        }
+    }
+
+    /**
+     * The amount a forecast item created for an unmatched split plans:  its budget item's, like every
+     * other forecast item, unless the budget item plans none.
+     *
+     * <p>It used to be the split's.  The message printed just before the new occurrence says its
+     * budgeted amount belongs to the budget item, and on 09-17-2026 the next line contradicted it:
+     * a $7.49 Sudafed charge created OTC Medicine's forecast item and showed "Budgeted Amount =
+     * $-7.49" for an item budgeting $-20.00.  Every later occurrence of that item would plan $7.49.
+     *
+     * @param budgetItemAmount what the budget item plans per occurrence
+     * @param splitAmount      the split that needed an occurrence
+     * @return the amount for the new forecast item
+     */
+    static double newForecastItemAmount(double budgetItemAmount, double splitAmount) {
+        return Utility.isEqualCurrency(budgetItemAmount, 0.0) ? splitAmount : budgetItemAmount;
     }
 
     /**
@@ -848,11 +952,14 @@ public class ForecastController {
             case PERIODIC:
             case VARIABLE_PERIODIC:
             case UNPLANNED:
+                boolean wasAlreadyZero = Utility.isEqualCurrency(forecastTransaction.getRemainingAmount(), 0.0);
                 forecastTransaction.setRemainingAmount(0);
                 forecastTransaction.save(UPDATE);
-                view.say(Utility.formatDollarAmount(split.getAmount()) +
-                        ((split.getAmount() < 0) ? " deducted from " : " added to ") +
-                        forecastTransaction.toStringVeryConcise());
+                view.say(periodicAssignmentMessage(split.getAmount(), wasAlreadyZero,
+                        forecastTransaction.toStringVeryConcise()));
+                if (wasAlreadyZero) {
+                    retireLiveSameMonthSiblings(forecastTransaction);
+                }
                 break;
         }
 
@@ -1426,6 +1533,22 @@ public class ForecastController {
      * @throws Exception if an error occurs during the update
      */
     public void updateForecast(Calendar updateStartDate) throws Exception {
+        updateForecast(updateStartDate, null);
+    }
+
+    /**
+     * {@link #updateForecast(Calendar)}, regenerating only the occurrences of some budget items.
+     *
+     * <p>Every other occurrence is left exactly as it is, id included, so a spreadsheet rendered before the
+     * update can still be read back for them.  Forecast items this update creates, for budget items the
+     * forecast did not yet hold, are regenerated too, since they have no occurrences at all yet.
+     *
+     * @param updateStartDate the date to start the forecast update from
+     * @param onlyBudgetItems the budget items whose occurrences to regenerate, or null for all of them
+     * @throws Exception if an error occurs during the update
+     */
+    public void updateForecast(Calendar updateStartDate, Set<UUID> onlyBudgetItems) throws Exception {
+        Set<UUID> scope = onlyBudgetItems == null ? null : new HashSet<>(onlyBudgetItems);
 
         // Update the forecast start date:
         forecast.setStartDate(updateStartDate);
@@ -1437,9 +1560,7 @@ public class ForecastController {
 
         // Update up the end date so that the forecast window will be the same number of months as it was originally
         // set to be.
-        Calendar endDate = (Calendar) updateStartDate.clone();
-        endDate.add(MONTH, forecast.getNumberOfMonths());
-        forecast.setEndDate(endDate);
+        forecast.setEndDate(Forecast.endDateFor(updateStartDate, forecast.getNumberOfMonths()));
 
         // Update all the forecast items in the forecast from the current budget items.
         ForecastItem.updateForecastItemsFromBudgetItems(forecast);
@@ -1458,6 +1579,9 @@ public class ForecastController {
         while (rs.next()) {
             forecastItem = new ForecastItem(forecast, new BudgetItem(rs));
             forecastItem.save(INSERT);
+            if (scope != null) {
+                scope.add(forecastItem.getIdBudgetItem());
+            }
         }
 
         // Expire any forecast items generated from budget items that no longer exist so they no longer generate new
@@ -1481,26 +1605,7 @@ public class ForecastController {
         // - Overridden ones (user manually modified)
         // - Reconciled ones (have splits assigned, which indicates reconciliation data exists)
         // Note: The 'found' flag is NOT used here - it's only for the "Update from External Source" process
-        String deleteQuery = ForecastTransaction.getDeleteQuery() +
-                "where " +
-                    "ForecastItem_idForecastItem in (" +
-                        "select " +
-                            "idForecastItem " +
-                        "from " +
-                            "forecast_item " +
-                        "where " +
-                            "Forecast_idForecast = uuid_to_bin('" + forecast.getId() + "')" +
-                    ") " +
-                    "and plannedDate >= " + Utility.calendarDateToSqlDateString(updateStartDate) + " " +
-                    "and not overridden " +
-                    "and not exists (" +
-                        "select 1 " +
-                        "from " +
-                            "forecast_transaction_split " +
-                        "where " +
-                            "forecast_transaction_split.ForecastTransaction_idForecastTransaction = " +
-                                "forecast_transaction.idForecastTransaction" +
-                    ")";
+        String deleteQuery = regenerationDeleteQuery(forecast.getId(), updateStartDate, scope);
         executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
 
@@ -1521,7 +1626,7 @@ public class ForecastController {
         // Generate the updated portion of the forecast starting on the update start date.
         forecast.setTransactions(new ForecastTransaction[forecast.getNumberOfMonths() * 31]);
         ForecastEngine forecastEngine = new ForecastEngine();
-        forecastEngine.generateForecastTransactions(forecast, updateStartDate);
+        forecastEngine.generateForecastTransactions(forecast, updateStartDate, scope);
 
         // Save the updated portion of the forecast.
         forecast.saveForecastTransactions();

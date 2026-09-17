@@ -741,9 +741,24 @@ public class Transaction extends IndependentEntity {
      */
     public static Transaction getByDateAndAmount(UUID idRegister, Calendar postDate, double amount)
             throws EntityException, SQLException {
+        List<Transaction> held = getAllByDateAndAmount(idRegister, postDate, amount);
+        return held.isEmpty() ? null : held.getFirst();
+    }
 
+    /**
+     * Every transaction {@link #getByDateAndAmount} could return, not just the first.
+     *
+     * @param idRegister the register being imported into
+     * @param postDate   the transaction's post date
+     * @param amount     the transaction's amount, compared to the cent
+     * @return the cleared transactions held for that date and amount;  possibly empty
+     */
+    public static List<Transaction> getAllByDateAndAmount(UUID idRegister, Calendar postDate, double amount)
+            throws EntityException, SQLException {
+
+        List<Transaction> held = new ArrayList<>();
         if (idRegister == null || postDate == null) {
-            return null;
+            return held;
         }
 
         String query = getSelectQuery() +
@@ -759,7 +774,10 @@ public class Transaction extends IndependentEntity {
 
         ResultSet rs = getRS(query, "Database error encountered looking for an already-imported copy of a " +
                 "transaction in register " + idRegister + ".");
-        return (rs != null && rs.next()) ? new Transaction(rs) : null;
+        while (rs != null && rs.next()) {
+            held.add(new Transaction(rs));
+        }
+        return held;
     }
 
     /**

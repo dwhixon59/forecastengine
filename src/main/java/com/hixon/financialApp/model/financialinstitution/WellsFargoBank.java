@@ -551,12 +551,7 @@ public class WellsFargoBank extends FinancialInstitution {
                 logger.debug("Processing as DEFAULT (one-time online payment or other)");
 
                 // Skip over certain words at the beginning if they are present:
-                if (payeeTokens[0].equalsIgnoreCase("BILL") && payeeTokens[1].equalsIgnoreCase("PAY")) {
-                    start = 2;
-                } else if (payeeTokens[0].equalsIgnoreCase("PURCHASE") ||
-                        payeeTokens[0].equalsIgnoreCase("REVERSAL")) {
-                    start = 1;
-                }
+                start = leadingWordsToSkip(payeeTokens);
                 logger.debug("  Start token index: {}", start);
 
                 // Derive a payee from the remaining tokens:
@@ -931,7 +926,64 @@ public class WellsFargoBank extends FinancialInstitution {
         // The merchant payee will be parsed later for new transactions only.
 
         // Create a transaction based on the provisional record (merchantPayee will be set to raw payee):
-        return new Transaction(register, tokens[iOffset], tokens[1 + iOffset], amount, tokens[1 + iOffset]);
+        String payee = cleanProvisionalPayee(tokens[1 + iOffset]);
+        return new Transaction(register, tokens[iOffset], payee, amount, payee);
+    }
+
+    /**
+     * How many words at the front of a one-off transaction's description say what kind of transaction it
+     * is rather than who it was with.
+     *
+     * <p>"PURCH RTN" is how the pending list describes a purchase return:  on 09-17-2026
+     * {@code PURCH RTN AMAZON MKTPL Amzn.com/bil WA CARD0148} became the merchant payee
+     * "PURCH RTN AMAZON MKTPL", which matched no merchant, and the user had to pick from 18 budget items.
+     *
+     * @param tokens the description's words
+     * @return how many to skip
+     */
+    static int leadingWordsToSkip(String[] tokens) {
+        if (tokens == null || tokens.length == 0) {
+            return 0;
+        }
+        String first = tokens[0];
+        String second = tokens.length > 1 ? tokens[1] : "";
+        if ((first.equalsIgnoreCase("BILL") && second.equalsIgnoreCase("PAY")) ||
+                (first.equalsIgnoreCase("PURCH") && second.equalsIgnoreCase("RTN")) ||
+                (first.equalsIgnoreCase("PURCHASE") && second.equalsIgnoreCase("RETURN"))) {
+            return tokens.length > 2 ? 2 : 0;
+        }
+        if (first.equalsIgnoreCase("PURCHASE") || first.equalsIgnoreCase("REVERSAL") ||
+                first.equalsIgnoreCase("PURCH")) {
+            return tokens.length > 1 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    /**
+     * Web page text copied along with a pending transaction's description.
+     *
+     * <p>Copying the pending list from the Wells Fargo site picks up the labels of the page's controls,
+     * glued straight onto the description:  on 09-17-2026 an Amazon return arrived as
+     * {@code PURCH RTN AMAZON MKTPL Amzn.com/bil WA CARD0148Learn MoreOpens a dialog}.
+     */
+    private static final java.util.regex.Pattern PAGE_TEXT =
+            java.util.regex.Pattern.compile("(?i)learn\\s*more|opens\\s+a\\s+dialog");
+
+    /**
+     * A pending transaction's description with the copied page text removed and its spacing tidied.
+     *
+     * <p>More than cosmetic:  the pending import recognises a transaction it already holds by its
+     * description and amount, so a description that carries the page text one day and not the next is
+     * a new transaction, and the register would hold the charge twice.
+     *
+     * @param payee the description as it appears in the pending file
+     * @return the description alone
+     */
+    public static String cleanProvisionalPayee(String payee) {
+        if (payee == null) {
+            return null;
+        }
+        return PAGE_TEXT.matcher(payee).replaceAll(" ").replaceAll("\\s+", " ").trim();
     }
 
     /**

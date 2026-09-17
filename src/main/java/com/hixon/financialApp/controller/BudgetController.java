@@ -146,7 +146,7 @@ public class BudgetController {
                                     view.say("Budget item successfully added.");
 
                                     // Ask if user wants to update associated forecasts
-                                    updateAssociatedForecasts(selectedBudget);
+                                    updateAssociatedForecasts(selectedBudget, confirmedItem);
                                 }
                             } else if (newItem != null) {
                                 view.say("Budget item entered by user is invalid.");
@@ -209,8 +209,16 @@ public class BudgetController {
                                                 confirmedItem.save(EntityInt.SaveMethod.INSERT);
                                                 view.say("Budget item successfully copied and added.");
 
-                                                // Ask if user wants to update associated forecasts
-                                                updateAssociatedForecasts(selectedBudget);
+                                                // Offer the forecasts of the budget the copy went into.
+                                                // On 09-17-2026 OTC Medicine was copied from Bill Pay
+                                                // Danni into Bill Pay Dave, and the question offered
+                                                // Danni's forecast, which the copy is not in.
+                                                UUID copyBudgetId = budgetOfferedForecastsFor(
+                                                        confirmedItem.getIdBudget(), selectedBudget.getId());
+                                                updateAssociatedForecasts(
+                                                        copyBudgetId.equals(selectedBudget.getId())
+                                                                ? selectedBudget : Budget.getById(copyBudgetId),
+                                                        confirmedItem);
                                             }
                                         } else if (copiedItem != null) {
                                             view.say("Budget item entered by user is invalid.");
@@ -232,7 +240,8 @@ public class BudgetController {
                                         boolean moved = selectedItem != null && selectedItem.getIdBudget() != null
                                                 && !selectedItem.getIdBudget().equals(budgetBeforeUpdate);
                                         updateAssociatedForecasts(moved
-                                                ? Budget.getById(selectedItem.getIdBudget()) : selectedBudget);
+                                                ? Budget.getById(selectedItem.getIdBudget()) : selectedBudget,
+                                                selectedItem);
                                         // Don't set actionComplete - stay in the action menu to allow more updates
                                         break;
 
@@ -415,7 +424,7 @@ public class BudgetController {
                                                 if (confirmedItem != null) {
                                                     confirmedItem.save(EntityInt.SaveMethod.INSERT);
                                                     view.say("Budget item successfully added.");
-                                                    updateAssociatedForecasts(selectedBudget);
+                                                    updateAssociatedForecasts(selectedBudget, confirmedItem);
                                                 }
                                             } else if (newItem != null) {
                                                 view.say("Budget item entered by user is invalid.");
@@ -1366,7 +1375,8 @@ public class BudgetController {
 
             // Ask if user wants to update forecasts
             if (view.getYesOrNo("Do you want to update the forecasts for both the old and new budgets?")) {
-                updateForecastsForBudgets(currentBudget, newBudget);
+                updateForecastsForBudgets(currentBudget, newBudget,
+                        onlyTheseBudgetItems(budgetItem, newBudgetItem));
             }
 
             return newBudgetItem;
@@ -1518,35 +1528,45 @@ public class BudgetController {
      * @param newBudget The new budget
      * @throws Exception if an error occurs
      */
-    private void updateForecastsForBudgets(Budget oldBudget, Budget newBudget) throws Exception {
+    private void updateForecastsForBudgets(Budget oldBudget, Budget newBudget, Set<UUID> onlyBudgetItems)
+            throws Exception {
         view.say();
         view.say("Updating forecasts...");
 
-        // Update forecast for old budget
-        try {
-            Forecast oldForecast = Forecast.selectForecast(oldBudget);
-            if (oldForecast != null) {
-                ForecastController forecastController = new ForecastController(sessionController);
-                // Note: This assumes the ForecastController has access to update forecasts
-                // You may need to adjust this based on your actual ForecastController implementation
-                view.say("Updated forecast for budget: " + oldBudget.getName());
+        // This used to find each budget's forecast, update neither, and report both as updated.
+        List<Forecast> forecasts = new ArrayList<>();
+        for (Budget budget : budgetsToUpdate(oldBudget, newBudget)) {
+            try {
+                forecasts.addAll(Forecast.getListOf(budget));
+            } catch (Exception e) {
+                view.say("Note: Could not find the forecasts for budget " + budget.getName() + ": " +
+                        e.getMessage());
             }
-        } catch (Exception e) {
-            view.say("Note: Could not update forecast for old budget: " + e.getMessage());
         }
 
-        // Update forecast for new budget
-        try {
-            Forecast newForecast = Forecast.selectForecast(newBudget);
-            if (newForecast != null) {
-                ForecastController forecastController = new ForecastController(sessionController);
-                view.say("Updated forecast for budget: " + newBudget.getName());
-            }
-        } catch (Exception e) {
-            view.say("Note: Could not update forecast for new budget: " + e.getMessage());
+        if (forecasts.isEmpty()) {
+            view.say("No forecasts are associated with either budget.");
+            return;
         }
+        updateForecasts(forecasts, onlyBudgetItems);
+    }
 
-        view.say("Forecast updates complete.");
+    /**
+     * The budgets whose forecasts a move between budgets affects:  both, once each.
+     *
+     * @param oldBudget the budget the item left, or null
+     * @param newBudget the budget the item joined, or null
+     * @return the distinct, non-null budgets, the old one first
+     */
+    static List<Budget> budgetsToUpdate(Budget oldBudget, Budget newBudget) {
+        List<Budget> budgets = new ArrayList<>();
+        if (oldBudget != null) {
+            budgets.add(oldBudget);
+        }
+        if (newBudget != null && (oldBudget == null || !Objects.equals(oldBudget.getId(), newBudget.getId()))) {
+            budgets.add(newBudget);
+        }
+        return budgets;
     }
 
     public Calendar getSpendingReportMonth() throws QuitException {
@@ -1610,6 +1630,18 @@ public class BudgetController {
     }
 
     /**
+     * Which budget's forecasts to offer to update after a budget item is saved:  the budget the item
+     * is now in, or the one being browsed when the item does not say.
+     *
+     * @param budgetOfItem   the id of the budget the saved item belongs to, or null
+     * @param browsingBudget the id of the budget the user was browsing
+     * @return the id of the budget whose forecasts hold the item
+     */
+    static UUID budgetOfferedForecastsFor(UUID budgetOfItem, UUID browsingBudget) {
+        return budgetOfItem != null ? budgetOfItem : browsingBudget;
+    }
+
+    /**
      * Prompts the user to select and update forecasts associated with a given budget.
      * This method retrieves all forecasts for the budget, presents them to the user,
      * and allows the user to select which ones to regenerate. This is typically called
@@ -1619,6 +1651,24 @@ public class BudgetController {
      * @throws Exception If an error occurs during forecast update
      */
     private void updateAssociatedForecasts(Budget budget) throws Exception {
+        updateAssociatedForecasts(budget, null);
+    }
+
+    /**
+     * {@link #updateAssociatedForecasts(Budget)}, regenerating only the occurrences of the budget item that
+     * changed.
+     *
+     * <p>Regenerating a whole forecast gives every future occurrence a new id, and a spreadsheet rendered
+     * before it can then update none of them.  On 09-17-2026 moving the start date of Dave's gas and food
+     * for work regenerated all of Bill Pay Dave's items while its forecast was open in Excel, and 274 of
+     * the spreadsheet's 284 rows were skipped when it was read back.  Only the changed item's occurrences
+     * need to be rebuilt;  everything else keeps its ids.
+     *
+     * @param budget      the budget whose forecasts to offer
+     * @param changedItem the budget item that was added, copied or updated, or null to regenerate everything
+     */
+    private void updateAssociatedForecasts(Budget budget, BudgetItem changedItem) throws Exception {
+        Set<UUID> onlyBudgetItems = onlyTheseBudgetItems(changedItem);
         // Get all forecasts for this budget
         List<Forecast> forecasts = Forecast.getListOf(budget);
 
@@ -1634,7 +1684,7 @@ public class BudgetController {
         if (forecasts.size() == 1) {
             Forecast onlyForecast = forecasts.getFirst();
             if (view.getYesOrNo("\nDo you want to update the forecast '" + onlyForecast.getDescription() + "'?")) {
-                updateForecasts(List.of(onlyForecast));
+                updateForecasts(List.of(onlyForecast), onlyBudgetItems);
             }
             return;
         }
@@ -1722,7 +1772,26 @@ public class BudgetController {
         for (int index : selectedIndices) {
             selectedForecasts.add(forecasts.get(index));
         }
-        updateForecasts(selectedForecasts);
+        updateForecasts(selectedForecasts, onlyBudgetItems);
+    }
+
+    /**
+     * The ids of the budget items a forecast update should be limited to, or null for a full update when
+     * none is known.
+     *
+     * @param items the items that changed;  null entries, and items not yet saved, are ignored
+     * @return their ids, or null
+     */
+    static Set<UUID> onlyTheseBudgetItems(BudgetItem... items) {
+        Set<UUID> ids = new HashSet<>();
+        if (items != null) {
+            for (BudgetItem item : items) {
+                if (item != null && item.getId() != null) {
+                    ids.add(item.getId());
+                }
+            }
+        }
+        return ids.isEmpty() ? null : ids;
     }
 
     /**
@@ -1732,8 +1801,9 @@ public class BudgetController {
      * at that.
      *
      * @param forecastsToUpdate the forecasts to regenerate
+     * @param onlyBudgetItems   the budget items whose occurrences to regenerate, or null for all of them
      */
-    private void updateForecasts(List<Forecast> forecastsToUpdate) {
+    private void updateForecasts(List<Forecast> forecastsToUpdate, Set<UUID> onlyBudgetItems) {
         if (forecastsToUpdate.size() > 1) {
             view.say("\nUpdating " + forecastsToUpdate.size() + " forecast(s)...");
         }
@@ -1750,7 +1820,7 @@ public class BudgetController {
                 sessionController.setBudget(forecastToUpdate.getBudget());
                 ForecastController forecastController = new ForecastController(
                         sessionController);
-                forecastController.updateForecast(firstOfNextMonth);
+                forecastController.updateForecast(firstOfNextMonth, onlyBudgetItems);
                 view.say("Forecast '" + forecastToUpdate.getDescription() + "' updated successfully.");
             } catch (Exception e) {
                 view.say("Error updating forecast: " + e.getMessage());

@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
+import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
 import com.hixon.financialApp.model.forecast.ForecastTransaction;
@@ -14,6 +15,7 @@ import com.hixon.financialApp.model.merchant.MerchantUtilities;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.RegisterException;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.FinancialAppException;
@@ -138,6 +140,13 @@ public class ImportController {
      */
     private boolean treatLookAlikesAsAlreadyHeld = false;
 
+    /**
+     * Register transactions already matched to an earlier look-alike in this import run.  Each held
+     * transaction explains at most one incoming one, so a genuine second identical charge still finds
+     * nothing to match and is asked about.
+     */
+    private final Set<UUID> claimedLookAlikes = new HashSet<>();
+
 
     // Fields:
 
@@ -242,11 +251,12 @@ public class ImportController {
      * {@link Transaction#getByDateAndAmount(UUID, java.util.Calendar, double)} for the Citi case that
      * prompted it.
      *
-     * <p>The question is asked rather than assumed, and defaults to importing.  Same date and same
-     * amount is a strong hint and not a proof -- two identical charges in one day are ordinary -- and
-     * the two mistakes are not equally bad:  a duplicate the user waves through is visible and
-     * fixable, while a real transaction silently dropped is money that never appears in the register,
-     * the forecast or any report.
+     * <p>The question is asked rather than assumed.  Same date and same amount is a strong hint and not
+     * a proof -- two identical charges in one day are ordinary -- and a real transaction dropped is
+     * money that never appears in the register, the forecast or any report, so the user decides.  The
+     * default is "already held", because that is almost always the answer:  a re-downloaded Citi
+     * statement asks this about every charge already in the register (five times on 09-17-2026, every
+     * one of them already held).
      *
      * <p>The bank's description is shown for both when they differ, because that is the case most
      * likely to be a genuine second charge -- and the case where a duplicate hid before, when one
@@ -259,14 +269,28 @@ public class ImportController {
      */
     private Transaction confirmNotAlreadyImported(Transaction incoming, Register register) throws Exception {
 
-        Transaction alreadyHeld = Transaction.getByDateAndAmount(register.getId(), incoming.getPostDate(),
+        List<Transaction> held = Transaction.getAllByDateAndAmount(register.getId(), incoming.getPostDate(),
                 incoming.getAmount());
-        if (alreadyHeld == null) {
+        held.removeIf(t -> claimedLookAlikes.contains(t.getId()));
+        if (held.isEmpty()) {
             return null;
         }
 
+        // Described exactly as the register already has it:  nothing to ask.  On 09-17-2026 a Citi
+        // re-download asked this five times, and every one of the five read identically on both sides.
+        Transaction identical = findIdenticalLookAlike(held, incoming.getPayee());
+        if (identical != null) {
+            claimedLookAlikes.add(identical.getId());
+            view.say("Already imported as import id " + identical.getImportRecordId() +
+                    " (same date, amount and description).");
+            return identical;
+        }
+
+        Transaction alreadyHeld = held.getFirst();
+
         // The user has already answered this for the rest of the file.
         if (treatLookAlikesAsAlreadyHeld) {
+            claimedLookAlikes.add(alreadyHeld.getId());
             return alreadyHeld;
         }
 
@@ -306,6 +330,7 @@ public class ImportController {
 
                 case "a":
                     treatLookAlikesAsAlreadyHeld = true;
+                    claimedLookAlikes.add(alreadyHeld.getId());
                     view.say("Treating this and every later look-alike as already imported.");
                     return alreadyHeld;
 
@@ -318,8 +343,146 @@ public class ImportController {
             }
         }
 
+        claimedLookAlikes.add(alreadyHeld.getId());
         view.say("Treating it as already imported.");
         return alreadyHeld;
+    }
+
+    /**
+     * The held transaction described exactly as an incoming look-alike is, ignoring case and spacing.
+     *
+     * @param held          the unclaimed transactions held for the same date and amount
+     * @param incomingPayee the incoming transaction's description
+     * @return the identical one, or null when every description differs
+     */
+    static Transaction findIdenticalLookAlike(List<Transaction> held, String incomingPayee) {
+        String incoming = normalizedDescription(incomingPayee);
+        if (incoming.isEmpty()) {
+            return null;
+        }
+        for (Transaction candidate : held) {
+            if (incoming.equals(normalizedDescription(candidate.getPayee()))) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static String normalizedDescription(String description) {
+        return description == null ? "" : description.trim().replaceAll("\\s+", " ").toUpperCase();
+    }
+
+    /**
+     * Whether a pending transaction from the file has already cleared into the register, and the
+     * user agrees it should not be imported again.
+     *
+     * <p>Asked rather than assumed, defaulting to skipping it:  a second identical charge posted the
+     * same day is possible, just rare, and the user can see which it is.
+     *
+     * @param pending         the pending transaction read from the file
+     * @param claimedTwins    cleared transactions already matched to earlier rows of this file;  the
+     *                        one found here is added to it
+     * @return true to skip the pending transaction
+     */
+    private boolean isAlreadyCleared(Transaction pending, Set<UUID> claimedTwins) throws Exception {
+        Transaction cleared = TransactionUtilities.findClearedTwinOfProvisional(register.getId(), pending,
+                claimedTwins);
+        if (cleared == null) {
+            return false;
+        }
+
+        view.say(alreadyClearedMessage(pending, cleared));
+        while (true) {
+            String answer = view.getResponseString("Skip it? (y - yes, it is the same charge, " +
+                            "n - no, import it as a separate charge)",
+                    "y", ViewInt.DO_NOT_ALLOW_NONE, ViewInt.DO_NOT_SHOW_CANCEL_QUIT_SKIP,
+                    ViewInt.ALLOW_CANCEL, ViewInt.ALLOW_QUIT, ViewInt.DO_NOT_ALLOW_SKIP, null);
+            switch (answer == null ? "" : answer.trim().toLowerCase()) {
+                case "y":
+                    claimedTwins.add(cleared.getId());
+                    view.say("Skipped:  it is already in the register.");
+                    return true;
+                case "n":
+                    return false;
+                default:
+                    view.say("Please enter y or n.");
+            }
+        }
+    }
+
+    /**
+     * Whether the transaction the register holds under an import record id is the charge now arriving
+     * with that id:  the same post date and the same amount.
+     *
+     * <p>The description is deliberately not compared.  Banks rename a charge between downloads --
+     * Citi sent one $750.00 payment as {@code PAYMENT THANK YOU} and later as
+     * {@code ONLINE PAYMENT, THANK YOU} -- and a re-download of the same charge never changes its
+     * date or amount.
+     *
+     * @param held     the transaction the register holds under the id
+     * @param incoming the transaction read from the file
+     * @return true if they are the same charge
+     */
+    static boolean isSameCharge(Transaction held, Transaction incoming) {
+        if (held.getPostDate() == null || incoming.getPostDate() == null) {
+            return isEqualCurrency(held.getAmount(), incoming.getAmount());
+        }
+        return dateOnlyCompare(held.getPostDate(), incoming.getPostDate()) == 0
+                && isEqualCurrency(held.getAmount(), incoming.getAmount());
+    }
+
+    /** What the user is told when a file reuses an import record id for a different charge. */
+    static String importIdReusedMessage(Transaction held, Transaction incoming) {
+        return "Import id " + incoming.getImportRecordId() + " already belongs to a different transaction (" +
+                calendarDateToStringDate(held.getPostDate()) + "  " + formatDollarAmount(held.getAmount()) + "  " +
+                held.getPayee() + "), so this one is not treated as already imported:\n  " +
+                calendarDateToStringDate(incoming.getPostDate()) + "  " +
+                formatDollarAmount(incoming.getAmount()) + "  " + incoming.getPayee();
+    }
+
+    /**
+     * A free import record id for a cleared transaction whose own id is already taken:  the id with
+     * {@code -2}, {@code -3} ... appended.
+     *
+     * <p>Not {@link #firstFreeImportRecordId}, whose counter form would turn Citi's
+     * {@code 20260915090001} into {@code 20260915090002} -- an id the next download is just as likely
+     * to hand to yet another charge.
+     *
+     * @param importRecordId the id the file gave the transaction
+     * @param taken          says whether an id is already in use
+     * @return the first free suffixed id
+     */
+    static String firstFreeSuffixedImportRecordId(String importRecordId, ImportRecordIdCheck taken)
+            throws Exception {
+        int counter = 1;
+        String candidate;
+        do {
+            counter++;
+            candidate = importRecordId + "-" + counter;
+        } while (taken.isTaken(candidate));
+        return candidate;
+    }
+
+    /**
+     * The key the pending import merges the file against the register by:  description and amount.
+     *
+     * <p>The description is cleaned on both sides, not only as it is read from the file, because rows
+     * saved before the cleaning existed still carry the copied page text -- see
+     * {@link WellsFargoBank#cleanProvisionalPayee}.  Without it such a row would never match its own
+     * charge again, and the charge would be imported a second time.
+     */
+    static String provisionalMergeKey(Transaction transaction) {
+        return WellsFargoBank.cleanProvisionalPayee(transaction.getPayee()) + transaction.getAmount();
+    }
+
+    /** What the user is told about a pending transaction that has already cleared. */
+    static String alreadyClearedMessage(Transaction pending, Transaction cleared) {
+        return "\nThis pending transaction has already cleared into the register:\n" +
+                "  pending:  " + calendarDateToStringDate(pending.getPostDate()) + "  " +
+                formatDollarAmount(pending.getAmount()) + "  " + pending.getPayee() + "\n" +
+                "  cleared:  " + calendarDateToStringDate(cleared.getPostDate()) + "  " +
+                formatDollarAmount(cleared.getAmount()) + "  " + cleared.getPayee() +
+                "  (import id " + cleared.getImportRecordId() + ")";
     }
 
     public String constructImportRecordId(HashMap<String, String> map, String importRecordBaseName) {
@@ -556,6 +719,19 @@ public class ImportController {
                 // Track whether this is a new transaction (not previously imported)
                 String importRecordId = currentTransaction.getImportRecordId();
                 Transaction existingTransaction = Transaction.getByImportRecordId(importRecordId, register.getId());
+
+                // An id that matches is only the same charge if the charge matches too.  Citi's id is
+                // the date and the charge's position in that download, and Wells Fargo's is the date
+                // and its position in the file, so a later download can give a new charge an id an
+                // earlier charge already holds.  Trusting the id then drops the new charge silently:
+                // on 09-17-2026 Citi's 20260915090001 was LA Fitness, while that day's download
+                // numbered LA Fitness 20260915090006 and could as easily have put a new charge first.
+                if (existingTransaction != null && !isSameCharge(existingTransaction, currentTransaction)) {
+                    view.say(importIdReusedMessage(existingTransaction, currentTransaction));
+                    currentTransaction.setImportRecordId(firstFreeSuffixedImportRecordId(importRecordId,
+                            id -> Transaction.getByImportRecordId(id, register.getId()) != null));
+                    existingTransaction = null;
+                }
 
                 // The import record id is supposed to be the bank's stable identity for the charge,
                 // and for most banks it is.  Citi's is not:  its FITID is the date followed by the
@@ -1442,11 +1618,8 @@ public class ImportController {
             if (!provisionalTransactions.isEmpty()) {
 
                 //  Sort the list in ascending order by payee + amount:
-                Comparator<Transaction> comparator = (t1, t2) -> {
-                    String t1Key = t1.getPayee() + t1.getAmount();
-                    String t2Key = t2.getPayee() + t2.getAmount();
-                    return t1Key.compareTo(t2Key);
-                };
+                Comparator<Transaction> comparator =
+                        (t1, t2) -> provisionalMergeKey(t1).compareTo(provisionalMergeKey(t2));
                 provisionalTransactions.sort(comparator);
 
                 /*
@@ -1469,6 +1642,7 @@ public class ImportController {
                 // Let the user know what we are doing:
                 view.say("\n----------\nCategorize the provisional transactions.");
                 int regTrxIndex = 0;
+                Set<UUID> claimedClearedTwins = new HashSet<>();
                 List<TransactionSplit> splits;
                 RegisterController registerController = new RegisterController(sessionController);
                 BudgetController budgetController = new BudgetController(sessionController);
@@ -1525,6 +1699,16 @@ public class ImportController {
                         /*
                          * then this is a new provisional transaction, so add this transaction to the database:
                          */
+
+                        // Unless it has already cleared.  A pending file downloaded before the charge
+                        // posted still lists it, and importing it after the cleared file puts the charge
+                        // in the register twice -- see TransactionUtilities.findClearedTwinOfProvisional.
+                        // Checked before the payee is parsed, since parsing can ask about transfers.
+                        if (!alreadyInTheRegister && isAlreadyCleared(provisionalTransactions.get(provTrxIndex),
+                                claimedClearedTwins)) {
+                            provTrxIndex++;
+                            continue;
+                        }
 
                         // Parse the merchant payee for this NEW transaction (deferred from loadProvisionalTransactionFromCSV).
                         // This avoids prompting user for transfers without account numbers when the transaction

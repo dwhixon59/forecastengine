@@ -32,7 +32,8 @@ import static com.hixon.financialApp.model.entity.EntityInt.getSingletonRS;
  */
 public class Forecast extends IndependentEntity {
 
-    //    private static final Logger logger = LogManager.getLogger(Forecast.class);
+    private static final org.apache.logging.log4j.Logger logger =
+            org.apache.logging.log4j.LogManager.getLogger(Forecast.class);
 
     // The types of significant events that can be generated:
     public enum SignificantEvents {daysBelowMinimumBalance}
@@ -347,10 +348,7 @@ public class Forecast extends IndependentEntity {
             this.startDate = startDate;
         }
         this.startingBalance = startingBalance;
-        this.endDate = (Calendar) Objects.requireNonNull(startDate).clone();
-        this.endDate.add(Calendar.MONTH, numberOfMonths);
-        // Subtract off one day because n months after June 1st is June 1st, but we only want to go to May 31st, etc.:
-        this.endDate.add(Calendar.DATE, -1);
+        this.endDate = endDateFor(Objects.requireNonNull(startDate), numberOfMonths);
         this.minimumBalance = minimumBalance;
         this.endingBalance = 0;
         this.numberOfMonths = numberOfMonths;
@@ -805,7 +803,7 @@ public class Forecast extends IndependentEntity {
                 for (ForecastTransaction transaction : this.transactions) {
                     if (transaction != null) {
                         ForecastTransaction forecastTransaction = transaction;
-                        Utility.getView().say("Updating " + forecastTransaction.getForecastItem().toStringShort());
+                        logger.debug("Updating {}", forecastTransaction.getForecastItem().toStringShort());
                         while (forecastTransaction != null) {
                             preparedStmt.setString(1, forecastTransaction.getId().toString());
                             preparedStmt.setDouble(2, forecastTransaction.getRemainingAmount());
@@ -1332,6 +1330,26 @@ public class Forecast extends IndependentEntity {
     /*
      *  Helper methods:
      */
+    /**
+     * The last day of a forecast window of a number of months:  the day before the same date that many
+     * months later, because twelve months from 10-01-2026 run to 09-30-2027, not to 10-01-2027.
+     *
+     * <p>The end date is inclusive.  Updating a forecast used to add the months without taking off
+     * the day, so every update ran to the first of a thirteenth month, and the summary reported a
+     * "13 month period" whose last month held only first-of-the-month items -- October 2027 in the
+     * 09-17-2026 Bill Pay renders, at $3,607 of income against $8,555 in every other month.
+     *
+     * @param startDate      the first day of the forecast
+     * @param numberOfMonths how many months it covers
+     * @return a new calendar holding the last day it covers
+     */
+    public static Calendar endDateFor(Calendar startDate, int numberOfMonths) {
+        Calendar endDate = (Calendar) startDate.clone();
+        endDate.add(Calendar.MONTH, numberOfMonths);
+        endDate.add(Calendar.DATE, -1);
+        return endDate;
+    }
+
     public void createTransactionsArray() {
         this.transactions = new ForecastTransaction[numberOfMonths * 31];
     }
@@ -1400,7 +1418,7 @@ public class Forecast extends IndependentEntity {
                     linkedTransaction = linkedTransaction.getNextTransaction();
                 linkedTransaction.setNextTransaction(forecastTransaction);
             }
-            System.out.println("Adding transaction " + forecastItem.getPayee() + " to the forecast at index " + index);
+            logger.debug("Adding transaction {} to the forecast at index {}", forecastItem.getPayee(), index);
         } else {
             throw new Exception("Forecast.addTransaction:  date not in range of forecast.");
         }

@@ -1080,20 +1080,42 @@ public class ForecastTransactionController {
                 "Forecast Transactions that changed after the spreadsheet was rendered."
         );
 
-        boolean firstTime = true;
+        List<String> changed = new ArrayList<>();
         while (rs.next()) {
-            if (firstTime) {
-                getView().say("\nThese transactions are not in the spreadsheet, but they changed after it " +
-                        "was rendered on " + Utility.calendarDateToStringDate(forecast.getLastRenderedDate()) +
-                        ", so the spreadsheet never held them and they have been left as they are:  ");
-                firstTime = false;
-            }
-            getView().say(new ForecastTransaction(rs).toStringConcise() + " .");
+            changed.add(new ForecastTransaction(rs).toStringConcise());
         }
-        if (!firstTime) {
-            getView().say("Render the forecast again to bring them into the spreadsheet, then delete " +
-                    "them there if you do want them zeroed.");
+        if (changed.isEmpty()) {
+            return;
         }
+
+        getView().say("\n" + changed.size() + " transaction" + (changed.size() == 1 ? " is" : "s are") +
+                " not in the spreadsheet, but changed after it was rendered on " +
+                Utility.calendarDateToStringDate(forecast.getLastRenderedDate()) +
+                ", so the spreadsheet never held them and they have been left as they are:");
+        for (String line : firstFewChanged(changed, CHANGED_SINCE_RENDER_SHOWN)) {
+            getView().say(line);
+        }
+        getView().say("Render the forecast again to bring them into the spreadsheet, then delete " +
+                "them there if you do want them zeroed.");
+    }
+
+    /** How many of the occurrences changed since the render are listed by name. */
+    static final int CHANGED_SINCE_RENDER_SHOWN = 5;
+
+    /**
+     * The first few of a list, followed by how many more there are.  A regenerated forecast listed all
+     * 230 of its occurrences on 09-17-2026.
+     *
+     * @param lines the lines
+     * @param limit how many to show
+     * @return the lines to print
+     */
+    static List<String> firstFewChanged(List<String> lines, int limit) {
+        List<String> shown = new ArrayList<>(lines.subList(0, Math.min(limit, lines.size())));
+        if (lines.size() > limit) {
+            shown.add("... and " + (lines.size() - limit) + " more.");
+        }
+        return shown;
     }
 
     /**

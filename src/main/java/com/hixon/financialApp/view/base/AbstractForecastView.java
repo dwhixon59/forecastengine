@@ -94,6 +94,39 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
         return rawLabel.trim();
     }
 
+    /**
+     * The timeline line about months that end in deficit, or null when none does.
+     *
+     * <p>"Persistent" only when the balance is still negative at every month-end from the first one
+     * to the end of the period.  It used to be said of any negative month-end:  on 09-17-2026 Bill Pay
+     * Danni ended October 2026 at $-107 and every later month in the black, and the timeline still
+     * announced a persistent deficit beginning in October.
+     *
+     * @param labels         the months, in order
+     * @param endingBalances each month's ending balance, in the same order
+     * @return the line to print, or null
+     */
+    static String monthEndDeficitLine(List<String> labels, List<Double> endingBalances) {
+        int firstNegative = -1;
+        for (int i = 0; i < endingBalances.size(); i++) {
+            if (endingBalances.get(i) < 0) {
+                firstNegative = i;
+                break;
+            }
+        }
+        if (firstNegative < 0) {
+            return null;
+        }
+
+        for (int i = firstNegative + 1; i < endingBalances.size(); i++) {
+            if (endingBalances.get(i) >= 0) {
+                return "  - The balance is negative at the end of " + labels.get(firstNegative) +
+                        " and back in the black by the end of " + labels.get(i) + ".";
+            }
+        }
+        return "  - Persistent deficit period begins by month-end in " + labels.get(firstNegative) + ".";
+    }
+
     static double monthsOfRunway(double startingBalance, double monthlyNet) {
         if (monthlyNet >= 0) {
             return Double.POSITIVE_INFINITY;
@@ -1075,12 +1108,11 @@ public abstract class AbstractForecastView extends AbstractView implements Forec
                 getView().say("  - All projected balances remain non-negative.");
             }
 
-            Optional<MonthlyCashFlow> firstMonthEndNegative = monthlyCashFlowMap.values().stream()
-                    .filter(month -> month.endingBalance < 0)
-                    .findFirst();
-            if (firstMonthEndNegative.isPresent()) {
-                getView().say(new StringBuilder().append("  - Persistent deficit period begins by month-end in ").
-                        append(firstMonthEndNegative.get().label).append(".").toString());
+            String monthEndDeficit = monthEndDeficitLine(
+                    monthlyCashFlowMap.values().stream().map(month -> month.label).toList(),
+                    monthlyCashFlowMap.values().stream().map(month -> month.endingBalance).toList());
+            if (monthEndDeficit != null) {
+                getView().say(monthEndDeficit);
             }
             if (dateOfPeriodLowestBalance != null) {
                 getView().say(new StringBuilder().append("  - Lowest point occurs on ").

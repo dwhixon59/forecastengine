@@ -430,6 +430,7 @@ public class ExcelForecastView extends AbstractForecastView {
         int i = 0;
         int missingIdCount = 0;
         int totalRowsWithIds = 0;
+        List<Integer> missingIdRows = new ArrayList<>();
         List<ForecastTransaction> forecastTransactions = new ArrayList<>();
 
         // Adjust POI's zip bomb detection threshold
@@ -531,8 +532,7 @@ public class ExcelForecastView extends AbstractForecastView {
                     if (dbForecastTransaction == null) {
                         // ID not found in database - track and warn
                         missingIdCount++;
-                        Utility.getView().say("WARNING: Row " + (rowNum + 1) + ": Transaction ID '" +
-                                transactionId + "' not found in database. Skipping this row.");
+                        missingIdRows.add(rowNum + 1);
                         continue;
                     }
 
@@ -613,6 +613,12 @@ public class ExcelForecastView extends AbstractForecastView {
                 forecastTransactions.add(forecastTransactionView);
             }
 
+            // One line for all the rows whose ids are gone, rather than one line each:  on 09-17-2026 a stale
+            // Bill Pay Dave spreadsheet printed 274 of them.
+            if (!missingIdRows.isEmpty()) {
+                Utility.getView().say(missingIdSummary(missingIdRows, totalRowsWithIds));
+            }
+
             // Check if most/all transaction IDs were not found - this indicates the forecast was updated
             // after the Excel file was rendered, causing all UUIDs to change
             if (totalRowsWithIds > 0 && missingIdCount > 0) {
@@ -625,16 +631,16 @@ public class ExcelForecastView extends AbstractForecastView {
                             "║ " + String.format("%-74s", missingIdCount + " out of " + totalRowsWithIds + " transaction IDs were not found.") + " ║\n" +
                             "║                                                                            ║\n" +
                             "║ This usually means the forecast was UPDATED after this Excel file was     ║\n" +
-                            "║ rendered. When a forecast is updated, all transactions are regenerated    ║\n" +
-                            "║ with new IDs, making the IDs in this Excel file obsolete.                 ║\n" +
+                            "║ rendered. An update gives the occurrences it regenerates new IDs, so      ║\n" +
+                            "║ this Excel file no longer refers to them.                                 ║\n" +
                             "║                                                                            ║\n" +
                             "║ RECOMMENDED SOLUTION:                                                      ║\n" +
                             "║ 1. RENDER the forecast again to create a new Excel file with current IDs  ║\n" +
                             "║ 2. Make your changes in the NEWLY rendered Excel file                     ║\n" +
                             "║ 3. Import changes from the new file                                       ║\n" +
                             "║                                                                            ║\n" +
-                            "║ Or, if you want to proceed with the few transactions that were found,     ║\n" +
-                            "║ you can continue, but most of your changes will not be imported.          ║\n" +
+                            "║ The rows that were found have been read and will be imported; the rest    ║\n" +
+                            "║ are skipped, so most changes made in this file will not be imported.      ║\n" +
                             "╚════════════════════════════════════════════════════════════════════════════╝\n");
                 }
             }
@@ -652,6 +658,34 @@ public class ExcelForecastView extends AbstractForecastView {
         }
 
         return forecastTransactions;
+    }
+
+    /**
+     * The warning about spreadsheet rows whose forecast transaction ids no longer exist, with the rows
+     * given as ranges.
+     *
+     * @param rows      the spreadsheet row numbers, ascending
+     * @param totalRows how many rows carried an id
+     * @return the warning
+     */
+    static String missingIdSummary(List<Integer> rows, int totalRows) {
+        StringBuilder ranges = new StringBuilder();
+        int i = 0;
+        while (i < rows.size()) {
+            int start = rows.get(i);
+            int end = start;
+            while (i + 1 < rows.size() && rows.get(i + 1) == end + 1) {
+                end = rows.get(++i);
+            }
+            if (ranges.length() > 0) {
+                ranges.append(", ");
+            }
+            ranges.append(start == end ? String.valueOf(start) : start + "-" + end);
+            i++;
+        }
+        return "WARNING: " + rows.size() + " of " + totalRows + " spreadsheet rows refer to forecast transactions " +
+                "that are no longer in the database, and were skipped (" + (rows.size() == 1 ? "row " : "rows ") +
+                ranges + ").";
     }
 
     /**

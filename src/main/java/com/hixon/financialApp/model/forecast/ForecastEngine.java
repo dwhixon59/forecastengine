@@ -12,8 +12,15 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.Set;
+import java.util.UUID;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ForecastEngine {
+
+    private static final Logger logger = LogManager.getLogger(ForecastEngine.class);
 
     // Constructor:
     public ForecastEngine() throws Exception {
@@ -52,9 +59,9 @@ public class ForecastEngine {
             Calendar nextDate = new GregorianCalendar();
             nextDate.set(startDate.get(Calendar.YEAR), startDate.get(Calendar.MONTH),
                     startDate.get(Calendar.DATE));
-            System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) + "  Next Date: " +
-                    Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
-                    Utility.calendarDateToStringDate(forecast.getEndDate()));
+            // Diagnostics only:  printed to the console, this ran through the middle of an import (09-17-2026).
+            logger.debug("Start Date: {}  Next Date: {}  End Date: {}", Utility.calendarDateToStringDate(startDate),
+                    Utility.calendarDateToStringDate(nextDate), Utility.calendarDateToStringDate(forecast.getEndDate()));
 
             // For each item in the budget:
             ForecastItem forecastItem;
@@ -90,6 +97,16 @@ public class ForecastEngine {
     // Generate the forecast transactions for the forecast items in a forecast starting at the specified start date:
     public boolean generateForecastTransactions(Forecast forecast, Calendar startDate) throws Exception,
                 BudgetException, EntityException {
+        return generateForecastTransactions(forecast, startDate, null);
+    }
+
+    /**
+     * {@link #generateForecastTransactions(Forecast, Calendar)} for some budget items only.
+     *
+     * @param onlyBudgetItems the budget items to generate occurrences for, or null for all of them
+     */
+    public boolean generateForecastTransactions(Forecast forecast, Calendar startDate, Set<UUID> onlyBudgetItems)
+            throws Exception, BudgetException, EntityException {
         try {
             /*
              Read each of the forecast items in the database and add transactions for them to the forecast in the correct
@@ -105,9 +122,8 @@ public class ForecastEngine {
                     "Database error attempting to retrieve a list of items in the forecast.");
 
             Calendar nextDate = (Calendar) startDate.clone();
-            System.out.println("Start Date: " + Utility.calendarDateToStringDate(startDate) +
-                    "  Next Date:  " + Utility.calendarDateToStringDate(nextDate) + "  End Date: " +
-                    Utility.calendarDateToStringDate(forecast.getEndDate()));
+            logger.debug("Start Date: {}  Next Date: {}  End Date: {}", Utility.calendarDateToStringDate(startDate),
+                    Utility.calendarDateToStringDate(nextDate), Utility.calendarDateToStringDate(forecast.getEndDate()));
 
             // For each item in the forecast:
             ForecastItem forecastItem;
@@ -132,6 +148,9 @@ public class ForecastEngine {
 
                 // This item will be in the forecast, so create a forecast item object for it:
                 forecastItem = new ForecastItem(rs);
+                if (onlyBudgetItems != null && !onlyBudgetItems.contains(forecastItem.getIdBudgetItem())) {
+                    continue;
+                }
 
                 // Set the current date to the first date after the start date of the forecast window:
                 nextDate = forecastItem.getFirstDateOnOrAfter(startDate);

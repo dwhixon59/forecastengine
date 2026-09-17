@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.BudgetException;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.forecast.Forecast;
+import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.utility.Utility;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -406,6 +407,103 @@ public class TransactionUtilities {
         logger.debug("=== End Provisional Matching Debug ===");
 
         return bestMatch;
+    }
+
+    /**
+     * How many days after a pending charge its cleared copy may post.  The same window
+     * {@link #findMatchingProvisionalTransaction} searches in the other direction.
+     */
+    static final int CLEARED_TWIN_DAY_WINDOW = 5;
+
+    /**
+     * Find the cleared transaction a pending one has already become, if the register holds it.
+     *
+     * <p>The mirror image of {@link #findMatchingProvisionalTransaction}.  That one runs when a cleared
+     * charge arrives and takes over its pending row.  This one runs when a pending charge arrives
+     * <em>after</em> that has happened -- a pending file downloaded before the charge posted, and
+     * imported after.  On 09-17-2026 yesterday's Bill Pay Danni pending file put Platinum Healthcare
+     * ($-184.00) and Slim Chickens ($-14.65) back into the register minutes after their cleared copies
+     * had taken over the originals, and the register counted both charges twice.
+     *
+     * @param idRegister     the register being imported into
+     * @param pending        the pending transaction just read from the file
+     * @param alreadyClaimed cleared transactions already matched to an earlier row of the same file;
+     *                       two identical pending charges must not both be explained by one cleared one
+     * @return the cleared copy, or null if the register holds none
+     */
+    public static Transaction findClearedTwinOfProvisional(UUID idRegister, Transaction pending,
+                                                           java.util.Set<UUID> alreadyClaimed)
+            throws EntityException, SQLException, RegisterException {
+
+        if (idRegister == null || pending == null || pending.getPostDate() == null) {
+            return null;
+        }
+
+        ResultSet rs = EntityInt.getRS(clearedTwinCandidateQuery(idRegister, pending.getAmount(),
+                        pending.getPostDate()),
+                "Database error occurred while looking for the cleared copy of a pending transaction.");
+        if (rs == null) {
+            return null;
+        }
+
+        while (rs.next()) {
+            Transaction candidate = new Transaction(rs);
+            if (alreadyClaimed != null && alreadyClaimed.contains(candidate.getId())) {
+                continue;
+            }
+            Merchant merchant = candidate.getMerchant();
+            if (isClearedTwin(pending.getPostDate(), pending.getPayee(), candidate.getPostDate(),
+                    candidate.getPayee(), merchant != null ? merchant.getName() : null)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The SQL behind {@link #findClearedTwinOfProvisional}:  cleared rows of the same register and the
+     * same amount, posted on the pending date or up to {@link #CLEARED_TWIN_DAY_WINDOW} days after it,
+     * nearest first.
+     */
+    static String clearedTwinCandidateQuery(UUID idRegister, double amount, Calendar pendingDate) {
+        Calendar latest = (Calendar) pendingDate.clone();
+        latest.add(Calendar.DAY_OF_MONTH, CLEARED_TWIN_DAY_WINDOW);
+        String pendingSqlDate = Utility.calendarDateToSqlDateString(pendingDate);
+        return Transaction.getSelectQuery() +
+                " WHERE tr.Register_idRegister = uuid_to_bin('" + idRegister + "')" +
+                " AND tr.cleared = true" +
+                " AND abs(tr.amount - " + amount + ") < 0.005" +
+                " AND tr.postDate >= " + pendingSqlDate +
+                " AND tr.postDate <= " + Utility.calendarDateToSqlDateString(latest) +
+                " ORDER BY DATEDIFF(tr.postDate, " + pendingSqlDate + ") ASC";
+    }
+
+    /**
+     * Whether a cleared transaction of the same amount is the posted copy of a pending one.
+     *
+     * <p>A charge posts on or after the day it was pending, never before:  a cleared $150 transfer on
+     * 09-11 cannot be the pending $150 transfer of 09-12, however alike the two read.  Within the
+     * window the payee has to agree with the bank's posted description or with the merchant it was
+     * filed under -- the two descriptions differ ("PURCHASE Platinum Hea 194-1927112 FL CARD0148"
+     * against "Platinum Healthcar"), which is what the fuzzy comparison is for.
+     *
+     * @param pendingDate         the pending transaction's post date
+     * @param pendingPayee        the pending transaction's description
+     * @param clearedDate         the cleared transaction's post date
+     * @param clearedPayee        the cleared transaction's description
+     * @param clearedMerchantName the name of the merchant the cleared transaction is filed under, or null
+     * @return true if the cleared transaction is the pending one, posted
+     */
+    static boolean isClearedTwin(Calendar pendingDate, String pendingPayee, Calendar clearedDate,
+                                 String clearedPayee, String clearedMerchantName) {
+        if (pendingDate == null || clearedDate == null) {
+            return false;
+        }
+        int daysLater = Utility.daysBetween(pendingDate, clearedDate);
+        if (daysLater < 0 || daysLater > CLEARED_TWIN_DAY_WINDOW) {
+            return false;
+        }
+        return fuzzyPayeeMatch(pendingPayee, clearedPayee) || fuzzyPayeeMatch(pendingPayee, clearedMerchantName);
     }
 
     // Wrapper used by other code that just needs a boolean

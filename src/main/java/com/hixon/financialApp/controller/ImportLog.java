@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.register.Transaction;
 import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 import static com.hixon.financialApp.utility.Utility.*;
@@ -118,9 +119,7 @@ public class ImportLog {
             default: importStatus = "Processed";
         }
 
-        String importDate = (transaction.getAuthorizationDate() != null) ?
-                calendarDateToStringDate(transaction.getAuthorizationDate()) :
-                calendarDateToStringDate(transaction.getPostDate());
+        String importDate = calendarDateToStringDate(displayDate(transaction));
 
         // Always show the merchant name — it tells the user WHO the transaction was with.
         // The register name is already known from context (you are importing into it).
@@ -147,6 +146,25 @@ public class ImportLog {
                     formatDollarAmount(transaction.getProvisionalAmount()),
                     formatDollarAmount(transaction.getAmount())));
         }
+    }
+
+    /**
+     * The date to show for an imported transaction.
+     *
+     * <p>A cleared transaction's authorization date is the day the purchase was made, which is worth
+     * showing.  A pending one has no authorization date of its own:  the field holds the day it was
+     * first imported, which the withdrawn-pending check relies on.  Showing that made one charge read
+     * as two dates on 09-17-2026 -- "Date: 09-16-2026" and then "Imported ... on 09-17-2026" -- so a
+     * pending transaction shows the date the bank gave it.
+     *
+     * @param transaction the transaction
+     * @return the date to show
+     */
+    static Calendar displayDate(Transaction transaction) {
+        if (!transaction.isCleared() || transaction.getAuthorizationDate() == null) {
+            return transaction.getPostDate();
+        }
+        return transaction.getAuthorizationDate();
     }
 
     /**
