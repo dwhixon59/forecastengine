@@ -510,6 +510,73 @@ public class ImportSummaryControllerTest {
         }
     }
 
+    // ── Changing the merchant ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Changing the merchant ('7m')")
+    class ChangeMerchant {
+
+        @Test
+        @DisplayName("A number followed by 'm' changes that transaction's merchant, not its budget items")
+        void numberWithM_changesMerchant() throws Exception {
+            Transaction txn = buildMockTransaction(true, 1600.00);
+            ImportLog.ImportRecord record = addNewRecord(txn);
+
+            try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
+                ts.when(() -> TransactionSplit.getSplitsForTransaction(any()))
+                        .thenReturn(Collections.emptyList());
+                when(mockView.getResponseStringMenuSelection(anyString(), anyBoolean(),
+                        anyBoolean(), anyBoolean(), anyBoolean())).thenReturn("1m", "");
+
+                boolean result = summaryController.showSummaryAndRecategorize();
+
+                verify(mockTransactionController).assignMerchantToTransaction(txn);
+                verify(mockTransactionController, never()).recategorizeTransaction(any(Transaction.class));
+                assertTrue(record.isRecategorizedThisSession());
+                // The merchant decides nothing about the forecast.
+                assertFalse(result);
+            }
+        }
+
+        @Test
+        @DisplayName("An upper-case 'M' with a space before it is understood too")
+        void upperCaseMWithSpace_changesMerchant() throws Exception {
+            Transaction txn = buildMockTransaction(true, 1600.00);
+            addNewRecord(txn);
+
+            try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
+                ts.when(() -> TransactionSplit.getSplitsForTransaction(any()))
+                        .thenReturn(Collections.emptyList());
+                when(mockView.getResponseStringMenuSelection(anyString(), anyBoolean(),
+                        anyBoolean(), anyBoolean(), anyBoolean())).thenReturn("1 M", "");
+
+                summaryController.showSummaryAndRecategorize();
+
+                verify(mockTransactionController).assignMerchantToTransaction(txn);
+            }
+        }
+
+        @Test
+        @DisplayName("A cancelled merchant change leaves the record unmarked")
+        void cancelledMerchantChange_leavesRecordUnmarked() throws Exception {
+            Transaction txn = buildMockTransaction(true, 1600.00);
+            ImportLog.ImportRecord record = addNewRecord(txn);
+
+            try (MockedStatic<TransactionSplit> ts = Mockito.mockStatic(TransactionSplit.class)) {
+                ts.when(() -> TransactionSplit.getSplitsForTransaction(any()))
+                        .thenReturn(Collections.emptyList());
+                doThrow(new CancelException("cancelled"))
+                        .when(mockTransactionController).assignMerchantToTransaction(any(Transaction.class));
+                when(mockView.getResponseStringMenuSelection(anyString(), anyBoolean(),
+                        anyBoolean(), anyBoolean(), anyBoolean())).thenReturn("1m", "");
+
+                summaryController.showSummaryAndRecategorize();
+
+                assertFalse(record.isRecategorizedThisSession());
+            }
+        }
+    }
+
     // ── Testable subclass ─────────────────────────────────────────────────────
 
     /**

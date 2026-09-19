@@ -965,9 +965,14 @@ public class ImportController {
                     if (merchant == null) {
                         try {
                             // E8: Use the shared merchantController so its session cache persists
-                            // across all transactions in this import run.
-                            merchant = merchantController.assignMerchant(currentTransaction.getMerchantPayee(),
-                                    currentTransaction.getPayee(), currentTransaction.getAmount());
+                            // across all transactions in this import run.  When the user has just
+                            // confirmed the transaction is a particular budget item, offer that
+                            // item's merchants rather than a name search on the payee.
+                            merchant = merchantController.assignMerchantForBudgetItem(
+                                    currentTransaction.getMerchantPayee(), currentTransaction.getPayee(),
+                                    currentTransaction.getAmount(),
+                                    matchedBudgetItemPendingMerchant == null ? null
+                                            : BudgetItem.getById(matchedBudgetItemPendingMerchant));
                             currentTransaction.setIdMerchant(merchant.getId());
                             currentTransaction.setMerchant(merchant);
                         } catch (CancelException ce) {
@@ -1792,10 +1797,11 @@ public class ImportController {
                                 // the manual path (clear splits so the normal flow handles it).
                                 if (provisionalTransactions.get(provTrxIndex).getMerchant() == null) {
                                     try {
-                                        Merchant assignedMerchant = merchantController.assignMerchant(
+                                        Merchant assignedMerchant = merchantController.assignMerchantForBudgetItem(
                                                 provisionalTransactions.get(provTrxIndex).getMerchantPayee(),
                                                 provisionalTransactions.get(provTrxIndex).getPayee(),
-                                                provisionalTransactions.get(provTrxIndex).getAmount());
+                                                provisionalTransactions.get(provTrxIndex).getAmount(),
+                                                BudgetItem.getById(idBudgetItem));
                                         if (assignedMerchant != null) {
                                             provisionalTransactions.get(provTrxIndex).setMerchant(assignedMerchant);
                                         } else {

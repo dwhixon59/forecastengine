@@ -1317,4 +1317,70 @@ public class Utility {
         return file;
     }
 
+    /** Pauses between checks on a file another program has open;  replaced in tests. */
+    @FunctionalInterface
+    public interface Pause {
+        void pause() throws InterruptedException;
+    }
+
+    /**
+     * Whether another program has a file open in a way that keeps it from being written -- which is
+     * how Excel holds a workbook for as long as it has it open, and while it saves it.
+     *
+     * <p>Opening for writing is the test because opening for reading is not one:  Excel shares its
+     * workbooks for reading, so a read succeeds while Excel is still in the middle of saving.
+     * Nothing is written;  the channel is closed as soon as it opens.
+     *
+     * @param path the file
+     * @return true if the file exists, could be written by this user, and cannot be opened for writing
+     */
+    public static boolean isFileHeldOpen(Path path) {
+        // A missing or read-only file cannot be opened for writing either, but not because anything
+        // has it open, and waiting would never end.
+        if (!Files.exists(path) || !Files.isWritable(path)) {
+            return false;
+        }
+        try (java.nio.channels.FileChannel ignored =
+                     java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)) {
+            return false;
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    /**
+     * Waits until no other program has a file open, saying so while it waits.
+     *
+     * @param path the file
+     */
+    public static void waitForFileToBeReleased(Path path) throws InterruptedException {
+        waitForFileToBeReleased(path, Utility::isFileHeldOpen, () -> Thread.sleep(1000));
+    }
+
+    /**
+     * As {@link #waitForFileToBeReleased(Path)}, with the check and the pause supplied.
+     *
+     * <p>Waiting for Excel to exit is not the same as waiting for it to let go of the workbook.  When
+     * Excel is already running, the Excel the application starts hands the workbook to it and exits at
+     * once, and the forecast was read while the user was still editing it.  On 09-18-2026 the Citi
+     * forecast was read with the $38.00 Christine's calling plan occurrence the user had deleted still
+     * in it:  Excel's save landed at 06:15:36, after the read, so the deletion was never seen.
+     *
+     * @param path      the file
+     * @param heldOpen  says whether the file is still held open
+     * @param pause     waits between checks
+     */
+    static void waitForFileToBeReleased(Path path, java.util.function.Predicate<Path> heldOpen, Pause pause)
+            throws InterruptedException {
+        if (!heldOpen.test(path)) {
+            return;
+        }
+        getView().say("\n" + path.getFileName() + " is still open in Excel (or another program).  " +
+                "Save and close it to continue.");
+        while (heldOpen.test(path)) {
+            pause.pause();
+        }
+        getView().say("It has been closed.  Continuing...");
+    }
+
 }

@@ -418,6 +418,10 @@ public class ExcelForecastView extends AbstractForecastView {
             Process process = Runtime.getRuntime().exec("cmd /c start /wait excel \"" + longTermForecastFilename + "\"");
             process.waitFor();
 
+            // The Excel just started can exit while the workbook is still open:  when Excel is already
+            // running it hands the file over and leaves.  Wait for the workbook itself.
+            Utility.waitForFileToBeReleased(forecastFile.toPath());
+
             Utility.getView().sayH4("Excel closed. Continuing...");
         } catch (IOException | InterruptedException e) {
             throw new ViewException("Error opening forecast file in Excel: " + e.getMessage(), e);
@@ -441,6 +445,15 @@ public class ExcelForecastView extends AbstractForecastView {
         Path sourcePath = Paths.get(sourceName);
         if (!Files.exists(sourcePath)) {
             throw new ControllerException("Excel file not found: " + sourceName);
+        }
+
+        // Reading a workbook Excel still has open reads whatever it last saved, not what is on the
+        // screen, and every row deleted since then survives.  See Utility.waitForFileToBeReleased.
+        try {
+            Utility.waitForFileToBeReleased(sourcePath);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ControllerException("Interrupted waiting for " + sourceName + " to be closed.");
         }
 
         try (RandomAccessFile raf = Utility.openFileWithRetry(sourcePath);

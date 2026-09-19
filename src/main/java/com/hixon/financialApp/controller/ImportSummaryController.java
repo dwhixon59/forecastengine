@@ -84,7 +84,9 @@ public class ImportSummaryController {
             String input;
             try {
                 input = view.getResponseStringMenuSelection(
-                        "Recategorize a transaction? Enter number [1-" + records.size() + "] or press Enter to continue",
+                        "Recategorize a transaction? Enter number [1-" + records.size() + "] (or number" +
+                                " + 'm' to change its merchant, e.g. " + records.size() + "m)" +
+                                " or press Enter to continue",
                         true,   // allowNone = allow pressing Enter to continue
                         false,  // isCancelAllowed
                         true,   // isQuitAllowed
@@ -98,6 +100,14 @@ public class ImportSummaryController {
 
             if (input.isEmpty()) {
                 break;
+            }
+
+            // A trailing 'm' asks to change the merchant rather than the budget items.  The merchant
+            // used to be fixed here:  on 09-18-2026 a Citi payment the import had put under Samsung
+            // Electronics could be moved between budget items, but stayed Samsung Electronics.
+            boolean changeMerchant = input.toLowerCase().endsWith("m");
+            if (changeMerchant) {
+                input = input.substring(0, input.length() - 1).trim();
             }
 
             int selection;
@@ -126,6 +136,12 @@ public class ImportSummaryController {
                 continue;
             }
 
+            if (changeMerchant) {
+                changeMerchant(record);
+                printSummary(records);
+                continue;
+            }
+
             // NEWLY_IMPORTED — recategorize via the same path as Manage Data
             recategorize(record);
 
@@ -148,6 +164,20 @@ public class ImportSummaryController {
      */
     protected TransactionController createTransactionController() {
         return new TransactionController(sessionController);
+    }
+
+    /**
+     * Changes the merchant of a newly imported transaction, through the same path as Manage Data.
+     * The budget items are left as they are;  the merchant decides nothing about the forecast.
+     */
+    private void changeMerchant(ImportLog.ImportRecord record) throws Exception {
+        try {
+            createTransactionController().assignMerchantToTransaction(record.getTransaction());
+            record.setRecategorizedThisSession(true);
+        } catch (CancelException | SkipException e) {
+            logger.debug("Merchant change cancelled for transaction: {}",
+                    record.getTransaction().getImportRecordId());
+        }
     }
 
     private void recategorize(ImportLog.ImportRecord record) throws Exception {

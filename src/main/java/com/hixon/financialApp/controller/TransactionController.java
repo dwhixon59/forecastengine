@@ -12,6 +12,7 @@ import com.hixon.financialApp.model.forecast.ForecastTransaction;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit;
 import com.hixon.financialApp.model.forecast.ForecastTransactionSplit.SplitDisposition;
 import com.hixon.financialApp.model.merchant.Merchant;
+import com.hixon.financialApp.model.merchant.MerchantPayee;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
@@ -772,12 +773,67 @@ public class TransactionController {
         Merchant merchant = merchantController.selectMerchantPublic(ALLOW_CREATE);
 
         if (merchant != null) {
+            if (merchant.isDirty()) {
+                merchant.save();
+            }
+
             // Update the transaction with the new merchant
             transaction.setMerchant(merchant);
             transaction.setIdMerchant(merchant.getId());
             transaction.update();
             view.say("Merchant successfully changed to: " + merchant.getName());
+
+            if (currentMerchant != null && !currentMerchant.getId().equals(merchant.getId())) {
+                offerToMovePayees(transaction, currentMerchant, merchant);
+            }
         }
+    }
+
+    /**
+     * Offers to move the payee strings that made the import choose the old merchant to the new one.
+     *
+     * <p>Changing only the transaction leaves the mapping that caused the mistake in place, and the
+     * next transaction with the same payee is given the wrong merchant again.  On 09-18-2026 the payee
+     * "ELECTRONIC PAYMENT-THANK YO" was mapped to Samsung Electronics during a Citi import;  correcting
+     * the one transaction would not have stopped next month's payment arriving as Samsung too.
+     *
+     * @param transaction the transaction whose merchant was changed
+     * @param oldMerchant the merchant it had
+     * @param newMerchant the merchant it has now
+     */
+    void offerToMovePayees(Transaction transaction, Merchant oldMerchant, Merchant newMerchant) throws Exception {
+        for (String payee : payeesBehind(transaction.getPayee(), MerchantPayee.getPayeesForMerchant(oldMerchant))) {
+            if (view.getYesOrNo("Payee '" + payee + "' is recognised as '" + oldMerchant.getName() +
+                    "'. Recognise it as '" + newMerchant.getName() + "' from now on?")) {
+                MerchantPayee.deleteByName(payee);
+                new MerchantPayee(payee, newMerchant.getId()).save();
+                view.say("Payee '" + payee + "' now belongs to '" + newMerchant.getName() + "'.");
+            }
+        }
+    }
+
+    /**
+     * The payee strings of a merchant that a transaction's payee carries, and so the ones that could
+     * have led the import to that merchant.  Matched without regard to case, since the parsed payee
+     * the mapping was made from is a piece of the raw one.
+     *
+     * @param transactionPayee the transaction's payee as the bank sent it
+     * @param merchantPayees   the payee strings mapped to the merchant
+     * @return the payee strings found in the transaction's payee
+     */
+    static List<String> payeesBehind(String transactionPayee, List<MerchantPayee> merchantPayees) {
+        List<String> found = new ArrayList<>();
+        if (transactionPayee == null || merchantPayees == null) {
+            return found;
+        }
+        String raw = transactionPayee.toLowerCase();
+        for (MerchantPayee merchantPayee : merchantPayees) {
+            String payee = merchantPayee.getPayee();
+            if (payee != null && !payee.isBlank() && raw.contains(payee.toLowerCase())) {
+                found.add(payee);
+            }
+        }
+        return found;
     }
 
     /**

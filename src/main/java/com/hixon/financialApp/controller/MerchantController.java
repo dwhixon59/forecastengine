@@ -1,5 +1,7 @@
 package com.hixon.financialApp.controller;
 
+import com.hixon.financialApp.model.budget.BudgetItem;
+import com.hixon.financialApp.model.budget.BudgetItemMerchant;
 import com.hixon.financialApp.model.entity.MatchQuery;
 import com.hixon.financialApp.model.merchant.Merchant;
 import com.hixon.financialApp.model.merchant.MerchantPayee;
@@ -174,39 +176,118 @@ public class MerchantController {
                 merchant.save();
             }
 
-            // Add the payee to this merchant if not already associated.
-            // Use exact match on payee string — a "contains" check would incorrectly treat
-            // "ZELLE FROM X ON" as already covering "ZELLE FROM X", preventing the new-format
-            // payee from being saved and causing repeated prompts in the same session.
-            List<MerchantPayee> existingPayees = merchant.getPayees();
-            boolean payeeExists = false;
-            for (MerchantPayee existingPayee : existingPayees) {
-                if (merchantPayeeString.equals(existingPayee.getPayee())) {
-                    payeeExists = true;
-                    break;
-                }
-            }
-
-            if (!payeeExists && !unidentifiedTransfer) {
-                // Before creating the new association, delete any existing association with a different merchant
-                // The payee field has a UNIQUE constraint, so we must delete the old one first
-                MerchantPayee.deleteByName(merchantPayeeString);
-
-                MerchantPayee newPayee = new MerchantPayee(merchantPayeeString, merchant.getId());
-                newPayee.save();
-                view.say("Associated payee '" + merchantPayeeString + "' with merchant '" + merchant.getName() + "'");
-            } else if (unidentifiedTransfer) {
-                view.say("This transfer's counterparty could not be identified, so '" + merchant.getName() +
-                        "' applies to this transaction only. The next one like it will ask again.");
-            }
-
-            // E8: Cache this payee→merchant mapping for the rest of this session.
-            if (!unidentifiedTransfer) {
-                confirmedPayeeCache.put(merchantPayeeString, merchant);
-            }
+            rememberPayee(merchantPayeeString, merchant, unidentifiedTransfer);
         }
 
         return merchant;
+    }
+
+    /**
+     * Assigns a merchant to a transaction the user has just confirmed belongs to a budget item, offering
+     * that budget item's own merchants first.
+     *
+     * <p>The ordinary search is seeded with the payee string and matches merchant names word by word, so
+     * a payee that shares a common word with an unrelated merchant is offered that merchant.  On
+     * 09-18-2026 the user confirmed the $1,600.00 Citi payment "ELECTRONIC PAYMENT-THANK YO" was
+     * 'Payment - Dave', and was then asked whether it was Samsung Electronics -- the only merchant with
+     * "electronic" in its name.  The budget item's merchants are the likely answers, and the only ones
+     * the user has already said this transaction is related to.
+     *
+     * <p>Falls back to {@link #assignMerchant(String, String, double)} whenever the payee is already
+     * known, the budget item has no merchants, or the user says it is none of them.
+     *
+     * @param merchantPayeeString the merchant payee string from the transaction
+     * @param transactionPayee    the transaction payee
+     * @param amount              the transaction amount
+     * @param budgetItem          the budget item the user confirmed the transaction belongs to, or null
+     * @return the assigned merchant
+     */
+    public Merchant assignMerchantForBudgetItem(String merchantPayeeString, String transactionPayee,
+                                                double amount, BudgetItem budgetItem) throws Exception {
+
+        boolean unidentifiedTransfer = MerchantUtilities.isUnidentifiedTransferPayee(merchantPayeeString);
+        boolean alreadyKnown = !unidentifiedTransfer &&
+                (confirmedPayeeCache.containsKey(merchantPayeeString) || Merchant.getByPayee(merchantPayeeString) != null);
+
+        List<Merchant> budgetItemMerchants = new ArrayList<>();
+        if (budgetItem != null && !alreadyKnown) {
+            for (BudgetItemMerchant association : BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem)) {
+                Merchant merchant = Merchant.getById(association.getIdMerchant());
+                if (merchant != null) {
+                    budgetItemMerchants.add(merchant);
+                }
+            }
+        }
+
+        if (budgetItemMerchants.isEmpty()) {
+            return assignMerchant(merchantPayeeString, transactionPayee, amount);
+        }
+
+        List<String> choices = new ArrayList<>();
+        for (Merchant merchant : budgetItemMerchants) {
+            choices.add(merchant.getName());
+        }
+        choices.add(NONE_OF_THESE_MERCHANTS);
+
+        view.say();
+        Integer choice = view.selectByPositionFromList("Which of the merchants of '" + budgetItem.getPayee() +
+                        "' is the payee '" + merchantPayeeString + "'?", choices,
+                DO_NOT_ALLOW_NONE, ALLOW_CANCEL, ALLOW_QUIT, DO_NOT_ALLOW_SKIP);
+
+        if (choice == null || choice < 0 || choice >= budgetItemMerchants.size()) {
+            return assignMerchant(merchantPayeeString, transactionPayee, amount);
+        }
+
+        Merchant merchant = budgetItemMerchants.get(choice);
+        rememberPayee(merchantPayeeString, merchant, unidentifiedTransfer);
+        return merchant;
+    }
+
+    /** The last choice in {@link #assignMerchantForBudgetItem}'s list. */
+    static final String NONE_OF_THESE_MERCHANTS = "None of these - search for or create the merchant";
+
+    /**
+     * Records that a payee string belongs to a merchant, so the next transaction carrying it is
+     * recognised without asking, and remembers it for the rest of this session.
+     *
+     * @param merchantPayeeString  the payee string
+     * @param merchant             the merchant it belongs to
+     * @param unidentifiedTransfer true when the payee names no counterparty, in which case nothing is
+     *                             recorded -- see {@link #assignMerchant(String, String, double, boolean)}
+     */
+    private void rememberPayee(String merchantPayeeString, Merchant merchant, boolean unidentifiedTransfer)
+            throws Exception {
+
+        // Add the payee to this merchant if not already associated.
+        // Use exact match on payee string — a "contains" check would incorrectly treat
+        // "ZELLE FROM X ON" as already covering "ZELLE FROM X", preventing the new-format
+        // payee from being saved and causing repeated prompts in the same session.
+        List<MerchantPayee> existingPayees = merchant.getPayees();
+        boolean payeeExists = false;
+        for (MerchantPayee existingPayee : existingPayees) {
+            if (merchantPayeeString.equals(existingPayee.getPayee())) {
+                payeeExists = true;
+                break;
+            }
+        }
+
+        if (!payeeExists && !unidentifiedTransfer) {
+            // Before creating the new association, delete any existing association with a different merchant
+            // The payee field has a UNIQUE constraint, so we must delete the old one first
+            MerchantPayee.deleteByName(merchantPayeeString);
+
+            MerchantPayee newPayee = new MerchantPayee(merchantPayeeString, merchant.getId());
+            newPayee.save();
+            view.say("Associated payee '" + merchantPayeeString + "' with merchant '" + merchant.getName() + "'");
+        } else if (unidentifiedTransfer) {
+            view.say("This transfer's counterparty could not be identified, so '" + merchant.getName() +
+                    "' applies to this transaction only. The next one like it will ask again.");
+        }
+
+        // E8: Cache this payee→merchant mapping for the rest of this session.
+        if (!unidentifiedTransfer) {
+            confirmedPayeeCache.put(merchantPayeeString, merchant);
+        }
     }
 
     /**

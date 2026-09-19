@@ -417,7 +417,24 @@ public class ForecastTransactionMatcher {
                 daysBefore,
                 daysAfter,
                 BankReferenceNumber.extract(transaction.getPayee()),
-                lookUpMemoSuggestion(transaction, forecast));
+                lookUpMemoSuggestion(transaction, forecast),
+                describeTransaction(transaction));
+    }
+
+    /**
+     * The transaction as the merchant question names it:  its date, direction, amount and the payee
+     * exactly as the bank sent it.
+     *
+     * <p>The question is asked before the transaction has printed anything, so without this it reads
+     * as a question about whatever was printed last.  On 09-18-2026 it came straight after
+     * "Already imported a debit to LA Fitness for $80.23", and was about the $1,600.00
+     * "ELECTRONIC PAYMENT-THANK YO" payment that followed.
+     */
+    static String describeTransaction(Transaction transaction) {
+        double amount = transaction.getAmount();
+        return "The " + Utility.calendarDateToStringDate(transaction.getDate()) + " " +
+                (amount >= 0 ? "deposit of " : "debit of ") + Utility.formatDollarAmount(Math.abs(amount)) +
+                (amount >= 0 ? " from '" : " to '") + transaction.getPayee() + "'";
     }
 
     /**
@@ -514,6 +531,28 @@ public class ForecastTransactionMatcher {
             int daysAfter,
             String transactionReference,
             MemoBudgetItemHistory.Suggestion memoSuggestion) throws Exception {
+
+        return findMatchingForecastTransaction(date, amount, forecast, possibleMerchants, daysBefore,
+                daysAfter, transactionReference, memoSuggestion, null);
+    }
+
+    /**
+     * As {@link #findMatchingForecastTransaction(Calendar, double, Forecast, List, int, int, String,
+     * MemoBudgetItemHistory.Suggestion)}, naming the transaction in the merchant question.
+     *
+     * @param transactionDescription the transaction as the user should see it named, or null to name
+     *                               it by date and amount alone
+     */
+    static ForecastTransaction findMatchingForecastTransaction(
+            Calendar date,
+            double amount,
+            Forecast forecast,
+            List<Merchant> possibleMerchants,
+            int daysBefore,
+            int daysAfter,
+            String transactionReference,
+            MemoBudgetItemHistory.Suggestion memoSuggestion,
+            String transactionDescription) throws Exception {
 
         // If no forecast is available, we cannot match
         if (forecast == null) {
@@ -720,15 +759,13 @@ public class ForecastTransactionMatcher {
                 }
 
                 if (!merchantMatches) {
-                    String txnMerchantDescription = possibleMerchants.isEmpty()
-                            ? "This transaction's merchant"
-                            : "This transaction's merchant ('" + possibleMerchants.get(0).getName() + "')";
-
                     ViewInt view = Utility.getView();
-                    boolean confirmed = view.getYesOrNo(txnMerchantDescription
-                            + " does not match any merchant assigned to budget item '" + budgetItem.getPayee()
-                            + "', though it otherwise matches on date/amount. Is this transaction another "
-                            + "merchant for '" + budgetItem.getPayee() + "'?");
+                    if (transactionDescription == null) {
+                        transactionDescription = "The " + Utility.calendarDateToStringDate(date) +
+                                " transaction of " + Utility.formatDollarAmount(amount);
+                    }
+                    view.sayH3(merchantMismatchHeading(transactionDescription, bestMatch, budgetItem));
+                    boolean confirmed = view.getYesOrNo(merchantMismatchQuestion(possibleMerchants, budgetItem));
 
                     if (!confirmed) {
                         logger.debug("  merchant mismatch declined by user -> no match");
@@ -740,6 +777,30 @@ public class ForecastTransactionMatcher {
         }
 
         return bestMatch;
+    }
+
+    /**
+     * The line that introduces the merchant question:  which transaction, and which forecast
+     * occurrence it lines up with.
+     */
+    static String merchantMismatchHeading(String transactionDescription, ForecastTransaction candidate,
+                                          BudgetItem budgetItem) {
+        return transactionDescription + " matches '" + budgetItem.getPayee() + "', due " +
+                Utility.calendarDateToStringDate(candidate.getPlannedDate()) + " for " +
+                Utility.formatDollarAmount(candidate.getRemainingAmount()) + ", on date and amount.";
+    }
+
+    /**
+     * The merchant question itself.  Answering yes goes on to ask which of the budget item's
+     * merchants this is, so it asks whether the transaction is the budget item -- not whether it is
+     * "another merchant", which the list that follows would contradict.
+     */
+    static String merchantMismatchQuestion(List<Merchant> possibleMerchants, BudgetItem budgetItem) {
+        String merchant = possibleMerchants.isEmpty()
+                ? "Its payee is not linked to any of"
+                : "Its merchant ('" + possibleMerchants.get(0).getName() + "') is not one of";
+        return merchant + " the merchants of '" + budgetItem.getPayee() + "'. Is this transaction '" +
+                budgetItem.getPayee() + "'?";
     }
 
     /**
