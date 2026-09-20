@@ -76,6 +76,26 @@ public class ImportLog {
 
     // ── Logging methods ───────────────────────────────────────────────────────
 
+    /**
+     * How many transactions this session actually took into the register.
+     *
+     * <p>Zero says the statement held nothing the register did not already have -- the ordinary
+     * outcome of re-importing a download, since a bank names a statement after its start date and a
+     * re-download arrives under the name the last one had.  See DailyUpdateController, which uses it
+     * to leave the forecast alone rather than re-rendering a forecast nothing has changed.
+     *
+     * @return the number of records with status {@link ImportRecord.Status#NEWLY_IMPORTED}
+     */
+    public int countNewlyImported() {
+        int count = 0;
+        for (ImportRecord record : importRecords) {
+            if (record.getStatus() == ImportRecord.Status.NEWLY_IMPORTED) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /** Log a newly imported transaction (splits assigned this session). */
     public void logImportEvent(Transaction transaction) throws EntityException, RegisterException {
         logImportEvent(transaction, ImportRecord.Status.NEWLY_IMPORTED);

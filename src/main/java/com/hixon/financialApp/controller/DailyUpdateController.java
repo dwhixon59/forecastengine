@@ -7,6 +7,7 @@ import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
+import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
 
 import java.util.Calendar;
@@ -60,6 +61,37 @@ public class DailyUpdateController {
      */
 
     /**
+     * Whether this run left the register and the forecast exactly as it found them.
+     *
+     * <p>That is the ordinary outcome of re-importing a statement:  a bank names a download after its
+     * start date, so a re-download arrives under the name the last one had, and every charge in it is
+     * already held.  On 09-20-2026 the Citi statement qdl20260911.QFX was imported for the second time,
+     * all seven of its charges were recognised, and the daily update went on to re-render the forecast
+     * and open it in Excel with not one figure different from the render two days earlier.
+     *
+     * <p>Every way this run could have changed something has to be accounted for here, since the answer
+     * decides whether the forecast is rendered at all.  {@code inSync} covers the changes that reach the
+     * forecast through the import itself -- a pending charge that fell off, a split assigned late -- and
+     * the flags cover the ones the user made.
+     *
+     * @param newlyImported                    how many transactions the import took into the register
+     * @param recategorized                    whether the import summary recategorized anything
+     * @param balanceUpdated                   whether the register balance was corrected
+     * @param skippedTransactionsProcessed     whether transactions skipped earlier were reprocessed
+     * @param externalForecastChangesImported  whether the spreadsheet's changes were read in at the start
+     * @param forecastUpdated                  whether the forecast was regenerated
+     * @param inSync                           whether the forecast is still in step with the register
+     * @return true when nothing changed
+     */
+    static boolean nothingChangedThisRun(int newlyImported, boolean recategorized, boolean balanceUpdated,
+                                         boolean skippedTransactionsProcessed,
+                                         boolean externalForecastChangesImported, boolean forecastUpdated,
+                                         boolean inSync) {
+        return newlyImported == 0 && !recategorized && !balanceUpdated && !skippedTransactionsProcessed
+                && !externalForecastChangesImported && !forecastUpdated && inSync;
+    }
+
+    /**
      * The session budget's items as they stand now, for {@link ForecastChangeReasons}.
      *
      * @return the snapshot, or null if the budget could not be read -- a missing snapshot must not make
@@ -103,6 +135,14 @@ public class DailyUpdateController {
             boolean recategorized = false;
             Set<UUID> recategorizedItems = new java.util.HashSet<>();
 
+            // What this run actually changed.  When it changed nothing -- the ordinary outcome of
+            // re-importing a statement the register already holds -- there is nothing for a new render of
+            // the forecast to show, and nothing to review in Excel.  See nothingChangedThisRun.
+            boolean externalForecastChangesImported = false;
+            boolean skippedTransactionsProcessed = false;
+            boolean balanceUpdated = false;
+            boolean forecastUpdated = false;
+
 
             // Check if user has modified the external forecast file since last render:
            view.sayH2("CHECK FOR EXTERNAL FORECAST CHANGES");
@@ -113,6 +153,7 @@ public class DailyUpdateController {
                        view.sayH2("IMPORT FORECAST CHANGES FROM EXTERNAL SOURCE");
                         try {
                             forecastController.updateFromExternalSource();
+                            externalForecastChangesImported = true;
                            view.sayH4("The forecast was successfully updated from the external source.");
                         } catch (Exception e) {
                             if (!view.askContinue("\nThe error '" + e + "' occurred while importing forecast " +
@@ -145,6 +186,7 @@ public class DailyUpdateController {
                     // Enhancement 7: Auto-default reprocess skipped transactions to yes
                     // during a daily update, since the user almost always wants to process them.
                     view.say("There are skipped transactions in the register. Auto-reprocessing...");
+                    skippedTransactionsProcessed = true;
                     inSync = registerController.processUnreconciledTransactions();
                     if (!inSync) {
                         // Only the budget items that changed:  see ForecastChangeReasons.updateScope.
@@ -249,6 +291,7 @@ public class DailyUpdateController {
             view.sayH2("VERIFY REGISTER BALANCE");
             try {
                  if (!registerController.verifyRegisterBalance(register)) {
+                    balanceUpdated = true;
                    view.sayH4("The balance of the register " + register.getName() + " was " +
                             "successfully updated.");
                 }
@@ -284,6 +327,7 @@ public class DailyUpdateController {
                         forecastController.updateForecast(ForecastChangeReasons.updateScope(forecastStaleAtStart,
                                 ForecastChangeReasons.changedItemIds(budgetBefore, budgetAfter), recategorized,
                                 recategorizedItems));
+                        forecastUpdated = true;
                        view.sayH4("The long term forecast was successfully updated.");
                     } catch (QuitException qe) {
                         throw qe;
@@ -298,34 +342,56 @@ public class DailyUpdateController {
                 }
             }
 
-            // Render the long term forecast:
-           view.sayH2("RENDER THE LONG TERM FORECAST");
-            try {
-                sessionController.getForecastView().renderLongTermForecast(forecast);
-               view.say("\nSuccessfully rendered the long term forecast.");
-            } catch (QuitException qe) {
-                throw qe;
-            } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while rendering the forecast.")) {
-                    throw e;
+            // Nothing changed, so there is nothing for a new render or a new set of reports to show.  Say
+            // so and offer them rather than assuming:  the files on disk are the ones the last run
+            // produced, and the user may still want to look at them.
+            boolean renderOutput = true;
+            int newlyImported = importController.getImportLog().countNewlyImported();
+            if (nothingChangedThisRun(newlyImported, recategorized, balanceUpdated, skippedTransactionsProcessed,
+                    externalForecastChangesImported, forecastUpdated, inSync)) {
+               view.sayH2("RENDER THE LONG TERM FORECAST");
+                view.say("Nothing new in this statement, and nothing else changed, so the forecast is " +
+                        "unchanged since it was last rendered" +
+                        ((forecast == null || forecast.getLastRenderedDate() == null) ? "" :
+                                " on " + Utility.calendarDateToStringDate(forecast.getLastRenderedDate())) + ".");
+                renderOutput = view.getYesOrNo("Render the forecast and the reports anyway?");
+                if (!renderOutput) {
+                    view.sayH4("The forecast and the reports were left as they were.");
                 }
             }
 
-            // Open the forecast in Excel for review:
-           view.sayH2("OPEN THE FORECAST FOR REVIEW");
-            try {
-                sessionController.getForecastView().editLongTermForecast();
-            } catch (QuitException qe) {
-                throw qe;
-            } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while opening the forecast in Excel.")) {
-                    throw e;
+            if (renderOutput) {
+                // Render the long term forecast:
+               view.sayH2("RENDER THE LONG TERM FORECAST");
+                try {
+                    sessionController.getForecastView().renderLongTermForecast(forecast);
+                   view.say("\nSuccessfully rendered the long term forecast.");
+                } catch (QuitException qe) {
+                    throw qe;
+                } catch (Exception e) {
+                    if (!view.askContinue("\nThe error '" + e + "' occurred while rendering the forecast.")) {
+                        throw e;
+                    }
                 }
-               view.say("Skipped opening forecast in Excel.");
+
+                // Open the forecast in Excel for review:
+               view.sayH2("OPEN THE FORECAST FOR REVIEW");
+                try {
+                    sessionController.getForecastView().editLongTermForecast();
+                } catch (QuitException qe) {
+                    throw qe;
+                } catch (Exception e) {
+                    if (!view.askContinue("\nThe error '" + e + "' occurred while opening the forecast in Excel.")) {
+                        throw e;
+                    }
+                   view.say("Skipped opening forecast in Excel.");
+                }
             }
 
-            // If the user made changes to the forecast, import them:
-            if (view.getYesOrNo("Did you make any changes to the forecast in Excel that you want to import?")) {
+            // If the user made changes to the forecast, import them.  Only worth asking when the forecast
+            // was opened for them to change.
+            if (renderOutput &&
+                    view.getYesOrNo("Did you make any changes to the forecast in Excel that you want to import?")) {
                view.sayH2("UPDATE THE FORECAST FROM AN EXTERNAL SOURCE");
                 try {
                     forecastController.updateFromExternalSource();
@@ -347,54 +413,60 @@ public class DailyUpdateController {
                         throw e;
                     }
                 }
-            } else {
+            } else if (renderOutput) {
                view.say("Forecast changes not imported.");
             }
 
-            // Render the Spending Report for the current month:
-            try {
-               view.sayH2("RENDER THE SPENDING REPORT");
-               sessionController.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
-               view.sayH4("The spending report was successfully rendered");
-            } catch (Exception e) {
-                if (!view.askContinue("The error '" + e + "' occurred while rendering the spending report.")) {
-                    throw e;
-                }
-            }
+            // The reports say what the register and the forecast hold, so a run that changed neither would
+            // write the same four reports out to everyone's iCloud folders again.  They are rendered on the
+            // same answer as the forecast:  see nothingChangedThisRun.
+            if (renderOutput) {
 
-            // Render the Items of Interest report:
-            try {
-               view.sayH2("RENDERING THE ITEMS OF INTEREST REPORT");
-               notificationService.sendItemsOfInterestReport(forecast);
-               view.sayH4("Successfully rendered the Items of Interest Report.");
-             } catch (Exception e) {
-                if (!view.askContinue("\nThe error '" + e + "' occurred while Rendering of the Items of Interest " +
-                        "report.")) {
-                    throw e;
+                // Render the Spending Report for the current month:
+                try {
+                   view.sayH2("RENDER THE SPENDING REPORT");
+                   sessionController.getBudgetView().renderSpendingReportForMonth(Calendar.getInstance(), budget);
+                   view.sayH4("The spending report was successfully rendered");
+                } catch (Exception e) {
+                    if (!view.askContinue("The error '" + e + "' occurred while rendering the spending report.")) {
+                        throw e;
+                    }
                 }
-            }
 
-            // Render the Overdue and Upcoming Items Report:
-            try {
-               view.sayH2("RENDERING THE OVERDUE AND UPCOMING ITEMS REPORT");
-               notificationService.sendOverdueAndUpcomingItemsReport(forecast);
-               view.sayH4("Successfully rendered the Overdue and Upcoming Items Report.");
-            } catch (Exception e) {
-                if (!view.askContinue("The error '" + e + "' occurred while rendering of the Overdue and Upcoming " +
-                        "Items Report.")) {
-                    throw e;
+                // Render the Items of Interest report:
+                try {
+                   view.sayH2("RENDERING THE ITEMS OF INTEREST REPORT");
+                   notificationService.sendItemsOfInterestReport(forecast);
+                   view.sayH4("Successfully rendered the Items of Interest Report.");
+                 } catch (Exception e) {
+                    if (!view.askContinue("\nThe error '" + e + "' occurred while Rendering of the Items of Interest " +
+                            "report.")) {
+                        throw e;
+                    }
                 }
-            }
 
-            // Render the New Transaction Summary report:
-            try {
-               view.sayH2("RENDERING THE NEW TRANSACTION SUMMARY REPORT");
-                notificationService.sendNewTransactionSummaryReport(register);
-               view.sayH4("Successfully rendered the New Transaction Summary Report.");
-            } catch (Exception e) {
-                if (!view.askContinue("The error '" + e + "' occurred while rendering the New Transaction Summary " +
-                        "Report.")) {
-                    throw e;
+                // Render the Overdue and Upcoming Items Report:
+                try {
+                   view.sayH2("RENDERING THE OVERDUE AND UPCOMING ITEMS REPORT");
+                   notificationService.sendOverdueAndUpcomingItemsReport(forecast);
+                   view.sayH4("Successfully rendered the Overdue and Upcoming Items Report.");
+                } catch (Exception e) {
+                    if (!view.askContinue("The error '" + e + "' occurred while rendering of the Overdue and Upcoming " +
+                            "Items Report.")) {
+                        throw e;
+                    }
+                }
+
+                // Render the New Transaction Summary report:
+                try {
+                   view.sayH2("RENDERING THE NEW TRANSACTION SUMMARY REPORT");
+                    notificationService.sendNewTransactionSummaryReport(register);
+                   view.sayH4("Successfully rendered the New Transaction Summary Report.");
+                } catch (Exception e) {
+                    if (!view.askContinue("The error '" + e + "' occurred while rendering the New Transaction Summary " +
+                            "Report.")) {
+                        throw e;
+                    }
                 }
             }
 
