@@ -416,6 +416,141 @@ public class TransferCounterpartController {
 
 
     /*
+     * Payments from another tracked register whose budget item is planned on both sides.
+     */
+
+    /**
+     * Where a transaction arriving in this register was paid from, as the paying register recorded it.
+     *
+     * @param payingRegister    the register the money came from
+     * @param payingTransaction that register's side of the movement
+     * @param merchant          the merchant named after the paying register
+     * @param budgetItem        the budget item in this register's budget the pairing names
+     */
+    public record PayingSide(Register payingRegister, Transaction payingTransaction, Merchant merchant,
+                             BudgetItem budgetItem) {
+
+        /** How the import reports the payment in place of its usual auto-match message. */
+        public String describe() {
+            return "Payment from " + payingRegister.getName() + " (" +
+                    Utility.calendarDateToStringDate(payingTransaction.getDate()) + ", " +
+                    Utility.formatDollarAmount(payingTransaction.getAmount()) + " '" +
+                    payingTransaction.getPayee() + "') -> " + budgetItem.getPayee();
+        }
+    }
+
+    /**
+     * Find the other side of a payment into this register in the register that made it, and with it
+     * the merchant and budget item this side should have.
+     *
+     * <p>Card payments are transfers between tracked registers, but the bank's wording on the card
+     * cannot say which account paid:  Citi writes "ONLINE PAYMENT, THANK YOU" for payments from both
+     * Bill Pay Dave and Bill Pay Danni, and on 07-28-2026 a $150.00 payment from Bill Pay Dave was
+     * filed under Danni for that reason.  The paying register's own copy does say, through the budget
+     * item it was split to.  A {@link TransferBudgetItemPair} from that budget item into this
+     * register's budget identifies the payment and names the budget item it belongs to here -- for
+     * example AAdvantage Card - David in Bill Pay Dave pairs with Payment - Dave in the Citi budget.
+     * The payee text is not consulted at all:  the same "CITI CARD ONLINE PAYMENT" in Bill Pay Danni
+     * has also paid the untracked Citibank Card, whose budget item has no pairing and so never
+     * matches.
+     *
+     * <p>A candidate must be the opposite amount within {@link #OTHER_SIDE_DAY_WINDOW} days, carry
+     * no bank reference that differs from this transaction's, and have a single split whose budget
+     * item is paired into this register's budget.  Anything but exactly one candidate returns null
+     * and the import asks its questions as before;  so does a paying side not imported yet.
+     *
+     * @param transaction a new transaction in this session's register
+     * @return the paying side, or null when there is not exactly one
+     */
+    public PayingSide findPayingSide(Transaction transaction) throws Exception {
+
+        Register here = sessionController.getRegister();
+        Budget budget = sessionController.getBudget();
+        if (transaction == null || transaction.getDate() == null || here == null || budget == null) {
+            return null;
+        }
+
+        String reference = BankReferenceNumber.extract(transaction.getPayee());
+        List<PayingSide> found = new ArrayList<>();
+
+        for (Register other : otherRegisters(here)) {
+            for (Transaction candidate : oppositeSideIn(other, transaction)) {
+
+                if (BankReferenceNumber.areDifferentMovements(reference,
+                        BankReferenceNumber.extract(candidate.getPayee()))) {
+                    continue;
+                }
+
+                List<TransactionSplit> splits = splitsOf(candidate);
+                if (splits == null || splits.size() != 1) {
+                    continue;
+                }
+                BudgetItem targetBudgetItem = pairedBudgetItem(splits.get(0), budget);
+                if (targetBudgetItem == null) {
+                    continue;
+                }
+
+                found.add(new PayingSide(other, candidate, null, targetBudgetItem));
+            }
+        }
+
+        if (found.size() != 1) {
+            return null;
+        }
+
+        // The merchant is the paying register's name, as it is for every transfer between tracked
+        // registers.  Without one there is nothing to name the payment after, so ask as before.
+        PayingSide side = found.get(0);
+        Merchant merchant = merchantNamed(side.payingRegister().getName());
+        if (merchant == null) {
+            return null;
+        }
+        return new PayingSide(side.payingRegister(), side.payingTransaction(), merchant, side.budgetItem());
+    }
+
+    /** The budget item a split's budget item is paired with in the target budget, or null. */
+    private BudgetItem pairedBudgetItem(TransactionSplit split, Budget targetBudget) throws Exception {
+        BudgetItem sourceBudgetItem = budgetItemOf(split);
+        if (sourceBudgetItem == null) {
+            return null;
+        }
+        TransferBudgetItemPair pairing = pairingFor(sourceBudgetItem, targetBudget);
+        return (pairing == null) ? null : pairing.getTargetBudgetItem();
+    }
+
+    protected List<Register> otherRegisters(Register here) throws Exception {
+        List<Register> others = new ArrayList<>();
+        for (Register register : Register.getListOf()) {
+            if (!register.getId().equals(here.getId())) {
+                others.add(register);
+            }
+        }
+        return others;
+    }
+
+    protected List<Transaction> oppositeSideIn(Register register, Transaction transaction) throws Exception {
+        return Transaction.findOppositeSideInRegister(register.getId(), transaction.getAmount(),
+                transaction.getDate(), OTHER_SIDE_DAY_WINDOW);
+    }
+
+    protected List<TransactionSplit> splitsOf(Transaction transaction) throws Exception {
+        return TransactionSplit.getSplitsForTransaction(transaction);
+    }
+
+    protected BudgetItem budgetItemOf(TransactionSplit split) throws Exception {
+        return split.getBudgetItem();
+    }
+
+    protected TransferBudgetItemPair pairingFor(BudgetItem sourceBudgetItem, Budget targetBudget) throws Exception {
+        return TransferBudgetItemPair.getBySourceAndTargetBudget(sourceBudgetItem, targetBudget);
+    }
+
+    protected Merchant merchantNamed(String name) throws Exception {
+        return Merchant.getByName(name);
+    }
+
+
+    /*
      * Lifecycle (section 4).
      */
 

@@ -666,6 +666,45 @@ public class ImportController {
     }
 
 
+    /**
+     * Saves a transaction whose merchant and splits were settled without asking, and reconciles it with
+     * the forecast at once, so Phase 5 has nothing left to do for it.
+     *
+     * @param transaction the new transaction
+     * @param merchant    its merchant
+     * @param splits      its splits
+     */
+    private void saveAndReconcileNow(Transaction transaction, Merchant merchant, List<TransactionSplit> splits)
+            throws Exception {
+        transaction.setMerchant(merchant);
+        transaction.setIdMerchant(merchant.getId());
+        transaction.save(INSERT_ON_DUPLICATE_UPDATE);
+
+        for (TransactionSplit split : splits) {
+            split.save(INSERT_ON_DUPLICATE_UPDATE);
+        }
+
+        new ForecastController(sessionController).reconcile(transaction, splits);
+
+        // Record for the Import Summary without printing a second bullet -- the heading already
+        // printed serves as the console log entry.
+        importLog.recordImportEvent(transaction, ImportLog.ImportRecord.Status.NEWLY_IMPORTED);
+    }
+
+    /**
+     * The other register's side of a payment into this one, or null when there is none to be found.
+     * A failed lookup costs only its own benefit:  the import asks as it did before.
+     */
+    private TransferCounterpartController.PayingSide findPayingSide(Transaction transaction) {
+        try {
+            return new TransferCounterpartController(sessionController).findPayingSide(transaction);
+        } catch (Exception e) {
+            logger.debug("Looking for the paying side of " + transaction.getPayee() + " failed", e);
+            return null;
+        }
+    }
+
+
     /*
      * Main methods:
      */
@@ -833,9 +872,16 @@ public class ImportController {
                      * Phase 2.5: Auto-match with forecast transactions (if enabled)
                      */
                     if (splits == null) {
+                        // A payment from another tracked register -- a card payment from a Bill Pay
+                        // account -- is identified by that register's own copy of it rather than by
+                        // this bank's wording, which does not say who paid.  When it is found, the
+                        // paying register is the merchant and the only one the match may consider.
+                        TransferCounterpartController.PayingSide payingSide = findPayingSide(currentTransaction);
+
                         // Get possible merchants from the transaction payee (0, 1, or more matches)
-                        List<Merchant> possibleMerchants =
-                                MerchantUtilities.getPossibleMerchantsByPayee(
+                        List<Merchant> possibleMerchants = (payingSide != null)
+                                ? new ArrayList<>(List.of(payingSide.merchant()))
+                                : MerchantUtilities.getPossibleMerchantsByPayee(
                                         currentTransaction.getMerchantPayee());
 
                         // Try to find a matching forecast transaction. The window here is just a
@@ -862,6 +908,26 @@ public class ImportController {
                             matchedForecast = null;
                         }
 
+                        // The pairing has already named the budget item a payment belongs to, so an
+                        // occurrence of any other item is not this payment.
+                        if (payingSide != null && matchedForecast != null && !payingSide.budgetItem().getId()
+                                .equals(matchedForecast.getForecastItem().getIdBudgetItem())) {
+                            matchedForecast = null;
+                        }
+
+                        // A payment with no occurrence to match -- an extra payment, or one well off its
+                        // date -- still belongs to the budget item the pairing names, and the paying
+                        // register has already answered every question the import would ask.
+                        if (matchedForecast == null && payingSide != null) {
+                            view.sayH3(payingSide.describe() + ".");
+                            merchant = payingSide.merchant();
+                            splits = new ArrayList<>();
+                            splits.add(new TransactionSplit(currentTransaction.getAmount(),
+                                    payingSide.budgetItem().getId(), currentTransaction.getId(), null));
+                            saveAndReconcileNow(currentTransaction, merchant, splits);
+                            autoMatched = true;
+                        }
+
                         // If we found a confident match
                         if (matchedForecast != null) {
                             // Get the budget item from the forecast transaction
@@ -875,21 +941,26 @@ public class ImportController {
                             // Inform the user about the auto-match as a heading. When the match is the
                             // recorded other side of a transfer, say so instead -- it makes obvious why no
                             // questions were asked.
-                            if (matchedForecast.isTransferCounterpart()) {
+                            if (payingSide != null) {
+                                view.sayH3(payingSide.describe() + ", due " +
+                                        calendarDateToStringDate(matchedForecast.getPlannedDate()) + ".");
+                            } else if (matchedForecast.isTransferCounterpart()) {
                                 view.sayH3(TransferCounterpartController.describeCounterpart(matchedForecast) + ".");
                             } else {
                                 view.sayH3("Auto-matched to forecast transaction: " + matchedForecast.toStringConcise());
                             }
 
                             // Determine the merchant for this transaction.
-                            // First try (transfers): if the raw payee still carries a masked
-                            // counterparty account number (e.g. "...XXXXXX8249..."), resolve the
-                            // register with those last four digits and use that register's name as
-                            // the merchant. Transfer merchants are keyed by register name throughout
-                            // the app, so this is deterministic and institution-agnostic. Returns
-                            // null (falls through) for non-transfer payees.
-                            merchant = MerchantUtilities.getTransferMerchantByLastFour(
-                                    currentTransaction.getPayee(), register);
+                            // First try (transfers): the paying register found above, or, if the raw
+                            // payee still carries a masked counterparty account number (e.g.
+                            // "...XXXXXX8249..."), the register with those last four digits.  Either
+                            // way that register's name is the merchant. Transfer merchants are keyed
+                            // by register name throughout the app, so this is deterministic and
+                            // institution-agnostic. Returns null (falls through) for non-transfer
+                            // payees.
+                            merchant = (payingSide != null) ? payingSide.merchant()
+                                    : MerchantUtilities.getTransferMerchantByLastFour(
+                                            currentTransaction.getPayee(), register);
 
                             // Second try: exact payee→merchant mapping (fast, most specific).
                             if (merchant == null && possibleMerchants != null && possibleMerchants.size() == 1) {
@@ -934,28 +1005,10 @@ public class ImportController {
 
                             // Only save and reconcile if we successfully identified a merchant
                             if (merchant != null) {
-                                currentTransaction.setMerchant(merchant);
-                                currentTransaction.setIdMerchant(merchant.getId());
-
-                                // Save the transaction with merchant info
-                                currentTransaction.save(INSERT_ON_DUPLICATE_UPDATE);
-
-                                // Save the splits
-                                for (TransactionSplit split : splits) {
-                                    split.save(INSERT_ON_DUPLICATE_UPDATE);
-                                }
-
-                                // Reconcile immediately with the forecast (no need to do it again in Phase 5)
-                                ForecastController forecastController = new ForecastController(sessionController);
-                                forecastController.reconcile(currentTransaction, splits);
+                                saveAndReconcileNow(currentTransaction, merchant, splits);
 
                                 // Mark that we've auto-matched and already reconciled
                                 autoMatched = true;
-
-                                // Record for the Import Summary without printing a second bullet —
-                                // the auto-match output above already serves as the console log entry.
-                                importLog.recordImportEvent(currentTransaction,
-                                        ImportLog.ImportRecord.Status.NEWLY_IMPORTED);
                             }
                             // If merchant is still null, splits will be saved later after merchant assignment
                         }
