@@ -150,6 +150,15 @@ public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoClos
     Double getImportedLedgerBalance();
 
     /**
+     * The ledger balance exactly as the bank reported it, with no adjustment for pending transactions.
+     * Reported to the user alongside the adjusted figure, so the number they are asked about can be
+     * recognised in the file and on the bank's website.
+     *
+     * @return the balance the bank stated, or null if not available
+     */
+    Double getReportedLedgerBalance();
+
+    /**
      * When the bank said the imported ledger balance was true (OFX DTASOF), or null if it did not
      * say or the format carries no balance.  Used to tell a newer statement from a merely wider one.
      */

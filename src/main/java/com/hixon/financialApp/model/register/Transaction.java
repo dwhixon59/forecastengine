@@ -781,6 +781,50 @@ public class Transaction extends IndependentEntity {
     }
 
     /**
+     * The charges this credit could be a refund of:  the same merchant, in the same register, for the
+     * same amount the other way round, before it.
+     *
+     * <p>A refund arrives as a payee the merchant map already knows ("PURCH RTN AMAZON MKTPL"), so the
+     * import identifies the merchant and then offers every budget item that merchant has ever been used
+     * for -- nineteen of them for Amazon on 09-20-2026, twice over, for two refunds that reversed
+     * charges the register already held.  The charge being reversed says what the refund is about;  this
+     * finds it so the user can be told.
+     *
+     * <p>Most recent first:  when a merchant has several charges of the same amount, the latest is the
+     * one a refund is most likely to reverse.
+     *
+     * @param credit    the credit that may be a refund
+     * @param dayWindow how many days before the credit to look
+     * @return the candidate charges, newest first, or empty when the transaction is not a credit
+     */
+    public static List<Transaction> findChargesRefundedBy(Transaction credit, int dayWindow)
+            throws EntityException, SQLException {
+
+        List<Transaction> candidates = new ArrayList<>();
+        if (credit == null || credit.getAmount() <= 0 || credit.getDate() == null
+                || credit.getIdRegister() == null || credit.getIdMerchant() == null) {
+            return candidates;
+        }
+
+        Calendar from = (Calendar) credit.getDate().clone();
+        from.add(Calendar.DATE, -dayWindow);
+
+        String query = getSelectQuery() +
+                " where tr.Register_idRegister = uuid_to_bin('" + credit.getIdRegister() + "')" +
+                " and tr.Merchant_idMerchant = uuid_to_bin('" + credit.getIdMerchant() + "')" +
+                " and abs(tr.amount + " + credit.getAmount() + ") < 0.005" +
+                " and tr.postDate between " + Utility.calendarDateToSqlDateString(from) +
+                " and " + Utility.calendarDateToSqlDateString(credit.getDate()) +
+                " order by tr.postDate desc";
+
+        ResultSet rs = getRS(query, "Database error encountered looking for the charge a refund reverses.");
+        while (rs != null && rs.next()) {
+            candidates.add(new Transaction(rs));
+        }
+        return candidates;
+    }
+
+    /**
      * Find the transactions in another register that could be the other side of this movement of
      * money:  the opposite amount, within a few days.
      *

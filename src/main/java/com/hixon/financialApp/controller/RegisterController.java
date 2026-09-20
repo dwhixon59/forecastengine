@@ -333,7 +333,9 @@ public class RegisterController {
 
                 view.sayH4("Current balance of " + register.getName() + ": " +
                         Utility.formatDollarAmount(register.getBalance()));
-                view.say("Downloaded balance: " + Utility.formatDollarAmount(qfxBalance));
+                view.say(downloadedBalanceLine(qfxBalance,
+                        sessionController.getFinancialInstitution().getReportedLedgerBalance(),
+                        pendingBalanceOf(register), qfxBalanceAsOf));
 
                 // Check if balances differ
                 if (!Utility.isEqualCurrency(register.getBalance(), qfxBalance)) {
@@ -424,6 +426,62 @@ public class RegisterController {
         }
 
         return wasCorrect;
+    }
+
+    /**
+     * The "Downloaded balance" line:  the figure the register is compared against, and, when it is not
+     * simply what the bank said, what it is made of.
+     *
+     * <p>The comparison figure is the bank's ledger balance plus the register's pending transactions,
+     * because the register counts those and the bank's ledger does not.  Quoting only the total invited
+     * the obvious question:  on 09-20-2026 Bill Pay Danni's statement said $122.33, the register held
+     * $10.05 of pending charges and refunds, and the line read "Downloaded balance: $132.38" -- a number
+     * that appears neither in the file nor on the bank's website.  The bank's own figure and its date are
+     * now said out loud, so a stale statement is visible too.
+     *
+     * <p>A bank's website usually shows its <em>available</em> balance, which is a third number again:  it
+     * deducts pending charges but does not credit pending refunds.  That is why it can disagree with both
+     * figures here, and why neither is wrong.
+     *
+     * @param comparisonBalance the figure the register is compared against
+     * @param reportedBalance   the ledger balance as the bank stated it, or null if unknown
+     * @param pendingBalance    the register's uncleared transactions, which is what was added to it
+     * @param asOf              when the bank said it was true, or null if it did not say
+     * @return the line to print
+     */
+    /** The register's uncleared transactions, or 0 when they cannot be read -- this only explains a number. */
+    private double pendingBalanceOf(Register register) {
+        try {
+            return register.getProvisionalBalance();
+        } catch (Exception e) {
+            logger.debug("Could not read the pending balance to explain the downloaded balance", e);
+            return 0.0;
+        }
+    }
+
+    static String downloadedBalanceLine(double comparisonBalance, Double reportedBalance, double pendingBalance,
+                                        Calendar asOf) {
+
+        String line = "Downloaded balance: " + Utility.formatDollarAmount(comparisonBalance);
+
+        // Only explain a figure this actually explains.  Re-importing a wider statement can leave the
+        // comparison figure and the balance last read from a file belonging to different statements, and a
+        // breakdown that does not add up would be worse than none.
+        if (reportedBalance == null
+                || !Utility.isEqualCurrency(reportedBalance + pendingBalance, comparisonBalance)) {
+            return line;
+        }
+
+        String bankFigure = "the bank's ledger balance of " + Utility.formatDollarAmount(reportedBalance) +
+                ((asOf == null) ? "" : " as of " + Utility.calendarDateToStringDate(asOf));
+
+        // Nothing pending, so the two figures are the same and there is nothing to break down.
+        if (Utility.isEqualCurrency(pendingBalance, 0.0)) {
+            return line + "  (" + bankFigure + ")";
+        }
+
+        return line + "  (" + bankFigure + ", plus " + Utility.formatDollarAmount(pendingBalance) +
+                " of pending transactions the bank has not counted yet)";
     }
 
     /**

@@ -167,6 +167,15 @@ public class GenericClassifer implements FinancialInstitutionInt, Iterator<Trans
      * {@inheritDoc}
      */
     @Override
+    public Double getReportedLedgerBalance() {
+        // No file import, so the bank reported nothing
+        return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public java.util.Calendar getImportedLedgerBalanceAsOf() {
         // No file import, so there is no balance and nothing to date it
         return null;

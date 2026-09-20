@@ -638,27 +638,26 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         return cachedLedgerBalanceAsOf;
     }
 
+    /**
+     * The balance the bank stated, before this application adjusts it for pending transactions.
+     *
+     * <p>{@link #getImportedLedgerBalance()} adds the register's uncleared transactions so that the two
+     * numbers being compared cover the same charges.  That makes the result the right number to compare
+     * against, and the wrong number to quote as "what the bank said":  on 09-20-2026 Bill Pay Danni's
+     * statement said $122.33, the register held $10.05 of pending charges and refunds, and the balance
+     * check reported $132.38 as the "downloaded balance" -- a figure that appears neither in the file nor
+     * on the bank's website, and left the user asking where it came from.
+     *
+     * @return the ledger balance as the bank reported it, or null when there is none
+     */
+    @Override
+    public Double getReportedLedgerBalance() {
+        return rawLedgerBalance();
+    }
+
     @Override
     public Double getImportedLedgerBalance() {
-        Double balance = null;
-        if (cachedLedgerBalance != null) {
-            balance = cachedLedgerBalance;
-        }
-
-        if (balance == null && qfxParser != null && isQfxOpen) {
-            try {
-                // Cast to QfxParser to access getStatement method
-                if (qfxParser instanceof QfxParser) {
-                    QfxStatement statement = ((QfxParser) qfxParser).getStatement();
-                    if (statement != null) {
-                        balance = statement.getLedgerBalance();
-                    }
-                }
-            } catch (Exception e) {
-                // If we can't get the balance, return null
-                return null;
-            }
-        }
+        Double balance = rawLedgerBalance();
 
         // If we have a balance, adjust it by adding provisional transactions
         if (balance != null) {
@@ -680,6 +679,31 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
             } catch (Exception e) {
                 // Log error but return unadjusted balance to avoid blocking the flow
                 System.err.println("Warning: Failed to adjust ledger balance with provisional transactions: " + e.getMessage());
+            }
+        }
+
+        return balance;
+    }
+
+    /** The ledger balance from the import file, with no adjustment of any kind. */
+    private Double rawLedgerBalance() {
+        Double balance = null;
+        if (cachedLedgerBalance != null) {
+            balance = cachedLedgerBalance;
+        }
+
+        if (balance == null && qfxParser != null && isQfxOpen) {
+            try {
+                // Cast to QfxParser to access getStatement method
+                if (qfxParser instanceof QfxParser) {
+                    QfxStatement statement = ((QfxParser) qfxParser).getStatement();
+                    if (statement != null) {
+                        balance = statement.getLedgerBalance();
+                    }
+                }
+            } catch (Exception e) {
+                // If we can't get the balance, return null
+                return null;
             }
         }
 

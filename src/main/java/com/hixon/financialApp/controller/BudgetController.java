@@ -40,6 +40,10 @@ import static java.util.Calendar.YEAR;
 @Setter
 public class BudgetController {
 
+    /** Where lookups that only inform the user report their failures, rather than at the user. */
+    private static final org.apache.logging.log4j.Logger logger =
+            org.apache.logging.log4j.LogManager.getLogger(BudgetController.class);
+
     /*
      * Fields for BudgetController:
      */
@@ -688,6 +692,10 @@ public class BudgetController {
                                         // and they are not fixed amounts:
                                         ((budgetItemMerchants.get(0).getAmount() == 0) && (budgetItemMerchants.get(0).getPercentage() == 0)))
         ) {
+            // A refund is about the charge it reverses, and that charge is already categorized.  Say which
+            // one it looks like before the list of everything this merchant has ever been used for.
+            sayRefundedCharge(transaction);
+
             // then ask the user to enter the splits:
             TransactionSplitsController transactionSplitsController = new TransactionSplitsController(sessionController);
             transactionSplitsController.setDefaultSplitMemo(defaultMemo);
@@ -738,6 +746,83 @@ public class BudgetController {
             }
         }
         return (splits.isEmpty()) ? null : splits;
+    }
+
+    /** How far back a refund is looked for the charge it reverses. */
+    static final int REFUNDED_CHARGE_DAY_WINDOW = 90;
+
+    /**
+     * Say which charge a credit looks like the refund of, and how that charge was categorized.
+     *
+     * <p>Silent unless the register holds a charge from the same merchant for exactly the amount being
+     * credited back.  Nothing is chosen or reordered:  the user is told what this money reverses, which
+     * is what the list of the merchant's budget items cannot say.  On 09-20-2026 two Amazon refunds were
+     * each answered from a nineteen-item list, and the $18.18 one reversed a charge the register had held
+     * since 08-28 under "Other - Travel charger".
+     *
+     * @param transaction the transaction about to be split
+     */
+    private void sayRefundedCharge(Transaction transaction) {
+        try {
+            List<Transaction> charges =
+                    Transaction.findChargesRefundedBy(transaction, REFUNDED_CHARGE_DAY_WINDOW);
+            String notice = refundedChargeNotice(charges, categorizationOf(charges.isEmpty() ? null
+                    : charges.get(0)));
+            if (notice != null) {
+                view.say(notice);
+            }
+        } catch (Exception e) {
+            // Telling the user what a refund reverses is a courtesy;  failing to must not stop the split
+            // question they are here to answer.
+            logger.debug("Could not look for the charge a refund reverses", e);
+        }
+    }
+
+    /** How a charge was categorized, as "Other - Travel charger", or null when it has no splits. */
+    private String categorizationOf(Transaction charge) throws Exception {
+        if (charge == null) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        for (TransactionSplit split : TransactionSplit.getSplitsForTransaction(charge)) {
+            BudgetItem budgetItem = split.getBudgetItem();
+            if (budgetItem == null) {
+                continue;
+            }
+            String part = budgetItem.getPayee();
+            if (split.getMemo() != null && !split.getMemo().isBlank()) {
+                part += " - " + split.getMemo().trim();
+            }
+            parts.add(part);
+        }
+        return parts.isEmpty() ? null : String.join(", ", parts);
+    }
+
+    /**
+     * The line that names the charge a refund reverses, or null when there is nothing to say.
+     *
+     * @param charges        the candidate charges, newest first
+     * @param categorization how the newest one was categorized, or null if it has no splits
+     */
+    static String refundedChargeNotice(List<Transaction> charges, String categorization) {
+
+        if (charges == null || charges.isEmpty()) {
+            return null;
+        }
+
+        Transaction charge = charges.get(0);
+        String notice = "\nThis looks like a refund of the " +
+                Utility.calendarDateToStringDate(charge.getDate()) + " charge of " +
+                Utility.formatDollarAmount(Math.abs(charge.getAmount()));
+        if (categorization != null) {
+            notice += ", which went to " + categorization;
+        }
+        notice += ".";
+
+        if (charges.size() > 1) {
+            notice += "  (" + charges.size() + " charges of that amount;  this is the most recent.)";
+        }
+        return notice;
     }
 
     /**
