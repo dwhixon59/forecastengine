@@ -23,7 +23,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import java.util.Comparator;
+
 import static com.hixon.financialApp.utility.Utility.calendarDateToStringDate;
+import static com.hixon.financialApp.utility.Utility.dateOnlyCompare;
 import static com.hixon.financialApp.utility.Utility.formatDollarAmount;
 import static com.hixon.financialApp.view.base.ViewInt.*;
 
@@ -70,7 +73,18 @@ public class ImportSummaryController {
      *         should call {@code forecastController.updateForecast()}).
      */
     public boolean showSummaryAndRecategorize() throws Exception {
-        List<ImportLog.ImportRecord> records = importLog.getImportRecords();
+        // Work on a copy sorted for a readable review:  the cleared block first (the table's section
+        // divider still expects cleared before provisional), then each block in date order.  The
+        // interactive merge phase that produced these records walked them in payee+amount order for
+        // its merge join against the register, which reads out of chronological order -- the review
+        // table has no such constraint.  Sorting a copy leaves the underlying import log and its
+        // counts untouched, and Java's stable sort keeps same-day rows in the order they were
+        // processed, so the number the user types still maps to the row they see.
+        List<ImportLog.ImportRecord> records = new ArrayList<>(importLog.getImportRecords());
+        records.sort(Comparator
+                .comparingInt((ImportLog.ImportRecord r) -> r.getTransaction().isCleared() ? 0 : 1)
+                .thenComparing(r -> ImportLog.displayDate(r.getTransaction()),
+                        (a, b) -> dateOnlyCompare(a, b)));
 
         if (records.isEmpty()) {
             view.say("No transactions were processed this session.");

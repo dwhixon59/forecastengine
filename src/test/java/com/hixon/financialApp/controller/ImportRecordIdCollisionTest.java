@@ -17,26 +17,26 @@ class ImportRecordIdCollisionTest {
     @Test
     @DisplayName("A free id is kept as it is")
     void freeId_isKept() throws Exception {
-        assertEquals("P202609141", ImportController.firstFreeImportRecordId("P202609141", id -> false));
+        assertEquals("P20260914001", ImportController.firstFreeImportRecordId("P20260914001", id -> false));
     }
 
     @Test
-    @DisplayName("The 09-14-2026 collision:  Amazon Prime does not take the payroll deposit's P202609141")
+    @DisplayName("The 09-14-2026 collision:  Amazon Prime does not take the payroll deposit's P20260914001")
     void takenId_movesToNextFreeCounter() throws Exception {
-        // P202609141 held the 09-12 deposit;  P202609142 belonged to the $42.00 transfer in the same file.
-        Set<String> taken = Set.of("P202609141", "P202609142");
+        // P20260914001 held the 09-12 deposit;  P20260914002 belonged to the $42.00 transfer in the same file.
+        Set<String> taken = Set.of("P20260914001", "P20260914002");
 
-        String id = ImportController.firstFreeImportRecordId("P202609141", taken::contains);
+        String id = ImportController.firstFreeImportRecordId("P20260914001", taken::contains);
 
-        assertEquals("P202609143", id);
+        assertEquals("P20260914003", id);
     }
 
     @Test
     @DisplayName("A two-digit counter continues from where it is")
     void twoDigitCounter_continues() throws Exception {
-        Set<String> taken = Set.of("P2026091411", "P2026091412");
+        Set<String> taken = Set.of("P20260914011", "P20260914012");
 
-        assertEquals("P2026091413", ImportController.firstFreeImportRecordId("P2026091411", taken::contains));
+        assertEquals("P20260914013", ImportController.firstFreeImportRecordId("P20260914011", taken::contains));
     }
 
     @Test

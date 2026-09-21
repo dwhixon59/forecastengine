@@ -157,13 +157,15 @@ public class fileBasedNotificationService implements NotificationServiceInt {
                 // Copy the new file to the user's personal file system:
                 Utility.copyToUsersFileSystem(user, file, filename);
 
-                // Log the results:
-                getView().say("File " + file.getName() + " was written to the file " + filename + " on the users personal " +
-                        "file system " + user.getPersonalFileSystem());
+                // Log the results.  Name the report the user will look for and the folder it landed
+                // in, not the randomly-named temp file it was copied from (e.g.
+                // OverdueItemsReportJustin_4444712816595493230.txt), which means nothing to the user.
+                getView().say("Wrote " + filename + " for " + user.getFirstName() + " to " +
+                        user.getPersonalFileSystem());
             } else {
                 // Log the results:
-                getView().say("File " + targetFilename + " was versioned on the users personal " +
-                        "file system " + user.getPersonalFileSystem());
+                getView().say("Versioned the previous " + targetFilename + " for " + user.getFirstName() +
+                        " in " + user.getPersonalFileSystem());
             }
         } else {
             throw new NotificationServiceException("To send a file to the user, you must specify the file, the target " +

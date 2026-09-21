@@ -281,8 +281,12 @@ public class ImportController {
         Transaction identical = findIdenticalLookAlike(held, incoming.getPayee());
         if (identical != null) {
             claimedLookAlikes.add(identical.getId());
-            view.say("Already imported as import id " + identical.getImportRecordId() +
-                    " (same date, amount and description).");
+            // No preamble here.  Every duplicate -- whether its import id matched directly or, as in
+            // this renamed-id look-alike case, it was recognised by date, amount and description -- is
+            // reported uniformly a moment later by the "Already imported a debit/deposit ... (Import
+            // Record ID: ...)" line in ImportLog.  Saying it twice, and only for this one path, made the
+            // note read as though it belonged to the previous transaction (see the 09-21-2026 Citi
+            // re-download, where two charges matched by id and so had no preamble, shifting the pairing).
             return identical;
         }
 
@@ -496,14 +500,15 @@ public class ImportController {
      *
      * <p>The sequence counter is maintained <em>per {@code idBase}</em>.  Each distinct
      * {@code dedupKey} under the same {@code idBase} receives the next counter value
-     * (P...1, P...2, P...3, …).  If the identical {@code dedupKey} is seen again later
+     * (P...001, P...002, P...003, …), zero-padded so the ids sort in assignment order.  If the
+     * identical {@code dedupKey} is seen again later
      * (a true duplicate), the previously-assigned ID is reused so the caller can detect
      * the collision rather than creating a new record.</p>
      *
      * @param map          tracks dedupKey→assignedId AND idBase→nextCounter in this run
      * @param idBase       the short prefix for the displayed ID (e.g. "P20260617")
      * @param dedupKey     the full-detail key used for duplicate detection in {@code map}
-     * @return             a unique import record ID of the form {@code idBase + counter}
+     * @return             a unique import record ID of the form {@code idBase + zero-padded counter}
      */
     public String constructImportRecordId(HashMap<String, String> map, String idBase, String dedupKey) {
         // If this exact dedupKey was already seen, return the same ID (true duplicate).
@@ -518,7 +523,11 @@ public class ImportController {
         int counter = map.containsKey(counterKey) ? Integer.parseInt(map.get(counterKey)) + 1 : 1;
         map.put(counterKey, Integer.toString(counter));
 
-        String importRecordId = idBase + counter;
+        // Zero-pad the counter to a fixed width so ids sort in the order they were assigned.  Without
+        // padding, the tenth row's id (P...10) sorts before the second's (P...2), because the compare
+        // is lexical; a day with ten or more rows -- 09-21-2026 Bill Pay Danni had twelve -- then reads
+        // out of order wherever ids are ordered as strings.
+        String importRecordId = idBase + formatProvisionalCounter(counter);
         map.put(dedupKey, importRecordId);  // remember this dedupKey → its assigned ID
         return importRecordId;
     }
@@ -560,6 +569,14 @@ public class ImportController {
     /** "P" + yyyyMMdd:  the part of a provisional import record id that comes before its counter. */
     static final int PROVISIONAL_ID_PREFIX_LENGTH = 9;
 
+    /** Digits the provisional counter is zero-padded to, so ids sort in the order they were assigned. */
+    static final int PROVISIONAL_ID_COUNTER_WIDTH = 3;
+
+    /** The counter part of a provisional import record id, zero-padded to {@link #PROVISIONAL_ID_COUNTER_WIDTH}. */
+    static String formatProvisionalCounter(int counter) {
+        return String.format("%0" + PROVISIONAL_ID_COUNTER_WIDTH + "d", counter);
+    }
+
     /**
      * The import record id to save a new provisional transaction under:  the one it was given if that is
      * free, otherwise the next free id with the same "P" + post date prefix.
@@ -579,20 +596,25 @@ public class ImportController {
 
         String base;
         int counter;
+        boolean numericSuffix;
         String suffix = importRecordId.length() > PROVISIONAL_ID_PREFIX_LENGTH
                 ? importRecordId.substring(PROVISIONAL_ID_PREFIX_LENGTH) : "";
         if (suffix.matches("\\d{1,9}")) {
             base = importRecordId.substring(0, PROVISIONAL_ID_PREFIX_LENGTH);
             counter = Integer.parseInt(suffix);
+            numericSuffix = true;
         } else {
             base = importRecordId + "-";
             counter = 1;
+            numericSuffix = false;
         }
 
         String candidate;
         do {
             counter++;
-            candidate = base + counter;
+            // A real "P" + date id keeps the zero-padding constructImportRecordId gave it; an id of
+            // some other shape (base + "-") just gets the next plain number.
+            candidate = base + (numericSuffix ? formatProvisionalCounter(counter) : Integer.toString(counter));
         } while (taken.isTaken(candidate));
         return candidate;
     }
@@ -1327,7 +1349,8 @@ public class ImportController {
         if (j > 0) {
             register.setLastImportDate(Calendar.getInstance());
             register.update();
-            view.say("\nSuccessfully imported " + j + " cleared transactions into the register:  " +
+            view.say("\nSuccessfully imported " + j +
+                    (j == 1 ? " cleared transaction into the register:  " : " cleared transactions into the register:  ") +
                     register.getName() + " from file " + importFilePath + ".");
         }
         return forecast.getInSync();
@@ -1655,7 +1678,7 @@ public class ImportController {
                     // The full-detail string (date+amount+cleared+checknum+payee) is used as the
                     // dedup key so that identical provisional transactions in the same file get
                     // distinct sequence numbers.  The displayed ID uses a compact "PyyyyMMdd"
-                    // prefix so it looks readable in the import log (e.g. "P202606111").
+                    // prefix so it looks readable in the import log (e.g. "P20260611001").
                     String importRecordDedupKey = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
                             formatDollarAmount(transaction.getAmount()).substring(1) + "\t" +
                             transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
@@ -2224,8 +2247,12 @@ public class ImportController {
                         provisionalTransactions.get(provTrxIndex).setMerchant(registerTransactions.get(regTrxIndex).getMerchant());
                         importLog.logImportEvent(provisionalTransactions.get(provTrxIndex), ImportLog.ImportRecord.Status.ALREADY_IMPORTED);
 
-                        // Tell the user what we did:
-                        view.say("Transaction was previously imported.");
+                        // logImportEvent already printed "Already imported a debit/deposit ... (Import
+                        // Record ID: ...)", so a separate "Transaction was previously imported." line
+                        // only repeated it -- noise multiplied by every duplicate when a whole file is
+                        // re-imported.  The split and forecast detail below stays:  it is the only place
+                        // the user sees what an already-held charge was applied to (the review summary
+                        // shows such rows as "[already imported — skipped]").
                         List<TransactionSplit> txSplits = TransactionSplit.getSplitsForTransaction(registerTransactions.get(regTrxIndex));
                         if (txSplits != null) {
                             logSplitsAndReconciliation(forecast, txSplits);
@@ -2343,7 +2370,8 @@ public class ImportController {
 
         // Tell the user the number of transactions imported:
         if (provTrxIndex > 0) {
-            view.say("\nSuccessfully imported " + provTrxIndex + " provisional transactions into the register:  " +
+            view.say("\nSuccessfully imported " + provTrxIndex +
+                    (provTrxIndex == 1 ? " provisional transaction into the register:  " : " provisional transactions into the register:  ") +
                     register.getName() + " from file " + filename + ".");
         }
         return forecast.getInSync();
