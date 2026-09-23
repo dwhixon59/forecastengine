@@ -405,13 +405,13 @@ ALTER TABLE transaction
 
 | File | Change |
 |---|---|
-| `FinancialInstitutionInt` / `FinancialInstitution` | add `loadProvisionalTransactions` (the default loops lines) and `ProvisionalFileContents`; copy `idCardholder` in `reconcileProvisionalTransaction` |
-| `CitiBank` | override `loadProvisionalTransactions` and `getMatchingProvisionalTransaction`; country rule in `normalizeCitiPayee`; `resolveCardholder` |
+| `FinancialInstitutionInt` / `FinancialInstitution` | add `loadProvisionalTransactions` (the default loops lines) and `ProvisionalFileContents`; copy `idCardholder` in `reconcileProvisionalTransaction`. **Hook built 09-23**, as a `default` on the interface so `GenericClassifer` needs nothing; the cardholder copy is Phase B. |
+| `CitiBank` | override `loadProvisionalTransactions` and `getMatchingProvisionalTransaction`; country rule in `normalizeCitiPayee`; `resolveCardholder`. **Built 09-23:** the country rule and `loadProvisionalTransactions`. |
 | `CitiPendingActivityParser` (new) | the pure block parser (§3.3). **Built 09-23.** |
 | `DateRange` (new) | the covered range, with `contains(Calendar)` for §3.6. **Built 09-23.** |
-| `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query |
+| `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query. **Built 09-23:** the constructor (the slash-date one now delegates to it). |
 | `add_transaction_cardholder_column.sql` (new) | the migration in §3.9, plus a rollback script |
-| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6) |
+| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6). **Built 09-23:** read all lines and call the hook once. |
 | `ImportSummaryController`, `NewTransactionSummaryReport` | show the cardholder's first name |
 | Verify-balance step | exclude uncleared rows from the comparison (§3.7) |
 | `TRANSACTION_IMPORT_ALGORITHM.md` | document the record hook, the covered-range rule and cardholder carry-over |

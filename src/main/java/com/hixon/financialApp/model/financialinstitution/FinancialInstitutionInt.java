@@ -94,6 +94,34 @@ public interface FinancialInstitutionInt extends Iterator<Transaction>, AutoClos
     // Create a transaction and load it from a provisional CSV record:
     Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception;
 
+    /**
+     * Reads every pending transaction in a pending-transactions file, in file order, and the dates the
+     * file covers.
+     *
+     * <p>The default reads one transaction per line with
+     * {@link #loadProvisionalTransactionFromCSV(String, Register)}, skipping a line that does not parse
+     * or that the user skips or cancels, and covers every date.  An institution whose pending rows
+     * span several lines (Citi's portal paste) overrides this.</p>
+     *
+     * @param lines    the lines of the file
+     * @param register the register the transactions belong to
+     * @return the pending transactions and the covered range
+     * @throws Exception if reading a transaction fails for any reason other than an unparseable line
+     */
+    default ProvisionalFileContents loadProvisionalTransactions(List<String> lines, Register register)
+            throws Exception {
+        List<Transaction> transactions = new java.util.ArrayList<>();
+        for (String line : lines) {
+            try {
+                transactions.add(loadProvisionalTransactionFromCSV(line, register));
+            } catch (ParseException | com.hixon.financialApp.controller.CancelException |
+                     com.hixon.financialApp.controller.SkipException ignored) {
+                // Not a transaction line, or the user passed on it -- as the per-line import always did.
+            }
+        }
+        return new ProvisionalFileContents(transactions, DateRange.unbounded());
+    }
+
     // Get a provisional transaction from an import record:
     Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
             throws RegisterException, SQLException, EntityException, java.text.ParseException, Exception;

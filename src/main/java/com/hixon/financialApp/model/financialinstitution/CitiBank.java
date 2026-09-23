@@ -69,7 +69,40 @@ public class CitiBank extends FinancialInstitution {
 
     @Override
     public Transaction loadProvisionalTransactionFromCSV(String line, Register register) throws Exception {
-        throw new UnsupportedOperationException("Citi uses QFX format, not CSV. QFX does not support provisional transactions.");
+        throw new UnsupportedOperationException("A Citi pending row spans several lines; read the file with " +
+                "loadProvisionalTransactions.");
+    }
+
+    /**
+     * Reads the pending charges from a paste of the Citi portal's activity page.  Neither of Citi's
+     * downloads (QFX, CSV) carries pending rows, so the user copies the page into the pending file; see
+     * {@link CitiPendingActivityParser}.
+     *
+     * <p>Each transaction's payee and merchant payee are the raw description, as for Wells Fargo:  the
+     * merchant payee is parsed later, and only for transactions the register does not already hold.</p>
+     *
+     * @param lines    the lines of the paste
+     * @param register the Citi register
+     * @return the pending transactions and the dates the paste covers
+     */
+    @Override
+    public ProvisionalFileContents loadProvisionalTransactions(List<String> lines, Register register) {
+        return toProvisionalFileContents(CitiPendingActivityParser.parse(lines, Calendar.getInstance()), register);
+    }
+
+    /**
+     * Turns the parser's records into provisional transactions.  Separate from the parse so that it can
+     * be tested with a fixed "today".
+     */
+    static ProvisionalFileContents toProvisionalFileContents(CitiPendingActivityParser.Result parsed,
+                                                             Register register) {
+        List<Transaction> transactions = new ArrayList<>();
+        for (CitiPendingActivityParser.PendingRecord record : parsed.records()) {
+            // The cardholder (record.cardholder()) is attributed in Phase B (section 3.9 of the design).
+            transactions.add(new Transaction(register, record.date(), record.description(), record.amount(),
+                    record.description()));
+        }
+        return new ProvisionalFileContents(transactions, parsed.coveredRange());
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
+import com.hixon.financialApp.model.financialinstitution.ProvisionalFileContents;
 import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.forecast.ForecastException;
@@ -1650,8 +1651,6 @@ public class ImportController {
 
         int provTrxIndex = 0;
         try {
-            Transaction transaction;
-
             /*
              * Create a list of provisional register transactions in ascending payee + amount order from the import file:
              */
@@ -1661,39 +1660,38 @@ public class ImportController {
             // Let the user know what we are doing:
             view.say("\n----------\nRead in the provisional transactions.");
 
-            // Read the records in the provisional transactions file into a list of provisional register transactions:
-            List<Transaction> provisionalTransactions = new ArrayList<>();
+            // Read the whole file and let the financial institution pick the transactions out of it.  A
+            // Wells Fargo transaction is one line, but a Citi one spans several (see
+            // FinancialInstitutionInt.loadProvisionalTransactions).
+            List<String> lines = new ArrayList<>();
             String line;
-            HashMap<String, String> map = new HashMap<>();
             while ((line = br.readLine()) != null) {
-                try {
-                    // Load the transaction from the CSV line:
-                    try {
-                        transaction = financialInstitution.loadProvisionalTransactionFromCSV(line, register);
-                    } catch (CancelException | SkipException ce) {
-                        continue;
-                    }
-
-                    // Construct an ID for this import record and store it in the transaction.
-                    // The full-detail string (date+amount+cleared+checknum+payee) is used as the
-                    // dedup key so that identical provisional transactions in the same file get
-                    // distinct sequence numbers.  The displayed ID uses a compact "PyyyyMMdd"
-                    // prefix so it looks readable in the import log (e.g. "P20260611001").
-                    String importRecordDedupKey = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
-                            formatDollarAmount(transaction.getAmount()).substring(1) + "\t" +
-                            transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
-                    SimpleDateFormat provIdFmt = new SimpleDateFormat("yyyyMMdd");
-                    String importRecordIdBase = "P" + provIdFmt.format(transaction.getPostDate().getTime());
-                    transaction.setImportRecordId(constructImportRecordId(map, importRecordIdBase, importRecordDedupKey));
-
-                    // Add the transaction to the array of provisional transactions:
-                    provisionalTransactions.add(transaction);
-                    //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
-
-                } catch (ParseException ignored) {
-                }
+                lines.add(line);
             }
             br.close();
+            ProvisionalFileContents fileContents = financialInstitution.loadProvisionalTransactions(lines, register);
+
+            // Read the records in the provisional transactions file into a list of provisional register transactions:
+            List<Transaction> provisionalTransactions = new ArrayList<>();
+            HashMap<String, String> map = new HashMap<>();
+            for (Transaction transaction : fileContents.transactions()) {
+
+                // Construct an ID for this import record and store it in the transaction.
+                // The full-detail string (date+amount+cleared+checknum+payee) is used as the
+                // dedup key so that identical provisional transactions in the same file get
+                // distinct sequence numbers.  The displayed ID uses a compact "PyyyyMMdd"
+                // prefix so it looks readable in the import log (e.g. "P20260611001").
+                String importRecordDedupKey = calendarDateToStringSlashDate(transaction.getPostDate()) + "\t" +
+                        formatDollarAmount(transaction.getAmount()).substring(1) + "\t" +
+                        transaction.isCleared() + "\t" + transaction.getCheckNumber() + "\t" + transaction.getPayee();
+                SimpleDateFormat provIdFmt = new SimpleDateFormat("yyyyMMdd");
+                String importRecordIdBase = "P" + provIdFmt.format(transaction.getPostDate().getTime());
+                transaction.setImportRecordId(constructImportRecordId(map, importRecordIdBase, importRecordDedupKey));
+
+                // Add the transaction to the array of provisional transactions:
+                provisionalTransactions.add(transaction);
+                //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
+            }
 
             // If we found any provisional transactions, then process them:
             if (!provisionalTransactions.isEmpty()) {

@@ -635,10 +635,26 @@ public class Transaction extends IndependentEntity {
     public Transaction(Register register, String postDate, String payee, double amount, String merchantPayee)
             throws ParseException {
 
-        super(true);
-        this.postDate = (stringDateSlashToCalendarDate(postDate));
+        this(register, stringDateSlashToCalendarDate(postDate), payee, amount, merchantPayee);
         // Wells Fargo provisional transactions don't have an authorization date, so use today's date.
         authorizationDate = Calendar.getInstance();
+    }
+
+    /**
+     * Constructs a provisional transaction whose date is already a Calendar.  The date is taken as
+     * both the post date and the authorization date:  a Citi pending row carries one date, the day the
+     * charge was authorized.
+     * @param register the register
+     * @param postDate the transaction date
+     * @param payee the payee
+     * @param amount the amount
+     * @param merchantPayee the merchant payee
+     */
+    public Transaction(Register register, Calendar postDate, String payee, double amount, String merchantPayee) {
+
+        super(true);
+        this.postDate = postDate;
+        authorizationDate = postDate == null ? null : (Calendar) postDate.clone();
         cleared = false;
         checkNumber = 0;
         this.payee = payee;
