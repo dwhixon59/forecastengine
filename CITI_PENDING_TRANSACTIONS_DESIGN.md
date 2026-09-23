@@ -293,6 +293,7 @@ mapping and for the fuzzy tie-break when a pending row is matched to its posted 
 
 `CitiBank.getMatchingProvisionalTransaction` does what Wells Fargo does: it delegates to
 `TransactionUtilities.findMatchingProvisionalTransaction(register, amount, date, merchantPayee)`.
+**Built 09-23:** both banks now call `FinancialInstitution.findPendingRowFor`, which is that delegation.
 `reconcileProvisionalTransaction` is inherited, plus the cardholder carry-over in §3.9.
 
 - **Common case.** A subscription or retail charge matches on exact amount within ±5 days
@@ -415,7 +416,7 @@ ALTER TABLE transaction
 | File | Change |
 |---|---|
 | `FinancialInstitutionInt` / `FinancialInstitution` | add `loadProvisionalTransactions` (the default loops lines) and `ProvisionalFileContents`; copy `idCardholder` in `reconcileProvisionalTransaction`. **Hook built 09-23**, as a `default` on the interface so `GenericClassifer` needs nothing; the cardholder copy is Phase B. |
-| `CitiBank` | override `loadProvisionalTransactions` and `getMatchingProvisionalTransaction`; country rule in `normalizeCitiPayee`; `resolveCardholder`. **Built 09-23:** the country rule and `loadProvisionalTransactions`. |
+| `CitiBank` | override `loadProvisionalTransactions` and `getMatchingProvisionalTransaction`; country rule in `normalizeCitiPayee`; `resolveCardholder`. **Built 09-23:** the country rule, `loadProvisionalTransactions` and `getMatchingProvisionalTransaction` (shared with Wells Fargo as `FinancialInstitution.findPendingRowFor`). |
 | `CitiPendingActivityParser` (new) | the pure block parser (§3.3). **Built 09-23.** |
 | `DateRange` (new) | the covered range, with `contains(Calendar)` for §3.6. **Built 09-23.** |
 | `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query. **Built 09-23:** the constructor (the slash-date one now delegates to it). |

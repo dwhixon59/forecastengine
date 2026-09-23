@@ -23,7 +23,9 @@ import java.util.regex.Pattern;
  *
  * <p><strong>Supported Formats:</strong>
  * <ul>
- *   <li>QFX/OFX files (inherited from {@link FinancialInstitution})</li>
+ *   <li>QFX/OFX files (inherited from {@link FinancialInstitution}) for posted transactions</li>
+ *   <li>A paste of the portal's activity page for pending transactions
+ *       ({@link #loadProvisionalTransactions}, {@link CitiPendingActivityParser})</li>
  * </ul>
  *
  * <p><strong>Iterator Pattern:</strong> This class uses the inherited iterator implementation
@@ -105,11 +107,20 @@ public class CitiBank extends FinancialInstitution {
         return new ProvisionalFileContents(transactions, parsed.coveredRange());
     }
 
+    /**
+     * Finds the pending row a charge from the QFX download was imported as while it was pending, so the
+     * posted charge takes it over instead of landing in the register a second time.  Matched as Wells
+     * Fargo's are:  exact amount within five days, or up to 30% more for a restaurant tip, the payee
+     * breaking ties.  The pending description ("LA FITNESS IRVINE USA") and the posted one ("LA FITNESS
+     * IRVINE CA") differ only in their location, which the fuzzy tie-break tolerates.
+     *
+     * @param clearedTransaction the posted charge from the QFX download
+     * @return its pending row, or null if the register holds none
+     */
     @Override
     public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
             throws RegisterException, SQLException, EntityException, ParseException, Exception {
-        // QFX transactions are always cleared, no provisional transactions
-        return null;
+        return findPendingRowFor(clearedTransaction);
     }
 
     // ========================================

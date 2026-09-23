@@ -8,8 +8,10 @@ import com.hixon.financialApp.model.parser.TransactionParser;
 import com.hixon.financialApp.model.qfx.QfxParser;
 import com.hixon.financialApp.model.qfx.QfxStatement;
 import com.hixon.financialApp.model.qfx.QfxTransaction;
+import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
+import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.Utility;
 import com.hixon.financialApp.view.base.ViewInt;
@@ -20,6 +22,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
@@ -99,6 +102,25 @@ public abstract class FinancialInstitution implements FinancialInstitutionInt {
         this.forecast = sessionController.getForecast();
         this.view = sessionController.getView();
         this.notificationService = sessionController.getNotificationService();
+    }
+
+    /**
+     * Finds the pending register row a cleared transaction is the posted copy of:  same register, not
+     * cleared, within five days, the exact amount (or up to 30% more, for a tip), the payee breaking
+     * ties.  See {@link TransactionUtilities#findMatchingProvisionalTransaction}.
+     *
+     * <p>For an institution whose pending rows come from its own pending file (Wells Fargo, Citi).
+     * One with no pending file has nothing to match and returns null instead.</p>
+     *
+     * @param clearedTransaction the cleared transaction being imported
+     * @return the pending row, or null if there is none
+     */
+    protected Transaction findPendingRowFor(Transaction clearedTransaction) throws EntityException, SQLException {
+        return TransactionUtilities.findMatchingProvisionalTransaction(
+                getRegister().getId(),
+                clearedTransaction.getAmount(),
+                clearedTransaction.getDate(),
+                clearedTransaction.getMerchantPayee());
     }
 
     /**

@@ -7,7 +7,6 @@ import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.forecast.Forecast;
 import com.hixon.financialApp.model.register.Register;
 import com.hixon.financialApp.model.register.Transaction;
-import com.hixon.financialApp.model.register.TransactionUtilities;
 import com.hixon.financialApp.model.user.User;
 import com.hixon.financialApp.notification.async.base.NotificationServiceInt;
 import com.hixon.financialApp.utility.CityStateChecker;
@@ -583,16 +582,8 @@ public class WellsFargoBank extends FinancialInstitution {
     public Transaction getMatchingProvisionalTransaction(Transaction clearedTransaction)
             throws SQLException, EntityException, Exception {
 
-        // Get the merchant payee from the already-parsed transaction
-        String merchantPayee = clearedTransaction.getMerchantPayee();
-
         // Use fuzzy matching based on payee, date, and amount only (no merchant ID)
-        return TransactionUtilities.findMatchingProvisionalTransaction(
-                getRegister().getId(),
-                clearedTransaction.getAmount(),
-                clearedTransaction.getDate(),
-                merchantPayee
-        );
+        return findPendingRowFor(clearedTransaction);
     }
 
     /**
