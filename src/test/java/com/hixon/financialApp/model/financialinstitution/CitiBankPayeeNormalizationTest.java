@@ -87,6 +87,57 @@ class CitiBankPayeeNormalizationTest {
     }
 
     @Test
+    void stripsTrailingCountryAndCityFromAPendingRow() {
+        // The portal writes a pending charge's location as "IRVINE USA" where the QFX row for the
+        // same charge writes "IRVINE CA".  Both have to reduce to the same merchant.
+        assertEquals("LA FITNESS", CitiBank.normalizeCitiPayee("LA FITNESS IRVINE USA"));
+        assertEquals("LA FITNESS", CitiBank.normalizeCitiPayee("LA FITNESS IRVINE CA"));
+    }
+
+    @Test
+    void stripsTrailingBareCountryCode() {
+        assertEquals("LA FITNESS", CitiBank.normalizeCitiPayee("LA FITNESS IRVINE US"));
+    }
+
+    @Test
+    void stripsAMultiWordCityBeforeATrailingCountry() {
+        // A country names no state, so the multi-word city is looked up in any state.  Pending and
+        // posted rows for the same charge must reduce to the same merchant.
+        CitiBank.CityStateLookup lookup = (city, state) -> city.equalsIgnoreCase("LOS GATOS")
+                && (state == null || state.equalsIgnoreCase("CA"));
+        assertEquals("Netflix", CitiBank.normalizeCitiPayee("Netflix.com Los Gatos USA", lookup));
+        assertEquals("Netflix", CitiBank.normalizeCitiPayee("Netflix.com Los Gatos CA", lookup));
+    }
+
+    @Test
+    void pendingAndPostedRowsFromThe0923PasteReduceAlike() {
+        // Pending and posted descriptors of the same charges, from the 09-23 portal paste.  The cities
+        // table spells it "St. Louis", so "SAINT LOUIS" is not a known city and both forms lose only
+        // "LOUIS" -- consistently, which is what the pending-to-posted match needs.
+        CitiBank.CityStateLookup lookup = (city, state) -> false;
+        assertEquals(CitiBank.normalizeCitiPayee("Spectrum SAINT LOUIS MO", lookup),
+                CitiBank.normalizeCitiPayee("Spectrum SAINT LOUIS USA", lookup));
+        assertEquals("PEACE RIVER ELECTRIC",
+                CitiBank.normalizeCitiPayee("PEACE RIVER ELECTRIC WAUCHULA USA", lookup));
+    }
+
+    @Test
+    void leavesACountryCodeThatIsNotTheLastTokenAlone() {
+        // The country rule looks only at the last token, so the "USA" in the middle of this descriptor
+        // survives and the state rule takes the trailing "New York NY" as it always has.  The result
+        // is unchanged from before the country rule existed.
+        CitiBank.CityStateLookup lookup =
+                (city, state) -> city.equalsIgnoreCase("NEW YORK") && state.equalsIgnoreCase("NY");
+        assertEquals("Spotify USA", CitiBank.normalizeCitiPayee("Spotify USA New York NY", lookup));
+    }
+
+    @Test
+    void doesNotStripCountryWhenItWouldRemoveTheOnlyMerchantToken() {
+        // Dropping "USA" and the token before it would leave nothing, so both are kept.
+        assertEquals("NETFLIX USA", CitiBank.normalizeCitiPayee("NETFLIX USA"));
+    }
+
+    @Test
     void handlesNullAndBlank() {
         assertNull(CitiBank.normalizeCitiPayee(null));
         assertEquals("   ", CitiBank.normalizeCitiPayee("   "));

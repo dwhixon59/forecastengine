@@ -36,5 +36,29 @@ public class CityStateChecker {
             throw ee;
         }
     }
+
+    /**
+     * Checks if a given city exists in any state.  Used where a descriptor names a country rather than
+     * a state ("LOS GATOS USA"), so there is no state to narrow the lookup by.
+     *
+     * @param city The name of the city (ASCII version).
+     * @return     True if some state has a city of that name, otherwise false.
+     */
+    public static boolean existsInAnyState(String city) throws SQLException, EntityException {
+        String query = "SELECT 1 FROM cities WHERE city_ascii = ? LIMIT 1";
+
+        try (PreparedStatement stmt = Utility.getDbConnection().prepareStatement(query)) {
+            stmt.setString(1, city);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+
+        } catch (SQLException e) {
+            EntityException ee = new EntityException("Database error occurred trying to retrieve a city. " +
+                    "\nSQL statement was " + query + ".  \nCity: " + city);
+            ee.initCause(e);
+            throw ee;
+        }
+    }
 }
 

@@ -1,8 +1,10 @@
 # Citi Pending Transactions — Design
 
-> **Status:** Proposed on 2026-09-15 and revised the same day. The revision used a second portal
-> sample (pending, posted and payment rows), a check of the QFX download, and the decision to
-> attribute charges to the cardholder. Not implemented.
+> **Status:** Proposed on 2026-09-15, revised the same day, and taken up for implementation on
+> 2026-09-20. The revision used a second portal sample (pending, posted and payment rows), a check of
+> the QFX download, and the decision to attribute charges to the cardholder. The 09-20 pass answered
+> the remaining questions (§6) and found §3.7 already built. Implementation is staged: **Phase A**
+> imports pending charges, **Phase B** adds cardholder attribution.
 >
 > **Goal:** Give the Citi AAdvantage Mastercard register the same pending-transaction import that
 > Wells Fargo registers already have. A charge then appears in the register and forecast when it is
@@ -85,7 +87,8 @@ contained only the pending row.
 | How is the time period written? | `Since Sep 11, 2026` or `Sep 14, 2026 - Sep 15, 2026` |
 | Who made the charge? | the *Name* column, e.g. `DAVID W HIXON` |
 | Does *Current Balance* include pending? | **No.** $11,610.12 is the running balance after the last *posted* row (ADT, 09-13) |
-| Does the QFX download include pending? | **No.** Checked 09-15. Other download formats have not been tried |
+| Does the QFX download include pending? | **No.** Checked 09-15 |
+| Does the CSV download include pending? | **No.** Checked 09-23 with two charges pending: every row is `Cleared` (§1.4) |
 
 The balance check: the register held −$11,522.52 after the 09-14 import, which ran through the
 09-12 payment. The three purchases posted since then add $53.49 + $9.95 + $24.16 = $87.60.
@@ -105,6 +108,29 @@ $11,522.52 + $87.60 = $11,610.12, so the pending $80.23 is not in it.
   shows the full text.
 - **No cardholder.** The QFX row carries no name. A posted row learns its cardholder only from the
   pending row it is merged into (§3.9).
+
+### 1.4 Third sample (09-23): two pending charges, and the CSV download
+
+Saved as the test fixture `src/test/resources/citi/pending-activity-20260923.txt`. *Since Sep 11,
+2026*, running balance shown. Under `Pending Total` (`Pending Purchases $485.00`):
+
+| Date | Description | Name | Amount |
+|---|---|---|---|
+| Sep 22, 2026 | `PEACE RIVER ELECTRIC WAUCHULA USA` | `DAVID W HIXON` | `$405.01` |
+| Sep 21, 2026 | `Spectrum SAINT LOUIS USA` | `DAVID W HIXON` | `$79.99` |
+
+What it adds:
+- **A charge can be listed as pending and posted at once.** Spectrum $79.99 on 09-21 also appears
+  under `Posted Total` as `Spectrum SAINT LOUIS MO`. Spectrum bills once a month, so it is one charge,
+  and the portal is slow to drop the pending row. The existing cleared-twin guard
+  (`TransactionUtilities.findClearedTwinOfProvisional`, added 09-17 for Wells Fargo) already skips a
+  pending row whose cleared copy the register holds. Nothing new is needed, but the parser test must
+  still return the Spectrum pending row; skipping it is the merge's job, not the parser's.
+- **The *Name* column can read `N/A`** (the posted `VISIBLE 8663313527 CO` row). The parser treats
+  `N/A` as no cardholder.
+- **The CSV download** (`Status,Date,Description,Debit,Credit,Member Name`) lists only `Cleared`
+  rows, so the paste stays. It does carry the cardholder for posted rows (`Member Name`, blank for
+  VISIBLE), which is noted for Phase B in §3.9.
 
 ---
 
@@ -171,9 +197,8 @@ The users are Justin Hixon, Danielle Hixon, Christian Rybicki and David Hixon.
   to the last daily update; *Since* the last statement is simplest. Select and copy.
   - **Pasting the whole page is fine.** The reader ignores everything that is not a transaction row.
   - *Running Balance* may be shown or hidden.
-- **Why not a download.** The QFX download does not include pending charges (checked 09-15). If
-  another format on the download menu (CSV, for example) turns out to include them, it could replace
-  the paste. Only the parser in §3.3 would change.
+- **Why not a download.** Neither the QFX download (checked 09-15) nor the CSV download (checked 09-23,
+  §1.4) includes pending charges.
 - **File type.** `ImportController.importProvisionalTransactionFile` accepts only `csv` and `tsv`
   today. Add `txt`.
 
@@ -225,7 +250,8 @@ ProvisionalFileContents loadProvisionalTransactions(List<String> lines, Register
   - `Posted Total -$662.40`
   - `$11,610.12` after *Current Balance*
   - a row's running balance, which follows its amount
-- **A record needs a date, a description and an amount.** The cardholder name is optional. A date with
+- **A record needs a date, a description and an amount.** The cardholder name is optional, and `N/A`
+  counts as none. A date with
   no amount within four lines is dropped and logged at debug level.
 - **Sign.** A portal purchase `$80.23` becomes `-80.23`. A portal credit `-$750.00` becomes `+750.00`.
 - **Section.** Only records under `Pending Total` are returned. Rows under `Posted Total` belong to the
@@ -243,8 +269,9 @@ ProvisionalFileContents loadProvisionalTransactions(List<String> lines, Register
 ### 3.4 Payee normalization
 
 Extend `CitiBank.normalizeCitiPayee` with one rule, applied **before** the state rule:
-- If the **last** token is a country code (`USA`, `US`), drop it together with the single city token
-  before it.
+- If the **last** token is a country code (`USA`, `US`), drop it together with the city before it. A
+  multi-word city is recognized as the state rule recognizes it, but looked up in any state (the
+  country names none), else one token is dropped. *(Built 09-20; the multi-word lookup added 09-23.)*
 - Keep the existing guard that at least one merchant token always remains.
 
 | Raw | Today | Proposed |
@@ -253,6 +280,11 @@ Extend `CitiBank.normalizeCitiPayee` with one rule, applied **before** the state
 | `LA FITNESS IRVINE CA` (posted) | `LA FITNESS` | `LA FITNESS` (unchanged) |
 | `Spotify USA New York NY` | state rule applies | unchanged: `USA` is not the last token |
 | `NETFLIX USA` | `NETFLIX USA` | unchanged: stripping would leave no merchant token |
+| `Netflix.com Los Gatos USA` | `Netflix Los Gatos USA` | `Netflix`, the same as the posted `… Los Gatos CA` |
+| `Spectrum SAINT LOUIS USA` | unchanged | `Spectrum SAINT`, the same as the posted `… SAINT LOUIS MO` |
+
+The `cities` table spells the city `St. Louis`, so `SAINT LOUIS` is not recognized in either form.
+The two still agree, which is what matching needs. Teaching the lookup `SAINT` = `ST.` is out of scope.
 
 Pending and posted rows then resolve to the same merchant payee. That matters for the payee→merchant
 mapping and for the fuzzy tie-break when a pending row is matched to its posted row.
@@ -344,7 +376,8 @@ empty. Attribution has its own method so the two uses do not share one ambiguous
   cleared row, alongside the id, merchant and splits it already copies.
 - **Charges never seen pending.** A charge that posts before any paste includes it arrives from QFX
   with no name, and stays unattributed.
-  - *Optional, phase 2:* the paste's `Posted Total` rows do carry names. The import could backfill
+  - *Optional, phase 2:* the paste's `Posted Total` rows do carry names, and so does the CSV
+    download's `Member Name` column (§1.4). The import could backfill
     `Cardholder_idUser` on cleared register rows with the same date and amount and a matching
     normalized payee, without importing anything.
 
@@ -386,7 +419,10 @@ ALTER TABLE transaction
 
 ## 5. Tests
 
-- **`CitiPendingActivityParserTest`** (new; fixtures are the two real samples)
+- **`CitiPendingActivityParserTest`** (new; fixtures are the three real samples)
+  - The 09-23 fixture gives exactly two records, `PEACE RIVER ELECTRIC WAUCHULA USA` -405.01 (09-22)
+    and `Spectrum SAINT LOUIS USA` -79.99 (09-21), range from 09-11. The posted Spectrum twin and the
+    `N/A` row are skipped.
   - The §1.1 paste gives exactly one record: `-80.23`, 2026-09-15, `LA FITNESS IRVINE USA`,
     `DAVID W HIXON`, range from 09-11.
   - The 09-14..09-15 paste, with running balance hidden, gives the same record, range 09-14..09-15.
@@ -426,10 +462,28 @@ ALTER TABLE transaction
 - *Should reports be filtered by person?* No. Everyone keeps getting the full list, labeled with the
   cardholder (§3.9).
 
-**Still open:**
-1. **Other download formats.** Does CSV (or any other format on the download menu) include pending
-   rows? If so, it could replace the paste. This does not block implementation: the paste works
-   either way.
+**Answered on 09-20, against the code and the live database:**
+
+- *Is the verify-balance change in §3.7 still needed?* **No — it is already built.**
+  `FinancialInstitution.getImportedLedgerBalance()` adds the register's uncleared total to the bank's
+  figure, and `RegisterController.downloadedBalanceLine()` says so in words ("plus $X of pending
+  transactions the bank has not counted yet"). Pending Citi charges will not be reported as a
+  discrepancy. §4's row for the verify-balance step is therefore obsolete.
+- *Does Citi's QFX `LEDGERBAL` equal the portal's posted-only Current Balance?* **Yes.**
+  `qdl20260914_old.QFX` carries `BALAMT -11690.35` as of 09-16; the portal's 09-15 posted balance was
+  $11,610.12, and $11,610.12 + $80.23 (the LA Fitness pending charge, posted by the 16th) =
+  $11,690.35. `LEDGERBAL` counts posted activity only, so the adjustment above is the right one.
+- *Is the optional cardholder backfill from `Posted Total` rows in scope?* **No.** A charge that posts
+  before any paste sees it stays unattributed, as §7 has it.
+- *How are the migration and the register configuration applied?* Directly against
+  `ForecastDatabase`, with the scripts kept in the repo for the record.
+- *One change or several?* **Staged.** Phase A is the import (parser, record hook, payee country
+  rule, covered-range fall-off, `.txt`, configuration); Phase B is attribution (the column, the
+  carry-over, and the cardholder's name in the two reports).
+
+**Answered on 09-23:**
+- *Does the CSV download include pending rows?* **No** (§1.4). The paste is the input; nothing is
+  still open.
 
 ---
 

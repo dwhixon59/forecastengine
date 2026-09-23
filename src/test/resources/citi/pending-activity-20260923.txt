@@ -1,0 +1,123 @@
+Transactions
+View Last Statement
+|
+Hide Running Balance
+|
+|
+Time Period
+Since Sep 11, 2026
+Filter By
+Filter By
+Search(merchant name or amount)
+Transactions
+    Date
+    Description
+    Name
+    Amount
+    Running Balance
+Pending Total
+Pending Purchases
+$485.00
+
+Sep 22, 2026
+
+PEACE RIVER ELECTRIC WAUCHULA USA
+
+DAVID W HIXON
+
+$405.01
+
+-----
+
+Sep 21, 2026
+
+Spectrum SAINT LOUIS USA
+
+DAVID W HIXON
+
+$79.99
+
+-----
+Posted Total
+Posted Total
+-$2,031.63
+
+Sep 21, 2026
+
+Spectrum SAINT LOUIS MO
+
+DAVID W HIXON
+
+$79.99
+
+$10,240.89
+
+Sep 20, 2026
+
+Netflix.com Los Gatos CA
+
+DAVID W HIXON
+
+$22.56
+
+$10,160.90
+
+Sep 19, 2026
+
+Microsoft*Microsoft 36 Redmond WA
+
+DAVID W HIXON
+
+$12.99
+
+$10,138.34
+
+Sep 17, 2026
+
+ELECTRONIC PAYMENT-THANK YOU
+
+DAVID W HIXON
+
+-$1,600.00
+
+$10,125.35
+
+Sep 15, 2026
+
+VISIBLE 8663313527 CO
+
+N/A
+
+$35.00
+
+$11,725.35
+
+Sep 15, 2026
+
+LA FITNESS IRVINE CA
+
+DAVID W HIXON
+
+$80.23
+
+$11,690.35
+
+Sep 13, 2026
+
+ADT SECURITY*320925392 BOCA RATON FL
+
+DAVID W HIXON
+
+$53.49
+
+$11,610.12
+
+Sep 12, 2026
+
+ONLINE PAYMENT, THANK YOU
+
+DAVID W HIXON
+
+-$750.00
+
+$11,556.63

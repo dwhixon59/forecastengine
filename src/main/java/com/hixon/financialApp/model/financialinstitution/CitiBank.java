@@ -110,6 +110,14 @@ public class CitiBank extends FinancialInstitution {
     private static final Set<String> STANDALONE_TLDS = Set.of("COM", "NET", "ORG", "INFO", "BIZ");
 
     /**
+     * Country codes that a pending row puts where a posted row puts a state.  The portal writes a
+     * charge's location as "IRVINE USA" while the QFX row for the same charge, days later, writes
+     * "IRVINE CA".  Both have to reduce to "LA FITNESS" or the pending row and its posted twin would
+     * map to two different merchants.
+     */
+    private static final Set<String> COUNTRY_CODES = Set.of("USA", "US");
+
+    /**
      * Matches a trailing domain suffix on a token so that a web-style merchant descriptor is reduced
      * to its brand name (e.g. "NETFLIX.COM" &rarr; "NETFLIX", "VXNBILL.COM" &rarr; "VXNBILL").
      */
@@ -124,6 +132,7 @@ public class CitiBank extends FinancialInstitution {
     /**
      * Looks up whether a (city, state) pair is a known U.S. city.  Abstracted behind an interface so
      * the normalization logic can be unit tested with an in-memory lookup instead of a live database.
+     * A null state means "in any state", for a descriptor that ends in a country instead of a state.
      */
     @FunctionalInterface
     interface CityStateLookup {
@@ -136,7 +145,7 @@ public class CitiBank extends FinancialInstitution {
      */
     private static final CityStateLookup DB_CITY_LOOKUP = (city, state) -> {
         try {
-            return CityStateChecker.exists(city, state);
+            return state == null ? CityStateChecker.existsInAnyState(city) : CityStateChecker.exists(city, state);
         } catch (Exception e) {
             return false;
         }
@@ -194,6 +203,9 @@ public class CitiBank extends FinancialInstitution {
      *       {@code "SECURITY*320925392"} contributes {@code "SECURITY"}, but the {@code "P"} in
      *       {@code "P3E6A1283E"} is dropped), and drop everything after it (which is trailing
      *       location).</li>
+     *   <li>Otherwise, if the last token is a country code ("USA", "US"), drop it together with the
+     *       city before it: "LA FITNESS IRVINE USA" &rarr; "LA FITNESS".  A multi-word city is
+     *       recognized as in the state rule below, looked up in any state.</li>
      *   <li>Otherwise, if the last token is a U.S. state abbreviation, drop it and the city that
      *       precedes it.  A multi-word city (e.g. "LOS GATOS") is recognized via the supplied city
      *       lookup; if no known multi-word city matches, a single (possibly truncated) city token is
@@ -245,7 +257,22 @@ public class CitiBank extends FinancialInstitution {
             return result.isEmpty() ? payee : result;
         }
 
-        // Rule 3: strip a trailing state and the city that precedes it (multi-word city aware).
+        // Rule 3: strip a trailing country code and the city before it.  Three tokens are required so
+        // that a merchant token always survives:  "NETFLIX USA" keeps both of its tokens rather than
+        // reducing to nothing.  Only the *last* token counts, which leaves the "USA" in the middle of
+        // "Spotify USA New York NY" alone for the state rule below to handle.  The city is removed the
+        // way the state rule removes it -- a known multi-word city whole, else one token -- or a
+        // pending "LOS GATOS USA" would leave "LOS" behind where the posted "LOS GATOS CA" leaves nothing.
+        if (tokens.size() >= 3 && COUNTRY_CODES.contains(tokens.get(tokens.size() - 1).toUpperCase())) {
+            tokens.remove(tokens.size() - 1);  // the country
+            if (removeTrailingCity(tokens, null, cityLookup) == 0) {
+                tokens.remove(tokens.size() - 1);  // the single city token that preceded it
+            }
+            String result = String.join(" ", tokens).trim();
+            return result.isEmpty() ? payee : result;
+        }
+
+        // Rule 4: strip a trailing state and the city that precedes it (multi-word city aware).
         if (tokens.size() >= 2 && STATE_ABBREVIATIONS.contains(tokens.get(tokens.size() - 1).toUpperCase())) {
             String state = tokens.remove(tokens.size() - 1).toUpperCase();  // remove the state
             int cityWordsRemoved = removeTrailingCity(tokens, state, cityLookup);
@@ -286,7 +313,7 @@ public class CitiBank extends FinancialInstitution {
      * by the caller's fallback so that no database call is made for the common single-word case.
      *
      * @param tokens     the tokens (with the state already removed); modified in place on a match
-     * @param state      the two-letter state abbreviation
+     * @param state      the two-letter state abbreviation, or null to accept the city in any state
      * @param cityLookup the (city, state) lookup
      * @return the number of city words removed (0 if none matched)
      */
