@@ -2344,6 +2344,13 @@ public class ImportController {
 
             } // End if there were any transactions in the provisional transactions file.
 
+            else {
+                // Nothing was read.  Saying so is the difference between "there were none" and the
+                // silent success that left a user asking whether a $2.99 apple.com charge had been
+                // imported:  the file simply held no provisional transactions this time.
+                view.say("No provisional transactions were found in the file.");
+            }
+
             // Save off the pending transactions file:
             versionFileAndClear(filename);
 

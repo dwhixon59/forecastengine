@@ -638,6 +638,88 @@ public class ForecastController {
     }
 
     /**
+     * Below this, the amount a periodic occurrence leaves behind when it is zeroed is a normal
+     * month-to-month variance, not a partial payment -- so an electric bill that came in a little
+     * under budget does not draw a nudge.
+     */
+    static final double PARTIAL_PAYMENT_MIN_SHORTFALL = 100.00;
+
+    /**
+     * One step of rolling an amount onto an occurrence.  The occurrence's remaining and the amount
+     * share the budget item's sign:  expenses are negative, income positive.
+     *
+     * @param applied      how much of the amount this occurrence took (0 if it had no room left)
+     * @param newRemaining what the occurrence has left after taking it
+     * @param carriedOver  what still has to go onto a later occurrence (0 once fully absorbed)
+     */
+    record RollStep(double applied, double newRemaining, double carriedOver) {
+    }
+
+    /**
+     * Land as much of {@code amountToApply} on an occurrence as it has room for, and report what is
+     * left to carry forward.
+     *
+     * <p>Works in magnitudes so income and expense settle identically:  an occurrence with $1,242 of
+     * room takes $1,200 and keeps $42;  one with $20.50 of room takes $20.50 and carries the rest.
+     * The occurrence's remaining and the amount always share a sign here -- only same-signed, non-zero
+     * occurrences are offered as roll-forward targets and a refund never reaches the roll path -- so
+     * the magnitude comparison is safe.</p>
+     *
+     * <p>This is what the earlier loop got wrong:  it compared and subtracted as though every amount
+     * were an expense, so a $1,200 instalment rolled onto a $1,242 income occurrence zeroed it and
+     * carried -$42 forward, then did the same to every later occurrence until it ran out of them.</p>
+     *
+     * @param occurrenceRemaining what the occurrence has left (signed)
+     * @param amountToApply       the amount still to place (signed, same sign as the occurrence)
+     * @return the applied amount, the occurrence's new remaining, and any carry-over
+     */
+    static RollStep rollOntoOccurrence(double occurrenceRemaining, double amountToApply) {
+        double room = Math.abs(occurrenceRemaining);
+        double need = Math.abs(amountToApply);
+
+        // The occurrence can absorb the whole amount when it has at least as much room (an exact
+        // match counts, so the last instalment settles to zero rather than a sub-cent remainder).
+        if (room + CURRENCY_COMPARISON_THRESHOLD >= need) {
+            return new RollStep(amountToApply, occurrenceRemaining - amountToApply, 0.0);
+        }
+        // Otherwise it fills to zero and the rest carries forward.
+        return new RollStep(occurrenceRemaining, 0.0, amountToApply - occurrenceRemaining);
+    }
+
+    /**
+     * A periodic occurrence is satisfied and zeroed no matter how much of it actually cleared:  an
+     * electric bill budgeted at $400 that arrives at $350 is done, and the $50 is deliberately not
+     * carried.  But when what cleared covers only a small part of the occurrence, the item is more
+     * likely a collection item entered as a periodic one -- a $250 payment against a $1,242
+     * occurrence closes out $992 that no single payment was ever meant to satisfy.  This decides
+     * when to nudge;  it changes no behaviour.
+     *
+     * @param splitAmount     what cleared
+     * @param remainingBefore what the occurrence had left before it was zeroed
+     * @return true if the cleared amount looks like a partial payment rather than the whole occurrence
+     */
+    static boolean looksLikePartialPaymentOnPeriodic(double splitAmount, double remainingBefore) {
+        double cleared = Math.abs(splitAmount);
+        double occurrence = Math.abs(remainingBefore);
+        double leftOnTheTable = occurrence - cleared;
+
+        // Covers less than half of the occurrence, and the part left behind is more than a normal
+        // variance -- so a bill that merely came in under budget does not trip it.
+        return leftOnTheTable > PARTIAL_PAYMENT_MIN_SHORTFALL && cleared * 2 < occurrence;
+    }
+
+    /**
+     * The nudge {@link #looksLikePartialPaymentOnPeriodic} decides to show.  It names the amount the
+     * periodic occurrence closed out and points at the classification that would carry it instead.
+     */
+    static String partialPaymentOnPeriodicHint(double splitAmount, double remainingBefore, String payee) {
+        double leftOnTheTable = Math.abs(remainingBefore) - Math.abs(splitAmount);
+        return "Note: " + Utility.formatDollarAmount(leftOnTheTable) + " of this occurrence was closed out " +
+                "because " + payee + " is a periodic item, so a single payment satisfies the whole occurrence.  " +
+                "If partial payments toward " + payee + " are normal, it may belong as a collection item.";
+    }
+
+    /**
      * What an ignored overage did.  Ignoring it still uses up what was left in the occurrence -- the remaining amount
      * is zeroed -- and only the excess goes unrecorded.  The message used to say the whole split was "assigned to,
      * but not deducted from" the occurrence, printed beside that occurrence showing its last $4.92 gone:  a $132.87
@@ -792,7 +874,6 @@ public class ForecastController {
         Transaction transaction = split.getTransaction();
 
         // Deduct the actual amount from the planned amount:
-        double remainingAmount = 0;
         switch (split.getBudgetItem().getHowOccurs()) {
 
             case COLLECTION:
@@ -858,64 +939,63 @@ public class ForecastController {
                                     forecastTransaction.toStringVeryConcise()));
                             break;
 
-                        case ROLL_FORWARD:
-                            boolean done = false;
-                            remainingAmount = split.getAmount();
-                            while (!done) {
-                                if (nextNonZeroForecastTransaction != null) {
-                                    // If there is enough money in the forecast transaction to cover the split amount:
-                                    if (nextNonZeroForecastTransaction.getRemainingAmount() <= remainingAmount) {
+                        case ROLL_FORWARD: {
+                            // Fill the overdrawn occurrence to zero first, then carry only the excess
+                            // forward.  Two things this gets right that the earlier loop did not:
+                            //
+                            //   * Sign.  An income collection item (rent collected in instalments) has
+                            //     positive occurrences and a positive split.  The old comparison and
+                            //     subtraction assumed expenses, so $1,200 rolled onto a $1,242
+                            //     occurrence zeroed it and carried -$42 forward, then repeated -- it
+                            //     consumed every later occurrence and grew the carry without bound
+                            //     until it ran out of occurrences ($-14,946 on 09-23-2026).
+                            //     rollOntoOccurrence works in magnitudes, so $1,200 onto $1,242 leaves
+                            //     $42 and stops.
+                            //
+                            //   * The overdrawn occurrence itself.  It was left holding whatever it
+                            //     still had, so a week already overspent went on reporting grocery
+                            //     money available.  Consuming it first spends that money before
+                            //     anything rolls;  the split stays linked to it, which is the period
+                            //     the spend belongs to.
+                            double carry = split.getAmount();
 
-                                        // then deduct the split amount from the forecast transaction amount:
-                                        nextNonZeroForecastTransaction.setRemainingAmount(
-                                                nextNonZeroForecastTransaction.getRemainingAmount() - remainingAmount);
+                            RollStep here = rollOntoOccurrence(forecastTransaction.getRemainingAmount(), carry);
+                            if (!Utility.isEqualCurrency(here.applied(), 0.0)) {
+                                forecastTransaction.setRemainingAmount(here.newRemaining());
+                                forecastTransaction.save(UPDATE);
+                                view.say(Utility.formatDollarAmount(here.applied()) +
+                                        ((here.applied() < 0) ? " deducted from " : " added to ") +
+                                        forecastTransaction.toStringVeryConcise());
+                            }
+                            carry = here.carriedOver();
 
-                                        // and save the new remaining amount in the forecast transactions:
-                                        nextNonZeroForecastTransaction.save(UPDATE);
-                                        view.say(Utility.formatDollarAmount(remainingAmount) +
-                                                ((remainingAmount < 0) ? " deducted from " : " added to ") +
-                                                nextNonZeroForecastTransaction.toStringVeryConcise());
-
-                                        // and we are done.
-                                        done = true;
-
-                                    } else { // but if there isn't enough money to cover:
-
-                                        // then figure out how much to carry over to the next forecast transaction:
-                                        remainingAmount -= nextNonZeroForecastTransaction.getRemainingAmount();
-
-                                        // then let the user know what we are doing:
-                                        double amount =
-                                                (currencyDifference(nextNonZeroForecastTransaction.getRemainingAmount(),
-                                                        remainingAmount) >= 0) ?
-                                                        remainingAmount : nextNonZeroForecastTransaction.getRemainingAmount();
-
-                                        // and zero out and save off the current forecast transaction:
-                                        view.say(Utility.formatDollarAmount(amount) +
-                                                ((amount < 0) ? " deducted from " : " added to ") +
-                                                nextNonZeroForecastTransaction.toStringVeryConcise());
-                                        nextNonZeroForecastTransaction.setRemainingAmount(0);
-                                        nextNonZeroForecastTransaction.save(UPDATE);
-
-                                        // and move to the next non-zero forecast transaction
-                                        nextNonZeroForecastTransaction = it.getNext();
-                                        if (nextNonZeroForecastTransaction != null) {
-                                            view.say("Carry over " + formatDollarAmount(remainingAmount) + " to " +
-                                                    nextNonZeroForecastTransaction.toStringVeryConcise());
-                                        } else {
-                                            view.say("Unable to roll forward " + formatDollarAmount(remainingAmount) +
-                                                    " because there are no more forecast transactions to roll foward to.");
-                                            done = true;
-                                        }
-                                    }
-
-                                } else {
-                                    view.say("Unable to roll forward " + formatDollarAmount(remainingAmount) +
+                            while (!Utility.isEqualCurrency(carry, 0.0)) {
+                                if (nextNonZeroForecastTransaction == null) {
+                                    view.say("Unable to roll forward " + formatDollarAmount(carry) +
                                             " because there are no more forecast transactions to roll foward to.");
-                                    done = true;
+                                    break;
+                                }
+
+                                RollStep step = rollOntoOccurrence(
+                                        nextNonZeroForecastTransaction.getRemainingAmount(), carry);
+                                nextNonZeroForecastTransaction.setRemainingAmount(step.newRemaining());
+                                nextNonZeroForecastTransaction.save(UPDATE);
+                                view.say(Utility.formatDollarAmount(step.applied()) +
+                                        ((step.applied() < 0) ? " deducted from " : " added to ") +
+                                        nextNonZeroForecastTransaction.toStringVeryConcise());
+                                carry = step.carriedOver();
+
+                                // If anything is still to place, move to the next occurrence and name it.
+                                if (!Utility.isEqualCurrency(carry, 0.0)) {
+                                    nextNonZeroForecastTransaction = it.getNext();
+                                    if (nextNonZeroForecastTransaction != null) {
+                                        view.say("Carry over " + formatDollarAmount(carry) + " to " +
+                                                nextNonZeroForecastTransaction.toStringVeryConcise());
+                                    }
                                 }
                             }
                             break;
+                        }
                     }
                 } else { // But if the user did not overspend on this item, e.g. the amount of the split is less than the
                     // remaining amount in the current period:
@@ -951,16 +1031,29 @@ public class ForecastController {
             case ENVELOPE:
             case PERIODIC:
             case VARIABLE_PERIODIC:
-            case UNPLANNED:
-                boolean wasAlreadyZero = Utility.isEqualCurrency(forecastTransaction.getRemainingAmount(), 0.0);
+            case UNPLANNED: {
+                double remainingBefore = forecastTransaction.getRemainingAmount();
+                boolean wasAlreadyZero = Utility.isEqualCurrency(remainingBefore, 0.0);
                 forecastTransaction.setRemainingAmount(0);
                 forecastTransaction.save(UPDATE);
                 view.say(periodicAssignmentMessage(split.getAmount(), wasAlreadyZero,
                         forecastTransaction.toStringVeryConcise()));
+
+                // Zeroing the whole occurrence is correct for a periodic item and stays that way.  But
+                // when what cleared covers only a small part of it, that is the signature of a
+                // collection item entered as a periodic one, so point it out without changing anything.
+                Item.HowOccurs howOccurs = split.getBudgetItem().getHowOccurs();
+                if ((howOccurs == Item.HowOccurs.PERIODIC || howOccurs == Item.HowOccurs.VARIABLE_PERIODIC)
+                        && looksLikePartialPaymentOnPeriodic(split.getAmount(), remainingBefore)) {
+                    view.say(partialPaymentOnPeriodicHint(split.getAmount(), remainingBefore,
+                            split.getBudgetItem().getPayee()));
+                }
+
                 if (wasAlreadyZero) {
                     retireLiveSameMonthSiblings(forecastTransaction);
                 }
                 break;
+            }
         }
 
         return forecastTransaction.getRemainingAmount();
