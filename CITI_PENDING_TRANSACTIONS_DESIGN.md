@@ -407,7 +407,8 @@ ALTER TABLE transaction
 |---|---|
 | `FinancialInstitutionInt` / `FinancialInstitution` | add `loadProvisionalTransactions` (the default loops lines) and `ProvisionalFileContents`; copy `idCardholder` in `reconcileProvisionalTransaction` |
 | `CitiBank` | override `loadProvisionalTransactions` and `getMatchingProvisionalTransaction`; country rule in `normalizeCitiPayee`; `resolveCardholder` |
-| `CitiPendingActivityParser` (new) | the pure block parser (§3.3) |
+| `CitiPendingActivityParser` (new) | the pure block parser (§3.3). **Built 09-23.** |
+| `DateRange` (new) | the covered range, with `contains(Calendar)` for §3.6. **Built 09-23.** |
 | `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query |
 | `add_transaction_cardholder_column.sql` (new) | the migration in §3.9, plus a rollback script |
 | `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6) |
