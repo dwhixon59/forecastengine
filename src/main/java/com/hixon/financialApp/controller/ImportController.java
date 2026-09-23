@@ -4,6 +4,7 @@ import com.hixon.financialApp.model.budget.*;
 import com.hixon.financialApp.model.entity.EntityException;
 import com.hixon.financialApp.model.entity.EntityInt;
 import com.hixon.financialApp.model.financialinstitution.FinancialInstitutionInt;
+import com.hixon.financialApp.model.financialinstitution.DateRange;
 import com.hixon.financialApp.model.financialinstitution.ProvisionalFileContents;
 import com.hixon.financialApp.model.financialinstitution.WellsFargoBank;
 import com.hixon.financialApp.model.forecast.Forecast;
@@ -1532,14 +1533,16 @@ public class ImportController {
 
         // Delegate to appropriate format-specific method
         switch (extension) {
-            case "csv", "tsv" -> {
-                // CSV/TSV format - use existing CSV import method (handles both comma and tab delimiters)
+            case "csv", "tsv", "txt" -> {
+                // CSV/TSV format - use existing CSV import method (handles both comma and tab delimiters).
+                // A .txt file is a paste of a bank's web page (Citi); the financial institution reads it
+                // in FinancialInstitutionInt.loadProvisionalTransactions.
                 return importCsvProvisionalTransactionFile(fullPath);
             }
             default -> {
                 throw new IllegalArgumentException(
                     "Unsupported provisional transaction file format: '" + extension + "'. " +
-                    "Supported formats: .csv, .tsv. " +
+                    "Supported formats: .csv, .tsv, .txt. " +
                     "File: " + fullPath
                 );
             }
@@ -1562,6 +1565,25 @@ public class ImportController {
     public boolean importCsvProvisionalTransactionFile() throws FinancialAppException {
         return importCsvProvisionalTransactionFile(register.getProvisionalTrxFileDirectory() + "\\" +
                 register.getProvisionalTrxFileName());
+    }
+
+    /**
+     * Whether a pending register row that the pending file no longer lists has likely been withdrawn,
+     * and may be offered for deletion.
+     *
+     * <p>Two conditions.  The row must be more than one business day old:  a charge authorized today
+     * may simply not have reached the bank's list yet.  And its date must be inside the dates the file
+     * covers:  a Citi paste filtered to Sep 14 - Sep 15 says nothing about a charge dated Sep 10, whose
+     * absence from the paste is only the filter.  A Wells Fargo file covers every date, so for it the
+     * second condition always holds.  See CITI_PENDING_TRANSACTIONS_DESIGN.md &sect;3.6.</p>
+     *
+     * @param rowDate      the pending register row's date
+     * @param today        today's date
+     * @param coveredRange the dates the pending file covers
+     * @return true if the row may be offered for deletion
+     */
+    static boolean mayHaveFallenOff(Calendar rowDate, Calendar today, DateRange coveredRange) {
+        return coveredRange.contains(rowDate) && businessDaysBeteween(today, rowDate) > 1;
     }
 
     /**
@@ -1693,8 +1715,19 @@ public class ImportController {
                 //TransactionHistory.getInstance().get().stream().forEach(t -> System.out.println(t.toStringConcise()));
             }
 
+            // A file that lists nothing pending still has something to say when it covers specific dates:
+            // every pending register row in those dates has posted or been withdrawn.  A Citi paste
+            // of "Since Sep 11" with an empty Pending section is exactly that.  A file with no dates of
+            // its own (Wells Fargo's, or a paste of the wrong page) says nothing, as before.
+            DateRange coveredRange = fileContents.coveredRange();
+            boolean nothingPendingInCoveredDates = provisionalTransactions.isEmpty() && coveredRange.isBounded();
+            if (nothingPendingInCoveredDates) {
+                view.say("No provisional transactions were found in the file, which covers " + coveredRange +
+                        ".  Checking the register's pending transactions in those dates.");
+            }
+
             // If we found any provisional transactions, then process them:
-            if (!provisionalTransactions.isEmpty()) {
+            if (!provisionalTransactions.isEmpty() || nothingPendingInCoveredDates) {
 
                 //  Sort the list in ascending order by payee + amount:
                 Comparator<Transaction> comparator =
@@ -2262,9 +2295,10 @@ public class ImportController {
 
                     } else {  // else the provisional transaction from the database has fallen off.
 
-                        //  If the register transaction is more than one business day old, then it has likely been
-                        // withdrawn:
-                        if (businessDaysBeteween(Calendar.getInstance(), registerTransactions.get(regTrxIndex).getDate()) > 1) {
+                        //  If the register transaction is more than one business day old, and dated inside
+                        // the dates the file covers, then it has likely been withdrawn:
+                        if (mayHaveFallenOff(registerTransactions.get(regTrxIndex).getDate(), Calendar.getInstance(),
+                                coveredRange)) {
 
                             // Confirm that with the user and remove if they agree:
                             if (registerController.askDeleteRegisterTransaction(registerTransactions.get(regTrxIndex))) {

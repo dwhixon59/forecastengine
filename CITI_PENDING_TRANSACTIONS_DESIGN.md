@@ -321,6 +321,15 @@ range comes from:
 This is a pure helper in the shared merge, `isWithinCoveredRange(Calendar date, DateRange range)`.
 Wells Fargo's range is unbounded, so its behaviour is unchanged.
 
+**Built 09-23** as `ImportController.mayHaveFallenOff(rowDate, today, coveredRange)`, which also holds
+the existing "more than one business day old" rule. Two additions settled while building it:
+- **A paste that covers nothing lets nothing fall off.** With no rows and no time period (a paste of the
+  wrong page), the range is empty rather than unbounded.
+- **A paste with a time period and no pending rows still runs the check.** Every pending register row in
+  those dates has posted or been withdrawn. The import says so ("No provisional transactions were found
+  in the file, which covers ...") and offers the old rows for deletion as usual. A Wells Fargo file with
+  nothing in it still does nothing, as before.
+
 ### 3.7 Register balance verification
 
 **Problem.** Pending rows are added to the register balance when imported, but the bank's balance
@@ -411,7 +420,7 @@ ALTER TABLE transaction
 | `DateRange` (new) | the covered range, with `contains(Calendar)` for §3.6. **Built 09-23.** |
 | `Transaction` | provisional constructor taking a `Calendar`; `idCardholder` field and the column in every query. **Built 09-23:** the constructor (the slash-date one now delegates to it). |
 | `add_transaction_cardholder_column.sql` (new) | the migration in §3.9, plus a rollback script |
-| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6). **Built 09-23:** read all lines and call the hook once. |
+| `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6). **Built 09-23:** everything but the cardholders (Phase B). |
 | `ImportSummaryController`, `NewTransactionSummaryReport` | show the cardholder's first name |
 | Verify-balance step | exclude uncleared rows from the comparison (§3.7) |
 | `TRANSACTION_IMPORT_ALGORITHM.md` | document the record hook, the covered-range rule and cardholder carry-over |

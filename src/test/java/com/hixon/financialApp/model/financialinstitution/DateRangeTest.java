@@ -32,6 +32,13 @@ class DateRangeTest {
     }
 
     @Test
+    void onlyARangeOfSpecificDaysIsBounded() {
+        assertTrue(DateRange.of(day(2026, 9, 14), day(2026, 9, 15)).isBounded());
+        assertFalse(DateRange.unbounded().isBounded());
+        assertFalse(DateRange.empty().isBounded());
+    }
+
+    @Test
     void rejectsARangeThatEndsBeforeItStarts() {
         assertThrows(IllegalArgumentException.class, () -> DateRange.of(day(2026, 9, 15), day(2026, 9, 14)));
         assertThrows(IllegalArgumentException.class, () -> DateRange.of(null, day(2026, 9, 14)));

@@ -87,6 +87,11 @@ public final class DateRange {
         return empty;
     }
 
+    /** Whether the range names specific days:  neither unbounded nor empty. */
+    public boolean isBounded() {
+        return start != null;
+    }
+
     /** A calendar day as a sortable yyyymmdd integer, ignoring the time of day. */
     private static int dayKey(Calendar c) {
         return c.get(Calendar.YEAR) * 10000 + (c.get(Calendar.MONTH) + 1) * 100 + c.get(Calendar.DAY_OF_MONTH);
