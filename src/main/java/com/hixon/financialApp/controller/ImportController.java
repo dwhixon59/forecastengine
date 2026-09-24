@@ -1372,9 +1372,17 @@ public class ImportController {
      * checked:  the merge said this row corresponds to something in the register, and this asks the
      * register whether it does.
      *
+     * <p>Rows the user skipped because the register already holds their cleared copy are left out.
+     * That copy carries the bank's posted wording ("Spectrum SAINT LOUIS MO", "PUBLIX #361") where the
+     * file has the pending wording ("Spectrum SAINT LOUIS USA", "PURCHASE PUBLIX #361 SARASOTA FL
+     * CARD0148"), so the payee comparison cannot find it, and on 09-24-2026 a correctly skipped Spectrum
+     * charge was reported as $79.99 missing.
+     *
      * @param provisionalTransactions the transactions read from the file, after the merge
+     * @param skippedAsAlreadyCleared rows skipped because their cleared copy is in the register
      */
-    private void reportProvisionalTransactionsNotInRegister(List<Transaction> provisionalTransactions) {
+    private void reportProvisionalTransactionsNotInRegister(List<Transaction> provisionalTransactions,
+                                                            Set<Transaction> skippedAsAlreadyCleared) {
 
         try {
             // Deliberately not restricted to uncleared rows.  The cleared import runs before this one
@@ -1403,20 +1411,7 @@ public class ImportController {
                 held.add(new Transaction(rs));
             }
 
-            List<Transaction> missing = new ArrayList<>();
-            for (Transaction fromFile : provisionalTransactions) {
-                boolean found = false;
-                for (Transaction inRegister : held) {
-                    if (Objects.equals(fromFile.getPayee(), inRegister.getPayee())
-                            && isEqualCurrency(fromFile.getAmount(), inRegister.getAmount())) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    missing.add(fromFile);
-                }
-            }
+            List<Transaction> missing = transactionsNotHeld(provisionalTransactions, held, skippedAsAlreadyCleared);
 
             if (missing.isEmpty()) {
                 return;
@@ -1437,6 +1432,37 @@ public class ImportController {
             // A check that fails must not fail the import it was checking.
             logger.debug("Could not verify that every provisional transaction reached the register", e);
         }
+    }
+
+    /**
+     * The file's transactions that the register does not hold, matched on payee and amount as the merge
+     * matches them, leaving out the ones skipped because their cleared copy is already there.
+     *
+     * @param fromFile the transactions read from the file
+     * @param held     the register's transactions over the same dates
+     * @param skipped  rows skipped as already cleared (compared by identity)
+     * @return the rows that are missing, in file order
+     */
+    static List<Transaction> transactionsNotHeld(List<Transaction> fromFile, List<Transaction> held,
+                                                 Set<Transaction> skipped) {
+        List<Transaction> missing = new ArrayList<>();
+        for (Transaction transaction : fromFile) {
+            if (skipped != null && skipped.contains(transaction)) {
+                continue;
+            }
+            boolean found = false;
+            for (Transaction inRegister : held) {
+                if (Objects.equals(transaction.getPayee(), inRegister.getPayee())
+                        && isEqualCurrency(transaction.getAmount(), inRegister.getAmount())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                missing.add(transaction);
+            }
+        }
+        return missing;
     }
 
     /**
@@ -1672,6 +1698,15 @@ public class ImportController {
                 register.getName() + "'.");
 
         int provTrxIndex = 0;
+
+        // How many new pending transactions this run saved.  provTrxIndex counts every row the merge
+        // processed, including ones already in the register and ones skipped because they had cleared.
+        int importedCount = 0;
+
+        // Rows skipped because the register already holds their cleared copy.  The cleared copy's
+        // description is the bank's posted wording, not the pending wording in the file, so the
+        // not-in-register check below would otherwise report each of them as missing.
+        Set<Transaction> skippedAsAlreadyCleared = Collections.newSetFromMap(new IdentityHashMap<>());
         try {
             /*
              * Create a list of provisional register transactions in ascending payee + amount order from the import file:
@@ -1818,6 +1853,7 @@ public class ImportController {
                         // Checked before the payee is parsed, since parsing can ask about transfers.
                         if (!alreadyInTheRegister && isAlreadyCleared(provisionalTransactions.get(provTrxIndex),
                                 claimedClearedTwins)) {
+                            skippedAsAlreadyCleared.add(provisionalTransactions.get(provTrxIndex));
                             provTrxIndex++;
                             continue;
                         }
@@ -1966,6 +2002,7 @@ public class ImportController {
                                     provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
                                     if (!alreadyInTheRegister) {
                                         creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                                        importedCount++;
                                     }
 
                                     // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
@@ -2217,6 +2254,7 @@ public class ImportController {
                         provisionalTransactions.get(provTrxIndex).save(INSERT_ON_DUPLICATE_UPDATE);
                         if (!alreadyInTheRegister) {
                             creditToRegisterBalance(provisionalTransactions.get(provTrxIndex));
+                            importedCount++;
                         }
 
                         // If the importRecordId already existed in the database the ON DUPLICATE KEY UPDATE
@@ -2372,7 +2410,7 @@ public class ImportController {
                 // Reporting only.  Re-importing here would mean deciding what went wrong, and this
                 // cannot know;  what it can do is make sure the next one is noticed rather than
                 // reconciled away by hand months later.
-                reportProvisionalTransactionsNotInRegister(provisionalTransactions);
+                reportProvisionalTransactionsNotInRegister(provisionalTransactions, skippedAsAlreadyCleared);
 
             } // End if there were any transactions in the provisional transactions file.
 
@@ -2407,11 +2445,15 @@ public class ImportController {
             throw ce;
         }
 
-        // Tell the user the number of transactions imported:
-        if (provTrxIndex > 0) {
-            view.say("\nSuccessfully imported " + provTrxIndex +
-                    (provTrxIndex == 1 ? " provisional transaction into the register:  " : " provisional transactions into the register:  ") +
+        // Tell the user the number of transactions imported -- saved this run, not merely read:  on
+        // 09-24-2026 a Citi paste whose one row had already cleared reported "Successfully imported 1".
+        if (importedCount > 0) {
+            view.say("\nSuccessfully imported " + importedCount +
+                    (importedCount == 1 ? " provisional transaction into the register:  " : " provisional transactions into the register:  ") +
                     register.getName() + " from file " + filename + ".");
+        } else if (provTrxIndex > 0) {
+            view.say("\nNo new provisional transactions to import into the register:  " + register.getName() +
+                    " from file " + filename + ".");
         }
         return forecast.getInSync();
 
