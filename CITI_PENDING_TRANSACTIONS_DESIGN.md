@@ -358,6 +358,22 @@ Set once, through Manage Data or a one-line `UPDATE register`:
 
 After a successful import the file is versioned and cleared, as for Wells Fargo.
 
+**Applied 09-23** directly against `ForecastDatabase` (the scripts were temporary and are not kept):
+
+```sql
+UPDATE register
+   SET provisionalTrxFileName      = 'CitiAAdvantage-PendingTrx.txt',
+       provisionalTrxFileDirectory = trxImportFileDirectory
+ WHERE idRegister = uuid_to_bin('6781379b-7dbb-4f27-a6ee-d4c83e4f1f0f');
+```
+
+To switch the import off, set both columns back to `''`, which is what they held before. The directory
+is copied from the register's QFX directory rather than spelled out: a Windows path in a MySQL string
+needs every backslash doubled, and a first run with single backslashes stored `C:UsersdwhixDownloads`
+(corrected in the same session).
+An empty `CitiAAdvantage-PendingTrx.txt` was created in Downloads so the daily update does not stop to
+report a missing file; an empty file imports nothing and lets nothing fall off.
+
 ### 3.9 Cardholder attribution
 
 **Decision (09-15):** each Citi charge is attributed to the cardholder in the portal's *Name* column.
@@ -487,7 +503,7 @@ ALTER TABLE transaction
 - *Is the optional cardholder backfill from `Posted Total` rows in scope?* **No.** A charge that posts
   before any paste sees it stays unattributed, as §7 has it.
 - *How are the migration and the register configuration applied?* Directly against
-  `ForecastDatabase`, with the scripts kept in the repo for the record.
+  `ForecastDatabase`. The scripts are temporary and not committed; the doc records what was run (§3.8).
 - *One change or several?* **Staged.** Phase A is the import (parser, record hook, payee country
   rule, covered-range fall-off, `.txt`, configuration); Phase B is attribution (the column, the
   carry-over, and the cardholder's name in the two reports).
