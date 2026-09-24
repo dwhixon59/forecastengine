@@ -922,6 +922,113 @@ public class WellsFargoBank extends FinancialInstitution {
     }
 
     /**
+     * Reads a pending-transactions file, which is either a CSV download or a copy of the pending list.
+     *
+     * <p>The account activity CSV download ({@code DATE,DESCRIPTION,AMOUNT,CHECK #,STATUS}) marks each
+     * row {@code Pending} or {@code Posted}, so the pending rows can be taken from it directly instead
+     * of from a copy of the web page.  Only the pending rows are read; the posted ones belong to the
+     * QFX import, which also supplies the balance check and the bank's transaction ids.  Any other file
+     * is read as before, one copied line at a time.</p>
+     *
+     * @param lines    the lines of the file
+     * @param register the register the transactions belong to
+     * @return the pending transactions; the range is unbounded, as the bank lists everything pending
+     * @throws Exception if reading a copied line fails for any reason other than an unparseable line
+     */
+    @Override
+    public ProvisionalFileContents loadProvisionalTransactions(List<String> lines, Register register)
+            throws Exception {
+        List<Transaction> fromDownload = readPendingRowsFromDownload(lines, register, Calendar.getInstance());
+        if (fromDownload == null) {
+            return super.loadProvisionalTransactions(lines, register);
+        }
+        return new ProvisionalFileContents(fromDownload, DateRange.unbounded());
+    }
+
+    /** The columns of the account activity CSV download, in order. */
+    static final List<String> DOWNLOAD_HEADER = List.of("DATE", "DESCRIPTION", "AMOUNT", "CHECK #", "STATUS");
+
+    /** The STATUS of a row that has not posted yet. */
+    private static final String PENDING_STATUS = "Pending";
+
+    /**
+     * The pending rows of an account activity CSV download, or null if the lines are not one.
+     *
+     * <p>A download is recognized by its header row.  Each pending row becomes a provisional transaction
+     * the way a copied line does:  the description is tidied by {@link #cleanProvisionalPayee} (the
+     * download pads its fields with runs of spaces, which that collapses, so a charge reads the same
+     * whether it came from the download or the page), the merchant payee is left for the import to parse,
+     * and the authorization date is the day of the import.  A row that cannot be read is skipped.</p>
+     *
+     * @param lines    the lines of the file
+     * @param register the register the transactions belong to
+     * @param today    the authorization date given to each transaction
+     * @return the pending transactions in file order, or null if the file is not a CSV download
+     */
+    static List<Transaction> readPendingRowsFromDownload(List<String> lines, Register register, Calendar today)
+            throws java.io.IOException {
+        int headerIndex = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i) == null ? "" : lines.get(i).replace("﻿", "").strip();
+            if (!line.isEmpty()) {
+                headerIndex = isDownloadHeader(line) ? i : -1;
+                break;
+            }
+        }
+        if (headerIndex < 0) {
+            return null;
+        }
+
+        List<Transaction> pending = new ArrayList<>();
+        String body = String.join("\n", lines.subList(headerIndex + 1, lines.size()));
+        org.apache.commons.csv.CSVFormat format = org.apache.commons.csv.CSVFormat.RFC4180.builder()
+                .setHeader(DOWNLOAD_HEADER.toArray(new String[0]))
+                .setIgnoreEmptyLines(true)
+                .setTrim(true)
+                .get();
+        try (org.apache.commons.csv.CSVParser parser = org.apache.commons.csv.CSVParser.parse(body, format)) {
+            for (CSVRecord record : parser) {
+                if (record.size() < DOWNLOAD_HEADER.size() ||
+                        !PENDING_STATUS.equalsIgnoreCase(record.get("STATUS"))) {
+                    continue;
+                }
+                try {
+                    SimpleDateFormat downloadDate = new SimpleDateFormat("MM/dd/yyyy", Locale.US);
+                    downloadDate.setLenient(false);
+                    Calendar date = Calendar.getInstance();
+                    date.setTime(downloadDate.parse(record.get("DATE")));
+                    double amount = Utility.parseDollarAmount(record.get("AMOUNT"));
+                    String payee = cleanProvisionalPayee(record.get("DESCRIPTION"));
+                    if (amount == 0 || payee == null || payee.isEmpty()) {
+                        continue;
+                    }
+                    Transaction transaction = new Transaction(register, date, payee, amount, payee);
+                    // As for a copied line:  Wells Fargo gives a pending row no authorization date.
+                    transaction.setAuthorizationDate((Calendar) today.clone());
+                    pending.add(transaction);
+                } catch (ParseException | NumberFormatException e) {
+                    logger.debug("Skipped an unreadable pending row in a Wells Fargo download: {}", record);
+                }
+            }
+        }
+        return pending;
+    }
+
+    /** Whether a line is the download's header row, compared by column name. */
+    private static boolean isDownloadHeader(String line) {
+        String[] cells = line.split(",", -1);
+        if (cells.length != DOWNLOAD_HEADER.size()) {
+            return false;
+        }
+        for (int i = 0; i < cells.length; i++) {
+            if (!cells[i].strip().replace("\"", "").equalsIgnoreCase(DOWNLOAD_HEADER.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * How many words at the front of a one-off transaction's description say what kind of transaction it
      * is rather than who it was with.
      *

@@ -6,8 +6,8 @@
 > It traces the code as it exists today and flags observations/open questions at the end.
 >
 > Scope: the **cleared (posted) register import** path — goal `importRegisterTransactions`.
-> The provisional (pending) import path and the "update forecast from external source" path
-> are related but out of scope here.
+> The provisional (pending) import path is summarized in §4A, only as far as it meets this one.
+> The "update forecast from external source" path is out of scope.
 
 > **Collaboration decisions (answers to §9):**
 > 1. **Focus:** Improve the whole pipeline, **one phase at a time**; the current focus is
@@ -119,6 +119,14 @@ For each `currentTransaction` produced by the iterator:
 ### Phase 2 — Reconcile with a provisional (pending) transaction
 Only if splits aren't already assigned:
 - `provisionalTransaction = financialInstitution.getMatchingProvisionalTransaction(currentTransaction)`.
+  - **Wells Fargo and Citi** (the institutions with a pending file) both call
+    `FinancialInstitution.findPendingRowFor`, which delegates to
+    `TransactionUtilities.findMatchingProvisionalTransaction`: same register, uncleared, within ±5
+    days, the exact amount first (the payee only breaks ties between several), then up to 30% more
+    for a tip. **Barclays and Generic** return `null`: they have no pending rows to match.
+  - A Citi pending description and its posted one differ in location (`LA FITNESS IRVINE USA` vs.
+    `LA FITNESS IRVINE CA`). A single exact-amount candidate is taken without looking at the payee;
+    among several, the fuzzy payee comparison still pairs them, since the merchant words agree.
 - If found:
   - Adopt its merchant (or resolve `Merchant.getByPayee(...)` if it was `UNKNOWN`).
   - Adopt its splits.
@@ -168,6 +176,61 @@ Only if splits aren't already assigned:
 - Phase 7: `versionFile(importFilePath)` (backup copy). `finally` always closes the institution iterator.
 - After the loop: if `j > 0`, update `register.lastImportDate` and print a success summary.
 - Returns `forecast.getInSync()`; the caller runs `updateForecast()` when out of sync.
+
+---
+
+## 4A. The provisional (pending) import, in brief
+
+`ImportController.importProvisionalTransactionFile()` → `importCsvProvisionalTransactionFile(path)`,
+run by the daily update **after** the cleared import. The register names the file
+(`provisionalTrxFileName` / `provisionalTrxFileDirectory`); `.csv`, `.tsv` and `.txt` are accepted.
+
+**Reading the file — the record hook.** The import reads every line, then makes one call:
+
+```
+ProvisionalFileContents contents = financialInstitution.loadProvisionalTransactions(lines, register);
+    // contents.transactions()  — the pending transactions, in file order
+    // contents.coveredRange()  — the dates the file speaks for (a DateRange)
+```
+
+| Institution | How it reads the file | Covered range |
+|---|---|---|
+| Wells Fargo, CSV download | recognized by its header `DATE,DESCRIPTION,AMOUNT,CHECK #,STATUS`; only rows with `STATUS` = `Pending` are read (`WellsFargoBank.readPendingRowsFromDownload`); the posted rows are left to the QFX import | unbounded |
+| Wells Fargo, copied page (and the default) | `FinancialInstitutionInt`'s `default`: one transaction per line via `loadProvisionalTransactionFromCSV`; a line that does not parse, or that the user skips or cancels, is dropped | unbounded: the file lists everything pending |
+| Citi | `CitiPendingActivityParser` reads a paste of the portal's activity page, where one row spans several lines; only rows under `Pending Total` are returned | the page's time period (`Since Sep 11, 2026` → 09-11..today); else the earliest..latest row; else **empty** |
+
+Each transaction then gets a `P<yyyyMMdd><nnn>` import record id, as before. See
+`CITI_PENDING_TRANSACTIONS_DESIGN.md` for the Citi paste format.
+
+**Merging with the register.** The file's transactions and the register's uncleared rows are sorted on
+the same key and walked together:
+- **In the file, not the register:** a new pending charge — unless the register already holds its
+  *cleared* copy (`TransactionUtilities.findClearedTwinOfProvisional`), which happens when a pending list
+  still shows a charge that posted overnight. Otherwise its merchant is parsed, splits assigned, and it is
+  saved, credited to the balance and reconciled to the forecast.
+- **In both:** already imported; skipped (or finished, if its splits or reconciliation were left
+  incomplete last time).
+- **In the register, not the file — "fallen off":** offered for deletion only when
+  `ImportController.mayHaveFallenOff(rowDate, today, coveredRange)` holds:
+  1. the row is **more than one business day old** (a charge authorized today may not be listed yet), and
+  2. its date is **inside the covered range**. A Citi paste filtered to Sep 14–15 says nothing about a
+     pending Sep 10 charge, so that charge is left alone. Wells Fargo's range is unbounded, so for it
+     only the age rule applies.
+
+  If the user agrees, the row, its splits, its transfer counterparts and any orphaned unplanned forecast
+  transaction are deleted and its amount is taken back out of the balance.
+
+**A file with nothing pending.** If no transactions were read:
+- and the covered range is **bounded** (a Citi paste with a time period and an empty Pending section),
+  the merge still runs, so pending rows in that period can fall off: they have posted or been withdrawn;
+- otherwise (an empty Wells Fargo file, or a Citi paste with no rows and no time period) it says
+  "No provisional transactions were found in the file" and changes nothing. An empty range never lets a
+  row fall off.
+
+**Afterwards** the file is versioned and cleared, ready for the next paste or download.
+
+**Where the two paths meet.** When the charge posts, the *cleared* import's Phase 2 (§4) finds the
+pending row and takes it over — its id, merchant and splits — so the charge is in the register once.
 
 ---
 
@@ -444,7 +507,9 @@ Ordered roughly by value ÷ risk. None of these are implemented yet — they're 
 ## 7. Idempotency, balance & control flow
 
 - **Duplicate protection:** `(importRecordId, registerId)` uniquely identifies a transaction, so a
-  re-run adopts the existing row instead of double-importing.
+  re-run adopts the existing row instead of double-importing. Between the two paths, a posted charge
+  takes over its pending row (Phase 2), and a pending charge whose posted copy is already there is not
+  re-added (§4A).
 - **Balance is mutated in several places:** Phase 2 (new, no provisional), Phase 2 tip adjustment,
   Phase 3 `SKIP` branch. (See open question Q4.)
 - **User escape hatches are exceptions:** `CancelException`, `SkipException`, `QuitException`

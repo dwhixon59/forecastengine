@@ -440,7 +440,7 @@ ALTER TABLE transaction
 | `ImportController` | accept `.txt`; read all lines and call the hook once; resolve cardholders; restrict fall-off to the covered range (§3.6). **Built 09-23:** everything but the cardholders (Phase B). |
 | `ImportSummaryController`, `NewTransactionSummaryReport` | show the cardholder's first name |
 | Verify-balance step | exclude uncleared rows from the comparison (§3.7) |
-| `TRANSACTION_IMPORT_ALGORITHM.md` | document the record hook, the covered-range rule and cardholder carry-over |
+| `TRANSACTION_IMPORT_ALGORITHM.md` | document the record hook, the covered-range rule and cardholder carry-over. **Built 09-24:** §4A and Phase 2 cover the hook, the covered range and pending/posted matching; the cardholder carry-over waits for Phase B. |
 
 ---
 
