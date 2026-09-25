@@ -825,6 +825,45 @@ public class Forecast extends IndependentEntity {
     } // End saveForecastTransactions().
 
     /**
+     * Give each freshly generated occurrence the id its deleted predecessor had, where one fell on the
+     * same day for the same forecast item.
+     *
+     * <p>A forecast update deletes the occurrences it is about to regenerate and the engine mints new
+     * ones with new ids.  Left alone, that breaks every reference to the old ids -- above all a forecast
+     * spreadsheet rendered before the update, whose rows are then skipped as "no longer in the database".
+     * The caller captured the old ids by {@link ForecastTransaction#occurrenceKey} before the delete;
+     * this hands them back to the occurrences that still occupy the same slot.  An occurrence whose day
+     * moved, or one with no predecessor, keeps the id the engine gave it.
+     *
+     * <p>Each id is used at most once:  it is removed from the map when claimed, so if the engine ever
+     * put two occurrences on one day for one item only the first takes the old id and the second keeps
+     * its new one, leaving them distinct.
+     *
+     * @param preservedIds occurrence key to old id, as captured before the regenerating delete;  may be
+     *                     null or empty, in which case nothing is changed
+     */
+    public void reapplyPreservedTransactionIds(Map<String, UUID> preservedIds)
+            throws EntityException, SQLException, ForecastException, BudgetException {
+        if (preservedIds == null || preservedIds.isEmpty() || transactions == null) {
+            return;
+        }
+        for (ForecastTransaction dayList : transactions) {
+            for (ForecastTransaction occurrence = dayList; occurrence != null;
+                 occurrence = occurrence.getNextTransaction()) {
+                if (occurrence.getIdForecastItem() == null || occurrence.getPlannedDate() == null) {
+                    continue;
+                }
+                UUID oldId = preservedIds.remove(
+                        ForecastTransaction.occurrenceKey(occurrence.getIdForecastItem(),
+                                occurrence.getPlannedDate()));
+                if (oldId != null) {
+                    occurrence.setId(oldId);
+                }
+            }
+        }
+    } // End reapplyPreservedTransactionIds().
+
+    /**
      * Detects and reports duplicate forecast transactions.
      * Finds transactions with the same ForecastItem + plannedDate combination but different IDs,
      * which indicates logical duplicates that should not exist.

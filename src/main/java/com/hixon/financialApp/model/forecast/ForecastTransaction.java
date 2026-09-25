@@ -568,6 +568,26 @@ public class ForecastTransaction extends IndependentEntity {
         return "forecast transaction";
     }
 
+    /**
+     * A stable key for an occurrence:  its forecast item and its planned day.  Two occurrences that
+     * share it are the same slot in the forecast even if a regeneration replaced one with the other,
+     * so it is what carries an occurrence's id across a delete-and-regenerate update -- see
+     * {@code ForecastController.updateForecast} and {@code Forecast.reapplyPreservedTransactionIds}.
+     *
+     * <p>The day is taken to date precision only:  a stored occurrence's planned date is at midnight
+     * while a freshly generated one carries the time of day it was generated, and the two must key the
+     * same.
+     *
+     * @param idForecastItem the forecast item the occurrence belongs to
+     * @param plannedDate    the day the occurrence is planned for
+     * @return the key
+     */
+    public static String occurrenceKey(UUID idForecastItem, Calendar plannedDate) {
+        return idForecastItem + "|" + String.format("%04d-%02d-%02d",
+                plannedDate.get(Calendar.YEAR), plannedDate.get(Calendar.MONTH) + 1,
+                plannedDate.get(Calendar.DATE));
+    }
+
     public static ForecastTransaction getById(UUID idForecastTransaction)
             throws ForecastException, EntityException, SQLException {
         ResultSet rs = EntityInt.getRSById(selectQuery + " where idForecastTransaction = ", idForecastTransaction,

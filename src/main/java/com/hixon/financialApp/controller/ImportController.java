@@ -553,13 +553,55 @@ public class ImportController {
     private boolean hasKnownPendingTwin(Transaction clearedTransaction) {
         try {
             clearedTransaction.setMerchantPayee(clearedTransaction.getPayee());
-            Transaction twin = financialInstitution.getMatchingProvisionalTransaction(clearedTransaction);
+            Transaction twin = matchingProvisionalTransactionFor(clearedTransaction);
             return twin != null && twin.getMerchant() != null
                     && !Merchant.UNKNOWN.equalsIgnoreCase(twin.getMerchant().getName());
         } catch (Exception e) {
             logger.debug("Could not look for a pending version before parsing the payee: {}", e.getMessage());
             return false;
         }
+    }
+
+    // -- Provisional-twin lookup memo -----------------------------------------------------------
+    //
+    // getMatchingProvisionalTransaction is a database round-trip that also writes a multi-line
+    // "Provisional Matching Debug" block to the log.  For a new charge it is asked for twice: once
+    // by hasKnownPendingTwin (peeking to decide whether the payee needs parsing) and again by
+    // Phase 2 (to actually reconcile).  Between the two the payee is reparsed only when the peek
+    // found no known twin, so keying the memo on the exact lookup inputs -- register, amount, date,
+    // merchantPayee -- makes the second call a cache hit whenever those are unchanged and a genuine
+    // fresh lookup whenever the reparse changed the payee.  forgetProvisionalTwin() clears it per
+    // charge so one charge's answer can never be served to the next.
+
+    private String provisionalTwinKey;
+    private Transaction provisionalTwinValue;
+    private boolean provisionalTwinCached;
+
+    private void forgetProvisionalTwin() {
+        provisionalTwinCached = false;
+        provisionalTwinKey = null;
+        provisionalTwinValue = null;
+    }
+
+    private Transaction matchingProvisionalTransactionFor(Transaction clearedTransaction) throws Exception {
+        String key = provisionalTwinLookupKey(clearedTransaction);
+        if (provisionalTwinCached && Objects.equals(key, provisionalTwinKey)) {
+            return provisionalTwinValue;
+        }
+        Transaction twin = financialInstitution.getMatchingProvisionalTransaction(clearedTransaction);
+        provisionalTwinKey = key;
+        provisionalTwinValue = twin;
+        provisionalTwinCached = true;
+        return twin;
+    }
+
+    /** The inputs {@link FinancialInstitutionInt#getMatchingProvisionalTransaction} matches on. */
+    private String provisionalTwinLookupKey(Transaction clearedTransaction) {
+        UUID idRegister = register != null ? register.getId() : null;
+        Calendar date = clearedTransaction.getDate();
+        String dateKey = date != null ? calendarDateToStringDate(date) : "null";
+        return idRegister + "|" + clearedTransaction.getAmount() + "|" + dateKey + "|"
+                + clearedTransaction.getMerchantPayee();
     }
 
     /** Whether an import record id is already in use.  May consult the database. */
@@ -766,6 +808,10 @@ public class ImportController {
 
                 // Set up for processing this transaction:
                 merchant = null;
+                // A new charge's pending-twin lookup is asked for twice -- once by hasKnownPendingTwin
+                // below and again by Phase 2 -- so its result is memoised per charge.  Forget the
+                // previous charge's answer before the next charge reuses the same field.
+                forgetProvisionalTwin();
                 boolean autoMatched = false;  // Track if we auto-matched and already reconciled in Phase 2.5
                 // Set (Phase 2.5) when a forecast match was found but the merchant couldn't be
                 // resolved yet, so the eventual merchant can be linked to this budget item once known.
@@ -863,7 +909,7 @@ public class ImportController {
                      */
                     // Get matching provisional transaction and reconcile it with the cleared transaction.
                     Transaction provisionalTransaction =
-                            financialInstitution.getMatchingProvisionalTransaction(currentTransaction);
+                            matchingProvisionalTransactionFor(currentTransaction);
 
                     // If we found a provisional transaction:
                     boolean reconciledWithProvisional = false;

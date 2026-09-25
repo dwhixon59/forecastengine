@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
@@ -743,6 +744,40 @@ public class ForecastController {
      * @return the SQL
      */
     static String regenerationDeleteQuery(UUID idForecast, Calendar updateStartDate, Collection<UUID> onlyBudgetItems) {
+        return ForecastTransaction.getDeleteQuery() +
+                regenerationWhereClause(idForecast, updateStartDate, onlyBudgetItems);
+    }
+
+    /**
+     * The SQL selecting the ids of the occurrences a forecast update is about to regenerate, keyed data
+     * enough to carry each one's identity across the regeneration:  its own id, its forecast item and
+     * its planned date.  These are exactly the rows {@link #regenerationDeleteQuery} deletes, read
+     * before the delete so the fresh occurrences can take their ids back -- see
+     * {@link #capturePreservedOccurrenceIds} and {@link Forecast#reapplyPreservedTransactionIds}.
+     *
+     * @param idForecast      the forecast being updated
+     * @param updateStartDate the first day being regenerated
+     * @param onlyBudgetItems the budget items being regenerated, or null for all of them
+     * @return the SQL
+     */
+    static String regeneratedOccurrenceIdQuery(UUID idForecast, Calendar updateStartDate,
+                                               Collection<UUID> onlyBudgetItems) {
+        return "select " +
+                    "bin_to_uuid(idForecastTransaction) as idForecastTransaction, " +
+                    "bin_to_uuid(ForecastItem_idForecastItem) as idForecastItem, " +
+                    "plannedDate " +
+                "from forecast_transaction " +
+                regenerationWhereClause(idForecast, updateStartDate, onlyBudgetItems);
+    }
+
+    /**
+     * The {@code where} clause shared by {@link #regenerationDeleteQuery} and
+     * {@link #regeneratedOccurrenceIdQuery} so the rows deleted and the ids captured are always the
+     * same set:  the forecast's occurrences on or after the start date, except overridden and
+     * reconciled ones, and -- when the update is limited to some budget items -- only theirs.
+     */
+    private static String regenerationWhereClause(UUID idForecast, Calendar updateStartDate,
+                                                  Collection<UUID> onlyBudgetItems) {
         StringBuilder items = new StringBuilder();
         if (onlyBudgetItems != null) {
             items.append(" and BudgetItem_idBudgetItem in (");
@@ -756,8 +791,7 @@ public class ForecastController {
             }
             items.append(")");
         }
-        return ForecastTransaction.getDeleteQuery() +
-                "where " +
+        return "where " +
                     "ForecastItem_idForecastItem in (" +
                         "select " +
                             "idForecastItem " +
@@ -776,6 +810,40 @@ public class ForecastController {
                             "forecast_transaction_split.ForecastTransaction_idForecastTransaction = " +
                                 "forecast_transaction.idForecastTransaction" +
                     ")";
+    }
+
+    /**
+     * The ids of the occurrences a forecast update is about to delete and regenerate, keyed by item and
+     * planned day so a regenerated occurrence on the same day can reclaim its predecessor's id.
+     *
+     * <p>Read before the delete runs.  The rows are the ones with no splits and not overridden, so
+     * nothing references them by foreign key -- reusing their ids is free of dangling-reference risk --
+     * and the only thing that still points at them is a forecast spreadsheet rendered earlier, which is
+     * exactly what keeping the id preserves.  A duplicate key (two occurrences on one day for one item)
+     * keeps only the first;  the engine's duplicate check reports genuine duplicates separately.
+     *
+     * @param idForecast      the forecast being updated
+     * @param updateStartDate the first day being regenerated
+     * @param onlyBudgetItems the budget items being regenerated, or null for all of them
+     * @return the map from occurrence key to id, empty when there is nothing to preserve
+     */
+    private Map<String, UUID> capturePreservedOccurrenceIds(UUID idForecast, Calendar updateStartDate,
+                                                            Collection<UUID> onlyBudgetItems)
+            throws SQLException, EntityException {
+        Map<String, UUID> preserved = new HashMap<>();
+        ResultSet rs = getRS(regeneratedOccurrenceIdQuery(idForecast, updateStartDate, onlyBudgetItems),
+                "capturing the ids of the forecast transactions about to be regenerated");
+        while (rs != null && rs.next()) {
+            UUID idForecastItem = UUID.fromString(rs.getString("idForecastItem"));
+            Calendar plannedDate = Utility.localDateToCalendarDate(rs.getObject("plannedDate", LocalDate.class));
+            if (plannedDate == null) {
+                continue;
+            }
+            // putIfAbsent so a rare duplicate day for one item does not have two rows claim one id.
+            preserved.putIfAbsent(ForecastTransaction.occurrenceKey(idForecastItem, plannedDate),
+                    UUID.fromString(rs.getString("idForecastTransaction")));
+        }
+        return preserved;
     }
 
     /**
@@ -1708,6 +1776,14 @@ public class ForecastController {
         // - Overridden ones (user manually modified)
         // - Reconciled ones (have splits assigned, which indicates reconciliation data exists)
         // Note: The 'found' flag is NOT used here - it's only for the "Update from External Source" process
+        //
+        // Capture the identities of exactly those rows first, keyed by item and planned day, so the
+        // fresh occurrences the engine mints below can take them back.  Without this every regenerated
+        // occurrence gets a brand-new id even when its date is unchanged, and a forecast spreadsheet
+        // rendered before this update no longer refers to any of them:  on 09-24-2026 flipping Cabin in
+        // the Mountains from income to expense regenerated its twelve occurrences, and the just-rendered
+        // Danni spreadsheet reported all twelve as "no longer in the database" and skipped them.
+        Map<String, UUID> preservedIds = capturePreservedOccurrenceIds(forecast.getId(), updateStartDate, scope);
         String deleteQuery = regenerationDeleteQuery(forecast.getId(), updateStartDate, scope);
         executeUpdate(deleteQuery, "deleting all the forecast transactions after " +
                 Utility.calendarDateToStringDate(updateStartDate));
@@ -1730,6 +1806,12 @@ public class ForecastController {
         forecast.setTransactions(new ForecastTransaction[forecast.getNumberOfMonths() * 31]);
         ForecastEngine forecastEngine = new ForecastEngine();
         forecastEngine.generateForecastTransactions(forecast, updateStartDate, scope);
+
+        // Give each regenerated occurrence that still falls on the same day the id its deleted
+        // predecessor had, so a spreadsheet rendered before this update is still current for it and
+        // any external reference to it stays valid.  Occurrences that moved to a new date, or are new,
+        // keep the fresh id the engine gave them.
+        forecast.reapplyPreservedTransactionIds(preservedIds);
 
         // Save the updated portion of the forecast.
         forecast.saveForecastTransactions();

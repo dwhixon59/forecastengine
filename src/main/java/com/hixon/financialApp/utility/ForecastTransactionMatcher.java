@@ -14,7 +14,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -593,6 +595,14 @@ public class ForecastTransactionMatcher {
         if (possibleMerchants != null && !possibleMerchants.isEmpty()) {
             List<ForecastTransaction> filteredTransactions = new ArrayList<>();
 
+            // A recurring budget item contributes several occurrences to the same candidate window --
+            // a weekly allowance can put four into a ±14-day range -- and each one otherwise repeats
+            // the identical BudgetItem.getById + getAssignedMerchantsForBudgetItem pair of database
+            // round-trips.  Memoise the merchant list per budget item for the life of this call so the
+            // lookup happens once per item rather than once per occurrence.  The scope is a single
+            // call, so a merchant reassignment between imports is always read fresh.
+            Map<UUID, List<BudgetItemMerchant>> merchantsByBudgetItem = new HashMap<>();
+
             for (ForecastTransaction ft : candidateForecastTransactions) {
 
                 // A transfer counterpart is exempt from merchant filtering: it was created from a
@@ -605,13 +615,15 @@ public class ForecastTransactionMatcher {
                     continue;
                 }
 
-                // Get the budget item for this forecast transaction
+                // Get the merchants assigned to this forecast transaction's budget item, from the
+                // per-call cache when the same item has already been looked up in this window.
                 UUID idBudgetItem = ft.getForecastItem().getIdBudgetItem();
-                BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
-
-                // Get merchants assigned to this budget item
-                List<BudgetItemMerchant> budgetItemMerchants =
-                        BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
+                List<BudgetItemMerchant> budgetItemMerchants = merchantsByBudgetItem.get(idBudgetItem);
+                if (budgetItemMerchants == null) {
+                    BudgetItem budgetItem = BudgetItem.getById(idBudgetItem);
+                    budgetItemMerchants = BudgetItemMerchant.getAssignedMerchantsForBudgetItem(budgetItem);
+                    merchantsByBudgetItem.put(idBudgetItem, budgetItemMerchants);
+                }
 
                 // Check if any of the budget item's merchants match our possible merchants
                 boolean merchantMatches = false;
