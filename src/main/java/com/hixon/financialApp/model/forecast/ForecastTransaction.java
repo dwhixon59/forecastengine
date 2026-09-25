@@ -1571,9 +1571,35 @@ public class ForecastTransaction extends IndependentEntity {
     public static ForecastTransaction getApplicableZeroOccurrence(Forecast forecast, UUID idBudgetItem, Calendar date)
             throws SQLException, EntityException, ForecastException, BudgetException {
 
-        return getApplicableZeroOccurrence(ForecastItem.getByBudgetItemId(idBudgetItem), date);
+        // The budget item's forecast item in this forecast.  A budget can feed several registers' forecasts, and
+        // looking the item up without the forecast returned whichever forecast's copy the database found first.
+        return getApplicableZeroOccurrence(ForecastItem.getByBudgetItemId(forecast, idBudgetItem), date);
     }
 
+
+    /**
+     * The query for a forecast item's last occurrence on or before a date.
+     *
+     * <p>Selected by the forecast item itself, as {@link #getNextOccurrence} is.  It used to be selected by the
+     * forecast item's category and payee, which several budget items share:  Justin's, Danni's, Christine's and
+     * Dave's calling plans are all Utilities / Smart Phones, told apart only by their memo.  On 09-25-2026 a $25
+     * Visible charge for Justin's plan, dated 09-24, was offered Danni's 09-15 occurrence, the latest Smart Phones
+     * occurrence of any plan -- or of any forecast, since nothing limited it to one.
+     *
+     * @param idForecastItem the forecast item whose occurrence is wanted
+     * @param date           the date the occurrence must fall on or before
+     * @return the SQL
+     */
+    static String lastOccurrenceOnOrBeforeQuery(UUID idForecastItem, Calendar date) {
+        return "select fi.category as 'fi.category', fi.payee as 'fi.payee', " + ForecastTransaction.getSelectColumns() +
+                "from forecast_transaction ft " +
+                "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
+                "where " +
+                "ft.ForecastItem_idForecastItem = uuid_to_bin('" + idForecastItem + "') and " +
+                "ft.plannedDate <= " + calendarDateToSqlDateString(date) + " " +
+                "order by ft.plannedDate desc " +
+                "limit 1";
+    }
 
     /**
      * Find the forecast transaction for a forecast item that applies on the specified date given the fact that there
@@ -1591,17 +1617,13 @@ public class ForecastTransaction extends IndependentEntity {
 
         ForecastTransaction forecastTransaction = null;
 
+        // No forecast item for the budget item in this forecast, so no occurrence of it either:
+        if (forecastItem == null) {
+            return null;
+        }
+
         // Find the last occurrence of a forecast transaction on or before today for this item of interest:
-        String lastOccurrenceBeforeDateQuery =
-                "select fi.category as 'fi.category', fi.payee as 'fi.payee', " + ForecastTransaction.getSelectColumns() +
-                        "from forecast_transaction ft " +
-                        "inner join forecast_item fi on ft.ForecastItem_idForecastItem = fi.idForecastItem " +
-                        "where " +
-                        "ft.plannedDate <= " + calendarDateToSqlDateString(date) + " and " +
-                        "fi.category = \"" + forecastItem.getCategory() + "\" and " +
-                        "fi.payee = \"" + forecastItem.getPayee() + "\" " +
-                        "order by ft.plannedDate desc " +
-                        "limit 1";
+        String lastOccurrenceBeforeDateQuery = lastOccurrenceOnOrBeforeQuery(forecastItem.getId(), date);
         ResultSet rsLO = EntityInt.getRS(lastOccurrenceBeforeDateQuery, "retrieve the latest occurrence " +
                 "of a the forecast transaction for forecast item" + forecastItem + " before " +
                 calendarDateToStringDate(date) + ".");
