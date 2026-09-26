@@ -10,9 +10,16 @@ import org.apache.logging.log4j.core.appender.rolling.SizeBasedTriggeringPolicy;
 import org.apache.logging.log4j.core.appender.rolling.TimeBasedTriggeringPolicy;
 import org.apache.logging.log4j.core.appender.rolling.TriggeringPolicy;
 import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.ConfigurationFactory;
+import org.apache.logging.log4j.core.config.ConfigurationSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,14 +40,43 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Rotation was added after a plain File appender let logs/app.log reach 12 MB with nothing to
  * stop it -- the matcher writes a scored candidate list for every imported transaction, so the file
  * grows with every import and never shrinks.
+ *
+ * <p><b>Why the production file is parsed directly, not the active configuration.</b>  During tests
+ * the active log4j configuration is the console-only {@code src/test/resources/log4j2.properties},
+ * which exists so a test run does not write into the production {@code logs/app.log}.  It has no
+ * "File" appender by design.  This test's subject is the <em>shipped</em> configuration, so it loads
+ * {@code src/main/resources/log4j2.properties} through log4j's own factory -- which still exercises
+ * the parser, so a typo that makes log4j reject the file is still caught -- rather than inspecting
+ * whichever configuration happens to be active.
  */
 @DisplayName("Log Rotation Config Tests")
 class LogRotationConfigTest {
 
+    /** The shipped production configuration, parsed once by log4j's own factory. */
+    private static Configuration productionConfiguration;
+
+    private static synchronized Configuration productionConfiguration() {
+        if (productionConfiguration == null) {
+            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            Path file = Path.of("src", "main", "resources", "log4j2.properties");
+            try (InputStream in = Files.newInputStream(file)) {
+                ConfigurationSource source = new ConfigurationSource(in, file.toFile());
+                Configuration configuration =
+                        ConfigurationFactory.getInstance().getConfiguration(context, source);
+                assertNotNull(configuration,
+                        "log4j could not build a configuration from src/main/resources/log4j2.properties");
+                configuration.initialize();
+                productionConfiguration = configuration;
+            } catch (IOException e) {
+                throw new UncheckedIOException(
+                        "Could not read src/main/resources/log4j2.properties", e);
+            }
+        }
+        return productionConfiguration;
+    }
+
     private static Appender fileAppender() {
-        LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        Configuration configuration = context.getConfiguration();
-        return configuration.getAppender("File");
+        return productionConfiguration().getAppender("File");
     }
 
     @Test

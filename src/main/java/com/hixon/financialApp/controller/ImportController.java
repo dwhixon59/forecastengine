@@ -572,15 +572,27 @@ public class ImportController {
     // merchantPayee -- makes the second call a cache hit whenever those are unchanged and a genuine
     // fresh lookup whenever the reparse changed the payee.  forgetProvisionalTwin() clears it per
     // charge so one charge's answer can never be served to the next.
+    //
+    // The reparse case -- the peek finds no twin, the payee is then parsed, and Phase 2 looks up
+    // again under the new payee -- was still two round-trips despite the memo, because the two keys
+    // differ.  But that second lookup is provably pointless: the matcher gathers candidates by
+    // register, amount and date and uses the payee only to choose among them (a lone exact-amount
+    // candidate is returned without consulting the payee at all), so it can never turn a null result
+    // into a match.  A null is therefore a function of register+amount+date alone.  When a lookup
+    // returns null we record that (payee-independent) key and short-circuit any later lookup for the
+    // same charge, sparing the redundant query while a real twin still forces a fresh post-parse
+    // lookup so its tie-breaking is unaffected.
 
     private String provisionalTwinKey;
     private Transaction provisionalTwinValue;
     private boolean provisionalTwinCached;
+    private String provisionalTwinNullKey;
 
     private void forgetProvisionalTwin() {
         provisionalTwinCached = false;
         provisionalTwinKey = null;
         provisionalTwinValue = null;
+        provisionalTwinNullKey = null;
     }
 
     private Transaction matchingProvisionalTransactionFor(Transaction clearedTransaction) throws Exception {
@@ -588,20 +600,34 @@ public class ImportController {
         if (provisionalTwinCached && Objects.equals(key, provisionalTwinKey)) {
             return provisionalTwinValue;
         }
+        // A null result is payee-independent, so a prior null for this register/amount/date settles
+        // any later lookup for the same charge without touching the database.
+        String amountDateKey = provisionalTwinAmountDateKey(clearedTransaction);
+        if (Objects.equals(amountDateKey, provisionalTwinNullKey)) {
+            return null;
+        }
         Transaction twin = financialInstitution.getMatchingProvisionalTransaction(clearedTransaction);
         provisionalTwinKey = key;
         provisionalTwinValue = twin;
         provisionalTwinCached = true;
+        if (twin == null) {
+            provisionalTwinNullKey = amountDateKey;
+        }
         return twin;
     }
 
     /** The inputs {@link FinancialInstitutionInt#getMatchingProvisionalTransaction} matches on. */
     private String provisionalTwinLookupKey(Transaction clearedTransaction) {
+        return provisionalTwinAmountDateKey(clearedTransaction) + "|"
+                + clearedTransaction.getMerchantPayee();
+    }
+
+    /** The register, amount and date a provisional match is gathered by -- everything but the payee. */
+    private String provisionalTwinAmountDateKey(Transaction clearedTransaction) {
         UUID idRegister = register != null ? register.getId() : null;
         Calendar date = clearedTransaction.getDate();
         String dateKey = date != null ? calendarDateToStringDate(date) : "null";
-        return idRegister + "|" + clearedTransaction.getAmount() + "|" + dateKey + "|"
-                + clearedTransaction.getMerchantPayee();
+        return idRegister + "|" + clearedTransaction.getAmount() + "|" + dateKey;
     }
 
     /** Whether an import record id is already in use.  May consult the database. */

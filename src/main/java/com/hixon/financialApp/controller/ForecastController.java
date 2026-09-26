@@ -1076,7 +1076,7 @@ public class ForecastController {
 
                         // then check with the user to see if they want to credit the amount to the remaining amount
                         // of the forecast item:
-                        resolver.say("Appicable:  " + forecastTransaction.toStringConcise());
+                        resolver.say("Applicable:  " + forecastTransaction.toStringConcise());
                         deduct = resolver.getYesOrNo("Do you want to credit the amount of this split to the " +
                                 "forecast transaction");
                     }
